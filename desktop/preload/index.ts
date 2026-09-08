@@ -111,6 +111,7 @@ const api = {
 
   send: (sid: string, text: string, images?: string[], auto?: boolean) =>
     ipcRenderer.send("chat:send", sid, text, images, auto),
+  isRunning: (sid: string) => ipcRenderer.invoke("chat:is-running", sid) as Promise<boolean>,
   inject: (sid: string, text: string, images?: string[]) =>
     ipcRenderer.send("chat:inject", sid, text, images),
   recallInject: (sid: string, text: string) =>

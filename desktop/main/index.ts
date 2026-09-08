@@ -2541,6 +2541,10 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   }
 }
 
+// 权威运行态查询：主进程 runs 才是某会话「是否正在跑一轮」的唯一真相源。渲染端自主推进续跑前先问它，
+// 在跑就别画气泡也别发——从根上杜绝时序误判导致的"孤儿气泡"。
+ipcMain.handle("chat:is-running", (_e, sid: string) => runs.has(sid || currentId));
+
 ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean) => {
   const useId = sid || currentId;
   // 自主推进/看门狗的「软续跑」(auto=true)：该会话若还在跑就静默跳过，绝不弹「上一条还在处理中」刷屏。

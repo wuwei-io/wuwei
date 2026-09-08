@@ -4686,7 +4686,7 @@ export function App() {
   const suggestionRef = useRef(suggestion); suggestionRef.current = suggestion;
   // 后台会话没有输入框/建议条，直接投递给它自己的 sid，不碰当前屏幕。
   // (只在最后落笔前再校验一次各种闸门，因为从收到建议到真发出去中间隔着"反悔窗口")
-  const autoContinue = (sid: string, text: string) => {
+  const autoContinue = async (sid: string, text: string) => {
     const go = (text || "").trim();
     if (!go || !sid) return;
     if (modeOf(sid) !== "cont") return; // 这期间被关掉了智能继续/点了暂停
@@ -4695,6 +4695,12 @@ export function App() {
     if (cur && inputRef.current.trim()) return; // 当前会话:你正在打字就别抢
     const n = (contBySid.current.get(sid) || 0) + 1;
     if (contMaxRef.current > 0 && n > contMaxRef.current) return; // 连推轮数封顶(0=不限)
+    // 权威确认:主进程 runs 才是唯一裁判。它若还在跑就直接返回——不画气泡、不发送,从根上杜绝"孤儿气泡"
+    // (看门狗按时序误判、乐观清了 runningSet 也没用,这里以主进程真实态为准)。查不到(老版本)就按老逻辑继续。
+    try { if (await window.wuwei.isRunning?.(sid)) return; } catch { /* ignore */ }
+    // await 之后状态可能已变,关键闸门再校验一次
+    if (modeOf(sid) !== "cont" || runningSetRef.current.has(sid)) return;
+    if (cur && inputRef.current.trim()) return;
     contBySid.current.set(sid, n);
     setRunningSet((s) => new Set(s).add(sid)); // 乐观置运行中(主进程随后 evt:tasks 校准)
     if (cur) {

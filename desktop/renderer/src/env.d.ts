@@ -86,6 +86,7 @@ export interface WuweiApi {
   babyPyramid(): Promise<string>;
   babyReorganize(): Promise<string>;
   send(sid: string, text: string, images?: string[], auto?: boolean): void;
+  isRunning(sid: string): Promise<boolean>;
   inject(sid: string, text: string, images?: string[]): void;
   recallInject(sid: string, text: string): Promise<boolean>;
   stop(sid?: string): void;
