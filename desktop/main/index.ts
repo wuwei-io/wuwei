@@ -2585,7 +2585,19 @@ ipcMain.handle("codex:consume-reset", async (_e, creditId: string) => {
 });
 
 // —— 会话管理 IPC ——
+// 离开某会话前把它「当前显示的模型」锁死进会话元信息。config.model 恒等于当前活动会话的模型，
+// 故此处写入的就是该会话自己的模型。无条件锁(不只在未绑定时)——保证任何离开路径后切回来都能还原，
+// 从根上杜绝"某会话没绑定→切回时读到全局(别的会话刚选的模型)→被覆盖"这类串会话 bug。未持久化的空会话跳过(不建幽灵记录)。
+function lockSessionModel(sid: string) {
+  try {
+    if (!sid || !listSessions().some((x) => x.id === sid)) return;
+    const c = loadConfig();
+    setSessionModel(sid, c.model, loadSettings()?.providerId);
+  } catch { /* ignore */ }
+}
+
 ipcMain.on("session:new", () => {
+  lockSessionModel(currentId); // ★关键修复:新建会话前先锁住正要离开的会话的模型,否则它切回来会被新会话的模型覆盖
   currentId = randomUUID();
   const a = getAgent(currentId);
   send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
@@ -2706,14 +2718,8 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
 });
 
 ipcMain.on("session:switch", (_e, id: string) => {
-  // 切走前：把当前模型绑给正要离开的会话(若它还没绑过)，让老会话也能立刻记住、切回来能还原
-  try {
-    const leaving = currentId;
-    if (leaving && leaving !== id) {
-      const lm = listSessions().find((x) => x.id === leaving);
-      if (lm && !lm.model) { const c = loadConfig(); setSessionModel(leaving, c.model, loadSettings()?.providerId); }
-    }
-  } catch { /* ignore */ }
+  // 切走前无条件把当前模型锁给正要离开的会话，让老会话立刻记牢、切回来必还原(不再只在"未绑定"时才锁)
+  if (currentId && currentId !== id) lockSessionModel(currentId);
   currentId = id;
   const a = getAgent(id);
   // 每会话绑定模型：把该会话存的 {model, providerId} 带给渲染端，由它用 PRESETS 完整切平台
@@ -2729,6 +2735,7 @@ ipcMain.on("session:switch", (_e, id: string) => {
 // 历史在 getAgent→loadMessages 里已自愈(补齐悬空 tool_result/交替角色)，可直接续跑。
 ipcMain.on("session:resume", (_e, id: string) => {
   const sid = id || currentId;
+  if (currentId && currentId !== sid) lockSessionModel(currentId); // 切到别的会话前先锁住当前会话的模型
   clearInterrupted(sid);
   currentId = sid;
   const a = getAgent(sid);
