@@ -4133,6 +4133,8 @@ export function App() {
       const t = tRef.current;
       // 看门狗心跳：任何来自某会话的事件都刷新它的「最后活动时间」，供自主推进兜底判定是否僵死
       { const asid = payload?.sid; if (asid) lastActivityRef.current.set(asid, Date.now()); }
+      // 长命令心跳(evt:heartbeat)：只为刷新上面的活动时间而发，无其它语义——刷完即返回，别触发落定/switch
+      if (ch === "evt:heartbeat") return;
       // 结构性事件(工具/完成/切换…)前先把累积的流式文本落定，保证顺序不乱
       if (ch !== "evt:assistant-delta" && pendingDeltaRef.current) flushDelta(true); // 段落边界整段吐
       switch (ch) {

@@ -2391,6 +2391,12 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   const ac = new AbortController();
   runs.set(useId, ac);
   emitTasks();
+  // 长命令/长工具心跳：一条工具正在执行时(onToolStart↔onToolEnd 之间)会长时间无任何流式事件，
+  // 渲染端自主推进看门狗会把它误判成僵死→重复自动续跑→撞本函数守卫报"上一条还在处理中"。
+  // 这里在「有工具正在跑」时每 25s 发个带 sid 的心跳,刷新看门狗活动时间;工具没在跑(如模型 socket 挂死)则不发,
+  // 看门狗照常到阈值救援——精准区分"合法长静默"与"真卡死"。
+  let toolDepth = 0;
+  const hb = setInterval(() => { if (toolDepth > 0 && runs.get(useId) === ac) send("evt:heartbeat", { sid: useId }); }, 25000);
   const turnT0 = Date.now(); // 本轮耗时起点（诊断日志 api_call.ms 用）
   try {
     const runP = agent.send(
@@ -2409,8 +2415,8 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
           streamDrafts.delete(useId);
           send("evt:assistant-replace", { sid: useId, text: cleaned }); // 前端把泄漏的 XML 换成干净正文
         },
-        onToolStart: (id, name, input) => send("evt:tool-start", { sid: useId, id, name, input }),
-        onToolEnd: (id, result, isError) => send("evt:tool-end", { sid: useId, id, result, isError }),
+        onToolStart: (id, name, input) => { toolDepth++; send("evt:tool-start", { sid: useId, id, name, input }); },
+        onToolEnd: (id, result, isError) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError }); },
         requestPermission: (tool, input) =>
           new Promise((resolve) => {
             const id = ++permSeq;
@@ -2502,6 +2508,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
       }
     }
   } finally {
+    clearInterval(hb); // 停掉长命令心跳
     if (runs.get(useId) === ac) {
       runs.delete(useId);
       emitTasks();
