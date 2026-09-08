@@ -109,8 +109,8 @@ const api = {
   babyPyramid: () => ipcRenderer.invoke("agi:baby:pyramid") as Promise<string>,
   babyReorganize: () => ipcRenderer.invoke("agi:baby:reorganize") as Promise<string>,
 
-  send: (sid: string, text: string, images?: string[]) =>
-    ipcRenderer.send("chat:send", sid, text, images),
+  send: (sid: string, text: string, images?: string[], auto?: boolean) =>
+    ipcRenderer.send("chat:send", sid, text, images, auto),
   inject: (sid: string, text: string, images?: string[]) =>
     ipcRenderer.send("chat:inject", sid, text, images),
   recallInject: (sid: string, text: string) =>

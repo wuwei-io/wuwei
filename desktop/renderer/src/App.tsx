@@ -4711,7 +4711,7 @@ export function App() {
       turnTextRef.current = "";
       push({ type: "user", text: go, ts: Date.now() }); // 只有看得见的会话才画气泡
     }
-    window.wuwei.send(sid, go);
+    window.wuwei.send(sid, go, undefined, true); // auto=true:软续跑,主进程若发现该会话还在跑就静默跳过(不报错刷屏)
   };
   // 自主推进看门狗：定时兜底「不看就停」。开着智能继续(cont)的会话若长时间无任何流式活动
   // (单轮报错断链 / 后台 setTimeout 被节流 / 主进程僵死)，就自动朝总目标续上，不靠某一次性调度。

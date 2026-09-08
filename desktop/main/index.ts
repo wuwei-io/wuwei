@@ -2541,8 +2541,13 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   }
 }
 
-ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[]) => {
-  void startTurn(sid || currentId, text, images);
+ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean) => {
+  const useId = sid || currentId;
+  // 自主推进/看门狗的「软续跑」(auto=true)：该会话若还在跑就静默跳过，绝不弹「上一条还在处理中」刷屏。
+  // 时序心跳追不平主进程真实运行态时(免费模型长思考0token、无工具在跑),这一层让误判彻底无害——
+  // 主进程 runs 才是唯一裁判。真结束后由正常 cont 流程/下一次看门狗巡检自然接上。用户手动发才照旧提示。
+  if (auto && runs.has(useId)) return;
+  void startTurn(useId, text, images);
 });
 
 // 运行中注入新需求：正在跑→注入到当前循环边界(AI 综合权衡/优先处理，不必等整轮跑完)；没在跑→当普通发送
