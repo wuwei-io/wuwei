@@ -1910,15 +1910,15 @@ function TrialPayModal({
       <div className="pay-card pay-card-wide" onClick={(e) => e.stopPropagation()}>
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: (context === "weekly" || context === "freecap") ? 16 : 2, paddingTop: 22 }}>
-          <h2>{context === "freecap" ? (en ? "Today's free quota is used up" : "今日免费额度用完啦") : context === "weekly" ? (en ? "This week's quota is used up" : "本周额度已用完") : context === "browse" ? (en ? "Choose your plan" : "选择你的套餐") : (en ? "You're out of credits" : "无为币用完啦")}</h2>
+          <h2>{context === "freecap" ? (en ? "Today's free quota is used up" : "今日免费额度用完啦") : context === "weekly" ? (en ? "This month's quota is used up" : "本月额度已用完") : context === "browse" ? (en ? "Choose your plan" : "选择你的套餐") : (en ? "You're out of credits" : "无为币用完啦")}</h2>
           <p>{context === "freecap"
             ? (en
                 ? <>Your free quota refreshes tomorrow. In a hurry? <button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>Upgrade your plan</button> or buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
                 : <>明天可继续使用免费额度。如果着急使用，可<button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>升级会员</button>或购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
             : context === "weekly"
             ? (en
-                ? <>Your weekly quota is used up — it refreshes next week. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
-                : <>您的本周额度已消耗完，可以等下周额度恢复后继续使用。如果着急使用，可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
+                ? <>Your monthly quota is used up — it refreshes next month. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
+                : <>您的本月额度已消耗完，可以等下月额度恢复后继续使用。如果着急使用，可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
             : context === "browse" ? (en ? "One subscription, every top flagship. Faster replies, fuller quota." : "一份订阅，用遍全球最强旗舰，响应更快、额度更足。") : (en ? "Pick a plan to keep going. Every top model, one click away." : "选个套餐接着用，全球最强旗舰随便切换。")}</p>
         </div>
 
@@ -7730,7 +7730,7 @@ export function App() {
                   return (
                     <>
                       <span className="fs-dot">·</span>
-                      <span className={"fs-quota" + tone}>{lang === "en" ? "Week" : "本周"} {usedPct}%</span>
+                      <span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span>
                     </>
                   );
                 })()}
@@ -7925,7 +7925,7 @@ export function App() {
                     return (
                       <div style={{ margin: "2px 0 4px" }}>
                         <div className="u-row" style={{ marginBottom: 4 }}>
-                          <span>{lang === "en" ? "This week" : "本周额度"}</span>
+                          <span>{lang === "en" ? "This month" : "本月额度"}</span>
                           <span>{lang === "en" ? `${usedPct}% used${rs ? ` · resets ${rs}` : ""}` : `已用 ${usedPct}%${rs ? ` · ${rs} 重置` : ""}`}</span>
                         </div>
                         <div className="u-bar"><div className={"u-fill" + (usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "")} style={{ width: usedPct + "%" }} /></div>
@@ -8742,11 +8742,11 @@ export function App() {
             <div className="mq-overlay" style={{ zIndex: 200 }} onClick={() => setQuotaWarn(null)} />
             <div className="freecap-modal">
               <button className="freecap-x" title={en ? "Close" : "关闭"} onClick={() => setQuotaWarn(null)}>×</button>
-              <div className="freecap-title">{en ? "You're burning your weekly quota fast" : "本周额度消耗有点快"}</div>
+              <div className="freecap-title">{en ? "You're burning your monthly quota fast" : "本月额度消耗有点快"}</div>
               <div className="freecap-sub">
                 {en
-                  ? `You're on ${curLabel}, which costs more per token. Your weekly quota is ${quotaWarn.usedPct}% used${rs ? ` (resets ${rs})` : ""}. Switch to a cheaper model below to make it last.`
-                  : `你正在用 ${curLabel}，单价较高，本周额度已用 ${quotaWarn.usedPct}%${rs ? `（${rs} 重置）` : ""}。想省着点用，可以切到下面更便宜的模型继续。`}
+                  ? `You're on ${curLabel}, which costs more per token. Your monthly quota is ${quotaWarn.usedPct}% used${rs ? ` (resets ${rs})` : ""}. Switch to a cheaper model below to make it last.`
+                  : `你正在用 ${curLabel}，单价较高，本月额度已用 ${quotaWarn.usedPct}%${rs ? `（${rs} 重置）` : ""}。想省着点用，可以切到下面更便宜的模型继续。`}
               </div>
               <div className="freecap-actions">
                 {ds && (
