@@ -39,6 +39,8 @@ export interface SessionMeta {
   discuss?: boolean; // 待讨论：该会话内容需过会议讨论，列表里打「议」徽标区分(独立于优先级/完成)
   model?: string; // 该会话绑定的模型(切到此会话自动切回)；空=用当前全局
   providerId?: string; // 该会话绑定的平台/供应商
+  kind?: string; // 该会话绑定平台的鉴权种类(codex/anthropic-oauth/anthropic-apikey/openai)——重建单会话 provider 用
+  baseUrl?: string; // 该会话绑定的自定义端点(openai 兼容中转站等)——重建单会话 provider 用
   running?: boolean; // 正在跑一轮(开跑置 true、结束置 false)；能跨重启存活→崩溃/强杀时残留 true
   interrupted?: boolean; // 上次运行被强制中断(启动时检测到残留 running=true 或内容明显干到一半)→提示恢复
   resumeDismissed?: boolean; // 用户点过「忽略」→内容启发式不再重复提示该会话(强杀 running 仍会重新提示)
@@ -142,6 +144,23 @@ export function setSessionModel(id: string, model?: string, providerId?: string)
   if (!s) return;
   if (model) s.model = model;
   if (providerId) s.providerId = providerId;
+  saveList(l);
+}
+
+// 方案B：存该会话「完整供应商身份」(模型+平台+鉴权种类+端点)——重建单会话 provider 的唯一真相源。
+// 每次该会话被聚焦并改模型/切平台时写入，切回来即用它自己的身份重建 provider，全局漂移再也带不动它。
+export function setSessionBinding(
+  id: string,
+  b: { model?: string; providerId?: string; kind?: string; baseUrl?: string },
+) {
+  const l = listSessions();
+  const s = l.find((x) => x.id === id);
+  if (!s) return;
+  if (b.model) s.model = b.model;
+  if (b.providerId) s.providerId = b.providerId;
+  // kind/baseUrl 允许显式清空(切到无端点的平台)：只要传了字段就覆盖
+  if ("kind" in b) s.kind = b.kind || undefined;
+  if ("baseUrl" in b) s.baseUrl = b.baseUrl || undefined;
   saveList(l);
 }
 

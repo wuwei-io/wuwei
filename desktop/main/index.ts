@@ -62,6 +62,7 @@ import {
   setSessionDone,
   setSessionDiscuss,
   setSessionModel,
+  setSessionBinding,
   setSessionRunning,
   clearInterrupted,
   dismissResume,
@@ -1064,6 +1065,9 @@ function applySettings(sIn: Settings, forceSid?: string) {
     if (credRefreshOnly && backendBySid.get(sid) === newPid) a.setProvider(provider);
     // 其余(不同后端 / 非凭证刷新)一律不碰：这正是"在别的会话切平台/模型不影响这个正在跑的会话"的保证。
   }
+  // 方案B：把「聚焦会话改后的完整身份」立即持久化进它自己的 meta——每次改模型/切平台即写入，
+  // 不再依赖离开时的 lockSessionModel 补锁。之后 providerForSession 就能凭它精确重建该会话 provider。
+  if (target) setSessionBinding(target, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl });
   refreshAgentTools(); // 「知识网络」开关变了→即时给所有会话加/摘 brain_* 工具
   send("evt:ready", { backend: backendLabel, model: modelLabel, cwd, sub: subFlag, ctxWindow });
   void emitAccount(); // 切平台后左下角账号/余额随之更新
@@ -1488,17 +1492,54 @@ function refreshAgentTools() {
 }
 
 // 取/建某会话的 Agent（懒加载并恢复其历史）
+// 方案B 核心：为「某个会话」构建它自己的 provider。真相源=该会话 meta 里存的完整身份
+// (model+providerId+kind+baseUrl)，凭证从全局 creds[providerId] 取(同平台共用一份 token/key，本就该共享)。
+// 复用唯一真实变换 applyEnvFromSettings→loadConfig(同步、无 await 间隙)：临时把 env 换成该会话的身份构建，
+// 构建完立刻还原全局 env→全局 provider/显示保持跟聚焦会话一致。会话没存身份(全新/老会话)→回退全局种子。
+// 这样每个会话的 agent 从出生就绑「它自己的模型」，全局怎么漂都带不动别的会话——从根上杜绝串会话。
+function providerForSession(id: string): ReturnType<typeof makeProvider> | null {
+  const gs = loadSettings();
+  try {
+    const meta = listSessions().find((x) => x.id === id);
+    if (!meta || !meta.model || !meta.providerId || !gs) return provider; // 未绑定→全局种子
+    const slot = (gs.creds || {})[meta.providerId] || {};
+    const sSettings: Settings = {
+      ...gs,
+      providerId: meta.providerId,
+      kind: (meta.kind as Settings["kind"]) || gs.kind,
+      model: meta.model,
+      baseUrl: meta.baseUrl ?? slot.baseUrl ?? gs.baseUrl,
+      apiKey: slot.apiKey,
+      oauthToken: slot.oauthToken,
+    };
+    try {
+      applyEnvFromSettings(sSettings);
+      return makeProvider(loadConfig());
+    } finally {
+      applyEnvFromSettings(gs); // 还原全局 env(与 initProvider/applySettings 后一致)
+    }
+  } catch {
+    return provider;
+  }
+}
+
 function getAgent(id: string): Agent | null {
   if (!provider) return null;
   let a = agents.get(id);
   if (!a) {
-    a = new Agent(provider, sysPrompt, desktopTools(), { cwd, sessionId: id }, desktopToolMap(), agentOpts);
+    const meta = listSessions().find((s) => s.id === id);
+    // 用该会话自己的 provider 建 agent(而非全局)——出生即绑自己的模型，全局漂移带不动它
+    a = new Agent(providerForSession(id) || provider, sysPrompt, desktopTools(), { cwd, sessionId: id }, desktopToolMap(), agentOpts);
     a.setMessages(loadMessages(id));
-    const meta = listSessions().find((s) => s.id === id); // 恢复该会话的用量
-    if (meta?.usage) a.setUsage(meta.usage);
+    if (meta?.usage) a.setUsage(meta.usage); // 恢复该会话的用量
     agents.set(id, a);
     // 登记该会话此刻绑定的后端：优先它自己存过的平台(切回老会话时用回它自己的)，否则用当前全局平台。
     backendBySid.set(id, meta?.providerId || curProviderId());
+    // 懒绑定：会话已有 meta 但从没存过完整身份(老会话)→把此刻的身份补写进去，之后就有自己的真相源。
+    if (meta && (!meta.kind || !meta.model || !meta.providerId)) {
+      const s = loadSettings();
+      if (s) setSessionBinding(id, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl });
+    }
   }
   return a;
 }
@@ -2266,10 +2307,42 @@ function reportLoginOnce(): void {
 // (可能绑在别的平台/别的托管模型)也换掉。不传(如连通性 ping)则只重建全局 provider、不动任何会话。
 async function ensureHostedProviderReady(targetSid?: string): Promise<void> {
   const st = loadSettings();
-  if (!st || !isHostedProvider(st.providerId)) return;
-  applyEnvFromSettings(st); // 平台 baseUrl(网关)等按设置
+  if (!st) return;
+  // 方案B：按「目标会话自己的绑定」判定用不用托管、用哪个托管模型——不再读全局(否则全局一漂就把
+  // 正在跑的托管会话换成别人的模型，这正是免费模型串会话的运行时元凶)。无 targetSid(连通性 ping)才看全局。
+  const meta = targetSid ? listSessions().find((x) => x.id === targetSid) : null;
+  const effProviderId = meta?.providerId || st.providerId;
+  if (!isHostedProvider(effProviderId)) return;
   const sess = await getFreshWuweiSession();
   const key = sess ? sess.accessToken : `anon-${getDeviceId()}`; // 未登录 → 匿名试用 token
+  // 目标会话有自己完整身份 → 用它的身份 + 新鲜网关 token 重建「它自己的」provider，绝不动全局/别的会话
+  if (targetSid && meta && meta.model && meta.providerId) {
+    const slot = (st.creds || {})[meta.providerId] || {};
+    const sSettings: Settings = {
+      ...st,
+      providerId: meta.providerId,
+      kind: (meta.kind as Settings["kind"]) || st.kind,
+      model: meta.model,
+      baseUrl: meta.baseUrl ?? slot.baseUrl ?? st.baseUrl,
+      apiKey: slot.apiKey,
+      oauthToken: slot.oauthToken,
+    };
+    try {
+      applyEnvFromSettings(sSettings);
+      process.env.WUWEI_API_KEY = key; // 网关 key 必须在 applyEnvFromSettings 之后覆盖(它会清 MINICC_API_KEY)
+      process.env.MINICC_API_KEY = key;
+      const p = makeProvider(loadConfig());
+      const a = agents.get(targetSid);
+      if (a) { a.setProvider(p); backendBySid.set(targetSid, meta.providerId); }
+    } finally {
+      applyEnvFromSettings(st); // 还原全局 env
+      process.env.WUWEI_API_KEY = key;
+      process.env.MINICC_API_KEY = key;
+    }
+    return;
+  }
+  // 无 targetSid 或会话未绑定 → 老逻辑：只按全局重建全局 provider(+可选热更目标会话)
+  applyEnvFromSettings(st); // 平台 baseUrl(网关)等按设置
   process.env.WUWEI_API_KEY = key; // 网关的"key"(只 env、不落 config)
   process.env.MINICC_API_KEY = key; // 兼容：config.ts 仍读旧名，过渡期内双写
   provider = makeProvider(loadConfig());
