@@ -4693,7 +4693,7 @@ export function App() {
   const lastActivityRef = useRef<Map<string, number>>(new Map()); // 各会话最后一次收到事件的时刻，自主推进看门狗判僵死用
   // 自主推进看门狗可配参数(秒)：巡检间隔 + 判停阈值(无活动多久判卡住并自动续)。存 localStorage，设置里可改
   const [wdIntervalSec, setWdIntervalSec] = useState(() => { const v = Number(localStorage.getItem("wuwei-wd-interval")); return v >= 10 ? v : 40; });
-  const [wdIdleSec, setWdIdleSec] = useState(() => { const v = Number(localStorage.getItem("wuwei-wd-idle")); return v >= 20 ? v : 90; });
+  const [wdIdleSec, setWdIdleSec] = useState(() => { const v = Number(localStorage.getItem("wuwei-wd-idle")); return v >= 20 ? v : 30; });
   const wdIdleRef = useRef(wdIdleSec); wdIdleRef.current = wdIdleSec;
   const inputRef = useRef(input); inputRef.current = input;
   const suggestionRef = useRef(suggestion); suggestionRef.current = suggestion;
@@ -4745,8 +4745,11 @@ export function App() {
         const last = lastActivityRef.current.get(sid) ?? 0;
         if (last === 0) continue; // 从没跑过 → 不动
         const running = runningSetRef.current.has(sid);
-        // 仍标 running 的多等一截(判停阈值 + 150s)，避免打断真在跑的长工具；已停则到阈值即救
-        if (now - last < (running ? idleMs + 150000 : idleMs)) continue;
+        // 正常在跑就别打扰：一轮在跑时(running)靠心跳/流式活动证明它还活着——工具执行期间每 25s 有心跳、
+        // 流式输出有 delta，只要在动 now-last 就一直很小、绝不触发。只有「在跑却整整 10 分钟零活动」= 真卡死
+        // 才介入恢复(极长命令也早有心跳，不会误伤)。没在跑(两轮空档)则到判停阈值(默认30s)即快速续下一步。
+        const RUNNING_HANG_MS = 600000; // 在跑时判"真卡死"的零活动阈值(10分钟)
+        if (now - last < (running ? RUNNING_HANG_MS : idleMs)) continue;
         if (sid === currentIdRef.current && inputRef.current.trim()) continue; // 你正在打字
         if (contMaxRef.current > 0 && (contBySid.current.get(sid) || 0) >= contMaxRef.current) continue; // 到封顶轮数
         // 判僵死 → 直接清可能卡住的运行标(改 ref，否则 autoContinue 的 has(sid) 会挡回)，朝总目标续
@@ -7371,6 +7374,16 @@ export function App() {
             {busy ? (
               <button className="send-btn stop" onClick={stop} title={t("composer.stop", "停止")}>
                 <span className="stop-sq" />
+              </button>
+            ) : modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
+              // 自主推进模式开着、此刻没在跑、输入框空 → 显示「待续跑」转圈，明确表示"活着、稍后自动继续"，
+              // 避免两轮空档里显示成普通发送图标、让人误以为停了。点它可立即续跑，不必等看门狗。
+              <button
+                className="send-btn cont-wait"
+                onClick={() => void autoContinue(currentId, lang === "en" ? "Keep going toward the overall goal." : "继续朝总目标推进。")}
+                title={t("composer.contWait", "自主推进中 · 稍后自动继续（点击立即继续）")}
+              >
+                <span className="by-spin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><Ic.IcRefresh size={15} /></span>
               </button>
             ) : (
               <button
