@@ -30,6 +30,12 @@ function capToolResult(content: string): string {
   );
 }
 
+// 判定是否「上下文超限」错误(模型明确拒收，因历史太长)。用于当场硬清理+重试，精确命中不靠启发式。
+function isContextOverflow(e: unknown): boolean {
+  const s = String((e as { message?: string })?.message || e || "");
+  return /prompt is too long|too many tokens|context[_ ](length|window|limit)|context length|model_context_window_exceeded|input length and max_tokens exceed|maximum context/i.test(s);
+}
+
 export type PermissionDecision = "allow" | "deny";
 
 export interface AgentOptions {
@@ -343,6 +349,7 @@ export class Agent {
 
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
       let result: Awaited<ReturnType<typeof this.provider.complete>>;
+      let ctxTrims = 0; // 上下文超限时的硬清理次数(防死循环)
       for (let attempt = 0; ; attempt++) {
         try {
           result = await this.provider.complete(this.system, this.messages, this.tools, {
@@ -353,6 +360,12 @@ export class Agent {
           break;
         } catch (e) {
           if (signal?.aborted) throw e; // 用户主动停止 → 不重试
+          // 上下文超限：模型明确拒收(历史太长)→ 当场硬清理历史再重试(精确命中，不靠 lastInput 启发式)。最多 3 次防死循环。
+          if (isContextOverflow(e) && ctxTrims < 3 && this.hardTrim(hooks)) {
+            ctxTrims++;
+            hooks.onRecover?.(""); // 清掉本步已流式显示的半截
+            continue;
+          }
           if (!isTransientNetErr(e) || attempt >= NET_RETRY_DELAYS_MS.length) throw e; // 非瞬时错/重试用尽 → 抛出提示
           const delay = NET_RETRY_DELAYS_MS[attempt];
           hooks.onRetry?.(attempt + 1, delay, String((e as { message?: string })?.message || e).slice(0, 200));
@@ -638,6 +651,38 @@ export class Agent {
     this.messages.push({ role: "assistant", content: [{ type: "text", text: tt("(已停止)", "(stopped)") }] });
   }
 
+  // 硬清理历史：丢掉旧史，只留最近 keepRecent 条(设置"保留最近N条"可调，且把其中巨型工具输出截断)，
+  // 注入一句"去读你之前 write_file 沉淀的文档补背景"。用于:①压缩总结失败兜底 ②模型真报上下文超限时当场救急。
+  // 返回是否真的清理了(有可丢的旧史)。不靠 lastInput 启发式——由调用方在"确实超限"时调用，精确命中。
+  private hardTrim(hooks: AgentHooks): boolean {
+    if (this.messages.length <= this.keepRecent + 1) return false;
+    let cut = this.findCutIndex();
+    if (cut <= 0) cut = Math.max(1, this.messages.length - this.keepRecent); // 找不到安全切点→兜底按条数切
+    const older = this.messages.slice(0, cut);
+    const recent = this.messages.slice(cut);
+    if (!older.length) return false;
+    const before = this.messages.length;
+    const isSummary = (m: Message) =>
+      (m.content || []).some((b: any) => b.type === "text" && /^【之前对话摘要】|^【历史已精简】|^\[Summary of earlier conversation\]|^\[History trimmed\]/.test(String(b.text || "").trim()));
+    try { const d = older.filter((m) => !isSummary(m)); if (d.length) hooks.onCompactArchive?.(d); } catch { /* 归档失败不影响 */ }
+    // 保留的最近几条里若有巨型工具输出(老会话历史当初没封顶)，一并截断，否则"只留几条"仍可能几 M → 救不回来
+    const capMsg = (m: Message): Message => ({
+      ...m,
+      content: Array.isArray(m.content) ? (m.content as any[]).map((b) => (b && b.type === "tool_result" ? { ...b, content: capToolResult(b.content) } : b)) : m.content,
+    });
+    this.messages = [
+      { role: "user", content: [{ type: "text", text: tt(
+        "【历史已精简】早期对话历史因过长已整体清理(防止撑爆上下文)。如需早期背景/进展，请去读你之前用 write_file 沉淀的文档(知识宫殿等知识库)再继续，别凭空假设。总目标与最近进展见下方。",
+        "[History trimmed] The earlier conversation history was cleared (it grew too large and would overflow the context). If you need earlier background/progress, read the docs you previously saved with write_file (your knowledge base) before continuing — don't assume. The overall goal and recent progress are below.",
+      ) }] },
+      ...recent.map(capMsg),
+    ];
+    this.usage.lastInput = 0;
+    this.lastCompactedLen = this.messages.length;
+    hooks.onCompact?.(before, this.messages.length);
+    return true;
+  }
+
   // —— 上下文压缩 ——
   private async maybeCompact(hooks: AgentHooks): Promise<void> {
     // token 阈值 或 消息条数阈值，任一命中就压（两者都可在设置里配；0=该项关闭）
@@ -744,33 +789,8 @@ export class Agent {
       try { const d = older.filter((m) => !isSummary(m)); if (d.length) hooks.onCompactArchive?.(d); } catch { /* 归档失败不影响主流程 */ }
     };
 
-    // ⚠ 摘要失败兜底(硬清理)：早先是"放弃本次压缩"，但那会让历史继续涨→连总结都超限→死结(会话再也发不出)。
-    // 改为：整体丢掉旧历史、只留最近 keepRecent 条(设置里"保留最近N条"可调)，注入一句提示让 AI 需要早期
-    // 背景时去读它之前 write_file 沉淀的文档(知识宫殿等)。适合自主推进这类"每个节点写库"的工作流。
-    if (!summaryText) {
-      archiveOlder();
-      // 保留的最近几条里若有巨型工具输出(老会话历史当初没封顶)，一并截断，否则"只留几条"仍可能几 M → 救不回来
-      const capMsg = (m: Message): Message => ({
-        ...m,
-        content: Array.isArray(m.content)
-          ? (m.content as any[]).map((b) => (b && b.type === "tool_result" ? { ...b, content: capToolResult(b.content) } : b))
-          : m.content,
-      });
-      this.messages = [
-        {
-          role: "user",
-          content: [{ type: "text", text: tt(
-            "【历史已精简】早期对话历史因过长已整体清理(防止撑爆上下文)。如需早期背景/进展，请去读你之前用 write_file 沉淀的文档(知识宫殿等知识库)再继续，别凭空假设。总目标与最近进展见下方。",
-            "[History trimmed] The earlier conversation history was cleared (it grew too large and would overflow the context). If you need earlier background/progress, read the docs you previously saved with write_file (your knowledge base) before continuing — don't assume. The overall goal and recent progress are below.",
-          ) }],
-        },
-        ...recent.map(capMsg),
-      ];
-      this.usage.lastInput = 0;
-      this.lastCompactedLen = this.messages.length;
-      hooks.onCompact?.(before, this.messages.length);
-      return;
-    }
+    // ⚠ 摘要失败兜底：早先是"放弃本次压缩"，但那会让历史继续涨→连总结都超限→死结。改为硬清理(见 hardTrim)。
+    if (!summaryText) { this.hardTrim(hooks); return; }
 
     archiveOlder();
     this.messages = [
