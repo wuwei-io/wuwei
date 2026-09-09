@@ -3426,22 +3426,35 @@ export function App() {
   const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number } | null>(null); // 免费模型当天次数用完(已登录)→弹窗引导
   const [quotaWarn, setQuotaWarn] = useState<{ model: string; usedPct: number; resetsAt: string | null } | null>(null); // 用高价模型烧周额度过快(≥50/80%)→弹窗建议切省钱模型
   const [payFaqOpen, setPayFaqOpen] = useState(false); // 缺币弹窗「常见问题」答疑弹窗（叠在支付弹窗之上，关闭即返回）
+  const [debugCtx, setDebugCtx] = useState<null | "weekly" | "shortage" | "freecap" | "browse">(null); // 仅 dev：调试快捷键强制支付弹窗的 context，覆盖真实推断
   const shortageShownAt = useRef(0); // 余额不足弹窗展示时刻，用于算用户看了多久
   // 关闭余额不足弹窗并记录用户动作 + 停留时长。action: close(叉/暂不) | upgrade(升级会员) | buy_pack(买积分包) | rebind(改用订阅)
   function closeShortage(action: string) {
     const dwellMs = shortageShownAt.current ? Date.now() - shortageShownAt.current : 0;
     void window.wuwei.track?.("credits_shortage_action", { action, dwell_ms: dwellMs });
     setCoinShortage(null);
+    setDebugCtx(null); // 关掉调试强制的 context
   }
-  // 【仅开发预览】Ctrl+Shift+9 直接弹出缺币弹窗看效果；import.meta.env.DEV 门控，生产构建自动剥离。
+  // 【仅开发预览】调试快捷键，逐个弹出各弹窗看文案/效果。import.meta.env.DEV 门控，生产构建自动剥离。
+  //   Ctrl+Shift+1 本月额度用完(weekly)  ·  2 无为币用完(shortage)  ·  3 今日免费额度用完(freecap购买)
+  //   Ctrl+Shift+4 选择套餐(browse)      ·  5 月额度烧太快提醒(quotaWarn)  ·  6 免费次数用完切托管(freeCapModal)
   useEffect(() => {
     if (!(import.meta as { env?: { DEV?: boolean } }).env?.DEV) return;
+    const openPay = (ctx: null | "weekly" | "shortage" | "freecap" | "browse") => {
+      setDebugCtx(ctx);
+      setCoinShortage({ message: "调试预览", balance: 0 });
+      shortageShownAt.current = Date.now();
+    };
     const h = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === "9" || e.code === "Digit9")) {
-        e.preventDefault();
-        setCoinShortage({ message: "预览", balance: 0 });
-        shortageShownAt.current = Date.now();
-      }
+      if (!e.ctrlKey || !e.shiftKey) return;
+      const c = e.code;
+      if (c === "Digit1") { e.preventDefault(); openPay("weekly"); }
+      else if (c === "Digit2") { e.preventDefault(); openPay("shortage"); }
+      else if (c === "Digit3") { e.preventDefault(); openPay("freecap"); }
+      else if (c === "Digit4") { e.preventDefault(); openPay("browse"); }
+      else if (c === "Digit5") { e.preventDefault(); setQuotaWarn({ model: "claude-opus-4-8", usedPct: 85, resetsAt: new Date(Date.now() + 20 * 864e5).toISOString() }); }
+      else if (c === "Digit6") { e.preventDefault(); setFreeCapModal({ model: "gpt-oss-20b-free", balance: 0 }); }
+      else if (c === "Digit9") { e.preventDefault(); openPay("shortage"); } // 兼容旧快捷键
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -8771,7 +8784,7 @@ export function App() {
           en={lang === "en"}
           balance={coinShortage.balance != null ? coinShortage.balance : wuwei?.coin.balance ?? 0}
           rebind={coinShortage.rebind}
-          context={coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : ((wuwei?.membership?.weeklyQuota?.active && (wuwei.membership.weeklyQuota.remainingPct ?? 0) <= 0) ? "weekly" : "shortage")}
+          context={debugCtx ?? (coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : ((wuwei?.membership?.weeklyQuota?.active && (wuwei.membership.weeklyQuota.remainingPct ?? 0) <= 0) ? "weekly" : "shortage"))}
           opts={payOpts}
           defaultSku={payDefaultSku}
           onClose={() => closeShortage("close")}
