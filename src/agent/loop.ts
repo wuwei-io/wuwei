@@ -13,6 +13,23 @@ import type {
 // ⚠ 必须在「调用时」求值，绝不能把 tt(...) 的结果存进模块顶层 const——那会在模块加载那刻把语言焊死，切语言不生效。
 const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
 
+// 工具输出封顶：单条工具结果过大(训练日志/大文件 dump)原样堆进历史会撑爆上下文——保留最近几条原文时
+// 这几条本身就超限，且大到连"压缩总结"这步都超限、压缩放弃 → 死结(会话再也发不出请求)。
+// 存历史前截断，保留头尾(尾部通常是最终结果/报错，最重要)，中间省略并标注。UI 工具卡片仍拿完整输出(不受影响)。
+const TOOL_RESULT_CAP = 60000; // 字符上限(约 15k token)；即便 keepRecent 条都满也稳在上下文窗口内
+function capToolResult(content: string): string {
+  if (typeof content !== "string" || content.length <= TOOL_RESULT_CAP) return content;
+  const omitted = content.length - 60000;
+  return (
+    content.slice(0, 20000) +
+    tt(
+      `\n\n[…… 中间省略 ${omitted} 字符：工具输出过长，已只保留头尾以免撑爆上下文 ……]\n\n`,
+      `\n\n[…… ${omitted} chars omitted: tool output too long, kept head+tail to avoid blowing the context ……]\n\n`,
+    ) +
+    content.slice(-40000)
+  );
+}
+
 export type PermissionDecision = "allow" | "deny";
 
 export interface AgentOptions {
@@ -479,7 +496,7 @@ export class Agent {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
-            content: out.content,
+            content: capToolResult(out.content), // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
             is_error: out.isError,
           };
         })();
@@ -715,23 +732,47 @@ export class Agent {
         .join("")
         .trim();
     } catch {
-      summaryText = ""; // 生成失败 → 下面直接放弃本次压缩，绝不丢历史
+      summaryText = ""; // 生成失败(通常=历史已大到连"总结"这步都超限)→ 走下面的硬清理兜底，绝不放任历史继续涨
     }
 
-    // ⚠ 摘要为空/失败：宁可不压、也不能把历史丢成空摘要(否则 AI 直接失忆)
-    if (!summaryText) return;
+    // 归档 older 原始消息(排除之前生成的摘要/精简提示本身，避免重复归档)——摘要成功与硬清理都用它
+    const isSummary = (m: Message) =>
+      (m.content || []).some(
+        (b: any) => b.type === "text" && /^【之前对话摘要】|^【历史已精简】|^\[Summary of earlier conversation\]|^\[History trimmed\]/.test(String(b.text || "").trim()),
+      );
+    const archiveOlder = () => {
+      try { const d = older.filter((m) => !isSummary(m)); if (d.length) hooks.onCompactArchive?.(d); } catch { /* 归档失败不影响主流程 */ }
+    };
 
-    // 归档：把这批将被摘要顶替的原始消息交给上层写进"永不压缩的完整日志"。
-    // 排除之前压缩生成的摘要消息本身(它不是真实对话，且它顶替的原始消息早已归档过)，避免重复。
-    try {
-      const isSummary = (m: Message) =>
-        (m.content || []).some(
-          (b: any) => b.type === "text" && /^【之前对话摘要】|^\[Summary of earlier conversation\]/.test(String(b.text || "").trim()),
-        );
-      const droppedReal = older.filter((m) => !isSummary(m));
-      if (droppedReal.length) hooks.onCompactArchive?.(droppedReal);
-    } catch { /* 归档失败绝不影响压缩主流程 */ }
+    // ⚠ 摘要失败兜底(硬清理)：早先是"放弃本次压缩"，但那会让历史继续涨→连总结都超限→死结(会话再也发不出)。
+    // 改为：整体丢掉旧历史、只留最近 keepRecent 条(设置里"保留最近N条"可调)，注入一句提示让 AI 需要早期
+    // 背景时去读它之前 write_file 沉淀的文档(知识宫殿等)。适合自主推进这类"每个节点写库"的工作流。
+    if (!summaryText) {
+      archiveOlder();
+      // 保留的最近几条里若有巨型工具输出(老会话历史当初没封顶)，一并截断，否则"只留几条"仍可能几 M → 救不回来
+      const capMsg = (m: Message): Message => ({
+        ...m,
+        content: Array.isArray(m.content)
+          ? (m.content as any[]).map((b) => (b && b.type === "tool_result" ? { ...b, content: capToolResult(b.content) } : b))
+          : m.content,
+      });
+      this.messages = [
+        {
+          role: "user",
+          content: [{ type: "text", text: tt(
+            "【历史已精简】早期对话历史因过长已整体清理(防止撑爆上下文)。如需早期背景/进展，请去读你之前用 write_file 沉淀的文档(知识宫殿等知识库)再继续，别凭空假设。总目标与最近进展见下方。",
+            "[History trimmed] The earlier conversation history was cleared (it grew too large and would overflow the context). If you need earlier background/progress, read the docs you previously saved with write_file (your knowledge base) before continuing — don't assume. The overall goal and recent progress are below.",
+          ) }],
+        },
+        ...recent.map(capMsg),
+      ];
+      this.usage.lastInput = 0;
+      this.lastCompactedLen = this.messages.length;
+      hooks.onCompact?.(before, this.messages.length);
+      return;
+    }
 
+    archiveOlder();
     this.messages = [
       // 这条会被原样渲染成一条用户消息 → 标题跟随界面语言
       {
