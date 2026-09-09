@@ -1917,8 +1917,8 @@ function TrialPayModal({
                 : <>明天可继续使用免费额度。如果着急使用，可<button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>升级会员</button>或购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
             : context === "weekly"
             ? (en
-                ? <>Your monthly quota is used up — it refreshes next month. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
-                : <>您的本月额度已消耗完，可以等下月额度恢复后继续使用。如果着急使用，可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
+                ? <>Your monthly quota is used up — it refreshes at your next billing cycle. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
+                : <>您的本月额度已用完，将在下个订阅周期自动恢复。着急使用可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续。</>)
             : context === "browse" ? (en ? "One subscription, every top flagship. Faster replies, fuller quota." : "一份订阅，用遍全球最强旗舰，响应更快、额度更足。") : (en ? "Pick a plan to keep going. Every top model, one click away." : "选个套餐接着用，全球最强旗舰随便切换。")}</p>
         </div>
 
