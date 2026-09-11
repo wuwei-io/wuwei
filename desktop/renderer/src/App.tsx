@@ -4010,14 +4010,6 @@ export function App() {
     }
     return null;
   }
-  // 免费模型用完 → 建议切到的托管模型。规则：GLM-5.3 Flash 用完 → 托管 GLM-5.3 Flash；
-  // 其余所有免费模型 → 统一托管 DeepSeek V4 Flash。托管 GLM 目录里若暂无则兜底回 DeepSeek。
-  function hostedEquivalentOf(freeModel: string): { provider: (typeof providerList)[number]; model: string } | null {
-    const base = (freeModel || "").replace(/-free$/i, "").toLowerCase();
-    const DEEPSEEK = "deepseek-v4-flash";
-    if (/glm-5\.3-flash/.test(base)) return findHostedModel("glm-5.3-flash") || findHostedModel(DEEPSEEK);
-    return findHostedModel(DEEPSEEK);
-  }
   // 一键切到指定托管平台+模型(和 quickProvider 同套配置，但指定具体 model)
   async function switchToHosted(prov: (typeof providerList)[number], model: string) {
     const r = await window.wuwei.getSettings();
@@ -7185,10 +7177,13 @@ export function App() {
           {/* 上游厂商暂不可用(upstream_error) → 一键换到可用模型继续(登录→DeepSeek 顶级；游客→另一免登录模型)+自动重发上一句。
               这类错误文案不以「出错/Error」开头，走不到下面那条栏，故单列。绝不让用户对着「不可用」干等。 */}
           {!busy && unavailModel && (() => {
-            const prefer = wuwei
-              ? ["deepseek-v4-flash-free", "glm-5.3-flash-free", "glm-4-flash"]
-              : ["glm-4-flash", "glm-z1-flash", "glm-4.7-flash"];
-            const fb = prefer.find((m) => m !== unavailModel && !(!wuwei && loginReqModelIds.has(m)));
+            // 兜底模型只从后台下发的「免费池」里按序取第一个可用的，绝不硬编码具体模型名。
+            // 曾硬编码 deepseek-v4-flash-free / glm-5.3-flash-free：这俩名字带 free、实际走厂商付费通道，
+            // 后台下架(hidden)后老逻辑照推不误，用户点一下就在烧真金。付费模型一律只出现在无为托管里。
+            const fb = mergedPresets
+              .filter((p) => p.hosted)
+              .flatMap((p) => p.models)
+              .find((m) => m !== unavailModel && freeModelIds.has(m) && !(!wuwei && loginReqModelIds.has(m)));
             if (!fb) return null;
             const fbLabel = MODEL_LABEL_OVERRIDES[fb] || (lang === "en" ? modelLabelsEn.get(fb) : undefined) || modelLabels.get(fb) || fb;
             return (
@@ -8723,8 +8718,6 @@ export function App() {
       {/* 免费模型当天次数用完(已登录)：弹窗引导——明天继续 / 一键切到对应托管付费模型。无为币再用完才走升级窗 */}
       {freeCapModal && (() => {
         const en = lang === "en";
-        const labelOf = (m: string) => MODEL_LABEL_OVERRIDES[m] || (en ? modelLabelsEn.get(m) : undefined) || modelLabels.get(m) || m;
-        const eq = hostedEquivalentOf(freeCapModal.model);
         const bal = freeCapModal.balance;
         return (
           <>
@@ -8738,15 +8731,11 @@ export function App() {
                   : `明天免费额度会重置，可以继续免费使用哦～ 如果着急使用，可以切换到无为托管模型，按 token 计费扣无为币，你当前还有 ${bal} 无为币，可以直接使用哦。`}
               </div>
               <div className="freecap-actions">
-                {eq ? (
-                  <button className="freecap-primary" onClick={() => { void switchToHosted(eq.provider, eq.model); setFreeCapModal(null); }}>
-                    {en ? `Switch to hosted ${labelOf(eq.model)} — keep going now` : `一键切到托管 ${labelOf(eq.model)}，立刻继续用`}
-                  </button>
-                ) : (
-                  <button className="freecap-primary" onClick={() => { setShowProviderMenu(true); setFreeCapModal(null); }}>
-                    {en ? "Switch to a Wuwei-hosted model" : "换个无为托管模型继续用"}
-                  </button>
-                )}
+                {/* 只开「无为托管」平台入口让用户自己挑，不再一键把人推到某个具体付费模型上：
+                    付费模型一律只在无为托管里，免费场景不替用户做付费决定(曾默认推 DeepSeek V4 Flash)。 */}
+                <button className="freecap-primary" onClick={() => { setShowProviderMenu(true); setFreeCapModal(null); }}>
+                  {en ? "Switch to a Wuwei-hosted model" : "换个无为托管模型继续用"}
+                </button>
                 <button className="freecap-ghost" onClick={() => setFreeCapModal(null)}>{en ? "Maybe tomorrow" : "明天再说"}</button>
               </div>
             </div>
