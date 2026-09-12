@@ -3960,7 +3960,7 @@ export function App() {
           apiKey: slot.apiKey,
           oauthToken: slot.oauthToken,
           baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
-          model: model || slot.model || p.models[0] || cur.model,
+          model: model || slot.model || defaultModelOf(p) || cur.model,
         });
         setCurProviderId(providerId);
         return;
@@ -3977,6 +3977,13 @@ export function App() {
     if (model && cur.model !== model) window.wuwei.setSettings({ ...cur, model });
   }
 
+  // 切平台时该默认选哪个模型：未登录时跳过「需登录」的，选第一个免登录可用的。
+  // 免费池顺序由后台 sort 决定，第一个未必 anon 可用(现在排头的 Nex N2.5 Pro 就需登录)——
+  // 直接取 models[0] 会让未登录用户默认选中一个用不了的模型，发消息时才被自动切走，白多一次摩擦。
+  function defaultModelOf(p: { models: string[] }): string | undefined {
+    if (wuwei) return p.models[0];
+    return p.models.find((m) => !loginReqModelIds.has(m)) || p.models[0];
+  }
   // 快捷切换供应商：带出该平台已存的 key/baseUrl，默认用该平台第一个模型
   async function quickProvider(p: (typeof PRESETS)[number]) {
     // 访客门禁：未登录只能选「免费体验(anon)」，切到别的平台一律引导登录
@@ -3995,7 +4002,7 @@ export function App() {
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
       baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
-      model: p.models[0] || cur.model,
+      model: defaultModelOf(p) || cur.model,
     });
     setRate(null); // 清掉上一个平台的订阅额度残留(余额类无 evt:ratelimits 不会覆盖)，新平台 emitAccount 会重推
     setCurProviderId(p.id);
