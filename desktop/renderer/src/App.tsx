@@ -5030,8 +5030,9 @@ export function App() {
     if (!wuwei && meta.model !== "glm-4.7-flash" && !anonUsable && !_afterAnonSwitch) {
       setInput(text);
       push({ type: "notice", text: lang === "en"
-        ? "This model needs sign-in. Switched to GLM-4.7-Flash (no login) so you can keep going. Sign in to unlock DeepSeek V4 Flash, a top open-source model that's blazing fast."
-        : "当前模型需登录，已为你切到 GLM-4.7-Flash（免登录）继续。登录即可解锁 DeepSeek V4 Flash：目前顶级的开源模型，速度飞快。" });
+        // 别在文案里点名具体模型：免费池后台随时增删(原文案点名的 DeepSeek V4 Flash 已下架)，点了名就会过时。
+        ? "This model needs sign-in. Switched to GLM-4.7-Flash (no login) so you can keep going. Sign in to unlock the full free lineup — including the stronger coding models."
+        : "当前模型需登录，已为你切到 GLM-4.7-Flash（免登录）继续。登录即可解锁全部免费模型，专攻代码的更强模型都在里面。" });
       void (async () => {
         const r = await window.wuwei.getSettings();
         const cur = r?.settings || {};
