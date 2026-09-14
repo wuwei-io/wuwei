@@ -63,6 +63,7 @@ import {
   setSessionDiscuss,
   setSessionModel,
   setSessionBinding,
+  setSessionEmployee,
   setSessionRunning,
   clearInterrupted,
   dismissResume,
@@ -93,7 +94,7 @@ import {
   type SessionBal,
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
-import { registerTeam, unregisterTeam } from "./team/index.js";
+import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -191,8 +192,68 @@ function send(channel: string, payload?: unknown) {
 
 // 「AI 员工团队」可选模块的挂载/卸载。开关变动时当场生效，不用重启。
 // 关闭状态下本模块零参与：IPC 通道摘掉、不读写 ~/.wuwei/team/、不占启动时间。
+/**
+ * 按员工绑定的模型建 provider（与 providerForSession 同一套路：临时改 env → makeProvider → 还原）。
+ * 员工没绑模型就返回 null，调用方回退全局 provider。
+ * 这是「文案用便宜的、架构评审用贵的」这个成本分层能成立的关键。
+ */
+function providerForEmployee(emp: { model?: { providerId: string; model: string } }): ReturnType<typeof makeProvider> | null {
+  const gs = loadSettings();
+  if (!emp.model?.providerId || !emp.model.model || !gs) return null;
+  try {
+    const slot = (gs.creds || {})[emp.model.providerId] || {};
+    const s: Settings = {
+      ...gs,
+      providerId: emp.model.providerId,
+      model: emp.model.model,
+      baseUrl: slot.baseUrl ?? gs.baseUrl,
+      apiKey: slot.apiKey,
+      oauthToken: slot.oauthToken,
+    };
+    try {
+      applyEnvFromSettings(s);
+      return makeProvider(loadConfig());
+    } finally {
+      applyEnvFromSettings(gs); // 必须还原，否则后续全局请求会跑到员工的平台上
+    }
+  } catch {
+    return null;
+  }
+}
+
 function syncTeamModule(s: Settings | null) {
-  if (teamEnabled(s)) registerTeam(ipcMain, { send, log });
+  if (teamEnabled(s))
+    registerTeam(ipcMain, {
+      send,
+      log,
+      // 开一名员工的私聊：与 session:new 同一套流程，只是先把 employeeId 写进 meta，
+      // 这样 getAgent 建 Agent 时就能读到并套上人格。
+      startChat: (employeeId, employeeName) => {
+        lockSessionModel(currentId); // 同 session:new：先锁住正要离开的会话的模型
+        currentId = randomUUID();
+        setSessionEmployee(currentId, employeeId, employeeName);
+        const a = getAgent(currentId);
+        send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
+        send("evt:sessions", listSessions());
+        sendUsageFor(currentId);
+        void emitAccount();
+      },
+      baseSys: () => sysPrompt,
+      // 跑一名员工一轮（房间用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
+      // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
+      runEmployee: async ({ employee, sys, history, input, signal }) => {
+        const p = providerForEmployee(employee) || provider;
+        if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
+        const all = desktopTools();
+        const tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
+        const map = new Map(tools.map((t) => [t.name, t]));
+        const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}` }, map, agentOpts);
+        if (history.length) a.setMessages(history as any);
+        await a.send(input, {} as any, signal);
+        const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
+        return last ? msgFullText(last as any) : "";
+      },
+    });
   else unregisterTeam(ipcMain);
 }
 
@@ -1547,8 +1608,15 @@ function getAgent(id: string): Agent | null {
   let a = agents.get(id);
   if (!a) {
     const meta = listSessions().find((s) => s.id === id);
+    // 「AI 员工团队」：会话绑了员工就套上他的人格与工具白名单；没绑(或模块没开)时 sys/tools 原样返回
+    const emp = meta?.employeeId && teamEnabled(loadSettings())
+      ? applyEmployee(meta.employeeId, sysPrompt, desktopTools())
+      : { sys: sysPrompt, tools: desktopTools() };
+    const empToolMap = emp.tools.length === desktopTools().length
+      ? desktopToolMap()
+      : new Map([...desktopToolMap()].filter(([n]) => emp.tools.some((t) => t.name === n)));
     // 用该会话自己的 provider 建 agent(而非全局)——出生即绑自己的模型，全局漂移带不动它
-    a = new Agent(providerForSession(id) || provider, sysPrompt, desktopTools(), { cwd, sessionId: id }, desktopToolMap(), agentOpts);
+    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id }, empToolMap, agentOpts);
     a.setMessages(loadMessages(id));
     if (meta?.usage) a.setUsage(meta.usage); // 恢复该会话的用量
     agents.set(id, a);

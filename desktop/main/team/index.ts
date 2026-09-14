@@ -6,9 +6,11 @@
 //    再回滚 index.ts / preload / App.tsx 那几处调用即可，其余代码零改动。
 
 import type { IpcMain } from "electron";
-import type { Employee, TeamAppCard } from "../../../src/team/types.js";
+import type { Employee, Room, TeamAppCard } from "../../../src/team/types.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
+import { abortRoom, isRoomRunning, runRoomTurn, type RunEmployeeArgs } from "./orchestrator.js";
+import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom } from "./room.js";
 import {
   addEmployees,
   installApp,
@@ -25,7 +27,37 @@ export type TeamDeps = {
   /** 广播给渲染层，让界面跟着刷新（与主进程其它 evt:* 同一套机制） */
   send: (channel: string, payload?: unknown) => void;
   log: (tag: string, ...args: unknown[]) => void;
+  /** 开一个与该员工的新私聊会话（主进程持有 currentId/getAgent，故由它实现，本模块只提需求） */
+  startChat: (employeeId: string, employeeName: string) => void;
+  /** 跑一名员工一轮（房间用）。provider 构造/工具集/凭证刷新都在主进程，这里不重复实现 */
+  runEmployee: (args: RunEmployeeArgs) => Promise<string>;
+  /** 基础系统提示词：工作目录、工具用法、安全红线等运行必需信息 */
+  baseSys: () => string;
 };
+
+/** 按 id 取员工；模块关闭时不会有人调用它 */
+export function findEmployee(id: string): Employee | null {
+  if (!id) return null;
+  return loadEmployees().find((e) => e.id === id) ?? null;
+}
+
+/**
+ * 把员工的人格与工具白名单套到一个会话上。
+ * ⭐ 人格是「追加」而不是「替换」基础提示词——基础提示词里有工作目录、工具用法、
+ *    安全red line 等运行必需的信息，换掉会让员工变成一个不会用工具的聊天机器人。
+ * 工具白名单缺省(undefined/空)= 不裁剪，保持全量。
+ */
+export function applyEmployee<T extends { name: string }>(
+  employeeId: string | undefined,
+  baseSys: string,
+  allTools: T[],
+): { sys: string; tools: T[]; employee: Employee | null } {
+  const emp = employeeId ? findEmployee(employeeId) : null;
+  if (!emp) return { sys: baseSys, tools: allTools, employee: null };
+  const sys = `${baseSys}\n\n---\n\n## 你的身份\n\n以下是你在这个团队里的角色设定，请始终以这个身份工作：\n\n${emp.persona}`;
+  const tools = emp.tools?.length ? allTools.filter((t) => emp.tools!.includes(t.name)) : allTools;
+  return { sys, tools, employee: emp };
+}
 
 const CHANNELS = [
   "team:state",
@@ -36,6 +68,14 @@ const CHANNELS = [
   "team:employee:remove",
   "team:import:scan",
   "team:import:apply",
+  "team:chat",
+  "team:rooms",
+  "team:room:create",
+  "team:room:update",
+  "team:room:delete",
+  "team:room:messages",
+  "team:room:send",
+  "team:room:abort",
   "team:purge",
 ] as const;
 
@@ -114,6 +154,59 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     deps.log("team", "导入员工", `解析 ${list.length} 名，新增 ${added} 名`);
     push();
     return { ok: true, added, parsed: list.length, ...snapshot() };
+  });
+
+  // 开一个与该员工的私聊：本质就是普通会话，只是绑了 employeeId，Agent 构建时套上人格与工具白名单
+  ipcMain.handle("team:chat", (_e, employeeId: string) => {
+    const emp = findEmployee(String(employeeId || ""));
+    if (!emp) return { ok: false, error: "unknown_employee" };
+    deps.startChat(emp.id, emp.name);
+    return { ok: true };
+  });
+
+  // ── 房间（多员工协作）──────────────────────────────────────────
+  const rooms = () => ({ rooms: loadRooms() });
+
+  ipcMain.handle("team:rooms", () => rooms());
+
+  ipcMain.handle("team:room:create", (_e, name: string, members: string[], coordinator?: string) => {
+    const r = createRoom(String(name || ""), Array.isArray(members) ? members.map(String) : [], coordinator);
+    deps.log("team", "建房间", r.name, `${r.members.length} 名成员`);
+    deps.send("evt:team-rooms", rooms());
+    return { ok: true, room: r, ...rooms() };
+  });
+
+  ipcMain.handle("team:room:update", (_e, id: string, patch: Partial<Room>) => {
+    updateRoom(String(id || ""), patch || {});
+    deps.send("evt:team-rooms", rooms());
+    return { ok: true, ...rooms() };
+  });
+
+  ipcMain.handle("team:room:delete", (_e, id: string) => {
+    deleteRoom(String(id || ""));
+    deps.send("evt:team-rooms", rooms());
+    return { ok: true, ...rooms() };
+  });
+
+  ipcMain.handle("team:room:messages", (_e, id: string) => ({
+    messages: loadRoomMessages(String(id || "")),
+    running: isRoomRunning(String(id || "")),
+  }));
+
+  // 在房间里发言：存消息 → 按 @ 决定唤醒谁 → 并行跑 → 结果回房间。不 await，进度走 evt:team-room
+  ipcMain.handle("team:room:send", (_e, id: string, text: string) => {
+    void runRoomTurn(String(id || ""), String(text || ""), {
+      send: deps.send,
+      log: deps.log,
+      runEmployee: deps.runEmployee,
+      baseSys: deps.baseSys,
+    });
+    return { ok: true };
+  });
+
+  ipcMain.handle("team:room:abort", (_e, id: string) => {
+    abortRoom(String(id || ""));
+    return { ok: true };
   });
 
   // 关掉模块时用户可选「同时清除数据」：删掉 ~/.wuwei/team/ 整个目录

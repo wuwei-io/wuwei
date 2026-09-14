@@ -99,7 +99,7 @@ function EmployeeIcon({ icon, name }: { icon?: string; name: string }) {
 type ImportCandidate = { sourceId: string; name: string; title?: string; blurb?: string; icon?: string };
 type ImportSource = { kind: string; path: string; candidates: ImportCandidate[] };
 
-export function AppStore({ en }: { en: boolean }) {
+export function AppStore({ en, onEmployees }: { en: boolean; onEmployees?: (list: Employee[]) => void }) {
   const [state, setState] = useState<TeamState>({ apps: [], employees: [] });
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -112,10 +112,17 @@ export function AppStore({ en }: { en: boolean }) {
 
   useEffect(() => {
     let alive = true;
-    api?.state().then((s: TeamState) => alive && s && setState(s));
+    api?.state().then((s: TeamState) => {
+      if (!alive || !s) return;
+      setState(s);
+      onEmployees?.(s.employees || []); // 上抛给房间界面：建群选人要用同一份员工表
+    });
     // 主进程侧任何变更都会广播 evt:team，界面跟着刷新（与 MCP 面板同一套机制）
     const off = (window as any).wuwei?.onEvent?.((ch: string, p: TeamState) => {
-      if (ch === "evt:team" && p) setState(p);
+      if (ch === "evt:team" && p) {
+        setState(p);
+        onEmployees?.(p.employees || []);
+      }
     });
     return () => {
       alive = false;
@@ -166,7 +173,12 @@ export function AppStore({ en }: { en: boolean }) {
         {hired.length > 0 && (
           <div className="team-emp-grid">
             {hired.map((e) => (
-              <div className="team-emp" key={e.id}>
+              <button
+                className="team-emp team-emp-btn"
+                key={e.id}
+                title={en ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                onClick={() => void api.chat(e.id)}
+              >
                 <span className="team-emp-ico">
                   <EmployeeIcon icon={e.icon} name={e.name} />
                 </span>
@@ -177,7 +189,12 @@ export function AppStore({ en }: { en: boolean }) {
                   </span>
                   {e.blurb && <span className="team-emp-blurb">{e.blurb}</span>}
                 </span>
-              </div>
+                <span className="team-emp-go">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </span>
+              </button>
             ))}
           </div>
         )}

@@ -44,6 +44,7 @@ export interface SessionMeta {
   running?: boolean; // 正在跑一轮(开跑置 true、结束置 false)；能跨重启存活→崩溃/强杀时残留 true
   interrupted?: boolean; // 上次运行被强制中断(启动时检测到残留 running=true 或内容明显干到一半)→提示恢复
   resumeDismissed?: boolean; // 用户点过「忽略」→内容启发式不再重复提示该会话(强杀 running 仍会重新提示)
+  employeeId?: string; // 「AI 员工团队」可选模块：本会话在跟哪名员工私聊(空=普通会话)。模块关着时永远不会被写入
 }
 
 function ensure() {
@@ -149,6 +150,22 @@ export function setSessionModel(id: string, model?: string, providerId?: string)
 
 // 方案B：存该会话「完整供应商身份」(模型+平台+鉴权种类+端点)——重建单会话 provider 的唯一真相源。
 // 每次该会话被聚焦并改模型/切平台时写入，切回来即用它自己的身份重建 provider，全局漂移再也带不动它。
+/**
+ * 把会话标记为「与某名 AI 员工的私聊」。只有「AI 员工团队」模块开启时才会被调用。
+ * 会话不存在时先建一条 meta——新建会话在首条消息落盘前 listSessions() 里还没有它。
+ */
+export function setSessionEmployee(id: string, employeeId: string, title?: string) {
+  const l = listSessions();
+  const s = l.find((x) => x.id === id);
+  if (s) {
+    s.employeeId = employeeId;
+    if (title) s.title = title;
+  } else {
+    l.unshift({ id, title: title || "", updatedAt: Date.now(), employeeId });
+  }
+  saveList(l);
+}
+
 export function setSessionBinding(
   id: string,
   b: { model?: string; providerId?: string; kind?: string; baseUrl?: string },

@@ -53,3 +53,46 @@ export interface TeamApp {
 export interface TeamAppCard extends TeamApp {
   installed: boolean;
 }
+
+// ───────────────────────── 房间（多员工协作）─────────────────────────
+
+/**
+ * 房间里的一条消息。
+ * ⭐ 与普通会话最大的区别：带 speaker（谁说的）。普通会话的 Message 只有 role: user|assistant，
+ *    装不下"三个人在同一个上下文里说话"，所以房间必须自己存一份原始多方流，
+ *    发给某个员工前再投影成他视角的 user/assistant 交替历史（见 projection.ts）。
+ */
+export interface RoomMessage {
+  id: string;
+  ts: number;
+  speaker: {
+    /** 人类固定用 "me"；员工用 employee.id */
+    id: string;
+    name: string;
+    kind: "human" | "agent";
+  };
+  text: string;
+  /** 本条 @ 了哪些员工（存 employee.id）。空=没点名 */
+  mentions?: string[];
+  /** 出错时留痕，界面上标红，不当正常发言参与后续投影 */
+  error?: boolean;
+}
+
+export interface Room {
+  id: string;
+  name: string;
+  /** 成员（employee.id）。顺序即界面显示顺序 */
+  members: string[];
+  /**
+   * 常驻协调者（employee.id）：不用 @ 也会响应，负责拆活派活。
+   * 对应 openclaw 那边「CEO requireMention=false」的角色。空=没有，谁都得被 @ 才说话。
+   */
+  coordinator?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** 预算闸：单条消息最多唤醒几名员工，防一句 @所有人 把全员长任务点着。默认 3 */
+  maxWake?: number;
+  /** 最后一条消息摘要，列表里展示 */
+  lastText?: string;
+}
+

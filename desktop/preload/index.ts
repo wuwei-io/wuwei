@@ -44,8 +44,11 @@ const EVENTS = [
   // 「最后活动时间」，好让自主推进看门狗把"正在跑长工具的合法静默"与"真卡死"区分开。
   // 之前漏在白名单外 → 事件被 preload 拦掉、到不了渲染层，两侧代码一直在空转。
   "evt:heartbeat",
-  // 「AI 员工团队」可选模块的状态广播（应用/员工列表变了）。模块关闭时主进程根本不发。
-  "evt:team",
+  // 「AI 员工团队」可选模块的状态广播。模块关闭时主进程根本不发。
+  "evt:team", // 应用/员工列表变了
+  "evt:team-rooms", // 房间列表变了
+  "evt:team-room", // 某个房间有新消息 / 运行状态变了
+  "evt:team-room-hint", // 房间提示（如没人被点名）
 ] as const;
 
 // 会话总目标"任务契约"：目标 + 调研 + 规则(要做/不做) + 树形分步计划(每节点带说明+验收+子节点，最多3层)
@@ -189,6 +192,15 @@ const api = {
     toggle: (appId: string) => ipcRenderer.invoke("team:toggle", appId),
     updateEmployee: (id: string, patch: unknown) => ipcRenderer.invoke("team:employee:update", id, patch),
     removeEmployee: (id: string) => ipcRenderer.invoke("team:employee:remove", id),
+    chat: (employeeId: string) => ipcRenderer.invoke("team:chat", employeeId),
+    rooms: () => ipcRenderer.invoke("team:rooms"),
+    roomCreate: (name: string, members: string[], coordinator?: string) =>
+      ipcRenderer.invoke("team:room:create", name, members, coordinator),
+    roomUpdate: (id: string, patch: unknown) => ipcRenderer.invoke("team:room:update", id, patch),
+    roomDelete: (id: string) => ipcRenderer.invoke("team:room:delete", id),
+    roomMessages: (id: string) => ipcRenderer.invoke("team:room:messages", id),
+    roomSend: (id: string, text: string) => ipcRenderer.invoke("team:room:send", id, text),
+    roomAbort: (id: string) => ipcRenderer.invoke("team:room:abort", id),
     importScan: () => ipcRenderer.invoke("team:import:scan"),
     importApply: (sourcePath: string, ids: string[]) => ipcRenderer.invoke("team:import:apply", sourcePath, ids),
     purge: () => ipcRenderer.invoke("team:purge"),

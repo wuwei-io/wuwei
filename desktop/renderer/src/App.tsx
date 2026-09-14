@@ -15,6 +15,7 @@ import { BabyPyramid } from "./baby/BabyPyramid.js";
 import * as Ic from "./baby/icons.js";
 // 「AI 员工团队」可选模块：整个渲染层只在这里引一次（可插拔契约，见设计方案第七节）
 import { AppStore } from "./team/AppStore.js";
+import { RoomView } from "./team/RoomView.js";
 
 // 数字婴儿生命体征：后端 /alive/status 一次给全，界面状态卡片全靠它渲染
 type BabyVitals = {
@@ -3104,7 +3105,8 @@ export function App() {
   // 「AI 员工团队」可选模块（默认关）。真相源是主进程 settings.app.teamEnabled，这里存一份 localStorage 镜像
   // 只为首帧就能正确显隐入口（否则要等 getSettings 回来，侧边栏会闪一下）；挂载后用 settings 校准。
   const [teamEnabled, setTeamEnabled] = useState(() => localStorage.getItem("wuwei-team-enabled") === "1");
-  const [appView, setAppView] = useState<null | "store">(null); // 主区是否显示应用中心
+  const [appView, setAppView] = useState<null | "store" | "rooms">(null); // 主区显示应用中心 / 房间
+  const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，房间界面建群选人要用
   const [babyExists, setBabyExists] = useState(() => localStorage.getItem("minicc-baby-exists") === "1");
   const [babyDiary, setBabyDiaryState] = useState("");
   const [babyCurious, setBabyCuriousState] = useState("");
@@ -6470,16 +6472,32 @@ export function App() {
       {/* 主区 */}
       <div className="main">
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
-        {/* 应用中心（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
-        {teamEnabled && appView === "store" && (
+        {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
+        {teamEnabled && (appView === "store" || appView === "rooms") && (
           <div className="baby-panel">
             <div className="baby-header">
               <span className="baby-title">{lang === "en" ? "Apps & teammates" : "应用中心"}</span>
+              <button
+                className={"mcp-btn" + (appView === "store" ? " save" : "")}
+                onClick={() => setAppView("store")}
+              >
+                {lang === "en" ? "Teammates" : "员工"}
+              </button>
+              <button
+                className={"mcp-btn" + (appView === "rooms" ? " save" : "")}
+                onClick={() => setAppView("rooms")}
+              >
+                {lang === "en" ? "Rooms" : "房间"}
+              </button>
               <button className="baby-back" onClick={() => setAppView(null)}>
                 {lang === "en" ? "Back" : "返回"}
               </button>
             </div>
-            <AppStore en={lang === "en"} />
+            {appView === "store" ? (
+              <AppStore en={lang === "en"} onEmployees={setTeamEmployees} />
+            ) : (
+              <RoomView en={lang === "en"} employees={teamEmployees} onBack={() => setAppView("store")} />
+            )}
           </div>
         )}
         {agiView === "baby" && (
