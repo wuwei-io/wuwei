@@ -1041,6 +1041,15 @@ function applySettings(sIn: Settings, forceSid?: string) {
   ctxWindow = cfg.contextWindow;
   subFlag = isSub(s.providerId);
   sysPrompt = buildSysPrompt(cwd, modelLabel, s.providerId); // 底层模型/自定义提示词变了都同步
+  // 压缩阈值跟着模型走：留空(自动)时它是「当前模型上下文 × 80%」，换模型就该重算。
+  // 原来只在启动时算一次 → 启动时用 200k 的模型、中途切到 1M 的，阈值还卡在旧的 16 万，
+  // 长会话十几万 token 就被压掉。用户显式填过的阈值/条数优先，不被自动值覆盖。
+  agentOpts = {
+    compactThreshold: s?.compactThreshold && s.compactThreshold > 0 ? s.compactThreshold : cfg.compactThreshold,
+    compactMsgThreshold: s?.compactMsgThreshold && s.compactMsgThreshold > 0 ? s.compactMsgThreshold : 0,
+    keepRecent: s?.keepRecent && s.keepRecent > 0 ? s.keepRecent : cfg.keepRecentTurns,
+  };
+  for (const a of agents.values()) a.setCompactOpts(agentOpts); // 只改阈值，不动正在跑的请求
   // 判定本次是否只是"同平台同模型的凭证刷新"(token/key 变了、模型没变)。这种情况下连正在跑的会话也
   // 必须换上带新 token 的 provider——否则 token 过期被清空后重新授权,那个正在重试的会话永远拿不到新
   // token,会一直报"未授权"(且"总结交接"也在该会话里跑→同样失败)。真正切模型/平台时不在此列。

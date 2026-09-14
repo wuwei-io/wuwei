@@ -117,10 +117,13 @@ export function loadConfig(): Config {
   let ctxWindow = Number(pick("MINICC_CONTEXT_WINDOW")) || contextWindowFor(model);
   // Codex 订阅通道对 gpt-5.x 封顶 400k(OpenAI Codex 自身限制，模型本身支持 1M 需走 API key)
   if (provider === "codex" && ctxWindow > 400_000) ctxWindow = 400_000;
-  // Claude 订阅(OAuth)通道同理封顶 200k：1M 是 API key 通道的能力，订阅端给不到。
-  // 不封的话占用条按 1M 算，用户看着「才 30 万、远没到 100 万」却一直报错，还会被误读成限流。
-  // 实测上限以服务端报错为准(prompt is too long: X > Y)；要覆盖用 MINICC_CONTEXT_WINDOW。
-  if (provider === "anthropic" && authMode === "oauth" && ctxWindow > 200_000) ctxWindow = 200_000;
+  // 这里曾对 Claude 订阅(OAuth)通道封顶 200k，理由是"1M 是 API key 通道的能力，订阅端给不到"。
+  // 2026-09-14 用 Max 20x 订阅 + claude-opus-4-8 实测推翻：
+  //   · 故意发 130 万 token → 服务端回 "prompt is too long: 1300056 tokens > 1000000 maximum"
+  //   · 实发 30 万 token   → HTTP 200，input_tokens=300054，正常出结果
+  // 即订阅端上限就是模型本身的 1M。封顶留着的实际危害是压缩阈值被算成 200k×80%=16 万，
+  // 长会话才十几万 token 就被压掉、白丢大量原文。故取消，改由 contextWindowFor 按模型给。
+  // 将来订阅端若收紧，用 MINICC_CONTEXT_WINDOW 覆盖；真撞上限也有 loop.ts 的超限硬清理兜底。
 
   return {
     provider,
