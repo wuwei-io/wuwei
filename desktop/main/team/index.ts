@@ -8,7 +8,9 @@
 import type { IpcMain } from "electron";
 import type { Employee, TeamAppCard } from "../../../src/team/types.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
+import { detectSources, importFrom } from "./import.js";
 import {
+  addEmployees,
   installApp,
   loadApps,
   loadEmployees,
@@ -32,6 +34,8 @@ const CHANNELS = [
   "team:toggle",
   "team:employee:update",
   "team:employee:remove",
+  "team:import:scan",
+  "team:import:apply",
   "team:purge",
 ] as const;
 
@@ -95,6 +99,21 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     removeEmployee(String(id || ""));
     push();
     return { ok: true, ...snapshot() };
+  });
+
+  // 扫描本机可导入的员工来源（openclaw 的 IDENTITY.md）。纯读文件，不需要 openclaw 在运行。
+  ipcMain.handle("team:import:scan", () => {
+    const sources = detectSources();
+    deps.log("team", "扫描导入源", `${sources.length} 个`, sources.map((s) => `${s.kind}:${s.candidates.length}名`).join(" "));
+    return { sources };
+  });
+
+  ipcMain.handle("team:import:apply", (_e, sourcePath: string, ids: string[]) => {
+    const list = importFrom(String(sourcePath || ""), Array.isArray(ids) ? ids.map(String) : []);
+    const { added } = addEmployees(list);
+    deps.log("team", "导入员工", `解析 ${list.length} 名，新增 ${added} 名`);
+    push();
+    return { ok: true, added, parsed: list.length, ...snapshot() };
   });
 
   // 关掉模块时用户可选「同时清除数据」：删掉 ~/.wuwei/team/ 整个目录

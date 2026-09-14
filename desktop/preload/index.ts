@@ -189,6 +189,8 @@ const api = {
     toggle: (appId: string) => ipcRenderer.invoke("team:toggle", appId),
     updateEmployee: (id: string, patch: unknown) => ipcRenderer.invoke("team:employee:update", id, patch),
     removeEmployee: (id: string) => ipcRenderer.invoke("team:employee:remove", id),
+    importScan: () => ipcRenderer.invoke("team:import:scan"),
+    importApply: (sourcePath: string, ids: string[]) => ipcRenderer.invoke("team:import:apply", sourcePath, ids),
     purge: () => ipcRenderer.invoke("team:purge"),
   },
   answerAsk: (id: number, answers: unknown) => ipcRenderer.send("ask:answer", id, answers),

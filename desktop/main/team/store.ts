@@ -83,6 +83,25 @@ export function toggleApp(appId: string): TeamApp[] {
   return apps;
 }
 
+/**
+ * 批量并入员工（从 openclaw 等外部来源导入时用）。
+ * 同 id 视为已导入过，跳过而不是覆盖——用户可能已经改过人格，重复导入不该把改动冲掉。
+ * 返回新并入的数量，好让界面告诉用户"导入了 N 名，M 名已存在"。
+ */
+export function addEmployees(list: Employee[]): { employees: Employee[]; added: number } {
+  const cur = loadEmployees();
+  const have = new Set(cur.map((e) => e.id));
+  let added = 0;
+  for (const e of list) {
+    if (have.has(e.id)) continue;
+    cur.push(e);
+    have.add(e.id);
+    added++;
+  }
+  if (added) saveEmployees(cur);
+  return { employees: cur, added };
+}
+
 /** 更新单个员工（改人格/换模型/调工具白名单） */
 export function updateEmployee(id: string, patch: Partial<Employee>): Employee[] {
   const list = loadEmployees().map((e) => (e.id === id ? { ...e, ...patch, id: e.id } : e));
