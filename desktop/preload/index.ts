@@ -40,6 +40,10 @@ const EVENTS = [
   "evt:tray-check-update",
   "evt:charter-draft",
   "evt:charter-progress",
+  // 长命令心跳：主进程在工具执行期间每 25s 发一次(index.ts 的 hb 定时器)，渲染层靠它刷新该会话的
+  // 「最后活动时间」，好让自主推进看门狗把"正在跑长工具的合法静默"与"真卡死"区分开。
+  // 之前漏在白名单外 → 事件被 preload 拦掉、到不了渲染层，两侧代码一直在空转。
+  "evt:heartbeat",
 ] as const;
 
 // 会话总目标"任务契约"：目标 + 调研 + 规则(要做/不做) + 树形分步计划(每节点带说明+验收+子节点，最多3层)
