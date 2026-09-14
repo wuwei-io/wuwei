@@ -613,6 +613,24 @@ async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: R
   throw lastErr || new Error("fetch failed");
 }
 
+// 结果相关性自检：挡住「HTTP 200 + 结构完整 + 内容与查询毫无关系」的反爬缓存页。
+// 实测 2026-09-14：Bing 对我们的请求稳定返回这种页——搜"如何用 python 读取 csv"回复仇者联盟票房、
+// 搜"Snapchat"回印地语翻译，10 条 b_algo 全能正常解析。源循环原本只看"解析出几条"就采信并 break，
+// 于是垃圾直接喂给模型、后面真正可用的 SearXNG 根本没机会跑。光看 HTTP 状态发现不了。
+// 判据放得很宽：查询里任一特征词在任一条结果的标题/摘要/URL 里出现即算相关，只拦完全不沾边的。
+function looksRelevant(query: string, results: { title: string; url: string; snippet: string }[]): boolean {
+  const q = query.toLowerCase();
+  const toks = new Set<string>();
+  for (const w of q.match(/[a-z0-9][a-z0-9.+#_-]{2,}/g) || []) toks.add(w); // 英文/数字词(≥3 字符)
+  // 中文按 2-gram 拆：整词匹配太严("全脑启发架构"很难原样出现)，逐字又太松。
+  for (const seg of query.match(/[一-龥]{2,}/g) || [])
+    for (let i = 0; i + 2 <= seg.length; i++) toks.add(seg.slice(i, i + 2));
+  if (!toks.size) return true; // 提不出特征词(纯符号/单字)就不拦，避免误杀
+  const hay = results.map((r) => `${r.title} ${r.snippet} ${r.url}`).join(" ").toLowerCase();
+  for (const t of toks) if (hay.includes(t)) return true;
+  return false;
+}
+
 const webSearchTool: Tool = {
   name: "web_search",
   description:
@@ -641,18 +659,32 @@ const webSearchTool: Tool = {
         sources.push({ name: "Wuwei-search", url: `${WUWEI_SEARCH_URL}?q=${eq}&format=json&language=` + tt("zh-CN", "en-US"), parse: parseSearxng, headers: { Authorization: "Bearer " + gwTok } });
       }
       // 兜底：公开源(未登录、或网关不可用时用)。
+      // ⚠️ Bing 垫底：实测它会返回「200 + 结构完整 + 内容与查询无关」的反爬缓存页(见 looksRelevant)，
+      // 比直接报错更坑——放最后，让真正能出结果的源先跑。
       sources.push(
-        { name: "Bing", url: "https://www.bing.com/search?q=" + eq + "&setlang=" + tt("zh-CN", "en-US"), parse: parseBing },
         { name: "SearXNG", url: sx("searx.be"), parse: parseSearxng }, // 元搜索公共实例备份(偶尔限流)
         { name: "DuckDuckGo", url: "https://lite.duckduckgo.com/lite/?q=" + eq, parse: parseLite },
         { name: "DuckDuckGo-html", url: "https://html.duckduckgo.com/html/?q=" + eq, parse: parseDDG },
+        { name: "Bing", url: "https://www.bing.com/search?q=" + eq + "&setlang=" + tt("zh-CN", "en-US"), parse: parseBing },
       );
       let results: { title: string; url: string; snippet: string }[] = [];
       const tried: string[] = [];
       for (const s of sources) {
         if (ctx.signal?.aborted) break;
         try {
-          const r = s.parse(await fetchTextRetry(s.url, ctx, 3, s.headers));
+          const raw = await fetchTextRetry(s.url, ctx, 3, s.headers);
+          // 网关源鉴权失败(token 过期)会回 {"error":"invalid_token","results":[]}，parseSearxng 解出空数组，
+          // 原来只会记成「空」，跟"这词没搜到"混为一谈 → 静默降级到公开源。这里单独点名，好定位。
+          if (s.headers?.Authorization && /"error"\s*:\s*"(invalid_token|auth_required)"/.test(raw)) {
+            tried.push(tt(`${s.name}(登录态失效)`, `${s.name}(auth expired)`));
+            continue;
+          }
+          const r = s.parse(raw);
+          if (r.length && !looksRelevant(q, r)) {
+            // 拿到了结果但跟查询八竿子打不着 → 反爬缓存页，弃掉换下一个源，绝不喂给模型
+            tried.push(tt(`${s.name}(返回无关内容)`, `${s.name}(irrelevant results)`));
+            continue;
+          }
           if (r.length) { results = r; break; }
           tried.push(tt(`${s.name}(空)`, `${s.name}(empty)`));
         } catch (e: any) {
