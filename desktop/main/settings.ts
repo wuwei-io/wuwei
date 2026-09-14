@@ -200,6 +200,7 @@ export interface AppSettings {
   brainDocs?: boolean; // brain_recall 是否连带扫描文档冷存储的『相关文档』(默认开)
   resumeDetect?: boolean; // 启动时检测被中断/干到一半的任务并提示恢复(默认开=undefined 视为 true)
   telemetry?: boolean; // 发送诊断信息用于改善体验(默认开=undefined 视为 true)；关掉后不再上报任何诊断日志/报错
+  teamEnabled?: boolean; // 启用「AI 员工团队」可选模块(应用中心/员工/房间)。⚠️与上面几个相反：默认关，用户主动开
 }
 
 // 三个开关的取值：undefined 一律按「开」处理，保持历史默认行为，只让用户能主动关
@@ -220,6 +221,11 @@ export function resumeDetectEnabled(s: Settings | null): boolean {
 }
 export function telemetryEnabled(s: Settings | null): boolean {
   return s?.app?.telemetry !== false;
+}
+// 「AI 员工团队」是可选模块，判定与上面几个相反：必须显式为 true 才算开。
+// 没开时主进程完全不碰这个模块——不注册 IPC、不读写 ~/.wuwei/team/、不占启动时间。
+export function teamEnabled(s: Settings | null): boolean {
+  return s?.app?.teamEnabled === true;
 }
 
 export function loadSettings(): Settings | null {

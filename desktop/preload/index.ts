@@ -44,6 +44,8 @@ const EVENTS = [
   // 「最后活动时间」，好让自主推进看门狗把"正在跑长工具的合法静默"与"真卡死"区分开。
   // 之前漏在白名单外 → 事件被 preload 拦掉、到不了渲染层，两侧代码一直在空转。
   "evt:heartbeat",
+  // 「AI 员工团队」可选模块的状态广播（应用/员工列表变了）。模块关闭时主进程根本不发。
+  "evt:team",
 ] as const;
 
 // 会话总目标"任务契约"：目标 + 调研 + 规则(要做/不做) + 树形分步计划(每节点带说明+验收+子节点，最多3层)
@@ -178,6 +180,17 @@ const api = {
   setAskToast: (autoDismiss: boolean, sec: number) =>
     ipcRenderer.send("settings:set-ask-toast", autoDismiss, sec),
   setAppSettings: (patch: Record<string, boolean>) => ipcRenderer.send("settings:set-app", patch),
+  // 「AI 员工团队」可选模块（默认关）。开关未开时主进程没注册这些通道，调用会 reject——
+  // 渲染层只在开关为真时才会用到它们，整块删掉即可摘除该模块。
+  team: {
+    state: () => ipcRenderer.invoke("team:state"),
+    install: (appId: string) => ipcRenderer.invoke("team:install", appId),
+    uninstall: (appId: string) => ipcRenderer.invoke("team:uninstall", appId),
+    toggle: (appId: string) => ipcRenderer.invoke("team:toggle", appId),
+    updateEmployee: (id: string, patch: unknown) => ipcRenderer.invoke("team:employee:update", id, patch),
+    removeEmployee: (id: string) => ipcRenderer.invoke("team:employee:remove", id),
+    purge: () => ipcRenderer.invoke("team:purge"),
+  },
   answerAsk: (id: number, answers: unknown) => ipcRenderer.send("ask:answer", id, answers),
   codexResetCredits: () => ipcRenderer.invoke("codex:reset-credits"),
   codexConsumeReset: (creditId: string) => ipcRenderer.invoke("codex:consume-reset", creditId),

@@ -88,9 +88,12 @@ import {
   resumeDetectEnabled,
   claudeAutoRefreshEnabled,
   telemetryEnabled,
+  teamEnabled,
   type Settings,
   type SessionBal,
 } from "./settings.js";
+// 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
+import { registerTeam, unregisterTeam } from "./team/index.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -184,6 +187,13 @@ function emitTasks() {
 
 function send(channel: string, payload?: unknown) {
   win?.webContents.send(channel, payload);
+}
+
+// 「AI 员工团队」可选模块的挂载/卸载。开关变动时当场生效，不用重启。
+// 关闭状态下本模块零参与：IPC 通道摘掉、不读写 ~/.wuwei/team/、不占启动时间。
+function syncTeamModule(s: Settings | null) {
+  if (teamEnabled(s)) registerTeam(ipcMain, { send, log });
+  else unregisterTeam(ipcMain);
 }
 
 function mimeFor(path: string): string | null {
@@ -2152,6 +2162,7 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
+    syncTeamModule(loadSettings()); // 可选模块：开了才挂，没开这行之后不留任何痕迹
     loadGoals(); // 智能继续：会话总目标(userData/session-goals.json)
     loadStopRules(); // 智能继续：自定义红线(userData/stop-rules.txt，首次给默认)
     // app://bundle/xxx → out/renderer/xxx（打包后 renderer 与 main 同级 out 下）
@@ -3120,6 +3131,7 @@ ipcMain.on("settings:set-app", (_e, patch: Record<string, boolean | string>) => 
   }
   syncBrainDocsFlag(s);
   setDiagConsent(telemetryEnabled(s)); // 「发送诊断信息」开关变了当场生效
+  syncTeamModule(s); // 「AI 员工团队」开关变了当场挂载/卸载，不用重启
   sysPrompt = buildSysPrompt(cwd, modelLabel, s.providerId);
   for (const a of agents.values()) a.setSystem(sysPrompt);
   refreshAgentTools();

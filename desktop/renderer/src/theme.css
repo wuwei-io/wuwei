@@ -5643,3 +5643,95 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   transition: background 0.15s, color 0.15s;
 }
 .announce-x:hover { background: var(--bg-soft); color: var(--text); }
+
+/* ── AI 员工团队（可选模块）────────────────────────────────
+   卡片/状态点/按钮复用上面的 .mcp-*，这里只补员工特有的几块。
+   模块关闭时这些 class 不会被任何元素用到，纯 CSS 无副作用。 */
+.team-desc {
+  padding: 0 10px 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.team-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg);
+}
+.team-chip svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.team-emp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.team-emp {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-soft);
+  min-width: 0;
+}
+.team-emp-ico {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.team-emp-ico svg {
+  width: 15px;
+  height: 15px;
+}
+.team-avatar-txt {
+  font-size: 13px;
+  font-weight: 600;
+}
+.team-emp-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.team-emp-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.team-emp-title {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.team-emp-blurb {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

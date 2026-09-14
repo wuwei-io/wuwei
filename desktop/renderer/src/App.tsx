@@ -13,6 +13,8 @@ import { BabyAvatar, inferBabyState } from "./baby/BabyAvatar.js";
 import { BabyHero } from "./baby/BabyHero.js";
 import { BabyPyramid } from "./baby/BabyPyramid.js";
 import * as Ic from "./baby/icons.js";
+// 「AI 员工团队」可选模块：整个渲染层只在这里引一次（可插拔契约，见设计方案第七节）
+import { AppStore } from "./team/AppStore.js";
 
 // 数字婴儿生命体征：后端 /alive/status 一次给全，界面状态卡片全靠它渲染
 type BabyVitals = {
@@ -3099,6 +3101,10 @@ export function App() {
   const [agiEnabled, setAgiEnabled] = useState(() => localStorage.getItem("wuwei-agi-enabled") === "1"); // 默认隐藏，实验功能，设置里手动开
   const [agiExpanded, setAgiExpanded] = useState(() => localStorage.getItem("minicc-agi-expanded") !== "0"); // 侧栏 AGI 区展开
   const [agiView, setAgiView] = useState<null | "baby">(null); // 主区是否显示数字婴儿面板
+  // 「AI 员工团队」可选模块（默认关）。真相源是主进程 settings.app.teamEnabled，这里存一份 localStorage 镜像
+  // 只为首帧就能正确显隐入口（否则要等 getSettings 回来，侧边栏会闪一下）；挂载后用 settings 校准。
+  const [teamEnabled, setTeamEnabled] = useState(() => localStorage.getItem("wuwei-team-enabled") === "1");
+  const [appView, setAppView] = useState<null | "store">(null); // 主区是否显示应用中心
   const [babyExists, setBabyExists] = useState(() => localStorage.getItem("minicc-baby-exists") === "1");
   const [babyDiary, setBabyDiaryState] = useState("");
   const [babyCurious, setBabyCuriousState] = useState("");
@@ -3687,6 +3693,12 @@ export function App() {
         if (freeP && r?.settings) {
           window.wuwei.setSettings({ ...r.settings, kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r.settings.model || freeP.models[0] });
         }
+      }
+      // 可选模块开关：以主进程 settings 为准校准本地镜像（用户可能在别处改过/换了机器）
+      {
+        const on = (r?.settings as any)?.app?.teamEnabled === true;
+        setTeamEnabled(on);
+        localStorage.setItem("wuwei-team-enabled", on ? "1" : "0");
       }
       setStations(r?.settings?.customStations || []);
       setProviderOrder(r?.settings?.providerOrder || []);
@@ -5496,6 +5508,23 @@ export function App() {
         <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
           {t("session.new")}
         </button>
+        {/* 「AI 员工团队」可选模块入口。默认关，设置→可选模块 里开。
+            摘除本模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它任何东西。 */}
+        {teamEnabled && (
+          <button
+            className={"agi-item" + (appView === "store" ? " on" : "")}
+            style={{ width: "100%", marginBottom: "6px" }}
+            onClick={() => { setAppView(appView === "store" ? null : "store"); setAgiView(null); }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            {lang === "en" ? "Apps & teammates" : "应用中心"}
+          </button>
+        )}
         {/* AGI 板块：数字婴儿入口(迁自 minicc)。默认隐藏，设置里开 */}
         {agiEnabled && (
         <div className="agi-panel">
@@ -6441,6 +6470,18 @@ export function App() {
       {/* 主区 */}
       <div className="main">
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
+        {/* 应用中心（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
+        {teamEnabled && appView === "store" && (
+          <div className="baby-panel">
+            <div className="baby-header">
+              <span className="baby-title">{lang === "en" ? "Apps & teammates" : "应用中心"}</span>
+              <button className="baby-back" onClick={() => setAppView(null)}>
+                {lang === "en" ? "Back" : "返回"}
+              </button>
+            </div>
+            <AppStore en={lang === "en"} />
+          </div>
+        )}
         {agiView === "baby" && (
           <div className="baby-panel">
             <div className="baby-header">
@@ -8523,6 +8564,11 @@ export function App() {
           onBrainLocked={() => {
             setShowSettings(false);
             setShowBrainIntro(true);
+          }}
+          onTeamEnabled={(v) => {
+            setTeamEnabled(v);
+            localStorage.setItem("wuwei-team-enabled", v ? "1" : "0");
+            if (!v) setAppView(null); // 关掉时收起面板，别让用户停在一个已消失模块的空白页
           }}
         />
       )}
@@ -12096,6 +12142,7 @@ function SettingsModal({
   onAskToast,
   isPro,
   onBrainLocked,
+  onTeamEnabled,
 }: {
   onClose: () => void;
   liveModels: Record<string, string[]>;
@@ -12120,6 +12167,7 @@ function SettingsModal({
   onAskToast: (auto: boolean, sec: number) => void;
   isPro: boolean;
   onBrainLocked: () => void;
+  onTeamEnabled: (v: boolean) => void; // 「AI 员工团队」开关：本组件够不着主区的 appView，回调给主组件同步侧边栏入口
 }) {
   // 上下文压缩·token/消息条数阈值：本地暂存 + 挂载时从 settings 载入，onChange 走独立 IPC(setCompact)
   const [compThr, setCompThr] = useState(""); // token 阈值(空=自动，按模型上下文80%)
@@ -12183,6 +12231,7 @@ function SettingsModal({
   const [resumeDetect, setResumeDetect] = useState(true); // 启动时检测被中断/干到一半的任务并提示恢复
   const [claudeAutoRefresh, setClaudeAutoRefresh] = useState(true); // Claude 订阅 token 快过期自动续期
   const [telemetry, setTelemetry] = useState(true); // 发送诊断信息用于改善体验(默认开，可关)
+  const [teamOn, setTeamOn] = useState(false); // 「AI 员工团队」可选模块：默认关，用户主动开(与上面几个默认开的相反)
   const setAppToggle = (patch: Record<string, boolean>) => {
     const cur = loadedRef.current || {};
     loadedRef.current = { ...cur, app: { ...(cur.app || {}), ...patch } }; // 同步本地，避免后续「保存」把开关刷回
@@ -12610,6 +12659,7 @@ function SettingsModal({
       setResumeDetect(s.app?.resumeDetect !== false);
       setClaudeAutoRefresh(s.app?.claudeAutoRefresh !== false);
       setTelemetry(s.app?.telemetry !== false);
+      setTeamOn(s.app?.teamEnabled === true); // 可选模块，只有显式为 true 才算开
       const sts: Station[] = s.customStations || [];
       setStations(sts);
       stationsRef.current = sts;
@@ -13413,6 +13463,29 @@ function SettingsModal({
                   onChange={(e) => {
                     setTelemetry(e.target.checked);
                     setAppToggle({ telemetry: e.target.checked });
+                  }}
+                />
+              </div>
+
+              {/* 「AI 员工团队」可选模块总开关。关闭时主进程完全不参与：不注册 IPC、不读写数据目录。 */}
+              <div className="app-set-group">{lang === "en" ? "Optional modules" : "可选模块"}</div>
+              <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
+                <div className="app-set-text">
+                  <div className="app-set-label">{lang === "en" ? "AI teammates" : "AI 员工团队"}</div>
+                  <div className="app-set-hint">
+                    {lang === "en"
+                      ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
+                      : "开启后侧边栏会多出「应用中心」，可以安装 AI 员工并分别私聊。默认关闭，关掉后不留任何痕迹。"}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="app-set-toggle"
+                  checked={teamOn}
+                  onChange={(e) => {
+                    setTeamOn(e.target.checked);
+                    setAppToggle({ teamEnabled: e.target.checked });
+                    onTeamEnabled(e.target.checked); // 通知主组件：显隐侧边栏入口、关掉时收起面板
                   }}
                 />
               </div>
