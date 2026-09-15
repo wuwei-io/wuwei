@@ -2664,6 +2664,15 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   const id = sid || currentId;
   const ac = runs.get(id);
   const agent = agents.get(id);
+  // ⭐ 先摘掉自主推进，再谈停不停这一轮。
+  // 否则：软停只让「当前这一轮」收尾，收尾后 finally 照样触发 suggestNextAction → 自主推进立刻起新一轮 →
+  // 用户再点停止时面对的已是全新一轮(isSoftStopping 又是 false)，于是永远停在"温和收尾中"、升不到强制停止，
+  // 表现就是"点停止没反应、整个界面像卡死"。实测用户连点 5 次都没能停下来。
+  // 用户点停止的意思是"别跑了"，不是"跑完这轮再自动接着跑"。
+  if (contSessions.delete(id)) {
+    send("evt:cont-off", { sid: id }); // 渲染层同步关掉该会话的自主推进开关，别再自动续跑
+    log("stop", id.slice(0, 8), "已关闭该会话的自主推进");
+  }
   // 两段式停止:
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。

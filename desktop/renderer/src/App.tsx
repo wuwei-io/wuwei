@@ -4161,6 +4161,14 @@ export function App() {
       { const asid = payload?.sid; if (asid) lastActivityRef.current.set(asid, Date.now()); }
       // 长命令心跳(evt:heartbeat)：只为刷新上面的活动时间而发，无其它语义——刷完即返回，别触发落定/switch
       if (ch === "evt:heartbeat") return;
+      // 用户点了停止 → 主进程已摘掉该会话的自主推进，这里把「连推」切回「自动」。
+      // 不这么做的话：软停只停当前这一轮，收尾后前端立刻又续下一轮，用户点多少次都追不上
+      // (实测连点 5 次仍停不下来，表现就是"点停止没反应、界面像卡死")。
+      if (ch === "evt:cont-off") {
+        const csid = payload?.sid;
+        if (csid && modeRef.current[csid] === "cont") setMode(csid, "auto");
+        return;
+      }
       // 结构性事件(工具/完成/切换…)前先把累积的流式文本落定，保证顺序不乱
       if (ch !== "evt:assistant-delta" && pendingDeltaRef.current) flushDelta(true); // 段落边界整段吐
       switch (ch) {
