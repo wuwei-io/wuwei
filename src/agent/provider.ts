@@ -74,6 +74,27 @@ function humanizeGatewayError(status: number, rawBody: string): string | null {
   }
 }
 
+/**
+ * 判断一段文本的结尾是不是「同一短串反复拼接」——用来兜住不带换行的死循环（"abcabcabc…"）。
+ * 只看尾部固定窗口，周期上限 16、要求至少重复 5 次，够短够快，每积累 16 字符才调一次。
+ * 返回命中的重复单元，没有则 null。
+ */
+function periodOf(s: string): string | null {
+  const tail = s.length > 256 ? s.slice(-256) : s;
+  for (let p = 1; p <= 16; p++) {
+    if (tail.length < p * 5) break; // 窗口内凑不满 5 个周期，更大的周期更不可能
+    const unit = tail.slice(-p);
+    if (!unit.trim()) continue; // 纯空白不算
+    let n = 0;
+    for (let i = tail.length - p; i >= 0; i -= p) {
+      if (tail.slice(i, i + p) !== unit) break;
+      n++;
+    }
+    if (n >= 5) return unit;
+  }
+  return null;
+}
+
 // Claude Code 订阅版(OAuth) 请求时，服务端要求 system 首段是官方身份，否则拒绝。
 const CLAUDE_CODE_IDENTITY =
   "You are Claude Code, Anthropic's official CLI for Claude.";
@@ -393,7 +414,8 @@ class OpenAIProvider implements Provider {
     let sawTool = false;
     let reasoningOpen = false; // 推理模型的 reasoning_content 流：包成 <think>…</think> 让渲染统一折叠
     // 死循环熔断：模型陷入重复轰炸(如无限吐"card")或输出超长时立即停止，避免越积越多卡死界面。
-    // 按「行」判定(而非单 chunk)，防 token 拆分绕过：同一短行连续第 3 行(=换行两次后)即判死循环。
+    // 两道判定：①按「行」(而非单 chunk，防 token 拆分绕过)，同一短行连续第 3 行即判死循环；
+    //          ②按「周期」，兜住不带换行的 "abcabcabc…"。
     const MAX_STREAM_CHARS = 120_000;
     let lineBuf = ""; // 当前累积的行
     let lastLine = ""; // 上一完整行(去空)
@@ -403,30 +425,45 @@ class OpenAIProvider implements Provider {
       for (const ch of chunk) {
         if (ch === "\n") {
           const line = lineBuf.trim();
-          if (line && line.length <= 24 && line === lastLine) {
+          lineBuf = "";
+          // ⚠️ 空行必须【跳过】，不能走 else：模型的重复几乎都是段落形式「court\n\ncourt\n\n…」，
+          //    原来空行会把 lineRepeat 清零、并把 lastLine 设成 ""，计数器永远重置 → 检测器被整个绕过。
+          //    实测放跑过单条 4095 次重复(一路吐满 max_tokens 才停)、连跑 18 轮、写进会话 1.4MB。
+          if (!line) continue;
+          if (line.length <= 24 && line === lastLine) {
             if (++lineRepeat >= 2) return true; // 连续第 3 行相同 → 死循环
           } else {
             lineRepeat = 0;
           }
           lastLine = line;
-          lineBuf = "";
         } else {
           lineBuf += ch;
           if (lineBuf.length > 400) lineBuf = lineBuf.slice(-400); // 超长单行防爆
+          // 不带换行的重复（"abcabcabc…"）：上面按行那套对这种形态完全不设防，这里按周期兜一道。
+          if (lineBuf.length >= 80 && lineBuf.length % 16 === 0 && periodOf(lineBuf)) return true;
         }
       }
       return text.length > MAX_STREAM_CHARS;
     };
     // 截掉尾部连续重复的短行(把"card\ncard\ncard…"清成一个)，返回清理后的正文。
+    // 同样要跳过空行，否则「court\n\ncourt」这种段落式重复一条都清不掉(与 feedGuard 同一个坑)。
     const cleanRepeatTail = (t: string): string => {
       const lines = t.split("\n");
       let i = lines.length - 1;
       while (i > 0 && lines[i].trim() === "") i--; // 跳过末尾空行
       const unit = lines[i]?.trim() ?? "";
       if (!unit || unit.length > 24) return t;
+      // 向前扫描：允许中间夹空行，只要非空行都等于 unit 就继续往前吃
       let j = i;
-      while (j > 0 && lines[j - 1].trim() === unit) j--;
-      if (i - j < 2) return t; // 不足 3 行重复，不动
+      let hits = 1;
+      for (let k = i - 1; k >= 0; k--) {
+        const s = lines[k].trim();
+        if (s === "") continue; // 空行不打断重复串
+        if (s !== unit) break;
+        hits++;
+        j = k;
+      }
+      if (hits < 3) return t; // 不足 3 次重复，不动
       lines.splice(j, lines.length - j, unit); // 只保留一个
       return lines.join("\n");
     };
