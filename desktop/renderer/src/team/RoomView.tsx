@@ -7,9 +7,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 
-type Props = { en: boolean; employees: Employee[]; onBack: () => void };
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null };
 
-export function RoomView({ en, employees, onBack }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<RoomMessage[]>([]);
@@ -26,6 +26,11 @@ export function RoomView({ en, employees, onBack }: Props) {
   const [newCoord, setNewCoord] = useState<string>("");
   const endRef = useRef<HTMLDivElement | null>(null);
   const api = (window as any).wuwei?.team;
+
+  // 从侧边栏点某个群进来 → 直接进那个群（外部指定优先）
+  useEffect(() => {
+    if (initialRoomId) setCur(initialRoomId);
+  }, [initialRoomId]);
 
   const room = rooms.find((r) => r.id === cur) || null;
   const empOf = (id: string) => employees.find((e) => e.id === id);

@@ -3105,8 +3105,23 @@ export function App() {
   // 「AI 员工团队」可选模块（默认关）。真相源是主进程 settings.app.teamEnabled，这里存一份 localStorage 镜像
   // 只为首帧就能正确显隐入口（否则要等 getSettings 回来，侧边栏会闪一下）；挂载后用 settings 校准。
   const [teamEnabled, setTeamEnabled] = useState(() => localStorage.getItem("wuwei-team-enabled") === "1");
-  const [appView, setAppView] = useState<null | "store" | "rooms">(null); // 主区显示应用中心 / 房间
-  const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，房间界面建群选人要用
+  const [appView, setAppView] = useState<null | "store" | "rooms">(null); // 主区显示应用中心 / 群
+  const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
+  const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
+  const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
+  // 一人公司板块要列群/员工：模块开着时拉一次 + 监听变更
+  useEffect(() => {
+    if (!teamEnabled) return;
+    const api = (window as any).wuwei?.team;
+    api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
+    api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
+    const off = window.wuwei.onEvent?.((ch: string, p: any) => {
+      if (ch === "evt:team-rooms") setTeamRooms(p?.rooms || []);
+      else if (ch === "evt:team" && p) setTeamEmployees(p.employees || []);
+    });
+    return off;
+  }, [teamEnabled]);
   const [babyExists, setBabyExists] = useState(() => localStorage.getItem("minicc-baby-exists") === "1");
   const [babyDiary, setBabyDiaryState] = useState("");
   const [babyCurious, setBabyCuriousState] = useState("");
@@ -5522,20 +5537,63 @@ export function App() {
             整块受 teamEnabled 控制；摘除模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它。 */}
         {teamEnabled && (
           <div className="side-tools">
-            <button
-              className={"tool-item" + (appView ? " on" : "")}
-              onClick={() => { setAppView(appView ? null : "store"); setAgiView(null); }}
-            >
-              <svg className="tool-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
-                <circle cx="9.5" cy="7" r="3.2" />
-                <path d="M17 11l2 2 3.5-3.5" />
-              </svg>
-              <span className="tool-label">{lang === "en" ? "My Company" : "一人公司"}</span>
-              <svg className="tool-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
+            {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
+                展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
+            <div className="tool-item-row">
+              <button
+                className={"tool-item tool-item-main" + (appView === "store" ? " on" : "")}
+                onClick={() => { setAppView("store"); setAgiView(null); }}
+              >
+                <svg className="tool-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+                  <circle cx="9.5" cy="7" r="3.2" />
+                  <path d="M17 11l2 2 3.5-3.5" />
+                </svg>
+                <span className="tool-label">{lang === "en" ? "My Company" : "一人公司"}</span>
+              </button>
+              <button
+                className="tool-expand"
+                title={teamExpanded ? (lang === "en" ? "Collapse" : "收起") : (lang === "en" ? "Expand" : "展开")}
+                onClick={() => { const v = !teamExpanded; setTeamExpanded(v); localStorage.setItem("wuwei-team-expanded", v ? "1" : "0"); }}
+              >
+                <svg className={"tool-chev" + (teamExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+            {teamExpanded && (
+              <div className="tool-sub">
+                {/* 员工私聊入口 */}
+                {teamEmployees.map((e: any) => (
+                  <button
+                    key={e.id}
+                    className="tool-sub-item"
+                    title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                    onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}
+                  >
+                    <span className="tool-sub-dot person" />
+                    <span className="tool-sub-nm">{e.name}</span>
+                  </button>
+                ))}
+                {/* 群入口 */}
+                {teamRooms.map((r: any) => (
+                  <button
+                    key={r.id}
+                    className={"tool-sub-item" + (appView === "rooms" && activeRoomId === r.id ? " on" : "")}
+                    onClick={() => { setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
+                  >
+                    <span className="tool-sub-dot group" />
+                    <span className="tool-sub-nm">{r.name}</span>
+                    <span className="tool-sub-cnt">{r.members?.length || 0}</span>
+                  </button>
+                ))}
+                {teamEmployees.length === 0 && teamRooms.length === 0 && (
+                  <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
+                    {lang === "en" ? "Add teammates →" : "去添加员工 →"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
         <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
@@ -6522,7 +6580,7 @@ export function App() {
                   providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
                 />
               ) : (
-                <RoomView en={lang === "en"} employees={teamEmployees} onBack={() => setAppView("store")} />
+                <RoomView en={lang === "en"} employees={teamEmployees} initialRoomId={activeRoomId} onBack={() => setAppView("store")} />
               )}
             </div>
           </div>
