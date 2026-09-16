@@ -20,6 +20,7 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; done: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
   const [showMenu, setShowMenu] = useState(false); // 群头部 ⋯ 菜单（成员/删除）
+  const [mention, setMention] = useState<string | null>(null); // @ 补全：输入 @ 后的查询词，null=不显示
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
@@ -345,13 +346,42 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
 
       {/* 输入框：抄主对话框风格——整体一个大圆角框，发送/停止按钮内嵌右下，对齐 */}
       <div className="tc-composer">
+        {/* @ 补全：输入 @ 弹出成员 + 所有人，点选插入 */}
+        {mention !== null && (() => {
+          const all = en ? "Everyone" : "所有人";
+          const names = [all, ...room.members.map((id) => nameOf(id))];
+          const q = mention.toLowerCase();
+          const cands = names.filter((n) => !q || n.toLowerCase().includes(q));
+          if (cands.length === 0) return null;
+          const pick = (name: string) => {
+            const inserted = name === all ? (en ? "all" : "所有人") : name;
+            setText((t) => t.replace(/@[^\s@]*$/, `@${inserted} `));
+            setMention(null);
+          };
+          return (
+            <div className="tc-mention">
+              {cands.map((n) => (
+                <button key={n} className={"tc-mention-item" + (n === all ? " all" : "")} onMouseDown={(e) => { e.preventDefault(); pick(n); }}>
+                  {n === all ? <span className="tc-mention-all">@</span> : <span className="tc-mention-dot" />}
+                  {n}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         <textarea
           value={text}
           rows={1}
-          placeholder={en ? "Message the group…  @name to call someone" : "在群里说话…  用 @姓名 点名"}
-          onChange={(e) => setText(e.target.value)}
+          placeholder={en ? "Message the group…  @name to call someone" : "在群里说话…  用 @姓名 点名（含所有人）"}
+          onChange={(e) => {
+            const v = e.target.value;
+            setText(v);
+            const m = /@([^\s@]*)$/.exec(v); // 光标处末尾的 @查询
+            setMention(m ? m[1] : null);
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+            if (e.key === "Escape" && mention !== null) { setMention(null); return; }
+            if (e.key === "Enter" && !e.shiftKey && mention === null) { e.preventDefault(); send(); }
           }}
         />
         {running ? (

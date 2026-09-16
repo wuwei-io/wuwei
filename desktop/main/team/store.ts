@@ -116,6 +116,16 @@ export function buildPersonaBlock(emp: Employee): string {
 }
 
 
+const MEM_DIR = join(DIR, "memory");
+/** 员工专属记忆文件路径（remember 工具写这里、applyEmployee 读这里追加进人格）。 */
+export function employeeMemoryPath(id: string): string {
+  return join(MEM_DIR, `${id}.md`);
+}
+/** 读员工专属动态记忆（聊天中 remember 攒的）。不存在返回空。 */
+export function loadEmployeeMemory(id: string): string {
+  try { return readFileSync(employeeMemoryPath(id), "utf8").trim(); } catch { return ""; }
+}
+
 /** 置顶/取消置顶员工：pinnedAt 有值即置顶，按它降序排前面。 */
 export function pinEmployee(id: string): Employee[] {
   const list = loadEmployees().map((e) => (e.id === id ? { ...e, pinnedAt: e.pinnedAt ? undefined : Date.now() } : e));

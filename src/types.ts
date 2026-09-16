@@ -50,6 +50,7 @@ export interface ToolContext {
   signal?: AbortSignal; // 中断信号：用户停止时传入，长命令(bash/grep)据此杀子进程
   env?: Record<string, string>; // 本地密钥注入(仅本机子进程可见，模型看不到)：bash 工具据此合并环境变量
   sessionId?: string; // 执行该工具的会话 id：ask_user 据此把选择框/通知绑到正确的会话(多会话并发时不串)
+  memoryFile?: string; // remember 工具写到哪个记忆文件：员工私聊会话指向该员工专属记忆，缺省=全局 memory.md
 }
 
 export interface ToolResult {

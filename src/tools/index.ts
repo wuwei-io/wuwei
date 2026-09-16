@@ -427,22 +427,24 @@ const rememberTool: Tool = {
     },
     required: ["text"],
   },
-  async run(input): Promise<ToolResult> {
+  async run(input, ctx): Promise<ToolResult> {
     try {
       const text = String(input.text || "").trim();
       if (!text)
         return { content: tt("记忆内容为空，未写入", "Memory text is empty; nothing written"), isError: true };
-      await fs.mkdir(dirname(MEMORY_FILE), { recursive: true });
+      // 员工私聊会话 → 写到该员工专属记忆文件(ctx.memoryFile)；否则写全局 memory.md。
+      const file = ctx.memoryFile || MEMORY_FILE;
+      await fs.mkdir(dirname(file), { recursive: true });
       let cur = "";
       try {
-        cur = await fs.readFile(MEMORY_FILE, "utf8");
+        cur = await fs.readFile(file, "utf8");
       } catch {
         /* 首次 */
       }
       const line = "- " + text;
       const seedHeader = process.env.WUWEI_LANG === "en" ? "# Memory" : "# 记忆";
       const next = cur.trim() ? cur.trimEnd() + "\n" + line + "\n" : seedHeader + "\n\n" + line + "\n";
-      await fs.writeFile(MEMORY_FILE, next, "utf8");
+      await fs.writeFile(file, next, "utf8");
       return { content: tt("已记住：" + text, "Remembered: " + text) };
     } catch (e: any) {
       return { content: tt(`写入记忆失败: ${e.message}`, `Failed to save memory: ${e.message}`), isError: true };

@@ -22,6 +22,8 @@ import {
   uninstallApp,
   updateEmployee,
   pinEmployee,
+  loadEmployeeMemory,
+  employeeMemoryPath,
   buildPersonaBlock,
 } from "./store.js";
 
@@ -56,7 +58,8 @@ export function applyEmployee<T extends { name: string }>(
 ): { sys: string; tools: T[]; employee: Employee | null } {
   const emp = employeeId ? findEmployee(employeeId) : null;
   if (!emp) return { sys: baseSys, tools: allTools, employee: null };
-  const sys = `${baseSys}\n\n${buildPersonaBlock(emp)}`;
+  const dyn = loadEmployeeMemory(emp.id); // 聊天中 remember 攒的专属动态记忆
+  const sys = `${baseSys}\n\n${buildPersonaBlock(emp)}` + (dyn ? `\n\n## 你记住的事（专属记忆）\n\n${dyn}` : "");
   const tools = emp.tools?.length ? allTools.filter((t) => emp.tools!.includes(t.name)) : allTools;
   return { sys, tools, employee: emp };
 }

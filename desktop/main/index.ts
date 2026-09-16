@@ -95,6 +95,7 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
+import { employeeMemoryPath } from "./team/store.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -255,7 +256,7 @@ function syncTeamModule(s: Settings | null) {
         const all = desktopTools();
         const tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
         const map = new Map(tools.map((t) => [t.name, t]));
-        const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}` }, map, agentOpts);
+        const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id) }, map, agentOpts);
         if (history.length) a.setMessages(history as any);
         // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
         await a.send(input, {
@@ -1622,14 +1623,18 @@ function getAgent(id: string): Agent | null {
   if (!a) {
     const meta = listSessions().find((s) => s.id === id);
     // 「AI 员工团队」：会话绑了员工就套上他的人格与工具白名单；没绑(或模块没开)时 sys/tools 原样返回
-    const emp = meta?.employeeId && teamEnabled(loadSettings())
-      ? applyEmployee(meta.employeeId, sysPrompt, desktopTools())
+    const empBound = meta?.employeeId && teamEnabled(loadSettings());
+    const emp = empBound
+      ? applyEmployee(meta!.employeeId!, sysPrompt, desktopTools())
       : { sys: sysPrompt, tools: desktopTools() };
+    if (empBound) log("team", "会话", id.slice(0, 8), "套用员工", meta!.employeeId, "人格(sys", emp.sys.length, "字, 工具", emp.tools.length, "个)");
     const empToolMap = emp.tools.length === desktopTools().length
       ? desktopToolMap()
       : new Map([...desktopToolMap()].filter(([n]) => emp.tools.some((t) => t.name === n)));
     // 用该会话自己的 provider 建 agent(而非全局)——出生即绑自己的模型，全局漂移带不动它
-    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id }, empToolMap, agentOpts);
+    // 员工私聊会话：remember 工具写到该员工专属记忆文件（下次 applyEmployee 会加载它）。
+    const memoryFile = empBound ? employeeMemoryPath(meta!.employeeId!) : undefined;
+    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile }, empToolMap, agentOpts);
     a.setMessages(loadMessages(id));
     if (meta?.usage) a.setUsage(meta.usage); // 恢复该会话的用量
     agents.set(id, a);

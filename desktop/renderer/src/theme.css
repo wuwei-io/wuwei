@@ -6721,3 +6721,22 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .team-cm-item.danger { color: var(--danger, #b4483a); }
 .team-cm-item.danger:hover { background: color-mix(in srgb, var(--danger, #b4483a) 9%, transparent); }
 .tool-sub-av .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
+
+/* 群 @ 补全弹窗 */
+.tc-composer { position: relative; }
+.tc-mention {
+  position: absolute; left: 6px; right: 6px; bottom: calc(100% + 6px);
+  max-height: 220px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 -8px 28px rgba(0,0,0,.18); padding: 5px; z-index: 20;
+}
+.tc-mention-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 11px; border: none; border-radius: 8px;
+  background: transparent; color: var(--text); font: inherit; font-size: 13.5px;
+  text-align: left; cursor: pointer;
+}
+.tc-mention-item:hover { background: var(--accent-soft); }
+.tc-mention-item.all { font-weight: 600; }
+.tc-mention-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+.tc-mention-all { width: 18px; height: 18px; border-radius: 50%; background: var(--spark, #C05F3C); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: 0 0 auto; }
