@@ -102,9 +102,31 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
   return { employees: cur, added };
 }
 
+/**
+ * 把员工的几段定义拼成一块系统提示词。各段对应 openclaw 的核心文件：
+ * 身份职责(IDENTITY) + 性格(SOUL) + 关于老板(USER) + 长期记忆(MEMORY)。
+ * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
+ */
+export function buildPersonaBlock(emp: Employee): string {
+  const parts = [`---\n\n## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
+  if (emp.soul?.trim()) parts.push(`## 你的性格与说话风格\n\n${emp.soul.trim()}`);
+  if (emp.aboutUser?.trim()) parts.push(`## 关于你服务的人\n\n${emp.aboutUser.trim()}`);
+  if (emp.memory?.trim()) parts.push(`## 你需要长期记住的背景\n\n${emp.memory.trim()}`);
+  return parts.join("\n\n");
+}
+
 /** 更新单个员工（改人格/换模型/调工具白名单） */
-export function updateEmployee(id: string, patch: Partial<Employee>): Employee[] {
-  const list = loadEmployees().map((e) => (e.id === id ? { ...e, ...patch, id: e.id } : e));
+export function updateEmployee(id: string, patch: Record<string, unknown>): Employee[] {
+  const list = loadEmployees().map((e) => {
+    if (e.id !== id) return e;
+    const next: Record<string, unknown> = { ...e };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null || v === undefined) delete next[k]; // null/undefined = 清除该字段（如移除自定义头像）
+      else next[k] = v;
+    }
+    next.id = e.id; // id 不可改
+    return next as unknown as Employee;
+  });
   saveEmployees(list);
   return list;
 }

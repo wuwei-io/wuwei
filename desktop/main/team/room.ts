@@ -1,6 +1,6 @@
-// AI 员工团队 · 房间（多员工协作）
+// AI 员工团队 · 群（多员工协作）
 //
-// 房间独立于普通会话存储：~/.wuwei/team/rooms.json（元信息）+ rooms/<id>.json（消息流）。
+// 群独立于普通会话存储：~/.wuwei/team/rooms.json（元信息）+ rooms/<id>.json（消息流）。
 // 刻意不复用 SessionMeta / sessions/<id>.json——现有会话结构字段多、保护逻辑密，
 // 而且它的 Message 没有 speaker、历史校验强制角色交替，塞不下多方对话（详见 projection.ts）。
 
@@ -45,7 +45,7 @@ export function saveRoomMessages(roomId: string, msgs: RoomMessage[]) {
 export function createRoom(name: string, members: string[], coordinator?: string): Room {
   const room: Room = {
     id: randomUUID(),
-    name: name || "新房间",
+    name: name || "新群",
     members: [...new Set(members)],
     coordinator: coordinator && members.includes(coordinator) ? coordinator : undefined,
     createdAt: Date.now(),
@@ -71,12 +71,12 @@ export function deleteRoom(id: string): Room[] {
     const f = join(MSG_DIR, `${id}.json`);
     if (existsSync(f)) rmSync(f, { force: true });
   } catch {
-    /* 消息文件删不掉不影响房间已移除 */
+    /* 消息文件删不掉不影响群已移除 */
   }
   return list;
 }
 
-/** 追加一条消息并同步房间的 updatedAt / lastText，返回最新消息流 */
+/** 追加一条消息并同步群的 updatedAt / lastText，返回最新消息流 */
 export function appendMessage(roomId: string, msg: Omit<RoomMessage, "id" | "ts"> & { ts?: number }): RoomMessage[] {
   const msgs = loadRoomMessages(roomId);
   const full: RoomMessage = { id: randomUUID(), ts: msg.ts ?? Date.now(), ...msg };

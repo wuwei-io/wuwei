@@ -4211,6 +4211,8 @@ export function App() {
           break;
         case "evt:session-loaded": {
           setCurrentId(payload.id);
+          setAppView(null); // 切会话/新建对话 → 退出一人公司面板，露出对话界面
+          setAgiView(null); // 数字婴儿面板同理
           // 搜索结果点进来的：目标不是底部而是命中那条 → 别吸底，交给下面的跳转 effect
           const jumping = jumpRef.current?.sid === payload.id;
           clearSearchHighlight(); // 上一次搜索的高亮不跨会话残留(要跳转的话下面会重新打)
@@ -5515,26 +5517,30 @@ export function App() {
             «
           </button>
         </div>
+        {/* 多功能区：置于「新对话」之上，与下面的对话列表用一条分隔线区分开。
+            目前放「应用中心」一个入口，以后要加别的全局功能入口也进这里。
+            整块受 teamEnabled 控制；摘除模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它。 */}
+        {teamEnabled && (
+          <div className="side-tools">
+            <button
+              className={"tool-item" + (appView ? " on" : "")}
+              onClick={() => { setAppView(appView ? null : "store"); setAgiView(null); }}
+            >
+              <svg className="tool-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+                <circle cx="9.5" cy="7" r="3.2" />
+                <path d="M17 11l2 2 3.5-3.5" />
+              </svg>
+              <span className="tool-label">{lang === "en" ? "My Company" : "一人公司"}</span>
+              <svg className="tool-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+        )}
         <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
           {t("session.new")}
         </button>
-        {/* 「AI 员工团队」可选模块入口。默认关，设置→可选模块 里开。
-            摘除本模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它任何东西。 */}
-        {teamEnabled && (
-          <button
-            className={"agi-item" + (appView === "store" ? " on" : "")}
-            style={{ width: "100%", marginBottom: "6px" }}
-            onClick={() => { setAppView(appView === "store" ? null : "store"); setAgiView(null); }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-            {lang === "en" ? "Apps & teammates" : "应用中心"}
-          </button>
-        )}
         {/* AGI 板块：数字婴儿入口(迁自 minicc)。默认隐藏，设置里开 */}
         {agiEnabled && (
         <div className="agi-panel">
@@ -6482,30 +6488,43 @@ export function App() {
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
-          <div className="baby-panel">
-            <div className="baby-header">
-              <span className="baby-title">{lang === "en" ? "Apps & teammates" : "应用中心"}</span>
-              <button
-                className={"mcp-btn" + (appView === "store" ? " save" : "")}
-                onClick={() => setAppView("store")}
-              >
-                {lang === "en" ? "Teammates" : "员工"}
-              </button>
-              <button
-                className={"mcp-btn" + (appView === "rooms" ? " save" : "")}
-                onClick={() => setAppView("rooms")}
-              >
-                {lang === "en" ? "Rooms" : "房间"}
-              </button>
-              <button className="baby-back" onClick={() => setAppView(null)}>
+          <div className="team-panel">
+            <div className="team-panel-head">
+              <span className="team-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+                  <circle cx="9.5" cy="7" r="3.2" />
+                  <path d="M17 11l2 2 3.5-3.5" />
+                </svg>
+                {lang === "en" ? "My Company" : "一人公司"}
+              </span>
+              <div className="team-seg">
+                <button className={appView === "store" ? "on" : ""} onClick={() => setAppView("store")}>
+                  {lang === "en" ? "Teammates" : "员工"}
+                </button>
+                <button className={appView === "rooms" ? "on" : ""} onClick={() => setAppView("rooms")}>
+                  {lang === "en" ? "Groups" : "群"}
+                </button>
+              </div>
+              <button className="team-panel-close" onClick={() => setAppView(null)} title={lang === "en" ? "Back to chat" : "返回对话"}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
                 {lang === "en" ? "Back" : "返回"}
               </button>
             </div>
-            {appView === "store" ? (
-              <AppStore en={lang === "en"} onEmployees={setTeamEmployees} />
-            ) : (
-              <RoomView en={lang === "en"} employees={teamEmployees} onBack={() => setAppView("store")} />
-            )}
+            <div className="team-panel-body">
+              {appView === "store" ? (
+                <AppStore
+                  en={lang === "en"}
+                  onEmployees={setTeamEmployees}
+                  onOpenChat={() => setAppView(null)}
+                  providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
+                />
+              ) : (
+                <RoomView en={lang === "en"} employees={teamEmployees} onBack={() => setAppView("store")} />
+              )}
+            </div>
           </div>
         )}
         {agiView === "baby" && (
@@ -13497,11 +13516,11 @@ function SettingsModal({
               <div className="app-set-group">{lang === "en" ? "Optional modules" : "可选模块"}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "AI teammates" : "AI 员工团队"}</div>
+                  <div className="app-set-label">{lang === "en" ? "My Company" : "一人公司"}</div>
                   <div className="app-set-hint">
                     {lang === "en"
                       ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
-                      : "开启后侧边栏会多出「应用中心」，可以安装 AI 员工并分别私聊。默认关闭，关掉后不留任何痕迹。"}
+                      : "开启后侧边栏会多出「一人公司」，可以雇 AI 员工、分别私聊、拉进群一起干活。默认关闭，关掉后不留任何痕迹。"}
                   </div>
                 </div>
                 <input

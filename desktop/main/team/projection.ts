@@ -2,12 +2,12 @@
 //
 // ⭐ 整套群聊设计的技术核心。
 //
-// 房间里存的是真实发生的多方对话（大成说一句、小文说一句、小码接一句），但每个员工背后
+// 群里存的是真实发生的多方对话（大成说一句、小文说一句、小码接一句），但每个员工背后
 // 是一个普通 Agent，只认 user / assistant 交替的历史。直接把多方流喂进去有两个死结：
 //   1. 连续多个 assistant 会被 isValidHistory 判成"损坏历史"并被 repairHistory 塞占位符修掉
 //   2. 就算不被修，模型也分不清哪句是谁说的，会把别人的话当成自己说过的
 //
-// 解法：房间存原始流，发给某个员工之前投影成「他视角」的历史——
+// 解法：群存原始流，发给某个员工之前投影成「他视角」的历史——
 //   · 他自己的发言           → assistant
 //   · 其他所有人（含别的员工）→ user，并在正文前加署名
 //
@@ -23,10 +23,10 @@ function textMsg(role: "user" | "assistant", text: string, ts: number): Message 
 }
 
 /**
- * 投影：把房间的多方消息流，转成「某名员工视角」的标准会话历史。
+ * 投影：把群的多方消息流，转成「某名员工视角」的标准会话历史。
  *
  * @param selfId 当前要发给谁（employee.id）
- * @param msgs   房间原始消息流（按时间升序）
+ * @param msgs   群原始消息流（按时间升序）
  */
 export function projectFor(selfId: string, msgs: RoomMessage[]): Message[] {
   const out: Message[] = [];
@@ -42,7 +42,7 @@ export function projectFor(selfId: string, msgs: RoomMessage[]): Message[] {
     }
   }
   // 收尾必须是 user：Agent 一轮的输入要求最后一条是用户消息。
-  // 如果房间里最后说话的恰好是这名员工自己（比如他被连续点名两次），补一条推进指令，
+  // 如果群里最后说话的恰好是这名员工自己（比如他被连续点名两次），补一条推进指令，
   // 而不是把他自己的话改成 user——那会让他误以为是别人在复述他。
   if (out.length && out[out.length - 1].role === "assistant") {
     out.push(textMsg("user", "（请接着上面的进展继续。）", Date.now()));

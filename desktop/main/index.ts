@@ -228,10 +228,17 @@ function syncTeamModule(s: Settings | null) {
       log,
       // 开一名员工的私聊：与 session:new 同一套流程，只是先把 employeeId 写进 meta，
       // 这样 getAgent 建 Agent 时就能读到并套上人格。
-      startChat: (employeeId, employeeName) => {
+      startChat: (employeeId, employeeName, model) => {
         lockSessionModel(currentId); // 同 session:new：先锁住正要离开的会话的模型
         currentId = randomUUID();
         setSessionEmployee(currentId, employeeId, employeeName);
+        // 员工绑了自定义模型 → 把它写进会话绑定，底栏就显示员工的模型（显示=实际用的，一致）。
+        // 没绑 → 会话不绑，底栏显示全局默认，applyEmployee 也不改模型。正好对应"自定义优先、否则用默认"。
+        if (model?.providerId && model.model) {
+          const gs = loadSettings();
+          const slot = (gs?.creds || {})[model.providerId] || {};
+          setSessionBinding(currentId, { providerId: model.providerId, model: model.model, kind: slot.kind, baseUrl: slot.baseUrl });
+        }
         const a = getAgent(currentId);
         send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
         send("evt:sessions", listSessions());
@@ -241,7 +248,7 @@ function syncTeamModule(s: Settings | null) {
       baseSys: () => sysPrompt,
       // 跑一名员工一轮（房间用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
       // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
-      runEmployee: async ({ employee, sys, history, input, signal }) => {
+      runEmployee: async ({ employee, sys, history, input, signal, onProgress }) => {
         const p = providerForEmployee(employee) || provider;
         if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
         const all = desktopTools();
@@ -249,7 +256,12 @@ function syncTeamModule(s: Settings | null) {
         const map = new Map(tools.map((t) => [t.name, t]));
         const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}` }, map, agentOpts);
         if (history.length) a.setMessages(history as any);
-        await a.send(input, {} as any, signal);
+        // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
+        await a.send(input, {
+          onText: (delta: string) => onProgress?.({ kind: "text", delta }),
+          onToolStart: (id: string, name: string) => onProgress?.({ kind: "tool-start", id, name }),
+          onToolEnd: (id: string, _r: string, isError: boolean) => onProgress?.({ kind: "tool-end", id, isError }),
+        } as any, signal);
         const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
         return last ? msgFullText(last as any) : "";
       },

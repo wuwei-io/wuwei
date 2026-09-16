@@ -78,6 +78,35 @@ export function parseIdentity(md: string): { name: string; title?: string; blurb
 }
 
 /**
+ * 清洗 openclaw 的 SOUL/USER/MEMORY.md：去掉顶部文件标题、斜体模板引导语、内部 Related 互链，
+ * 留下真正有内容的正文。全是模板占位（没被填过）则返回空串，导入时就不带这个字段。
+ */
+function cleanDoc(md: string): string {
+  const body = md
+    .replace(/^#\s.*$/im, "") // 顶部 # 标题
+    .replace(/^_.*_\s*$/gim, "") // 整行斜体引导语（_Learn about..._ / _You're not..._）
+    .replace(/^.*\]\(\/concepts\/.*$/gim, "") // 含 openclaw 文档站链接的整行（含前置引导语，如 "Want a sharper version? See [...](/concepts/soul)"）
+    .replace(/^##\s*Related[\s\S]*$/im, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  // 只剩空模板骨架（如一串 "- **Name:**" 没填值）则视为无内容
+  const meaningful = body.replace(/^-\s*\*\*[^:]+:\*\*\s*$/gim, "").replace(/[#>*_\-\s]/g, "");
+  return meaningful.length >= 8 ? body : "";
+}
+
+/** 读同目录下某个文件并清洗，不存在/读失败/无内容都返回 undefined */
+function readDoc(dir: string, name: string): string | undefined {
+  const f = join(dir, name);
+  if (!existsSync(f)) return undefined;
+  try {
+    const c = cleanDoc(readFileSync(f, "utf8"));
+    return c || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 拿本机的 WSL 发行版名。
  * ⚠️ 不能用 readdirSync("\\\\wsl.localhost") 枚举——Windows 不允许列举这个虚拟根（ENOENT），
  *    但只要知道发行版名，完整路径就能正常读（实测 \\wsl.localhost\Ubuntu\home\... 可列举）。
@@ -130,9 +159,24 @@ function scanOpenclawDir(base: string): ImportSource | null {
   }
 
   const candidates: ImportCandidate[] = [];
+
+  // ⭐ main/CEO（小笨）用根级的 workspace(单数)，不在 workspaces(复数)子目录里——
+  //    之前只扫复数目录，把第一个建的 CEO 漏了。先把它作为 sourceId="main" 排在最前。
+  const mainDir = join(base, "workspace");
+  const mainIdentity = join(mainDir, "IDENTITY.md");
+  if (existsSync(mainIdentity)) {
+    try {
+      const md = readFileSync(mainIdentity, "utf8");
+      const p = parseIdentity(md);
+      if (p.name) candidates.push({ sourceId: "main", name: p.name, title: p.title, blurb: p.blurb, icon: p.icon, bytes: md.length });
+    } catch {
+      /* 读不了就跳过 main，不影响其它 */
+    }
+  }
+
   for (const id of ids) {
     const f = join(ws, id, "IDENTITY.md");
-    if (!existsSync(f)) continue; // 没有人格文件的（如 openclaw 的 main）跳过，不硬凑
+    if (!existsSync(f)) continue; // 没有人格文件的跳过，不硬凑
     let md = "";
     try {
       md = readFileSync(f, "utf8");
@@ -171,7 +215,9 @@ export function detectSources(): ImportSource[] {
 export function importFrom(sourcePath: string, ids: string[]): Employee[] {
   const out: Employee[] = [];
   for (const id of ids) {
-    const f = join(sourcePath, id, "IDENTITY.md");
+    // sourcePath 指向 workspaces(复数)；main/CEO 在其兄弟目录 workspace(单数)里。
+    const dir = id === "main" ? join(sourcePath, "..", "workspace") : join(sourcePath, id);
+    const f = join(dir, "IDENTITY.md");
     if (!existsSync(f)) continue;
     let md = "";
     try {
@@ -188,6 +234,11 @@ export function importFrom(sourcePath: string, ids: string[]): Employee[] {
       blurb: p.blurb,
       icon: p.icon,
       persona: p.persona,
+      // ⭐ 完整搬运 openclaw 的员工定义：灵魂/性格、关于老板、长期记忆一并带过来，
+      //    聊天时这几段会拼进系统提示词，让员工据此了解上下文、约束行为、知道自己擅长啥。
+      soul: readDoc(dir, "SOUL.md"),
+      aboutUser: readDoc(dir, "USER.md"),
+      memory: readDoc(dir, "MEMORY.md"),
       fromApp: "import:openclaw",
     });
   }

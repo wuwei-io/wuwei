@@ -11,7 +11,7 @@ import type { TeamApp } from "../../../src/team/types.js";
 export const BUILTIN_APPS: TeamApp[] = [
   {
     id: "wuwei-team-basic",
-    name: "无为小队",
+    name: "无为团队",
     desc: "四名通用员工：文案、代码、数据、设计。装上即可分别私聊，各自绑定合适的模型。",
     version: "1.0.0",
     employees: [

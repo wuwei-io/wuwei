@@ -21,6 +21,7 @@ import {
   toggleApp,
   uninstallApp,
   updateEmployee,
+  buildPersonaBlock,
 } from "./store.js";
 
 export type TeamDeps = {
@@ -28,8 +29,8 @@ export type TeamDeps = {
   send: (channel: string, payload?: unknown) => void;
   log: (tag: string, ...args: unknown[]) => void;
   /** 开一个与该员工的新私聊会话（主进程持有 currentId/getAgent，故由它实现，本模块只提需求） */
-  startChat: (employeeId: string, employeeName: string) => void;
-  /** 跑一名员工一轮（房间用）。provider 构造/工具集/凭证刷新都在主进程，这里不重复实现 */
+  startChat: (employeeId: string, employeeName: string, model?: { providerId: string; model: string }) => void;
+  /** 跑一名员工一轮（群用）。provider 构造/工具集/凭证刷新都在主进程，这里不重复实现 */
   runEmployee: (args: RunEmployeeArgs) => Promise<string>;
   /** 基础系统提示词：工作目录、工具用法、安全红线等运行必需信息 */
   baseSys: () => string;
@@ -54,10 +55,12 @@ export function applyEmployee<T extends { name: string }>(
 ): { sys: string; tools: T[]; employee: Employee | null } {
   const emp = employeeId ? findEmployee(employeeId) : null;
   if (!emp) return { sys: baseSys, tools: allTools, employee: null };
-  const sys = `${baseSys}\n\n---\n\n## 你的身份\n\n以下是你在这个团队里的角色设定，请始终以这个身份工作：\n\n${emp.persona}`;
+  const sys = `${baseSys}\n\n${buildPersonaBlock(emp)}`;
   const tools = emp.tools?.length ? allTools.filter((t) => emp.tools!.includes(t.name)) : allTools;
   return { sys, tools, employee: emp };
 }
+
+// buildPersonaBlock 已移到 store.ts（数据层），index 与 orchestrator 都从那里 import，避免循环依赖。
 
 const CHANNELS = [
   "team:state",
@@ -160,18 +163,18 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   ipcMain.handle("team:chat", (_e, employeeId: string) => {
     const emp = findEmployee(String(employeeId || ""));
     if (!emp) return { ok: false, error: "unknown_employee" };
-    deps.startChat(emp.id, emp.name);
+    deps.startChat(emp.id, emp.name, emp.model);
     return { ok: true };
   });
 
-  // ── 房间（多员工协作）──────────────────────────────────────────
+  // ── 群（多员工协作）──────────────────────────────────────────
   const rooms = () => ({ rooms: loadRooms() });
 
   ipcMain.handle("team:rooms", () => rooms());
 
   ipcMain.handle("team:room:create", (_e, name: string, members: string[], coordinator?: string) => {
     const r = createRoom(String(name || ""), Array.isArray(members) ? members.map(String) : [], coordinator);
-    deps.log("team", "建房间", r.name, `${r.members.length} 名成员`);
+    deps.log("team", "建群", r.name, `${r.members.length} 名成员`);
     deps.send("evt:team-rooms", rooms());
     return { ok: true, room: r, ...rooms() };
   });
@@ -193,7 +196,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     running: isRoomRunning(String(id || "")),
   }));
 
-  // 在房间里发言：存消息 → 按 @ 决定唤醒谁 → 并行跑 → 结果回房间。不 await，进度走 evt:team-room
+  // 在群里发言：存消息 → 按 @ 决定唤醒谁 → 并行跑 → 结果回群。不 await，进度走 evt:team-room
   ipcMain.handle("team:room:send", (_e, id: string, text: string) => {
     void runRoomTurn(String(id || ""), String(text || ""), {
       send: deps.send,

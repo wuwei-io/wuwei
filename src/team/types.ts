@@ -22,8 +22,16 @@ export interface Employee {
   blurb?: string;
   /** 内置图标名（渲染层映射到手写 SVG），缺省按 name 首字生成字符头像 */
   icon?: string;
-  /** 注入系统提示词的人格描述 */
+  /** 自定义头像图片（用户上传+裁剪后的 data URL，正方形）。优先级高于 icon/首字。 */
+  avatarData?: string;
+  /** 身份与职责（对应 openclaw IDENTITY）：这个员工是谁、负责什么、不做什么。人格主体。 */
   persona: string;
+  /** 性格与说话风格（对应 openclaw SOUL）：语气、脾气、表达习惯。 */
+  soul?: string;
+  /** 关于老板/服务对象（对应 openclaw USER）：他是谁、偏好什么、在做什么项目。 */
+  aboutUser?: string;
+  /** 长期记忆与背景（对应 openclaw MEMORY）：需要长期记住的项目背景、约定、结论。 */
+  memory?: string;
   /** 缺省=跟随当前会话的平台/模型，让用户自己挑 */
   model?: EmployeeModel;
   /** 工具白名单；缺省=不裁剪（全量工具） */

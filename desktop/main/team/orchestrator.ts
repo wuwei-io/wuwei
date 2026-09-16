@@ -1,4 +1,4 @@
-// AI 员工团队 · 房间编排器
+// AI 员工团队 · 群编排器
 //
 // 职责只有两件：决定「谁该说话」，以及「他能看到什么」（后者委托给 projection.ts）。
 // 真正把 Agent 跑起来的能力由主进程通过 deps.runEmployee 注入——provider 的构造、
@@ -8,7 +8,7 @@ import type { Employee, Room, RoomMessage } from "../../../src/team/types.js";
 import type { Message } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
-import { loadEmployees } from "./store.js";
+import { loadEmployees, buildPersonaBlock } from "./store.js";
 
 export type RunEmployeeArgs = {
   employee: Employee;
@@ -18,7 +18,15 @@ export type RunEmployeeArgs = {
   history: Message[];
   input: string;
   signal: AbortSignal;
+  /** 实时进度回调（思考/工具活动），主进程据此转发给界面显示，不落消息流 */
+  onProgress?: (ev: ProgressEv) => void;
 };
+
+/** 员工干活时的实时进度（思考/工具）。只用来给界面显示，绝不进群消息流。 */
+export type ProgressEv =
+  | { kind: "text"; delta: string }
+  | { kind: "tool-start"; id: string; name: string }
+  | { kind: "tool-end"; id: string; isError: boolean };
 
 export type OrchestratorDeps = {
   send: (channel: string, payload?: unknown) => void;
@@ -29,7 +37,7 @@ export type OrchestratorDeps = {
   baseSys: () => string;
 };
 
-/** 正在跑的房间轮次，用于「停止」 */
+/** 正在跑的群轮次，用于「停止」 */
 const running = new Map<string, AbortController>();
 
 export function abortRoom(roomId: string) {
@@ -51,7 +59,7 @@ function pushAndBroadcast(
 }
 
 /**
- * 人类在房间里说了一句话，跑完这一轮。
+ * 人类在群里说了一句话，跑完这一轮。
  *
  * 并发策略：被唤醒的多名员工**并行**跑，各自看到的历史是「人类这句话之前 + 这句话」，
  * 互相看不到对方本轮的回复。这是刻意的——串行会让后发言的人被先发言的带偏，
@@ -62,7 +70,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
   if (!room) return;
   const text = (userText || "").trim();
   if (!text) return;
-  if (running.has(roomId)) return; // 同一房间不并发跑两轮
+  if (running.has(roomId)) return; // 同一群不并发跑两轮
 
   const all = loadEmployees();
   const members = room.members
@@ -86,7 +94,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     // 没 @ 人也没设协调者：只记录不唤醒，这是最大的省钱开关，但要让用户知道为什么没人应答
     deps.send("evt:team-room-hint", {
       roomId,
-      hint: "没有人被点名。@某位员工，或在房间设置里指定一名常驻协调者。",
+      hint: "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。",
     });
     return;
   }
@@ -112,20 +120,29 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
           .join("")
           .trim();
         const history = proj.slice(0, -1);
-        const sys = `${base}\n\n---\n\n## 你的身份\n\n${emp.persona}\n\n## 当前场景\n\n你在群聊「${room.name}」里，成员有：${members
+        const sys = `${base}\n\n${buildPersonaBlock(emp)}\n\n## 当前场景\n\n你在群聊「${room.name}」里，成员有：${members
           .map((m) => m.name)
           .join("、")}。别人的发言会以「姓名」开头标出。只说你自己该说的部分，不要替别人回答，也不要复述已有内容。`;
 
         try {
-          const out = await deps.runEmployee({ employee: emp, sys, history, input, signal: ac.signal });
+          const out = await deps.runEmployee({
+            employee: emp,
+            sys,
+            history,
+            input,
+            signal: ac.signal,
+            // 进度只广播、不落库：界面据此显示"谁正在想什么、调了什么工具"，可展开/收起，跑完即清。
+            onProgress: (ev) => deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }),
+          });
           if (ac.signal.aborted) return;
+          deps.send("evt:team-room-progress", { roomId, empId: emp.id, done: true }); // 该员工干完，界面清掉他的进度块
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
             text: (out || "").trim() || "（没有输出）",
           });
         } catch (e: any) {
           if (ac.signal.aborted) return;
-          deps.log("team", "房间成员出错", emp.name, String(e?.message || e).slice(0, 200));
+          deps.log("team", "群成员出错", emp.name, String(e?.message || e).slice(0, 200));
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
             text: `出错了：${String(e?.message || e).slice(0, 300)}`,
