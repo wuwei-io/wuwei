@@ -237,7 +237,8 @@ function syncTeamModule(s: Settings | null) {
         if (model?.providerId && model.model) {
           const gs = loadSettings();
           const slot = (gs?.creds || {})[model.providerId] || {};
-          setSessionBinding(currentId, { providerId: model.providerId, model: model.model, kind: slot.kind, baseUrl: slot.baseUrl });
+          // kind 不从 creds slot 取(CredSlot 无此字段)——会话按 providerId 重建 provider 时自会推断。
+          setSessionBinding(currentId, { providerId: model.providerId, model: model.model, baseUrl: slot.baseUrl });
         }
         const a = getAgent(currentId);
         send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
