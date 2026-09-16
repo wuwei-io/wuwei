@@ -88,6 +88,7 @@ interface SessionMeta {
   project?: string;
   done?: boolean;
   discuss?: boolean;
+  employeeId?: string; // 绑定的员工(一人公司私聊会话)；这类会话不进普通列表，只在一人公司板块下访问
 }
 
 // 优先级方案：高/中/低 + 艾森豪威尔四象限。weight 用于排序(大在前)，tag=徽标短标签，label=全称
@@ -5573,7 +5574,13 @@ export function App() {
                     key={e.id}
                     className="tool-sub-item"
                     title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
-                    onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}
+                    onClick={() => {
+                      // 微信式：优先进该员工最近的会话(延续)，没有才新建，避免每次点都开新对话
+                      const last = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+                      if (last) window.wuwei.switchSession(last.id);
+                      else void (window as any).wuwei?.team?.chat?.(e.id);
+                      setAppView(null); setAgiView(null);
+                    }}
                     onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                   >
                     <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
@@ -5677,10 +5684,11 @@ export function App() {
         </div>
         )}
         <div className="session-list">
-          {sessions.length === 0 && <div className="empty">{lang === "en" ? "No conversations yet" : "暂无历史对话"}</div>}
+          {sessions.filter((s) => !s.employeeId).length === 0 && <div className="empty">{lang === "en" ? "No conversations yet" : "暂无历史对话"}</div>}
           {(() => {
             const byGroup = new Map<string, SessionMeta[]>();
             for (const s of sessions) {
+              if (s.employeeId) continue; // 员工私聊会话不进普通列表，归一人公司板块下
               const g = groupOf(s);
               if (!byGroup.has(g)) byGroup.set(g, []);
               byGroup.get(g)!.push(s);
