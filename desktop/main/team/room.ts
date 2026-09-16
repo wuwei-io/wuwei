@@ -64,6 +64,14 @@ export function updateRoom(id: string, patch: Partial<Room>): Room[] {
   return list;
 }
 
+
+/** 置顶/取消置顶群 */
+export function pinRoom(id: string): Room[] {
+  const list = loadRooms().map((r) => (r.id === id ? { ...r, pinnedAt: r.pinnedAt ? undefined : Date.now(), updatedAt: r.updatedAt } : r));
+  saveRooms(list);
+  return list;
+}
+
 export function deleteRoom(id: string): Room[] {
   const list = loadRooms().filter((r) => r.id !== id);
   saveRooms(list);

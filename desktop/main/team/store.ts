@@ -115,6 +115,14 @@ export function buildPersonaBlock(emp: Employee): string {
   return parts.join("\n\n");
 }
 
+
+/** 置顶/取消置顶员工：pinnedAt 有值即置顶，按它降序排前面。 */
+export function pinEmployee(id: string): Employee[] {
+  const list = loadEmployees().map((e) => (e.id === id ? { ...e, pinnedAt: e.pinnedAt ? undefined : Date.now() } : e));
+  saveEmployees(list);
+  return list;
+}
+
 /** 更新单个员工（改人格/换模型/调工具白名单） */
 export function updateEmployee(id: string, patch: Record<string, unknown>): Employee[] {
   const list = loadEmployees().map((e) => {

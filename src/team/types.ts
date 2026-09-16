@@ -38,6 +38,8 @@ export interface Employee {
   tools?: string[];
   /** 来源应用 id；内置默认团队为 undefined */
   fromApp?: string;
+  /** 置顶时间戳；有值=置顶，按它降序排前 */
+  pinnedAt?: number;
 }
 
 /**
@@ -102,5 +104,7 @@ export interface Room {
   maxWake?: number;
   /** 最后一条消息摘要，列表里展示 */
   lastText?: string;
+  /** 置顶时间戳；有值=置顶 */
+  pinnedAt?: number;
 }
 

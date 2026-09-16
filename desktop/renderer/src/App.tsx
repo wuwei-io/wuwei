@@ -16,6 +16,7 @@ import * as Ic from "./baby/icons.js";
 // 「AI 员工团队」可选模块：整个渲染层只在这里引一次（可插拔契约，见设计方案第七节）
 import { AppStore } from "./team/AppStore.js";
 import { RoomView } from "./team/RoomView.js";
+import { EmployeeAvatar } from "./team/EmployeeAvatar.js";
 
 // 数字婴儿生命体征：后端 /alive/status 一次给全，界面状态卡片全靠它渲染
 type BabyVitals = {
@@ -3110,6 +3111,8 @@ export function App() {
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
   const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
+  // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项
+  const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room"; id?: string; name?: string }>(null);
   // 一人公司板块要列群/员工：模块开着时拉一次 + 监听变更
   useEffect(() => {
     if (!teamEnabled) return;
@@ -5543,6 +5546,7 @@ export function App() {
               <button
                 className={"tool-item tool-item-main" + (appView === "store" ? " on" : "")}
                 onClick={() => { setAppView("store"); setAgiView(null); }}
+                onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "company" }); }}
               >
                 <svg className="tool-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
@@ -5564,25 +5568,32 @@ export function App() {
             {teamExpanded && (
               <div className="tool-sub">
                 {/* 员工私聊入口 */}
-                {teamEmployees.map((e: any) => (
+                {[...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => (
                   <button
                     key={e.id}
                     className="tool-sub-item"
                     title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
                     onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}
+                    onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                   >
-                    <span className="tool-sub-dot person" />
+                    <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
                     <span className="tool-sub-nm">{e.name}</span>
                   </button>
                 ))}
                 {/* 群入口 */}
-                {teamRooms.map((r: any) => (
+                {[...teamRooms].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
                   <button
                     key={r.id}
                     className={"tool-sub-item" + (appView === "rooms" && activeRoomId === r.id ? " on" : "")}
                     onClick={() => { setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
+                    onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "room", id: r.id, name: r.name }); }}
                   >
-                    <span className="tool-sub-dot group" />
+                    <span className="tool-sub-stack">
+                      {(r.members || []).slice(0, 3).map((mid: string) => {
+                        const m = teamEmployees.find((x: any) => x.id === mid);
+                        return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                      })}
+                    </span>
                     <span className="tool-sub-nm">{r.name}</span>
                     <span className="tool-sub-cnt">{r.members?.length || 0}</span>
                   </button>
@@ -5596,6 +5607,41 @@ export function App() {
             )}
           </div>
         )}
+        {/* 一人公司右键菜单：公司标题=新建/导入/建群；员工=私聊/编辑/置顶/删除；群=进入/置顶/删除 */}
+        {teamMenu && (() => {
+          const api = (window as any).wuwei?.team;
+          const close = () => setTeamMenu(null);
+          const pin = (kind: "employee" | "room", id: string) => {
+            if (kind === "employee") void api?.employeePin?.(id);
+            else void api?.roomPin?.(id);
+            close();
+          };
+          const Item = ({ label, on, danger }: { label: string; on: () => void; danger?: boolean }) => (
+            <button className={"team-cm-item" + (danger ? " danger" : "")} onClick={() => { on(); }}>{label}</button>
+          );
+          return (
+            <>
+              <div className="team-cm-mask" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
+              <div className="team-cm" style={{ left: Math.min(teamMenu.x, window.innerWidth - 180), top: teamMenu.y }}>
+                {teamMenu.kind === "company" && (<>
+                  <Item label={lang === "en" ? "Add teammate" : "新建/导入员工"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "New group" : "建群"} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
+                </>)}
+                {teamMenu.kind === "employee" && (<>
+                  <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("employee", teamMenu.id!)} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`)) await api?.removeEmployee?.(teamMenu.id); }} />
+                </>)}
+                {teamMenu.kind === "room" && (<>
+                  <Item label={lang === "en" ? "Open" : "进入"} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`)) await api?.roomDelete?.(teamMenu.id); }} />
+                </>)}
+              </div>
+            </>
+          );
+        })()}
         <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
           {t("session.new")}
         </button>
@@ -6817,6 +6863,12 @@ export function App() {
           <span className="tb-title">
             <WuweiMark />
             {(() => {
+              // 在一人公司里时，标题栏显示当前所在：群名 / 员工管理页
+              if (teamEnabled && appView === "rooms" && activeRoomId) {
+                const r = teamRooms.find((x: any) => x.id === activeRoomId);
+                if (r) return r.name;
+              }
+              if (teamEnabled && appView === "store") return lang === "en" ? "My Company" : "一人公司";
               const st = sessions.find((s) => s.id === currentId)?.title;
               // 还没生成智能标题(仍是默认「新对话/New chat」)就显示品牌名，跟随界面语言
               const isDefault = !st || st === "新对话" || st === "New chat";

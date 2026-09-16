@@ -10,7 +10,7 @@ import type { Employee, Room, TeamAppCard } from "../../../src/team/types.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
 import { abortRoom, isRoomRunning, runRoomTurn, type RunEmployeeArgs } from "./orchestrator.js";
-import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom } from "./room.js";
+import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom } from "./room.js";
 import {
   addEmployees,
   installApp,
@@ -21,6 +21,7 @@ import {
   toggleApp,
   uninstallApp,
   updateEmployee,
+  pinEmployee,
   buildPersonaBlock,
 } from "./store.js";
 
@@ -69,6 +70,8 @@ const CHANNELS = [
   "team:toggle",
   "team:employee:update",
   "team:employee:remove",
+  "team:employee:pin",
+  "team:room:pin",
   "team:import:scan",
   "team:import:apply",
   "team:chat",
@@ -143,6 +146,9 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     push();
     return { ok: true, ...snapshot() };
   });
+
+  ipcMain.handle("team:employee:pin", (_e, id: string) => { pinEmployee(String(id || "")); push(); return { ok: true, ...snapshot() }; });
+  ipcMain.handle("team:room:pin", (_e, id: string) => { pinRoom(String(id || "")); deps.send("evt:team-rooms", { rooms: loadRooms() }); return { ok: true, rooms: loadRooms() }; });
 
   // 扫描本机可导入的员工来源（openclaw 的 IDENTITY.md）。纯读文件，不需要 openclaw 在运行。
   ipcMain.handle("team:import:scan", () => {
