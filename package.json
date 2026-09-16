@@ -116,12 +116,14 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.3",
     "cross-env": "^10.1.0",
     "electron": "^43.1.0",
