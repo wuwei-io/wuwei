@@ -272,4 +272,30 @@ const evalTool: Tool = {
   },
 };
 
-export const CHROME_TOOLS: Tool[] = [statusTool, tabsTool, readTool, navigateTool, clickTool, fillTool, evalTool];
+const screenshotTool: Tool = {
+  name: "chrome_screenshot",
+  description:
+    "截取指定标签页的当前画面并返回图片，让你直接看到页面长什么样（找元素位置、看图表、确认状态时用）。tab 缺省第一个。",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tab: { description: "标签序号或网址/标题子串，缺省第一个", type: ["number", "string"] },
+      full_page: { type: "boolean", description: "是否截整页(含滚动区域)，缺省只截可视区" },
+    },
+  },
+  readOnly: true,
+  async run(input, ctx: ToolContext) {
+    try {
+      const tab = await pickTab(input.tab, ctx.signal);
+      const params: Record<string, unknown> = { format: "png" };
+      if (input.full_page) params.captureBeyondViewport = true;
+      const r = await cdpSend(tab.webSocketDebuggerUrl, "Page.captureScreenshot", params, ctx.signal);
+      if (!r?.data) return err("截图失败：没拿到图像数据");
+      return { content: `已截取【${tab.title}】的画面`, image: `data:image/png;base64,${r.data}` };
+    } catch (e) {
+      return notConnected(e);
+    }
+  },
+};
+
+export const CHROME_TOOLS: Tool[] = [statusTool, tabsTool, readTool, navigateTool, clickTool, fillTool, evalTool, screenshotTool];

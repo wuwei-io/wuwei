@@ -506,12 +506,16 @@ export class Agent {
           hooks.onToolStart?.(call.id, call.name, call.input);
           const out = await tool.run(call.input, { ...this.ctx, signal }); // 传中断信号,停止时杀长命令
           hooks.onToolEnd?.(call.id, out.content, !!out.isError);
+          const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
-            content: capToolResult(out.content), // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
+            // 工具带图(截图类)→ 多模态数组[文本+图片]，让模型看得到；否则纯文本直通。
+            content: out.image
+              ? [{ type: "text", text: capped }, { type: "image", dataUrl: out.image }]
+              : capped,
             is_error: out.isError,
-          };
+          } as any;
         })();
         if (tool.readOnly) parallelJobs.push(job); // 只读：并行
         else await job; // 写类：等它跑完再继续下一个，串行执行

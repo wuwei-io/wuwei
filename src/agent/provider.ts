@@ -606,6 +606,15 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
         const { mediaType, data } = parseDataUrl(b.dataUrl);
         return { type: "image", source: { type: "base64", media_type: mediaType, data } };
       }
+      // tool_result 的 content 若是多模态数组(截图类工具)，把里面的 image 块转成 Anthropic image。
+      if (b.type === "tool_result" && Array.isArray((b as any).content)) {
+        const inner = (b as any).content.map((c: any) =>
+          c.type === "image"
+            ? (() => { const { mediaType, data } = parseDataUrl(c.dataUrl); return { type: "image", source: { type: "base64", media_type: mediaType, data } }; })()
+            : c,
+        );
+        return { type: "tool_result", tool_use_id: (b as any).tool_use_id, content: inner, is_error: (b as any).is_error };
+      }
       const { cache_control, ...rest } = b as Record<string, unknown>; // 剥掉遗留断点
       void cache_control;
       return { ...rest }; // 复制新对象,避免按引用改动污染历史
@@ -638,7 +647,14 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
       const toolResults = m.content.filter((b) => b.type === "tool_result");
       if (toolResults.length) {
         for (const r of toolResults as any[]) {
-          out.push({ role: "tool", tool_call_id: r.tool_use_id, content: r.content });
+          // 多模态数组(截图工具)→ OpenAI 的 tool role 不吃图，降级：取文本 + 一句"[截图]"占位。
+          let content = r.content;
+          if (Array.isArray(content)) {
+            const txt = content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+            const hasImg = content.some((c: any) => c.type === "image");
+            content = txt + (hasImg ? "\n[附截图，当前模型不支持看图；换 Claude 可看]" : "");
+          }
+          out.push({ role: "tool", tool_call_id: r.tool_use_id, content });
         }
         const text = m.content
           .filter((b) => b.type === "text")
