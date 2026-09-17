@@ -9,8 +9,8 @@ import type { IpcMain } from "electron";
 import type { Employee, Room, TeamAppCard } from "../../../src/team/types.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
-import { abortRoom, isRoomRunning, runRoomTurn, type RunEmployeeArgs } from "./orchestrator.js";
-import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom } from "./room.js";
+import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, type RunEmployeeArgs } from "./orchestrator.js";
+import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom, clearRoomMessages, deleteRoomMessage } from "./room.js";
 import {
   addEmployees,
   installApp,
@@ -85,6 +85,8 @@ const CHANNELS = [
   "team:room:messages",
   "team:room:send",
   "team:room:abort",
+  "team:room:clear",
+  "team:room:msg-delete",
   "team:purge",
 ] as const;
 
@@ -217,8 +219,28 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   });
 
   ipcMain.handle("team:room:abort", (_e, id: string) => {
-    abortRoom(String(id || ""));
+    const rid = String(id || "");
+    forceStopRoom(rid); // 强制停：立刻解锁界面、放行下一条，不等挂起的 401 重试
+    deps.send("evt:team-room", { roomId: rid, messages: loadRoomMessages(rid), running: false });
     return { ok: true };
+  });
+
+  // 清空群里全部消息（保留群）
+  ipcMain.handle("team:room:clear", (_e, id: string) => {
+    const rid = String(id || "");
+    clearRoomMessages(rid);
+    deps.send("evt:team-room", { roomId: rid, messages: [], running: isRoomRunning(rid) });
+    deps.send("evt:team-rooms", rooms());
+    return { ok: true };
+  });
+
+  // 删除群里某一条消息
+  ipcMain.handle("team:room:msg-delete", (_e, id: string, msgId: string) => {
+    const rid = String(id || "");
+    const msgs = deleteRoomMessage(rid, String(msgId || ""));
+    deps.send("evt:team-room", { roomId: rid, messages: msgs, running: isRoomRunning(rid) });
+    deps.send("evt:team-rooms", rooms());
+    return { ok: true, messages: msgs };
   });
 
   // 关掉模块时用户可选「同时清除数据」：删掉 ~/.wuwei/team/ 整个目录

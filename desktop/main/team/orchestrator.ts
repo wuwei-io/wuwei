@@ -44,6 +44,17 @@ export function abortRoom(roomId: string) {
   running.get(roomId)?.abort();
 }
 
+/**
+ * 强制停止：abort 信号 + 立刻把运行态从表里删掉。
+ * 用于 provider 卡在 401 重试/长 backoff、abort 信号一时没被检查到时——
+ * 点「停止」要能立即解锁界面、放行下一条消息，不等那个挂起的请求自己结束。
+ * 挂起的那轮最终 resolve/reject 时，其 finally 再 delete 一次无害，且落库被 aborted 守卫拦掉。
+ */
+export function forceStopRoom(roomId: string) {
+  running.get(roomId)?.abort();
+  running.delete(roomId);
+}
+
 export function isRoomRunning(roomId: string): boolean {
   return running.has(roomId);
 }

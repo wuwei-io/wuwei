@@ -1,0 +1,53 @@
+Anthropic really fumbling the Ball huh?
+Agents duplicate functions, over-engineer, and comment every line by default. This is the CLAUDE.md section I use against it - what's the paragraph that works in yours?
+I built stillpane: capture any window as markdown+screenshot for Claude Code
+How to Correctly Use Workflows Given 50% Fable Limit
+MacOS app AI Coach
+First thing I've ever built: a Mac terminal wrapper that feels like a browser
+Is there a way to add a 'sound' notifier for things?
+Claude Code highlighting text in an ugly way why?
+Been building widgets for Twitch recently, anyone working on something similar?
+OpenAI more like brokenAI.
+I got tired of babysitting Claude Code at the terminal, so we turned it into a resident process
+Cutting context bloat in Claude Code by ~28% when searching local papers and notes (local BM25 via MCP, no embeddings, no vector db)
+Building TUI applications
+Appeal to Anthropic
+Data Visualization and Reporting
+Claude, change the "Add to Cart" button to blue
+Wondering if my current setup is sufficient
+Limits are going off AGAIN
+Who’s Worth Following for Claude Code?
+Is this a bug?
+AI test
+I have found that this prompt made most of ai models struggle
+Riiighhhttttt, thanks Claude ig🫩🫩
+“Copy iPhone photos to USB” sounded like a simple feature until iCloud got involved
+Built a free 3d BESS site modelling engine with Fable 5.1
+AI prompts : EHR Macros
+I've already removed the Link cutters from my website.
+I keep getting rate limited and burning my tokens....
+Best Context7 alternatives in 2026? I tested 4 options for coding agent context
+The Impact of Skills and MCP on the Token Usage
+How do you QA your code without causing tons of regressions?
+Which is better sonnet 5 or Opus 4.6?
+US Agencies Accuse China-Based AI Firms of ‘Malicious’ Copying of American Models
+A GitHub Action that fails PRs when the agent adds too many comments
+Vibed a Linux dev environment to manage ClaudeCode cli sessions
+Just switched to claude desktop for code- Tokens burning faster?
+Summarization is garbage
+10 fucking subagents
+I've created a modern clone of Wizard of Wor
+Why Claude do sleeps like that?
+Give me your trips and tricks to reduce verbose output
+Save money on Claude Code by switching from Corporate to Team plan
+Ok guys, I vibecoded an app. It's called Sockmel.
+Opus 5 feels like an alien
+Any way to stop CLAUDE.md loading into a custom subagent?
+I made an MCP app so claude code can record, edit and export demo screen recordings for you
+Speaking at a local conference about AI in Dev - What would you actually want to hear about?
+At least they're being honest
+Compacting my session used more than 50% of my 5 hour-limit.
+We’re on call for code nobody wrote!
+API = Dollars, Subscription = Euro ... why ?
+The gap between 'using AI' and 'being good at AI' is wider than most people think
+WHat's your workflow with Claude Code?

@@ -84,6 +84,23 @@ export function deleteRoom(id: string): Room[] {
   return list;
 }
 
+/** 清空群里全部消息（保留群本身），返回空流 */
+export function clearRoomMessages(roomId: string): RoomMessage[] {
+  saveRoomMessages(roomId, []);
+  updateRoom(roomId, { lastText: "" });
+  return [];
+}
+
+/** 删除群里某一条消息，返回剩余消息流 */
+export function deleteRoomMessage(roomId: string, msgId: string): RoomMessage[] {
+  const msgs = loadRoomMessages(roomId).filter((m) => m.id !== msgId);
+  saveRoomMessages(roomId, msgs);
+  const last = msgs[msgs.length - 1];
+  const preview = last ? (last.text || "").replace(/\s+/g, " ").slice(0, 40) : "";
+  updateRoom(roomId, { lastText: last ? `${last.speaker.name}：${preview}` : "" });
+  return msgs;
+}
+
 /** 追加一条消息并同步群的 updatedAt / lastText，返回最新消息流 */
 export function appendMessage(roomId: string, msg: Omit<RoomMessage, "id" | "ts"> & { ts?: number }): RoomMessage[] {
   const msgs = loadRoomMessages(roomId);

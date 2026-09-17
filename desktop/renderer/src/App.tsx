@@ -3111,7 +3111,9 @@ export function App() {
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
   const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
+  const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
+  const [roomMenu, setRoomMenu] = useState(false); // 标题栏里群的 ⋯ 菜单(成员/清空/删除)是否展开
   // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项
   const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room"; id?: string; name?: string }>(null);
   // 一人公司板块要列群/员工：模块开着时拉一次 + 监听变更
@@ -5568,25 +5570,61 @@ export function App() {
             </div>
             {teamExpanded && (
               <div className="tool-sub">
-                {/* 员工私聊入口 */}
-                {[...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => (
-                  <button
-                    key={e.id}
-                    className="tool-sub-item"
-                    title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
-                    onClick={() => {
-                      // 微信式：优先进该员工最近的会话(延续)，没有才新建，避免每次点都开新对话
-                      const last = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
-                      if (last) window.wuwei.switchSession(last.id);
-                      else void (window as any).wuwei?.team?.chat?.(e.id);
-                      setAppView(null); setAgiView(null);
-                    }}
-                    onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
-                  >
-                    <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                    <span className="tool-sub-nm">{e.name}</span>
-                  </button>
-                ))}
+                {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式） */}
+                {[...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => {
+                  const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                  const isExpanded = empExpanded.has(e.id);
+                  const activeEmp = sessions.find((s) => s.id === currentId)?.employeeId === e.id && appView === null;
+                  // 点员工行 = 进他固定的专属会话(最近那次，延续上下文)；没聊过才新建
+                  const openLatest = () => {
+                    const last = empSessions[0];
+                    if (last) window.wuwei.switchSession(last.id);
+                    else void (window as any).wuwei?.team?.chat?.(e.id);
+                    setAppView(null); setAgiView(null);
+                  };
+                  return (
+                    <div className="tool-sub-emp" key={e.id}>
+                      <div className={"tool-sub-row" + (activeEmp ? " on" : "")}>
+                        <button
+                          className="tool-sub-item"
+                          title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                          onClick={openLatest}
+                          onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
+                        >
+                          <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
+                          <span className="tool-sub-nm">{e.name}</span>
+                        </button>
+                        {empSessions.length > 0 && (
+                          <button
+                            className="tool-sub-chev"
+                            title={isExpanded ? (lang === "en" ? "Collapse" : "收起") : (lang === "en" ? "Show chats" : "展开对话")}
+                            onClick={() => setEmpExpanded((prev) => { const n = new Set(prev); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })}
+                          >
+                            <svg className={"tool-chev" + (isExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      {isExpanded && (
+                        <div className="tool-sub-convos">
+                          {empSessions.map((s) => (
+                            <button
+                              key={s.id}
+                              className={"tool-sub-convo" + (s.id === currentId && appView === null ? " on" : "")}
+                              onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
+                              onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
+                            >
+                              <span className="tool-sub-convo-t">{s.title || (lang === "en" ? "New chat" : "新对话")}</span>
+                              <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
+                            </button>
+                          ))}
+                          <button className="tool-sub-newconvo" onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}>
+                            + {lang === "en" ? "New chat" : "新对话"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {/* 群入口 */}
                 {[...teamRooms].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
                   <button
@@ -6601,6 +6639,8 @@ export function App() {
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
           <div className="team-panel">
+            {/* 进入某个群后，顶部这条(一人公司/员工·群/返回)隐藏——群名/⋯已上移到软件标题栏 */}
+            {!(appView === "rooms" && activeRoomId) && (
             <div className="team-panel-head">
               <span className="team-panel-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -6625,6 +6665,7 @@ export function App() {
                 {lang === "en" ? "Back" : "返回"}
               </button>
             </div>
+            )}
             <div className="team-panel-body">
               {appView === "store" ? (
                 <AppStore
@@ -6869,18 +6910,77 @@ export function App() {
           }
         >
           <span className="tb-title">
-            <WuweiMark />
             {(() => {
-              // 在一人公司里时，标题栏显示当前所在：群名 / 员工管理页
-              if (teamEnabled && appView === "rooms" && activeRoomId) {
-                const r = teamRooms.find((x: any) => x.id === activeRoomId);
-                if (r) return r.name;
+              // 群里：头像=成员堆叠圆头像，标题=群名
+              const room = teamEnabled && appView === "rooms" && activeRoomId ? teamRooms.find((x: any) => x.id === activeRoomId) : null;
+              if (room) {
+                return (
+                  <>
+                    <span className="tb-avatar stack">
+                      {(room.members || []).slice(0, 3).map((mid: string) => {
+                        const m = teamEmployees.find((x: any) => x.id === mid);
+                        return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                      })}
+                    </span>
+                    <span className="tb-title-txt">{room.name}</span>
+                  </>
+                );
               }
-              if (teamEnabled && appView === "store") return lang === "en" ? "My Company" : "一人公司";
+              // 员工私聊：头像=员工圆头像，标题=员工名（固定，不随消息标题变）
+              const curEmpId = teamEnabled && appView === null ? sessions.find((s) => s.id === currentId)?.employeeId : undefined;
+              const curEmp = curEmpId ? teamEmployees.find((e: any) => e.id === curEmpId) : null;
+              if (curEmp) {
+                return (
+                  <>
+                    <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={curEmp.name} /></span>
+                    <span className="tb-title-txt">{curEmp.name}</span>
+                  </>
+                );
+              }
+              if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "My Company" : "一人公司"}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
-              // 还没生成智能标题(仍是默认「新对话/New chat」)就显示品牌名，跟随界面语言
               const isDefault = !st || st === "新对话" || st === "New chat";
-              return isDefault ? (lang === "en" ? "Wuwei" : "无为") : st;
+              return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (lang === "en" ? "Wuwei" : "无为") : st}</span></>;
+            })()}
+            {/* 群 ⋯ 菜单：群成员 / 清空消息 / 删除群，紧跟群名 */}
+            {teamEnabled && appView === "rooms" && activeRoomId && (() => {
+              const room = teamRooms.find((x: any) => x.id === activeRoomId);
+              if (!room) return null;
+              return (
+                <span className="tb-room-menu-wrap">
+                  <button className="tb-room-menu-btn" onClick={() => setRoomMenu((v) => !v)} title={lang === "en" ? "Group" : "群信息"}>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+                  </button>
+                  {roomMenu && (
+                    <>
+                      <div className="tb-room-menu-mask" onClick={() => setRoomMenu(false)} />
+                      <div className="tb-room-menu">
+                        <div className="tb-room-menu-sec">{lang === "en" ? "Members" : "群成员"} · {room.members.length}</div>
+                        <div className="tb-room-menu-members">
+                          {room.members.map((mid: string) => {
+                            const m = teamEmployees.find((x: any) => x.id === mid);
+                            return (
+                              <span className="tb-room-mem" key={mid}>
+                                <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>
+                                <span className="tb-room-mem-nm">{m?.name || mid}</span>
+                                {room.coordinator === mid && <span className="tb-room-mem-host">{lang === "en" ? "host" : "主持"}</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <button className="tb-room-menu-item" onClick={async () => { setRoomMenu(false); if (!window.confirm(lang === "en" ? "Clear all messages in this group?" : "清空本群全部消息？")) return; await (window as any).wuwei?.team?.roomClear(room.id); }}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" /></svg>
+                          {lang === "en" ? "Clear messages" : "清空消息"}
+                        </button>
+                        <button className="tb-room-menu-item danger" onClick={async () => { setRoomMenu(false); if (!window.confirm(lang === "en" ? `Delete group "${room.name}"? Chat history is removed too.` : `删除群「${room.name}」？聊天记录一并删除。`)) return; await (window as any).wuwei?.team?.roomDelete(room.id); setActiveRoomId(null); setAppView("store"); }}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
+                          {lang === "en" ? "Delete group" : "删除群"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </span>
+              );
             })()}
           </span>
           <span className="tb-spacer" />

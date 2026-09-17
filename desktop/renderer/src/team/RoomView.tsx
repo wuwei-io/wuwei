@@ -19,7 +19,6 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   // 员工干活进度：empId → {name, 思考文本, 工具列表}。只显示、不进消息流；跑完清掉。
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; done: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
-  const [showMenu, setShowMenu] = useState(false); // 群头部 ⋯ 菜单（成员/删除）
   const [mention, setMention] = useState<string | null>(null); // @ 补全：输入 @ 后的查询词，null=不显示
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -71,7 +70,6 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   useEffect(() => {
     if (!cur) return;
     setHint("");
-    setShowMenu(false);
     api?.roomMessages(cur).then((r: any) => {
       setMsgs(r?.messages || []);
       setRunning(!!r?.running);
@@ -236,52 +234,9 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   }
 
   // ── 群内聊天 ──
+  // 顶栏(群名/成员/⋯)已上移到软件标题栏(App 里)，这里不再重复渲染，直接进消息流。
   return (
     <div className="tc-pane tc-chat-pane">
-      <div className="tc-room-bar">
-        <button className="tc-btn-ghost" onClick={() => setCur(null)}>‹ {en ? "Groups" : "群"}</button>
-        <span className="tc-room-bar-t">{room.name}</span>
-        <span className="tc-room-mini">{room.members.length}{en ? "" : " 人"}</span>
-        <div className="tc-menu-wrap" style={{ marginLeft: "auto" }}>
-          <button className="tc-icon-btn" onClick={() => setShowMenu((v) => !v)} title={en ? "Group info" : "群信息"}>
-            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
-          </button>
-          {showMenu && (
-            <>
-              <div className="tc-menu-mask" onClick={() => setShowMenu(false)} />
-              <div className="tc-menu">
-                <div className="tc-menu-sec">{en ? "Members" : "群成员"}</div>
-                <div className="tc-menu-members">
-                  {room.members.map((id) => {
-                    const e = empOf(id);
-                    return (
-                      <span className="tc-menu-mem" key={id}>
-                        <span className="tc-menu-mem-av"><EmployeeAvatar icon={e?.icon} avatarData={e?.avatarData} name={e?.name || id} /></span>
-                        <span className="tc-menu-mem-nm">{nameOf(id)}</span>
-                        {room.coordinator === id && <span className="tc-menu-host">{en ? "host" : "主持"}</span>}
-                      </span>
-                    );
-                  })}
-                </div>
-                <button
-                  className="tc-menu-del"
-                  onClick={async () => {
-                    setShowMenu(false);
-                    if (!confirm(en ? `Delete group "${room.name}"?` : `删除群「${room.name}」？聊天记录也会一并删除。`)) return;
-                    const r = await api.roomDelete(room.id);
-                    setRooms(r?.rooms || []);
-                    setCur(null);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
-                  {en ? "Delete group" : "删除群"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
       <div className="tc-chat-flow">
         {msgs.length === 0 && (
           <div className="tc-chat-empty">
@@ -303,6 +258,14 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
                 {!mine && <span className="tc-msg-who">{m.speaker.name}</span>}
                 <span className="tc-bubble">{m.text}</span>
               </span>
+              {/* 悬停出现的删除单条：直接删，不弹确认（撤销成本低、群消息不金贵） */}
+              <button
+                className="tc-msg-del"
+                title={en ? "Delete message" : "删除这条"}
+                onClick={() => cur && api?.roomMsgDelete(cur, m.id)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
             </div>
           );
         })}
@@ -349,9 +312,10 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
         {/* @ 补全：输入 @ 弹出成员 + 所有人，点选插入 */}
         {mention !== null && (() => {
           const all = en ? "Everyone" : "所有人";
-          const names = [all, ...room.members.map((id) => nameOf(id))];
+          // 候选带上 id（所有人用特殊 id），好取头像
+          const cand0: { id: string; name: string }[] = [{ id: "__all__", name: all }, ...room.members.map((id) => ({ id, name: nameOf(id) }))];
           const q = mention.toLowerCase();
-          const cands = names.filter((n) => !q || n.toLowerCase().includes(q));
+          const cands = cand0.filter((c) => !q || c.name.toLowerCase().includes(q));
           if (cands.length === 0) return null;
           const pick = (name: string) => {
             const inserted = name === all ? (en ? "all" : "所有人") : name;
@@ -360,10 +324,16 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
           };
           return (
             <div className="tc-mention">
-              {cands.map((n) => (
-                <button key={n} className={"tc-mention-item" + (n === all ? " all" : "")} onMouseDown={(e) => { e.preventDefault(); pick(n); }}>
-                  {n === all ? <span className="tc-mention-all">@</span> : <span className="tc-mention-dot" />}
-                  {n}
+              {cands.map((c) => (
+                <button key={c.id} className={"tc-mention-item" + (c.id === "__all__" ? " all" : "")} onMouseDown={(e) => { e.preventDefault(); pick(c.name); }}>
+                  {c.id === "__all__" ? (
+                    <span className="tc-mention-av all">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                    </span>
+                  ) : (
+                    <span className="tc-mention-av"><EmployeeAvatar icon={empOf(c.id)?.icon} avatarData={empOf(c.id)?.avatarData} name={c.name} /></span>
+                  )}
+                  <span className="tc-mention-nm">{c.name}</span>
                 </button>
               ))}
             </div>

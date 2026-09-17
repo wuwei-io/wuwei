@@ -1,0 +1,52 @@
+Mention if a "new model" is a finetune
+Desert Ant Labs: On-device intelligence for every product
+SOTA ImageGen Locally NVIDIA Cosmos3(64B) INT4 quants CUDA/MLX
+Qwen3.8-27B-Uncensored-Genesis-V1-GGUF
+1-bit 27B in the browser: 25–30 tok/s on a 6 GB RTX 3060 Laptop (WebGPU, no install)
+Huihui Qwen3.8-27B Abliterated Q4_K_S
+Why the hell is LM Studio making LM Studio so difficult to download?
+GLM 5.3 Flash Q4 @ 60tps / 550tps on M3 Ultra
+What settings do you use for running Qwen3.8-Flash-Next in llama.cpp?
+Qwen is working better for me than ChatGPT – what’s the best way to use it with ZIP/code projects?
+Now this is a serious local machine
+DeepSeek-V4-Flash-Vision-Exp (285B MoE) on 10-12x RTX 3090 — spec decoding, vision
+Wrote up how my local agent picks which of circa 50 tools to call, from grep to embeddings to GBNF. Mostly a list of the ways I got it wrong. :-)
+Gemma4 12B cannot listen to audio from the videos?
+I’ve been writing a small .NET 10 OpenAI-compatible client mainly for llama.cpp
+We mapped 113 papers on TTS evaluation. Six dimensions have almost nothing.
+Is anyone working on conversation compaction?
+Macbook Air + R9700 or Macbook Pro 64GB?
+Deepseek Has Soft Retired Deepseek V4 Pro
+new Nex model
+MiMo-X-Pro-Preview and MiMo-X-Flash-Preview - New Mimo Model found in Mimo Desktop preview announcement
+Qwen3.8 27b made Mario with a single prompt :o
+Is there a dummies guide for setting up qwen 27B with dflash2 and n-gram?
+What OpenBMB 1B version is this?
+I'm actually a bit mind blown, how some of the local models on LLM bionic doesn't support my laptop's architecture?
+DSV4 Flash 0731 on OpenRouter. Why is the price SO LOW
+US accuses Chinese AI firms of 'malicious' copying of AI technology
+GitHub - coder543/minnow: Fast LLaDA2.2 inference server
+Qwen3.8-Flash-Next on MLX-serve, 1m context is released!
+Qwen3.6 35B A3B or Nex-N2.5-mini?
+Best vision models under 6B?
+Is RX 6800 + 6800 XT a sensible upgrade from 2x RTX 2060 OC 12GB for llama.cpp?
+How many agents can 2×4090 actually run at once? Three weeks of llama.cpp concurrency data — soft cap 5 @ 64k, hard cap 9, and why.
+Everyone keeps talking about this whole agentic gamedev, so I had to give in to FOMO... meet my new LIMBO-style adventure! Any feedback on the aesthetics and stuff?
+When will an open model solve a millenium math problem without prior training data of the solution and external help?
+On the Value of Human Ideas: What data poisoning research reveals about "autonomous" AI breakthroughs
+A hilarious comment about llama.cpp: “It’s a FB business using the pipeline to make profits”
+Qwen 3.8 27b with PI agent - pushed to its 3D graphic game limits
+Qwen3.8-Flash-Next in llama.cpp vs SGLang vs FreeToken: 35s vs 258s to first token at full context. My findings on new PRs coming to engines.
+I built Infercat: Share your local AI with friends over an encrypted p2p tunnel. Connect with an invite code from anywhere.
+Why is LlamaCpp using CPU if VRAM is available?
+For the brave: Ninfer + MTP + Vision + 400k context (nvfp4 quant and kv)
+Why has OpenAI gotten away with not being open after the release of gpt 120b?
+Why does Whisper drop half of any sentence when you switch languages? (and why do so many Whisper projects leave an ugly console window open?)
+Qwen/Qwen-Drive-1.0-4B · Hugging Face
+Are there any (small, ~10B) models that you would say are a good collaborator?
+nex-agi/Nex-N2.5-mini - 35b
+Looking for someone with dual AMD GPU using ASUS ProArt X870E-CREATOR and ROCm
+inclusionAI/Ling-3.0-flash-VL · Hugging Face
+I’m building MultiVibe: local and cloud models for coding agents, with a decentralized worker network
+Is there a GLM 5.3 Flash Antirez/DS4 GGUF targeted at 192 GB RAM?
+GPU guide (GB per dollar, bandwidth)

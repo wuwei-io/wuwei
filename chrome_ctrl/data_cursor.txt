@@ -1,0 +1,51 @@
+Generated a PR description with Curso and it gave Claude commit credit 😂
+Whats Happening in Cursor model
+Budgeting for third-party models ahead of OpenAI’s proposed November cutoff.
+999.9M tokens in 30 days on a single project. Missed the billion by this much.
+I’m confused about the Grok and Cursor plans.
+You love using glm or calude at cursor
+Ways to conserve tokens for coding?
+Cursor Pro vs Cursor Pro +
+Cursor's approve/deny is built for one person. What happens when your whole team is running agent mode on the same repo?
+Can Cursor Composer 2.5 handle a refactor this big, or should I use something else?
+Grok Vs Cursor - Which gives more GrokBot Access?
+How are you handling big specs and screenshots in Cursor without blowing context?
+Cursor usage suddenly skyrocketed — 70% gone after ~10 prompts?
+Muse Spark 1.3 and Cursor Usage
+Cursor update defaults to Grok which is less than helpful
+Grok bot Vs claude code?
+Cursor pro+ vs codex pro
+Is there a way to change main on the review branch functionality?
+Compass - Cursor Companion App
+Composer and Grok slow down and stalling?
+Stuck in an AI-only support loop on a billing issue, is there any way to reach a human?
+Cursor在我月度计划开始的第6天就向我收取了192美元的年度升级费用，然后拒绝撤销。
+Update to devtools
+Denzel Explains AI Slop
+"Too many free trials" and I haven't even done anything yet?
+Is it just me or has my cursor credits been running out faster
+Cursor Cloud Agent & Unwanted Sonnet Usage
+Got tired of context bloat when using agent skills, so I made a local router. Would people actually use this?
+Anyone else lose focus tabbing out while waiting on Cursor's agent?
+I can't use kimi
+RIP to my unlimited auto plan, what all you all doing now?
+Is Cursor worth it?
+Cursor Down?
+Cursor keeps switching from Auto (free and unlimited) to Grok (paid)
+Cursor is now officially geo-blocking Venezuela (Pro+ subscription canceled and refunded)
+Should I be fearful of paying more than my plan’s 20$?
+Cursor charged me $192 for an annual upgrade 6 days into my monthly plan, then refused to reverse it
+Anyone else hit this with Cursor + Figma?
+Can we get fable/astra level coding with cursor/spacexai models?
+AI has made me a better typer
+Wrong model and mode selected on mobile
+Running Cursor through Codex subscription(s)
+Computer use on cursor like codex ?
+Am I Addicted to VibeCoding or just can’t say no
+Ideas to build something
+What is the correct way to vibe-code Machine Learning projects?
+How to set reasoning level for custom OpenRouter model in Cursor?
+Cursor is extremely slow for me in the last two hours, anyone else?
+Resets in Cursor
+[Tool] Stop .cursorrules context bloat: We built Git-native persistent memory with native MCP for Cursor (pure Go, zero deps)
+What is your opinion

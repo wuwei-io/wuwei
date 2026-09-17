@@ -6738,5 +6738,106 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 }
 .tc-mention-item:hover { background: var(--accent-soft); }
 .tc-mention-item.all { font-weight: 600; }
-.tc-mention-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
-.tc-mention-all { width: 18px; height: 18px; border-radius: 50%; background: var(--spark, #C05F3C); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: 0 0 auto; }
+.tc-mention-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* @ 补全里的圆形头像（适当大小 22px） */
+.tc-mention-av { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; flex: 0 0 auto; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.tc-mention-av svg { width: 12px; height: 12px; }
+.tc-mention-av .team-avatar-txt { font-size: 10px; font-weight: 600; }
+.tc-mention-av .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
+.tc-mention-av.all { background: var(--spark, #C05F3C); color: #fff; }
+.tc-mention-av.all svg { width: 13px; height: 13px; }
+
+/* 群消息：悬停出现的删除单条按钮 */
+.tc-msg { position: relative; min-width: 0; }
+.tc-msg-del {
+  align-self: center; flex: 0 0 auto;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border: none; border-radius: 6px; background: transparent;
+  color: var(--text-faint); cursor: pointer; opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.tc-msg-del svg { width: 13px; height: 13px; }
+.tc-msg:hover .tc-msg-del { opacity: 1; }
+.tc-msg-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
+.tc-bubble { overflow-wrap: anywhere; }
+
+/* ── 侧栏：员工可展开的会话子列表（微信通讯录式） ── */
+.tool-sub-emp { display: flex; flex-direction: column; }
+.tool-sub-row { display: flex; align-items: center; border-radius: 7px; }
+.tool-sub-row.on { background: var(--accent-soft); }
+.tool-sub-row .tool-sub-item { width: auto; flex: 1; min-width: 0; }
+.tool-sub-chev {
+  -webkit-app-region: no-drag; flex: 0 0 auto;
+  width: 22px; height: 26px; display: grid; place-items: center;
+  border: none; background: transparent; color: var(--text-faint); cursor: pointer;
+}
+.tool-sub-chev:hover { color: var(--text); }
+.tool-sub-chev .tool-chev { width: 13px; height: 13px; transition: transform .16s; }
+.tool-sub-chev .tool-chev.open { transform: rotate(90deg); }
+.tool-sub-convos { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 3px 30px; padding-left: 8px; border-left: 1.5px solid var(--border); }
+.tool-sub-convo {
+  -webkit-app-region: no-drag;
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 8px; border: none; border-radius: 6px;
+  background: transparent; color: var(--text-faint);
+  font-size: 12px; text-align: left; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.tool-sub-convo:hover { background: rgba(127,127,127,.09); color: var(--text); }
+.tool-sub-convo.on { background: var(--accent-soft); color: var(--text); }
+.tool-sub-convo-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-sub-convo-tm { flex: 0 0 auto; font-size: 10.5px; color: var(--text-faint); }
+.tool-sub-newconvo {
+  -webkit-app-region: no-drag;
+  padding: 5px 8px; border: none; background: transparent;
+  color: var(--accent); font-size: 11.5px; text-align: left; cursor: pointer; border-radius: 6px;
+}
+.tool-sub-newconvo:hover { background: var(--accent-soft); }
+
+/* ── 标题栏：员工/群头像作为 logo + 群 ⋯ 菜单 ── */
+.tb-avatar { -webkit-app-region: no-drag; width: 22px; height: 22px; border-radius: 50%; overflow: hidden; flex: 0 0 auto; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.tb-avatar svg { width: 12px; height: 12px; }
+.tb-avatar .team-avatar-txt { font-size: 10px; font-weight: 600; }
+.tb-avatar .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
+.tb-avatar.stack { width: auto; background: transparent; border-radius: 0; display: flex; }
+.tb-av-mini { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); border: 1.5px solid var(--bg); margin-left: -8px; }
+.tb-avatar.stack .tb-av-mini:first-child { margin-left: 0; }
+.tb-av-mini svg { width: 11px; height: 11px; }
+.tb-av-mini .team-avatar-txt { font-size: 9px; font-weight: 600; }
+.tb-av-mini .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
+.tb-title-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tb-room-menu-wrap { -webkit-app-region: no-drag; position: relative; display: inline-flex; }
+.tb-room-menu-btn {
+  width: 26px; height: 26px; display: grid; place-items: center; margin-left: 2px;
+  border: none; border-radius: 7px; background: transparent; color: var(--text-faint); cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.tb-room-menu-btn:hover { color: var(--text); background: var(--bg-soft); }
+.tb-room-menu-btn svg { width: 16px; height: 16px; }
+.tb-room-menu-mask { position: fixed; inset: 0; z-index: 300; }
+.tb-room-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 301; min-width: 220px;
+  padding: 8px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border);
+  box-shadow: 0 12px 36px rgba(0,0,0,.26);
+}
+.tb-room-menu-sec { font-size: 11px; color: var(--text-faint); padding: 2px 6px 6px; }
+.tb-room-menu-members { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow-y: auto; margin-bottom: 6px; }
+.tb-room-mem { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 7px; }
+.tb-room-mem-av { width: 22px; height: 22px; border-radius: 50%; overflow: hidden; flex: 0 0 auto; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.tb-room-mem-av svg { width: 12px; height: 12px; }
+.tb-room-mem-av .team-avatar-txt { font-size: 10px; font-weight: 600; }
+.tb-room-mem-av .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
+.tb-room-mem-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text); }
+.tb-room-mem-host { font-size: 10.5px; color: var(--accent); flex: 0 0 auto; }
+.tb-room-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 10px; border: none; border-radius: 8px; margin-top: 2px;
+  background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  border-top: 1px solid var(--border);
+}
+.tb-room-menu-item svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-faint); }
+.tb-room-menu-item:hover { background: var(--accent-soft); }
+.tb-room-menu-item.danger { color: var(--danger, #b4483a); }
+.tb-room-menu-item.danger svg { color: var(--danger, #b4483a); }
+.tb-room-menu-item.danger:hover { background: color-mix(in srgb, var(--danger, #b4483a) 9%, transparent); }
