@@ -457,7 +457,7 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 // web_search 主力源 = 无为网关搜索代理(服务器端带自建 SearXNG 凭证转发，凭证不进客户端)。
 // 走无为登录 token(主进程登录后写入 WUWEI_GW_TOKEN 环境变量)；未登录则此源跳过、回落到 Bing 等公开源。
-const WUWEI_SEARCH_URL = "https://wuweiai.io/api/gateway/v1/search";
+const WUWEI_SEARCH_URL = "https://gw.wuweiai.io/api/gateway/v1/search";
 
 function stripTags(s: string): string {
   return s
