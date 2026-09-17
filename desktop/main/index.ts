@@ -1150,7 +1150,7 @@ function applySettings(sIn: Settings, forceSid?: string) {
   for (const [sid, a] of agents) {
     if (sid === target) {
       a.setProvider(provider);
-      a.setSystem(sysPrompt); // 热更该会话的系统提示，问"你是什么模型"能答对
+      a.setSystem(sysForSession(sid)); // 热更该会话系统提示；绑员工则保留人格（问模型也答对）
       backendBySid.set(sid, newPid); // 目标会话的后端随之更新
       continue;
     }
@@ -1615,6 +1615,18 @@ function providerForSession(id: string): ReturnType<typeof makeProvider> | null 
   } catch {
     return provider;
   }
+}
+
+// 按会话身份算它该用的系统提示词：绑了员工就套人格，否则用基础提示词。
+// 与 getAgent 同源(都走 applyEmployee)——任何"重置 system"的地方都改走这里，
+// 避免像 startTurn/设置变更等把员工人格无差别冲回"你是无为"(员工身份 bug 根因)。
+function sysForSession(id: string): string {
+  const base = buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId);
+  const meta = listSessions().find((s) => s.id === id);
+  if (meta?.employeeId && teamEnabled(loadSettings())) {
+    return applyEmployee(meta.employeeId, base, desktopTools()).sys;
+  }
+  return base;
 }
 
 function getAgent(id: string): Agent | null {
@@ -2464,7 +2476,7 @@ function applyProFromMe(me: WuweiMe | null): void {
   if (pro === isProCached) return;
   isProCached = pro;
   refreshAgentTools();
-  for (const a of agents.values()) a.setSystem(buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId));
+  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格，不冲回"你是无为"
 }
 async function refreshWuweiMe(): Promise<void> {
   const sess = await getFreshWuweiSession();
@@ -2493,7 +2505,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   await ensureFreshClaudeOAuth(); // Claude 订阅 OAuth 快过期则先静默续期，避免本轮请求 401
   await ensureHostedProviderReady(useId); // 无为托管平台：只给这个即将开跑的会话注入新鲜无为 token 为网关 key
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
-  agent.setSystem(sysOverride ?? buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId));
+  agent.setSystem(sysOverride ?? sysForSession(useId)); // 每轮重置也走会话身份，绑员工则保人格（身份 bug 根因修复）
   const ac = new AbortController();
   runs.set(useId, ac);
   emitTasks();
@@ -3164,7 +3176,7 @@ ipcMain.handle("settings:get", () => ({
 // 脑网络/密钥 提示词覆盖：只落盘该字段并热更所有会话系统提示(不重启 provider)。传 null=恢复默认
 function hotRefreshSys() {
   sysPrompt = buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId);
-  for (const a of agents.values()) a.setSystem(sysPrompt);
+  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格
 }
 ipcMain.on("settings:set-brain-prompt", (_e, text: string | null) => {
   const s = loadSettings() || ({} as Settings);
@@ -3228,7 +3240,7 @@ ipcMain.on("settings:set-app", (_e, patch: Record<string, boolean | string>) => 
   setDiagConsent(telemetryEnabled(s)); // 「发送诊断信息」开关变了当场生效
   syncTeamModule(s); // 「AI 员工团队」开关变了当场挂载/卸载，不用重启
   sysPrompt = buildSysPrompt(cwd, modelLabel, s.providerId);
-  for (const a of agents.values()) a.setSystem(sysPrompt);
+  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格
   refreshAgentTools();
 });
 
@@ -3270,7 +3282,7 @@ ipcMain.handle("memory:get", () => loadMemory());
 ipcMain.on("memory:set", (_e, text: string) => {
   saveMemory(text);
   // 立即刷新当前会话系统提示词,手动改的记忆下一条消息就生效
-  for (const a of agents.values()) a.setSystem(buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId));
+  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格，不冲回"你是无为"
 });
 
 // —— 输入框草稿：实时落盘 ~/.wuwei/draft.json，重开/更新后自动恢复(含粘贴的截图 base64) ——
@@ -3297,7 +3309,7 @@ ipcMain.on("draft:set", (_e, draft: { text?: string; images?: string[] }) => {
 
 // —— 本地知识网络 Brain（设置里的"知识网络"面板 + 模型预热）——
 function refreshSysAfterBrain() {
-  for (const a of agents.values()) a.setSystem(buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId));
+  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格，不冲回"你是无为"
 }
 ipcMain.handle("brain:graph", () => brain.getGraphLite());
 ipcMain.handle("brain:stats", () => brain.stats());

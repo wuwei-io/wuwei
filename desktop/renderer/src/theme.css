@@ -6801,7 +6801,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* ── 侧栏：员工可展开的会话子列表（微信通讯录式） ── */
 .tool-sub-emp { display: flex; flex-direction: column; }
 .tool-sub-row { display: flex; align-items: center; border-radius: 7px; }
-.tool-sub-row.on { background: var(--accent-soft); }
+/* 父员工行只做中性弱高亮(表示"你在这名员工里")，不与选中子对话抢 accent，避免两块同色糊成一坨 */
+.tool-sub-row.on { background: rgba(127,127,127,.10); }
 .tool-sub-row .tool-sub-item { width: auto; flex: 1; min-width: 0; }
 .tool-sub-chev {
   -webkit-app-region: no-drag; flex: 0 0 auto;
@@ -6811,7 +6812,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tool-sub-chev:hover { color: var(--text); }
 .tool-sub-chev .tool-chev { width: 13px; height: 13px; transition: transform .16s; }
 .tool-sub-chev .tool-chev.open { transform: rotate(90deg); }
-.tool-sub-convos { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 3px 30px; padding-left: 8px; border-left: 1.5px solid var(--border); }
+/* 顶部多留 4px，让缩进子块从父员工行下缘明显脱开；border-left 在中性父行下才看得清层级 */
+.tool-sub-convos { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 4px 30px; padding-left: 8px; border-left: 1.5px solid var(--border); }
 .tool-sub-convo {
   -webkit-app-region: no-drag;
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -6821,7 +6823,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   transition: background .12s, color .12s;
 }
 .tool-sub-convo:hover { background: rgba(127,127,127,.09); color: var(--text); }
-.tool-sub-convo.on { background: var(--accent-soft); color: var(--text); }
+/* 选中子对话：accent 底 + accent 左竖条，明确"这才是被选中的那一项"(呼应 .session-item.active 规范) */
+.tool-sub-convo.on { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
 .tool-sub-convo-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-sub-convo-tm { flex: 0 0 auto; font-size: 10.5px; color: var(--text-faint); }
 .tool-sub-convo:hover .tool-sub-convo-tm { display: none; } /* 悬停时让位给删除按钮 */
