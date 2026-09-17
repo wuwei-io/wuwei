@@ -6787,6 +6787,17 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tool-sub-convo.on { background: var(--accent-soft); color: var(--text); }
 .tool-sub-convo-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-sub-convo-tm { flex: 0 0 auto; font-size: 10.5px; color: var(--text-faint); }
+.tool-sub-convo:hover .tool-sub-convo-tm { display: none; } /* 悬停时让位给删除按钮 */
+.tool-sub-convo-del {
+  display: none; flex: 0 0 auto;
+  width: 18px; height: 18px; place-items: center;
+  border: none; border-radius: 5px; background: transparent;
+  color: var(--text-faint); cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.tool-sub-convo-del svg { width: 12px; height: 12px; }
+.tool-sub-convo:hover .tool-sub-convo-del { display: grid; }
+.tool-sub-convo-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
 .tool-sub-newconvo {
   -webkit-app-region: no-drag;
   padding: 5px 8px; border: none; background: transparent;

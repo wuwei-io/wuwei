@@ -5607,15 +5607,24 @@ export function App() {
                       {isExpanded && (
                         <div className="tool-sub-convos">
                           {empSessions.map((s) => (
-                            <button
+                            <div
                               key={s.id}
+                              role="button"
+                              tabIndex={0}
                               className={"tool-sub-convo" + (s.id === currentId && appView === null ? " on" : "")}
                               onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
                               onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
                             >
                               <span className="tool-sub-convo-t">{s.title || (lang === "en" ? "New chat" : "新对话")}</span>
                               <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
-                            </button>
+                              <button
+                                className="tool-sub-convo-del"
+                                title={lang === "en" ? "Delete" : "删除这条对话"}
+                                onClick={(e) => { e.stopPropagation(); window.wuwei.deleteSession(s.id); }}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              </button>
+                            </div>
                           ))}
                           <button className="tool-sub-newconvo" onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}>
                             + {lang === "en" ? "New chat" : "新对话"}
