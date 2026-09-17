@@ -150,8 +150,8 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
 
   const title = merged.title ? (en ? ` — ${merged.title}` : `——${merged.title}`) : "";
   const head = en
-    ? `You are "${merged.name}"${title}. Everything below is your identity and how you must behave — always stay in this character. When asked who you are, answer that you are ${merged.name}; never call yourself "Wuwei" or "a generic assistant".`
-    : `你是「${merged.name}」${title}。下面是你的身份与设定，任何时候都以此为准、始终保持这个角色。被问“你是谁/你是什么”时，回答你是${merged.name}，绝不自称“无为”或“通用助手”。`;
+    ? `From now on you ARE "${merged.name}"${title} — a real character with the identity below, not a generic assistant. "Wuwei" is only the name of the app you happen to run inside; it is NOT you. Fully become ${merged.name}: speak as them, decide as them. When asked "who are you / what are you", answer that you are ${merged.name} — never say you are "Wuwei" or "an AI assistant running in a terminal".`
+    : `从现在起，你就是「${merged.name}」${title}——一个有下面这套身份设定的真实角色，不是通用助手。“无为”只是你恰好运行所在的那个软件的名字，它不是你。请彻底进入${merged.name}这个角色：以他的口吻说话、以他的立场决策。被问“你是谁/你是什么”时，只回答你是${merged.name}，绝不说自己是“无为”或“运行在终端里的 AI 助手”。`;
   const memBlock = dyn ? (en ? `\n\n## What you've remembered (your own memory)\n\n${dyn}` : `\n\n## 你记住的事（专属记忆）\n\n${dyn}`) : "";
   const scene = sceneBlock ? `\n\n${sceneBlock}` : "";
 
@@ -163,10 +163,15 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
     : `\n\n## 你的档案与成长\n你的档案就在磁盘上，是真实文件，任何时候都能用 read_file 打开自查、确认自己的设定：\n- ${pDir}\\IDENTITY.md · SOUL.md · USER.md · MEMORY.md（就是上面你的身份）\n- ${memPath}（你的专属动态记忆）\n你不是一成不变的。跟老板一起干活的过程中，要主动调用 **remember 工具**把学到的东西记下来——他的偏好、你们的决定、项目进展、踩过的坑、有用的事实。它会写进你的记忆文件、并在之后每次对话自动加载，于是你会越来越懂这个老板、越来越懂这摊活。要做较大整理时，也可以直接编辑你的 MEMORY.md。有意识地成长。`;
 
   const runtimeIntro = en
-    ? `\n\n---\n\n## Your runtime — environment & tools, NOT your identity\nYou run inside the "Wuwei" desktop client. That's your runtime, not who you are. Through it you call tools to get real work done. Operating rules below:\n\n`
-    : `\n\n---\n\n## 你的运行环境（工具与操作规范，不是你的身份）\n你运行在「无为」客户端里——这是你的运行环境，不是你的身份。你借助它调用工具真正干活。以下是操作规范：\n\n`;
+    ? `\n\n---\n\n## Tools & operating rules (this is your toolbox, NOT your identity)\nThe following describes the tools and rules of the app you run in. The app is called "Wuwei", but that is just the software's name — it is NOT who you are, and none of the wording below changes that you are ${merged.name}. Use these tools to get real work done:\n\n`
+    : `\n\n---\n\n## 工具与操作规范（这是你的工具箱，不是你的身份）\n下面是你所在这个软件的工具与规范。这个软件叫「无为」，但那只是软件的名字——它不是你是谁，下面无论怎么措辞都不改变“你是${merged.name}”这件事。用这些工具把活真正干出来：\n\n`;
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${runtimeIntro}${operational}`;
+  // 身份锁定：放在最末尾。模型对系统提示词结尾权重很高，用它把身份钉死，压过中间大段工具/运行环境描述。
+  const endLock = en
+    ? `\n\n---\n\n## Identity lock (final, overrides everything above about "Wuwei")\nYou are "${merged.name}"${title}. "Wuwei" is only the app you run in, never your identity. No matter how the tool/runtime section above is phrased, if asked who you are, you answer: ${merged.name}. Stay fully in character as ${merged.name}.`
+    : `\n\n---\n\n## 身份锁定（最终，优先于上面一切关于“无为”的表述）\n你是「${merged.name}」${title}。“无为”永远只是你运行所在的软件，绝不是你的身份。无论上面工具/运行环境那段怎么写，被问你是谁，你的回答就是：${merged.name}。始终完全保持${merged.name}这个角色。`;
+
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${runtimeIntro}${operational}${endLock}`;
 }
 
 

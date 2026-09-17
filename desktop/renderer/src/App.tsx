@@ -3112,6 +3112,8 @@ export function App() {
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
   const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
   const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
+  const [contactsExpanded, setContactsExpanded] = useState(() => localStorage.getItem("wuwei-contacts-expanded") !== "0"); // 一人公司下「通讯录」子板块展开态
+  const [groupsExpanded, setGroupsExpanded] = useState(() => localStorage.getItem("wuwei-groups-expanded") !== "0"); // 一人公司下「群聊」子板块展开态
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
   const [roomMenu, setRoomMenu] = useState(false); // 标题栏里群的 ⋯ 菜单(成员/清空/删除)是否展开
   // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项
@@ -5570,8 +5572,17 @@ export function App() {
             </div>
             {teamExpanded && (
               <div className="tool-sub">
+                {/* 通讯录子板块头：可展开/收起，列所有员工 */}
+                <button
+                  className="tool-sub-sec"
+                  onClick={() => { const v = !contactsExpanded; setContactsExpanded(v); localStorage.setItem("wuwei-contacts-expanded", v ? "1" : "0"); }}
+                >
+                  <svg className={"tool-chev" + (contactsExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                  <span className="tool-sub-sec-nm">{lang === "en" ? "Contacts" : "通讯录"}</span>
+                  <span className="tool-sub-sec-cnt">{teamEmployees.length}</span>
+                </button>
                 {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式） */}
-                {[...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => {
+                {contactsExpanded && [...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => {
                   const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                   const isExpanded = empExpanded.has(e.id);
                   const activeEmp = sessions.find((s) => s.id === currentId)?.employeeId === e.id && appView === null;
@@ -5634,8 +5645,17 @@ export function App() {
                     </div>
                   );
                 })}
+                {/* 群聊子板块头：独立展开/收起，后续群多了(按项目分)也清爽 */}
+                <button
+                  className="tool-sub-sec"
+                  onClick={() => { const v = !groupsExpanded; setGroupsExpanded(v); localStorage.setItem("wuwei-groups-expanded", v ? "1" : "0"); }}
+                >
+                  <svg className={"tool-chev" + (groupsExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                  <span className="tool-sub-sec-nm">{lang === "en" ? "Groups" : "群聊"}</span>
+                  <span className="tool-sub-sec-cnt">{teamRooms.length}</span>
+                </button>
                 {/* 群入口 */}
-                {[...teamRooms].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
+                {groupsExpanded && [...teamRooms].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
                   <button
                     key={r.id}
                     className={"tool-sub-item" + (appView === "rooms" && activeRoomId === r.id ? " on" : "")}
@@ -5652,6 +5672,9 @@ export function App() {
                     <span className="tool-sub-cnt">{r.members?.length || 0}</span>
                   </button>
                 ))}
+                {groupsExpanded && teamRooms.length === 0 && (
+                  <div className="tool-sub-hint">{lang === "en" ? "No groups yet — right-click 「My Company」 to create one." : "还没有群 · 右键「一人公司」建群"}</div>
+                )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
                   <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
                     {lang === "en" ? "Add teammates →" : "去添加员工 →"}

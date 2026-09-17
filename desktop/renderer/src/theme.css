@@ -6693,6 +6693,27 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   padding-left: 8px;
   border-left: 1.5px solid var(--border);
 }
+/* 子板块小标题（通讯录 / 群聊）：小美规范——克制、留白、弱色，不抢主视觉 */
+.tool-sub-sec {
+  -webkit-app-region: no-drag;
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 5px 8px; margin-top: 2px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-faint);
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-align: left;
+  border-radius: 6px; transition: color .12s, background .12s;
+}
+.tool-sub-sec:first-child { margin-top: 0; }
+.tool-sub-sec:hover { color: var(--text-dim); background: rgba(127,127,127,.06); }
+.tool-sub-sec .tool-chev { width: 11px; height: 11px; color: inherit; }
+.tool-sub-sec-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.tool-sub-sec-cnt {
+  flex: 0 0 auto; font-size: 10px; font-weight: 600; letter-spacing: 0;
+  min-width: 16px; height: 15px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: rgba(127,127,127,.12); color: var(--text-faint);
+}
+.tool-sub-hint { padding: 4px 9px 6px 22px; font-size: 11px; color: var(--text-faint); line-height: 1.5; }
 .tool-sub-item {
   -webkit-app-region: no-drag;
   display: flex; align-items: center; gap: 8px;
