@@ -412,9 +412,12 @@ export function saveSession(
     discuss: prev?.discuss, // 保留待讨论标记，别被每轮落盘抹掉
     model: prev?.model, // 保留每会话绑定的模型/平台，别被每轮落盘抹掉(否则切回会话记不住模型)
     providerId: prev?.providerId,
+    kind: prev?.kind, // 保留每会话鉴权种类/端点，别被每轮落盘抹掉(否则单会话 provider 重建失据)
+    baseUrl: prev?.baseUrl,
     running: prev?.running, // 保留运行/中断标记，别被每轮落盘抹掉(否则崩溃检测失效)
     interrupted: prev?.interrupted,
     resumeDismissed: prev?.resumeDismissed,
+    employeeId: prev?.employeeId, // ⭐ 保留员工私聊绑定，别被每轮落盘抹掉(否则一发消息就退化成普通会话，标题栏/侧栏都不认，人格记忆也断)
   });
   saveList(l);
 }

@@ -5545,7 +5545,7 @@ export function App() {
           <div className="side-tools">
             {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
                 展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
-            <div className="tool-item-row">
+            <div className={"tool-item-row" + (appView === "store" ? " on" : "")}>
               <button
                 className={"tool-item tool-item-main" + (appView === "store" ? " on" : "")}
                 onClick={() => { setAppView("store"); setAgiView(null); }}

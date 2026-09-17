@@ -6659,16 +6659,32 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-menu-del svg { width: 15px; height: 15px; }
 
 /* ── 一人公司 · 侧边栏可展开板块（微信式列表）────────────── */
-.tool-item-row { display: flex; align-items: center; }
-.tool-item-main { flex: 1; margin-right: 0 !important; }
+/* 一人公司标题行：整行一个菜单项(悬停/选中整体高亮)，主按钮与展开箭头融合、不再是两个分开的盒子 */
+.tool-item-row {
+  display: flex; align-items: center;
+  margin: 0 12px; border-radius: 10px; border: 1px solid transparent;
+  transition: background .14s, border-color .14s;
+}
+.tool-item-row:hover { background: rgba(127,127,127,.09); }
+.tool-item-row.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+/* 主按钮内嵌进整行：去掉自身外边距与独立底色，颜色跟随整行 */
+.tool-item-row > .tool-item-main {
+  flex: 1; width: auto; margin: 0; border-color: transparent; background: transparent;
+}
+.tool-item-row > .tool-item-main:hover,
+.tool-item-row.on > .tool-item-main.on { background: transparent; border-color: transparent; color: var(--text); }
+.tool-item-row:hover > .tool-item-main { color: var(--text); }
+/* 展开箭头：贴合在行内右侧，无独立底色(整行统一高亮)，只做颜色反馈 */
 .tool-expand {
   -webkit-app-region: no-drag;
-  width: 28px; height: 34px; flex: 0 0 auto;
+  width: 30px; height: 34px; flex: 0 0 auto; margin-right: 4px;
   display: grid; place-items: center;
   border: none; background: transparent; color: var(--text-faint);
-  cursor: pointer; border-radius: 8px; margin-right: 8px;
+  cursor: pointer; border-radius: 8px;
 }
-.tool-expand:hover { background: rgba(127,127,127,.1); color: var(--text); }
+.tool-expand:hover { color: var(--text); }
+.tool-item-row:hover .tool-expand,
+.tool-item-row.on .tool-expand { color: var(--text); }
 .tool-chev { width: 13px; height: 13px; transition: transform .16s; }
 .tool-chev.open { transform: rotate(90deg); }
 .tool-sub {
@@ -6790,13 +6806,14 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tool-sub-convo:hover .tool-sub-convo-tm { display: none; } /* 悬停时让位给删除按钮 */
 .tool-sub-convo-del {
   display: none; flex: 0 0 auto;
-  width: 18px; height: 18px; place-items: center;
+  width: 20px; height: 20px; padding: 0; line-height: 0;
+  align-items: center; justify-content: center;
   border: none; border-radius: 5px; background: transparent;
   color: var(--text-faint); cursor: pointer;
   transition: color .12s, background .12s;
 }
-.tool-sub-convo-del svg { width: 12px; height: 12px; }
-.tool-sub-convo:hover .tool-sub-convo-del { display: grid; }
+.tool-sub-convo-del svg { width: 13px; height: 13px; display: block; }
+.tool-sub-convo:hover .tool-sub-convo-del { display: inline-flex; }
 .tool-sub-convo-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
 .tool-sub-newconvo {
   -webkit-app-region: no-drag;
