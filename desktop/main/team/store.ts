@@ -56,7 +56,9 @@ export function installApp(app: TeamApp): { apps: TeamApp[]; employees: Employee
   const existing = new Set(employees.map((e) => e.id));
   for (const e of app.employees) {
     if (existing.has(e.id)) continue; // 已存在=用户可能改过，不动
-    employees.push({ ...e, fromApp: app.id });
+    const emp = { ...e, fromApp: app.id };
+    employees.push(emp);
+    writePersonaFiles(emp); // 物化四件套 .md，供员工按路径自查
   }
 
   saveApps(apps);
@@ -96,6 +98,7 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
     if (have.has(e.id)) continue;
     cur.push(e);
     have.add(e.id);
+    writePersonaFiles(e); // 导入即物化四件套 .md
     added++;
   }
   if (added) saveEmployees(cur);
@@ -141,17 +144,29 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
   const en = enAt >= 0 && (zhAt < 0 || enAt < zhAt);
   const operational = cut >= 0 ? baseSys.slice(cut) : baseSys; // 兜底：切不到就整段带上(自定义提示词等)
 
-  const title = emp.title ? (en ? ` — ${emp.title}` : `——${emp.title}`) : "";
+  // A 方案：确保四件套已物化成 .md，并优先用文件内容(手改也生效)，回退 json 字段。
+  ensurePersonaFiles(emp);
+  const merged = { ...emp, ...readPersonaFiles(emp.id) } as Employee;
+
+  const title = merged.title ? (en ? ` — ${merged.title}` : `——${merged.title}`) : "";
   const head = en
-    ? `You are "${emp.name}"${title}. Everything below is your identity and how you must behave — always stay in this character. When asked who you are, answer that you are ${emp.name}; never call yourself "Wuwei" or "a generic assistant".`
-    : `你是「${emp.name}」${title}。下面是你的身份与设定，任何时候都以此为准、始终保持这个角色。被问“你是谁/你是什么”时，回答你是${emp.name}，绝不自称“无为”或“通用助手”。`;
+    ? `You are "${merged.name}"${title}. Everything below is your identity and how you must behave — always stay in this character. When asked who you are, answer that you are ${merged.name}; never call yourself "Wuwei" or "a generic assistant".`
+    : `你是「${merged.name}」${title}。下面是你的身份与设定，任何时候都以此为准、始终保持这个角色。被问“你是谁/你是什么”时，回答你是${merged.name}，绝不自称“无为”或“通用助手”。`;
   const memBlock = dyn ? (en ? `\n\n## What you've remembered (your own memory)\n\n${dyn}` : `\n\n## 你记住的事（专属记忆）\n\n${dyn}`) : "";
   const scene = sceneBlock ? `\n\n${sceneBlock}` : "";
+
+  // 档案文件路径 + 成长机制：告诉员工自己的文件在哪、可自查，并要求边干边把学到的记回记忆(自我成长)。
+  const pDir = personaDir(emp.id);
+  const memPath = employeeMemoryPath(emp.id);
+  const growth = en
+    ? `\n\n## Your files & how you grow\nYour profile lives on disk as real files — you can open them anytime with read_file to double-check who you are:\n- ${pDir}\\IDENTITY.md · SOUL.md · USER.md · MEMORY.md  (the identity above)\n- ${memPath}  (your own running memory)\nYou are NOT fixed. As you work with the boss, actively call the **remember** tool to save what you learn — his preferences, decisions, project progress, mistakes to avoid, useful facts. It writes to your memory file and loads back every future session, so you keep getting sharper about this boss and this work. For a bigger cleanup you may also edit your MEMORY.md directly. Grow on purpose.`
+    : `\n\n## 你的档案与成长\n你的档案就在磁盘上，是真实文件，任何时候都能用 read_file 打开自查、确认自己的设定：\n- ${pDir}\\IDENTITY.md · SOUL.md · USER.md · MEMORY.md（就是上面你的身份）\n- ${memPath}（你的专属动态记忆）\n你不是一成不变的。跟老板一起干活的过程中，要主动调用 **remember 工具**把学到的东西记下来——他的偏好、你们的决定、项目进展、踩过的坑、有用的事实。它会写进你的记忆文件、并在之后每次对话自动加载，于是你会越来越懂这个老板、越来越懂这摊活。要做较大整理时，也可以直接编辑你的 MEMORY.md。有意识地成长。`;
+
   const runtimeIntro = en
     ? `\n\n---\n\n## Your runtime — environment & tools, NOT your identity\nYou run inside the "Wuwei" desktop client. That's your runtime, not who you are. Through it you call tools to get real work done. Operating rules below:\n\n`
     : `\n\n---\n\n## 你的运行环境（工具与操作规范，不是你的身份）\n你运行在「无为」客户端里——这是你的运行环境，不是你的身份。你借助它调用工具真正干活。以下是操作规范：\n\n`;
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(emp)}${memBlock}${scene}${runtimeIntro}${operational}`;
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${runtimeIntro}${operational}`;
 }
 
 
@@ -163,6 +178,57 @@ export function employeeMemoryPath(id: string): string {
 /** 读员工专属动态记忆（聊天中 remember 攒的）。不存在返回空。 */
 export function loadEmployeeMemory(id: string): string {
   try { return readFileSync(employeeMemoryPath(id), "utf8").trim(); } catch { return ""; }
+}
+
+// ── 人格四件套的真·文件（A 方案）──────────────────────────────
+// 每个员工把身份/性格/关于老板/长期记忆物化成 4 个 .md，员工可 read_file 按路径自查、
+// 用户也能用编辑器/版本管理直接改。json(employees.json)仍是写入入口，.md 是物化副本 +
+// 读取时优先源：手改 .md 也会在下次建 Agent 时被拼进提示词。
+const PERSONA_DIR = join(DIR, "persona");
+/** 某员工人格文件所在目录：team/persona/<id>/ */
+export function personaDir(id: string): string {
+  return join(PERSONA_DIR, id);
+}
+// 字段 ↔ 文件名（对应 openclaw 命名，直观好认）
+const PERSONA_FILES: [keyof Employee, string][] = [
+  ["persona", "IDENTITY.md"],
+  ["soul", "SOUL.md"],
+  ["aboutUser", "USER.md"],
+  ["memory", "MEMORY.md"],
+];
+/** 把员工的四件套写成 .md 文件（建/导入/改员工时调用，保持文件与 json 同步）。 */
+export function writePersonaFiles(emp: Employee): void {
+  const d = personaDir(emp.id);
+  try {
+    mkdirSync(d, { recursive: true });
+    for (const [k, fname] of PERSONA_FILES) {
+      writeFileSync(join(d, fname), String((emp[k] as string | undefined) ?? ""));
+    }
+  } catch {
+    /* 物化失败不致命：拼提示词会回退到 json 字段 */
+  }
+}
+/** 读回四件套 .md（读取时优先用它，手改文件也生效）。缺文件的字段不返回，由调用方回退 json。 */
+export function readPersonaFiles(id: string): Partial<Pick<Employee, "persona" | "soul" | "aboutUser" | "memory">> {
+  const d = personaDir(id);
+  const out: Record<string, string> = {};
+  for (const [k, fname] of PERSONA_FILES) {
+    try {
+      const t = readFileSync(join(d, fname), "utf8");
+      if (t.trim()) out[k as string] = t;
+    } catch {
+      /* 缺文件=用 json 回退 */
+    }
+  }
+  return out as Partial<Pick<Employee, "persona" | "soul" | "aboutUser" | "memory">>;
+}
+/** 首次使用某员工时若还没物化过，就从 json 落一次盘（迁移老员工，保证文件存在可被自查）。 */
+export function ensurePersonaFiles(emp: Employee): void {
+  if (!existsSync(personaDir(emp.id))) writePersonaFiles(emp);
+}
+/** 删员工时连带清掉他的人格文件目录。 */
+function removePersonaFiles(id: string): void {
+  try { rmSync(personaDir(id), { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 /** 置顶/取消置顶员工：pinnedAt 有值即置顶，按它降序排前面。 */
@@ -185,6 +251,9 @@ export function updateEmployee(id: string, patch: Record<string, unknown>): Empl
     return next as unknown as Employee;
   });
   saveEmployees(list);
+  // 人格字段被改过就重新物化 .md，保持文件与 json 同步
+  const touched = ["persona", "soul", "aboutUser", "memory", "name", "title"].some((k) => k in patch);
+  if (touched) { const e = list.find((x) => x.id === id); if (e) writePersonaFiles(e); }
   return list;
 }
 
@@ -192,6 +261,7 @@ export function updateEmployee(id: string, patch: Record<string, unknown>): Empl
 export function removeEmployee(id: string): Employee[] {
   const list = loadEmployees().filter((e) => e.id !== id);
   saveEmployees(list);
+  removePersonaFiles(id); // 连带清掉他的人格文件目录
   return list;
 }
 
