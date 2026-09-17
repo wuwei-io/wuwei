@@ -14,3 +14,11 @@ release-minicc/
 reddit_posts/
 SEO_*登记文案.md
 小红书*/
+
+# 根目录散落的实验/SEO 脚本(不入库)
+_cdp_test.py
+_gsc_queries.txt
+_seo_*.md
+_serp_study.py
+chrome_ctl.py
+chrome_ctrl/
