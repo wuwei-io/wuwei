@@ -24,7 +24,7 @@ import {
   pinEmployee,
   loadEmployeeMemory,
   employeeMemoryPath,
-  buildPersonaBlock,
+  buildEmployeeSystem,
 } from "./store.js";
 
 export type TeamDeps = {
@@ -59,7 +59,7 @@ export function applyEmployee<T extends { name: string }>(
   const emp = employeeId ? findEmployee(employeeId) : null;
   if (!emp) return { sys: baseSys, tools: allTools, employee: null };
   const dyn = loadEmployeeMemory(emp.id); // 聊天中 remember 攒的专属动态记忆
-  const sys = `${baseSys}\n\n${buildPersonaBlock(emp)}` + (dyn ? `\n\n## 你记住的事（专属记忆）\n\n${dyn}` : "");
+  const sys = buildEmployeeSystem(emp, baseSys, dyn); // 员工身份在前、无为降为运行环境(见 store.ts)
   const tools = emp.tools?.length ? allTools.filter((t) => emp.tools!.includes(t.name)) : allTools;
   return { sys, tools, employee: emp };
 }

@@ -8,7 +8,7 @@ import type { Employee, Room, RoomMessage } from "../../../src/team/types.js";
 import type { Message } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
-import { loadEmployees, buildPersonaBlock } from "./store.js";
+import { loadEmployees, buildEmployeeSystem, loadEmployeeMemory } from "./store.js";
 
 export type RunEmployeeArgs = {
   employee: Employee;
@@ -131,9 +131,11 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
           .join("")
           .trim();
         const history = proj.slice(0, -1);
-        const sys = `${base}\n\n${buildPersonaBlock(emp)}\n\n## 当前场景\n\n你在群聊「${room.name}」里，成员有：${members
+        // 与私聊同款：员工身份在前、无为降为运行环境；群场景作为身份后的一段附加说明。
+        const scene = `## 当前场景\n\n你在群聊「${room.name}」里，成员有：${members
           .map((m) => m.name)
           .join("、")}。别人的发言会以「姓名」开头标出。只说你自己该说的部分，不要替别人回答，也不要复述已有内容。`;
+        const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
         try {
           const out = await deps.runEmployee({

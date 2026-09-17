@@ -108,11 +108,50 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
  * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
  */
 export function buildPersonaBlock(emp: Employee): string {
-  const parts = [`---\n\n## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
+  const parts = [`## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
   if (emp.soul?.trim()) parts.push(`## 你的性格与说话风格\n\n${emp.soul.trim()}`);
   if (emp.aboutUser?.trim()) parts.push(`## 关于你服务的人\n\n${emp.aboutUser.trim()}`);
   if (emp.memory?.trim()) parts.push(`## 你需要长期记住的背景\n\n${emp.memory.trim()}`);
   return parts.join("\n\n");
+}
+
+/**
+ * 拼一名员工的完整系统提示词。
+ *
+ * ⭐ 关键：员工身份必须**在最前面、且压过**基础提示词里「你是无为(wuwei)」那句。
+ *    此前是 `baseSys + 人格`——基础提示词开头强锚定"你是无为，一个终端里的 AI 助手"，
+ *    模型据此自我认同，人格追加在后压不动，导致问"你是谁"答"我是无为"(用户实测)。
+ *
+ * 参照 openclaw：**bot 的身份(IDENTITY/SOUL/USER/MEMORY)才是系统提示词主体，
+ *    运行环境(工具/目录/准则)是附属**。所以这里：
+ *      1. 员工身份+性格+关于老板+长期记忆+专属动态记忆 → 放最前，明确"你就是他"。
+ *      2. 无为客户端的工具/目录/安全/交互规范 → 作为「运行环境」附在后面，并显式声明
+ *         "这是你的运行环境，不是你的身份"，剥掉基础提示词开头的"你是无为"自我认同段。
+ *
+ * @param baseSys 基础(无为)系统提示词，完整含工具/目录/记忆/交互
+ * @param dyn     员工聊天中 remember 攒的专属动态记忆(可空)
+ * @param sceneBlock 可选场景块(群聊用：告诉他此刻在哪个群、有哪些成员)，接在身份之后
+ */
+export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string, sceneBlock?: string): string {
+  // 基础提示词里「当前工作目录 / Current working directory」之前全是"你是无为…"的身份自述，
+  // 之后才是纯操作性内容(工具/准则/记忆/密钥/交互)。从这里切开，只保留操作性尾部当运行环境。
+  const zhAt = baseSys.indexOf("当前工作目录");
+  const enAt = baseSys.indexOf("Current working directory");
+  const cut = zhAt >= 0 ? zhAt : enAt;
+  const en = enAt >= 0 && (zhAt < 0 || enAt < zhAt);
+  const operational = cut >= 0 ? baseSys.slice(cut) : baseSys; // 兜底：切不到就整段带上(自定义提示词等)
+
+  const title = emp.title ? (en ? ` — ${emp.title}` : `——${emp.title}`) : "";
+  const head = en
+    ? `You are "${emp.name}"${title}. Everything below is your identity and how you must behave — always stay in this character. When asked who you are, answer that you are ${emp.name}; never call yourself "Wuwei" or "a generic assistant".`
+    : `你是「${emp.name}」${title}。下面是你的身份与设定，任何时候都以此为准、始终保持这个角色。被问“你是谁/你是什么”时，回答你是${emp.name}，绝不自称“无为”或“通用助手”。`;
+  const memBlock = dyn ? (en ? `\n\n## What you've remembered (your own memory)\n\n${dyn}` : `\n\n## 你记住的事（专属记忆）\n\n${dyn}`) : "";
+  const scene = sceneBlock ? `\n\n${sceneBlock}` : "";
+  const runtimeIntro = en
+    ? `\n\n---\n\n## Your runtime — environment & tools, NOT your identity\nYou run inside the "Wuwei" desktop client. That's your runtime, not who you are. Through it you call tools to get real work done. Operating rules below:\n\n`
+    : `\n\n---\n\n## 你的运行环境（工具与操作规范，不是你的身份）\n你运行在「无为」客户端里——这是你的运行环境，不是你的身份。你借助它调用工具真正干活。以下是操作规范：\n\n`;
+
+  return `---\n\n${head}\n\n${buildPersonaBlock(emp)}${memBlock}${scene}${runtimeIntro}${operational}`;
 }
 
 
