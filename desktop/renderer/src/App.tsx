@@ -5090,7 +5090,7 @@ export function App() {
       void (async () => {
         const r = await window.wuwei.getSettings();
         const cur = r?.settings || {};
-        window.wuwei.setSettings({ ...cur, kind: "openai", providerId: "wuwei-free", baseUrl: "https://wuweiai.io/api/gateway/v1", apiKey: undefined, oauthToken: undefined, model: "glm-4.7-flash" });
+        window.wuwei.setSettings({ ...cur, kind: "openai", providerId: "wuwei-free", baseUrl: WUWEI_GATEWAY_BASE, apiKey: undefined, oauthToken: undefined, model: "glm-4.7-flash" });
         setCurProviderId("wuwei-free");
       })();
       setTimeout(() => submit(text, true), 140);
@@ -11221,6 +11221,10 @@ function applyProviderEdits(
     });
 }
 
+// 无为托管网关地址：2026-09 从 Vercel(wuweiai.io)迁到海外常驻 gw.wuweiai.io，聊天流量不再穿 Vercel。
+// 老用户已存旧 URL 的，由 provider.ts::fetchWithRetry 运行时改写兜底；此处让新安装直接存新地址。
+const WUWEI_GATEWAY_BASE = "https://gw.wuweiai.io/api/gateway/v1";
+
 // 私有版：保留 Codex/Claude 两种订阅后端，其余为各平台 API Key 预设（模型 id 均取自官网 2026-07）
 const PRESETS: Preset[] = [
   {
@@ -11228,7 +11232,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-free",
     label: "免费体验（无需登录）",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["glm-4.7-flash", "glm-4-flash", "glm-z1-flash", "glm-4v-flash"],
@@ -11242,7 +11246,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-deepseek",
     label: "无为托管 · DeepSeek",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
@@ -11254,7 +11258,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-zhipu",
     label: "无为托管 · 智谱",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["glm-5.2"],
@@ -11266,7 +11270,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-kimi",
     label: "无为托管 · Kimi",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["kimi-k3"],
@@ -11278,7 +11282,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-claude",
     label: "无为托管 · Claude",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["claude-opus-4-8"],
@@ -11290,7 +11294,7 @@ const PRESETS: Preset[] = [
     id: "wuwei-gpt",
     label: "无为托管 · GPT",
     kind: "openai",
-    baseUrl: "https://wuweiai.io/api/gateway/v1",
+    baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["gpt-6-astra", "gpt-5.6", "gpt-5.5"],

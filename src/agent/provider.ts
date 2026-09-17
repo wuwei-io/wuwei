@@ -129,7 +129,11 @@ const CLIENT_OS = (() => {
   }
 })();
 async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Promise<Response> {
-  // 无为网关：带上 X-Client-OS，后台「用量记录」据此显示游客系统。
+  // 网关迁移(2026-09)：托管聊天从 Vercel 上的 wuweiai.io 网关迁到海外常驻 gw.wuweiai.io(不再穿 Vercel、
+  // 不再吃 Fluid Compute 额度)。此处运行时改写 host → 一并覆盖所有「已把旧 URL 存进本地设置」的老用户，无需数据迁移。
+  // 只改写网关聊天流量；余额/coins 等 /api/me/* 仍走 wuweiai.io(Vercel)，不受影响。
+  if (typeof url === "string") url = url.replace("https://wuweiai.io/api/gateway", "https://gw.wuweiai.io/api/gateway");
+  // 无为网关：带上 X-Client-OS，后台「用量记录」据此显示游客系统。(gw.wuweiai.io/api/gateway 仍匹配下方正则)
   if (CLIENT_OS && typeof url === "string" && /wuweiai\.io\/api\/gateway/.test(url)) {
     const h = new Headers(init.headers as ConstructorParameters<typeof Headers>[0]);
     h.set("X-Client-OS", CLIENT_OS);
