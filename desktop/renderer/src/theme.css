@@ -6653,6 +6653,13 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   background: var(--bg-soft);
 }
 .tc-composer:focus-within { border-color: var(--accent); }
+/* 群/私聊底部状态栏(连通灯+账号额度)。复用主底栏的 conn-light；点/额度色本地定义(不在 .foot-status 作用域下) */
+.tc-room-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin: -6px 2px 12px; font-size: 11.5px; color: var(--text-faint); }
+.tc-room-foot .conn-light { width: 9px; height: 9px; }
+.tc-room-foot .fs-dot { opacity: .5; }
+.tc-room-foot .fs-quota.warn { color: #B08A2E; }
+.tc-room-foot .fs-quota.danger { color: #D2413F; }
+.tc-room-foot-txt { color: var(--text-faint); }
 .tc-composer textarea {
   flex: 1; min-width: 0; resize: none; box-sizing: border-box;
   padding: 6px 0; border: none; background: transparent; color: var(--text);

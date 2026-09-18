@@ -4,12 +4,15 @@
 // 一眼看出这是一屋子人在说话，而不是单线对话。
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null };
+// footer：App 传入的底部状态栏(连通灯+订阅/本月额度)。群没有「单一模型」，所以不复用主对话框那条
+// 完整的模型/上下文栏，只显示对群有意义的连通性与账号额度。App 拥有这些 state，故用 render-prop 注入。
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; footer?: ReactNode };
 
-export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId, footer }: Props) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<RoomMessage[]>([]);
@@ -382,6 +385,7 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
           </button>
         )}
       </div>
+      {footer && <div className="tc-room-foot">{footer}</div>}
     </div>
   );
 }

@@ -6891,7 +6891,42 @@ export function App() {
                   providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
                 />
               ) : (
-                <RoomView en={lang === "en"} employees={teamEmployees} initialRoomId={activeRoomId} onBack={() => setAppView("store")} />
+                <RoomView
+                  en={lang === "en"}
+                  employees={teamEmployees}
+                  initialRoomId={activeRoomId}
+                  onBack={() => setAppView("store")}
+                  footer={(
+                    // 群/私聊底部状态栏：连通灯 + 账号级订阅/本月额度。群没有单一模型，故不展示模型名/上下文栏。
+                    <>
+                      <button
+                        className={`conn-light conn-${conn.status}`}
+                        title={conn.reason || t("conn.lightTitle", "连通状态")}
+                        onClick={() => { if (conn.status === "red" || conn.status === "yellow") { setSettingsTab("model"); setShowSettings(true); } else void runConnCheck(); }}
+                      />
+                      <span className="tc-room-foot-txt">
+                        {conn.status === "green" ? (lang === "en" ? "Connected" : "已连通")
+                          : conn.status === "yellow" ? (lang === "en" ? "Errors" : "有报错")
+                          : conn.status === "red" ? (lang === "en" ? "Not connected" : "未连通")
+                          : (lang === "en" ? "Checking…" : "检测中…")}
+                      </span>
+                      {curProviderId.startsWith("wuwei-") && wuwei?.membership?.weeklyQuota?.active && (() => {
+                        const wq = wuwei.membership!.weeklyQuota!;
+                        const usedPct = Math.max(0, Math.min(100, 100 - wq.remainingPct));
+                        const tone = usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "";
+                        return (<><span className="fs-dot">·</span><span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span></>);
+                      })()}
+                      {meta.sub && rate && typeof rate.primaryUsedPercent === "number" && (
+                        <>
+                          <span className="fs-dot">·</span>
+                          {(rate.primaryWindowMinutes ?? 300) >= 1440
+                            ? <span>{lang === "en" ? "Week" : "周"} {rate.primaryUsedPercent}%</span>
+                            : <span>{lang === "en" ? "Week" : "周"} {rate.secondaryUsedPercent ?? 0}%</span>}
+                        </>
+                      )}
+                    </>
+                  )}
+                />
               )}
             </div>
           </div>

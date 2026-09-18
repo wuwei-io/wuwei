@@ -242,6 +242,13 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
     onText: (delta: string) => onProgress?.({ kind: "text", delta }),
     onToolStart: (id: string, name: string) => onProgress?.({ kind: "tool-start", id, name }),
     onToolEnd: (id: string, _r: string, isError: boolean) => onProgress?.({ kind: "tool-end", id, isError }),
+    // 群/私聊里员工跑订阅平台(Claude/Codex)时也上报额度快照——否则群里干活消耗了订阅额度，
+    // 底部状态栏(主会话)却看不到，用户以为额度没动。按员工自己的平台存(没绑走全局平台兜底)。
+    onRateLimits: (rl: unknown) => {
+      const pid = employee.model?.providerId || curProviderId();
+      try { saveRateLimits(pid, rl as any); } catch { /* 存不下不影响本轮 */ }
+      send("evt:ratelimits", rl);
+    },
   } as any, signal);
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
