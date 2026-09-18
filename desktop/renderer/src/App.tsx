@@ -3611,6 +3611,7 @@ export function App() {
           stop();
           setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
           setWuwei(me);
+          void runConnCheck(); // 重测连通灯：会员激活/到账后该模型即可用，灯从黄→绿，别让用户以为还有问题
           const plan = PRO_PLANS.find((p) => p.sku === clientSku);
           const isTrial = clientSku === "plan_trial";
           const planName = isTrial
@@ -3636,6 +3637,7 @@ export function App() {
           stop();
           setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
           setWuwei(me);
+          void runConnCheck(); // 重测连通灯：会员激活/到账后该模型即可用，灯从黄→绿，别让用户以为还有问题
           setPayResult({ kind: "coin", added: newBalance - baseBalance, bonus: 0, balance: newBalance, order: "" });
         }
       }).catch(() => { /* 单次拉取失败忽略，下个 tick 再试 */ });
