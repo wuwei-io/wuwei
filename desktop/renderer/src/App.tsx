@@ -7299,6 +7299,7 @@ export function App() {
                   employees={teamEmployees}
                   initialRoomId={activeRoomId}
                   dmSelfId={dmSelfId}
+                  renderMd={(t) => <MarkdownView text={t} />}
                   onBack={() => setAppView("store")}
                   footer={(ctx) => (
                     // 群/私聊底部状态栏：复用主对话完整的 <ComposerFoot>。roomMode 隐藏 per-session 的自动/智能继续档，

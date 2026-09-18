@@ -13,7 +13,7 @@ import { EmployeeAvatar } from "./EmployeeAvatar.js";
 // 和主对话是同一套 state/handler，切了全局默认就变。上下文统计则传本群/私聊自己的估算值(per-room)，故 footer
 // 改成 render-prop 函数：App 把 room 的 contextK 注入 <ComposerFoot roomMode contextK>。
 // dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number }) => ReactNode };
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number }) => ReactNode; renderMd?: (text: string) => ReactNode };
 
 // 群/私聊没有主进程回报的精确 token 数(那是 per-session 的)，这里按消息文本长度粗估：
 // CJK 字符 ≈ 1 token/字，其余(英文/符号/空格) ≈ 0.3 token/字。只用于底栏「上下文 ~x.xk」展示，标了 ~ 表示估算。
@@ -28,7 +28,7 @@ function estimateRoomContextK(msgs: { text?: string }[]): number {
   return tokens / 1000;
 }
 
-export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd }: Props) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<RoomMessage[]>([]);
@@ -294,7 +294,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               )}
               <span className="tc-msg-body">
                 {!mine && <span className="tc-msg-who">{m.speaker.name}</span>}
-                <span className="tc-bubble">{m.text}</span>
+                <span className="tc-bubble">{renderMd ? renderMd(m.text) : m.text}</span>
               </span>
               {/* 悬停出现的删除单条：直接删，不弹确认（撤销成本低、群消息不金贵） */}
               <button
