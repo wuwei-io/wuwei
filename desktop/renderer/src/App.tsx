@@ -3197,9 +3197,12 @@ export function App() {
   const [contactsExpanded, setContactsExpanded] = useState(() => localStorage.getItem("wuwei-contacts-expanded") !== "0"); // 一人公司下「通讯录」子板块展开态
   const [groupsExpanded, setGroupsExpanded] = useState(() => localStorage.getItem("wuwei-groups-expanded") !== "0"); // 一人公司下「群聊」子板块展开态
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
+  // DM 私聊本质也是 room(type==="dm")，复用 activeRoomId 进入。dmSelfId=从哪名员工的侧栏点进来的，
+  // 用于标题栏显示「对方」名字(镜像：小笨侧栏点=显示小数，小数侧栏点=显示小笨)。
+  const [dmSelfId, setDmSelfId] = useState<string | null>(null);
   const [roomMenu, setRoomMenu] = useState(false); // 标题栏里群的 ⋯ 菜单(成员/清空/删除)是否展开
-  // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项
-  const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room"; id?: string; name?: string }>(null);
+  // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项。dm=删除私聊
+  const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room" | "dm"; id?: string; name?: string }>(null);
   // 一人公司板块要列群/员工：模块开着时拉一次 + 监听变更
   useEffect(() => {
     if (!teamEnabled) return;
@@ -5738,6 +5741,8 @@ export function App() {
                 {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式） */}
                 {contactsExpanded && [...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => {
                   const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                  // 该员工参与的私聊(镜像)：同一条 dm 会在双方侧栏各显示一次，各自显示「对方」
+                  const empDms = teamRooms.filter((r: any) => r.type === "dm" && (r.members || []).includes(e.id)).sort((a:any,b:any)=>(b.updatedAt||0)-(a.updatedAt||0));
                   const isExpanded = empExpanded.has(e.id);
                   const activeEmp = sessions.find((s) => s.id === currentId)?.employeeId === e.id && appView === null;
                   // 点员工行 = 进他固定的专属会话(最近那次，延续上下文)；没聊过才新建
@@ -5759,7 +5764,7 @@ export function App() {
                           <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
                           <span className="tool-sub-nm">{e.name}</span>
                         </button>
-                        {empSessions.length > 0 && (
+                        {(empSessions.length > 0 || empDms.length > 0) && (
                           <button
                             className="tool-sub-chev"
                             title={isExpanded ? (lang === "en" ? "Collapse" : "收起") : (lang === "en" ? "Show chats" : "展开对话")}
@@ -5794,6 +5799,27 @@ export function App() {
                           <button className="tool-sub-newconvo" onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}>
                             + {lang === "en" ? "New chat" : "新对话"}
                           </button>
+                          {/* 员工间私聊(镜像)：显示「对方」头像+名，点进复用 RoomView。dmSelfId=e.id 让标题显示对方 */}
+                          {empDms.map((r: any) => {
+                            const otherId = (r.members || []).find((m: string) => m !== e.id);
+                            const other = teamEmployees.find((x: any) => x.id === otherId);
+                            const onDm = appView === "rooms" && activeRoomId === r.id;
+                            return (
+                              <div
+                                key={r.id}
+                                role="button"
+                                tabIndex={0}
+                                className={"tool-sub-convo tool-sub-dm" + (onDm ? " on" : "")}
+                                title={lang === "en" ? `DM with ${other?.name || otherId}` : `与${other?.name || otherId}的私聊`}
+                                onClick={() => { setDmSelfId(e.id); setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
+                                onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
+                              >
+                                <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
+                                <span className="tool-sub-convo-t">{other?.name || otherId}</span>
+                                <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -5806,10 +5832,10 @@ export function App() {
                 >
                   <svg className={"tool-chev" + (groupsExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
                   <span className="tool-sub-sec-nm">{lang === "en" ? "Groups" : "群聊"}</span>
-                  <span className="tool-sub-sec-cnt">{teamRooms.length}</span>
+                  <span className="tool-sub-sec-cnt">{teamRooms.filter((r:any)=>r.type!=="dm").length}</span>
                 </button>
-                {/* 群入口 */}
-                {groupsExpanded && [...teamRooms].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
+                {/* 群入口。私聊(type==="dm")不在这里列——它们镜像挂在各自参与员工的通讯录子列表下 */}
+                {groupsExpanded && [...teamRooms].filter((r:any)=>r.type!=="dm").sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((r: any) => (
                   <button
                     key={r.id}
                     className={"tool-sub-item" + (appView === "rooms" && activeRoomId === r.id ? " on" : "")}
@@ -5826,7 +5852,7 @@ export function App() {
                     <span className="tool-sub-cnt">{r.members?.length || 0}</span>
                   </button>
                 ))}
-                {groupsExpanded && teamRooms.length === 0 && (
+                {groupsExpanded && teamRooms.filter((r:any)=>r.type!=="dm").length === 0 && (
                   <div className="tool-sub-hint">{lang === "en" ? "No groups yet — right-click 「My Company」 to create one." : "还没有群 · 右键「一人公司」建群"}</div>
                 )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
@@ -5869,6 +5895,9 @@ export function App() {
                   <Item label={lang === "en" ? "Settings" : "群设置"} on={() => { setRoomSettings({ id: teamMenu.id! }); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
                   <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`)) await api?.roomDelete?.(teamMenu.id); }} />
+                </>)}
+                {teamMenu.kind === "dm" && (<>
+                  <Item danger label={lang === "en" ? "Delete chat" : "删除私聊"} on={async () => { close(); if (confirm(lang === "en" ? `Delete this private chat?` : `删除与「${teamMenu.name}」的私聊？删后可重新发起。`)) { await api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }} />
                 </>)}
               </div>
             </>
@@ -7100,6 +7129,17 @@ export function App() {
             {(() => {
               // 群里：头像=成员堆叠圆头像，标题=群名
               const room = teamEnabled && appView === "rooms" && activeRoomId ? teamRooms.find((x: any) => x.id === activeRoomId) : null;
+              if (room && room.type === "dm") {
+                // 私聊：标题=对方名(镜像，按 dmSelfId 判定自己是谁)，单头像
+                const otherId = (room.members || []).find((m: string) => m !== dmSelfId) || (room.members || [])[0];
+                const other = teamEmployees.find((x: any) => x.id === otherId);
+                return (
+                  <>
+                    <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
+                    <span className="tb-title-txt">{other?.name || otherId}</span>
+                  </>
+                );
+              }
               if (room) {
                 return (
                   <>
@@ -7132,7 +7172,7 @@ export function App() {
             {/* 群 ⋯ 菜单：群成员 / 清空消息 / 删除群，紧跟群名 */}
             {teamEnabled && appView === "rooms" && activeRoomId && (() => {
               const room = teamRooms.find((x: any) => x.id === activeRoomId);
-              if (!room) return null;
+              if (!room || room.type === "dm") return null; // 私聊不显示群菜单(成员/删群)——删私聊走侧栏右键
               return (
                 <span className="tb-room-menu-wrap">
                   <button className="tb-room-menu-btn" onClick={() => setRoomMenu((v) => !v)} title={lang === "en" ? "Group" : "群信息"}>

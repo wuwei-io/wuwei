@@ -6881,6 +6881,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tool-sub-convo-del svg { width: 13px; height: 13px; display: block; }
 .tool-sub-convo:hover .tool-sub-convo-del { display: inline-flex; }
 .tool-sub-convo-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
+/* 员工私聊(镜像)行：单头像不做堆叠偏移 */
+.tool-sub-dm .tool-sub-av.mini { margin-left: 0; }
 .tool-sub-newconvo {
   -webkit-app-region: no-drag;
   padding: 5px 8px; border: none; background: transparent;
