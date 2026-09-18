@@ -6,7 +6,23 @@
 //    再回滚 index.ts / preload / App.tsx 那几处调用即可，其余代码零改动。
 
 import type { IpcMain } from "electron";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, basename, extname } from "node:path";
 import type { Employee, Room, TeamAppCard } from "../../../src/team/types.js";
+// 一人公司 SOP 库数据层（与 team 同一可插拔契约、同一总开关）
+import {
+  loadTree as sopLoadTree,
+  createNode as sopCreateNode,
+  renameNode as sopRenameNode,
+  moveNode as sopMoveNode,
+  deleteNode as sopDeleteNode,
+  readSopDoc as sopReadDoc,
+  saveSopDoc as sopSaveDoc,
+  listVersions as sopListVersions,
+  readVersion as sopReadVersion,
+  rollback as sopRollback,
+  purge as sopPurge,
+} from "../sop/store.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
 import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, runDmHumanTurn, type RunEmployeeArgs } from "./orchestrator.js";
@@ -95,6 +111,18 @@ const CHANNELS = [
   "team:room:clear",
   "team:room:msg-delete",
   "team:purge",
+  // 一人公司 SOP 库（同一总开关；unregisterTeam 遍历本数组自动摘）
+  "sop:tree",
+  "sop:create",
+  "sop:rename",
+  "sop:move",
+  "sop:delete",
+  "sop:doc",
+  "sop:save",
+  "sop:versions",
+  "sop:read-version",
+  "sop:rollback",
+  "sop:import",
 ] as const;
 
 let registered = false;
@@ -255,11 +283,89 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     return { ok: true, messages: msgs };
   });
 
+  // ── 一人公司 SOP 库 ──────────────────────────────────────────
+  // 树变更后广播 evt:sop，让侧栏与 SopView 跟着刷新（同 evt:team-rooms 机制）。
+  const sopPush = () => deps.send("evt:sop", { tree: sopLoadTree() });
+
+  ipcMain.handle("sop:tree", () => ({ tree: sopLoadTree() }));
+
+  ipcMain.handle("sop:create", (_e, kind: "category" | "sop", name: string, parentId?: string, opts?: { taskKey?: string; summary?: string }) => {
+    const r = sopCreateNode(kind === "sop" ? "sop" : "category", String(name || ""), parentId ? String(parentId) : undefined, opts || undefined);
+    deps.log("sop", "新建", kind, r.node.name, r.exists ? "(已存在,去重)" : "");
+    sopPush();
+    return { ok: true, node: r.node, exists: r.exists, tree: sopLoadTree() };
+  });
+
+  ipcMain.handle("sop:rename", (_e, id: string, name: string) => {
+    sopRenameNode(String(id || ""), String(name || ""));
+    sopPush();
+    return { ok: true, tree: sopLoadTree() };
+  });
+
+  ipcMain.handle("sop:move", (_e, id: string, parentId: string | undefined, order: number) => {
+    sopMoveNode(String(id || ""), parentId ? String(parentId) : undefined, Number(order) || 0);
+    sopPush();
+    return { ok: true, tree: sopLoadTree() };
+  });
+
+  ipcMain.handle("sop:delete", (_e, id: string) => {
+    sopDeleteNode(String(id || ""));
+    deps.log("sop", "删除", id);
+    sopPush();
+    return { ok: true, tree: sopLoadTree() };
+  });
+
+  ipcMain.handle("sop:doc", (_e, id: string) => ({ text: sopReadDoc(String(id || "")) }));
+
+  ipcMain.handle("sop:save", (_e, id: string, text: string, note?: string) => {
+    const r = sopSaveDoc(String(id || ""), String(text ?? ""), note ? String(note) : undefined);
+    sopPush();
+    return { ok: !!r.node, version: r.version, tree: sopLoadTree() };
+  });
+
+  ipcMain.handle("sop:versions", (_e, id: string) => ({ versions: sopListVersions(String(id || "")) }));
+
+  ipcMain.handle("sop:read-version", (_e, id: string, n: number) => ({ text: sopReadVersion(String(id || ""), Number(n) || 0) }));
+
+  ipcMain.handle("sop:rollback", (_e, id: string, n: number) => {
+    const r = sopRollback(String(id || ""), Number(n) || 0);
+    sopPush();
+    return "error" in r ? { ok: false, error: r.error } : { ok: true, version: r.version, tree: sopLoadTree() };
+  });
+
+  // KB 导入：把某目录下的 .md 机械导入为 SOP（文件名去扩展名作标题、slug 作 taskKey、内容作 v1）。
+  ipcMain.handle("sop:import", (_e, dir: string) => {
+    const d = String(dir || "");
+    if (!d) return { ok: false, error: "no_dir" };
+    let files: string[] = [];
+    try { files = readdirSync(d).filter((f) => extname(f).toLowerCase() === ".md"); } catch { return { ok: false, error: "read_failed" }; }
+    // 给这次导入建一个类别，避免污染顶层
+    const catName = basename(d) || "导入";
+    const catId = sopCreateNode("category", catName).node.id;
+    let added = 0;
+    for (const f of files) {
+      const title = basename(f, extname(f)).replace(/[-_]+/g, " ").trim() || f;
+      const slug = basename(f, extname(f)).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || `kb-${Date.now()}-${added}`;
+      const taskKey = `kb-${slug}`;
+      const created = sopCreateNode("sop", title, catId, { taskKey });
+      if (created.exists) continue; // taskKey 撞了=已导入过，跳过
+      let body = "";
+      try { body = readFileSync(join(d, f), "utf8"); } catch { /* 读不到就空正文 */ }
+      sopSaveDoc(created.node.id, body, "KB 导入");
+      added++;
+    }
+    deps.log("sop", "KB 导入", `${files.length} 个 md，新增 ${added} 条`);
+    sopPush();
+    return { ok: true, added, parsed: files.length, tree: sopLoadTree() };
+  });
+
   // 关掉模块时用户可选「同时清除数据」：删掉 ~/.wuwei/team/ 整个目录
   ipcMain.handle("team:purge", () => {
     purge();
+    sopPurge(); // SOP 库与 team 同属一人公司模块，一并清掉 ~/.wuwei/sop/
     deps.log("team", "已清除全部数据");
     push();
+    sopPush();
     return { ok: true, ...snapshot() };
   });
 }

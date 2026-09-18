@@ -213,6 +213,20 @@ const api = {
     importScan: () => ipcRenderer.invoke("team:import:scan"),
     importApply: (sourcePath: string, ids: string[]) => ipcRenderer.invoke("team:import:apply", sourcePath, ids),
     purge: () => ipcRenderer.invoke("team:purge"),
+    // ── 一人公司 SOP 库（挂在同一 team 总开关下；开关关时这些通道未注册，调用会 reject）──
+    sopTree: () => ipcRenderer.invoke("sop:tree"),
+    sopCreate: (kind: "category" | "sop", name: string, parentId?: string, opts?: unknown) =>
+      ipcRenderer.invoke("sop:create", kind, name, parentId, opts),
+    sopRename: (id: string, name: string) => ipcRenderer.invoke("sop:rename", id, name),
+    sopMove: (id: string, parentId: string | undefined, order: number) =>
+      ipcRenderer.invoke("sop:move", id, parentId, order),
+    sopDelete: (id: string) => ipcRenderer.invoke("sop:delete", id),
+    sopDoc: (id: string) => ipcRenderer.invoke("sop:doc", id),
+    sopSave: (id: string, text: string, note?: string) => ipcRenderer.invoke("sop:save", id, text, note),
+    sopVersions: (id: string) => ipcRenderer.invoke("sop:versions", id),
+    sopReadVersion: (id: string, n: number) => ipcRenderer.invoke("sop:read-version", id, n),
+    sopRollback: (id: string, n: number) => ipcRenderer.invoke("sop:rollback", id, n),
+    sopImport: (dir: string) => ipcRenderer.invoke("sop:import", dir),
   },
   answerAsk: (id: number, answers: unknown) => ipcRenderer.send("ask:answer", id, answers),
   codexResetCredits: () => ipcRenderer.invoke("codex:reset-credits"),

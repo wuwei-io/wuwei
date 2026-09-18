@@ -16,6 +16,7 @@ import * as Ic from "./baby/icons.js";
 // 「AI 员工团队」可选模块：整个渲染层只在这里引一次（可插拔契约，见设计方案第七节）
 import { AppStore } from "./team/AppStore.js";
 import { RoomView } from "./team/RoomView.js";
+import { SopView } from "./team/SopView.js";
 import { EmployeeAvatar } from "./team/EmployeeAvatar.js";
 
 // 数字婴儿生命体征：后端 /alive/status 一次给全，界面状态卡片全靠它渲染
@@ -3189,32 +3190,94 @@ export function App() {
   // 「AI 员工团队」可选模块（默认关）。真相源是主进程 settings.app.teamEnabled，这里存一份 localStorage 镜像
   // 只为首帧就能正确显隐入口（否则要等 getSettings 回来，侧边栏会闪一下）；挂载后用 settings 校准。
   const [teamEnabled, setTeamEnabled] = useState(() => localStorage.getItem("wuwei-team-enabled") === "1");
-  const [appView, setAppView] = useState<null | "store" | "rooms">(null); // 主区显示应用中心 / 群
+  const [appView, setAppView] = useState<null | "store" | "rooms" | "sop">(null); // 主区显示应用中心 / 群 / SOP
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
   const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
   const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
   const [contactsExpanded, setContactsExpanded] = useState(() => localStorage.getItem("wuwei-contacts-expanded") !== "0"); // 一人公司下「通讯录」子板块展开态
   const [groupsExpanded, setGroupsExpanded] = useState(() => localStorage.getItem("wuwei-groups-expanded") !== "0"); // 一人公司下「群聊」子板块展开态
+  const [sopExpanded, setSopExpanded] = useState(() => localStorage.getItem("wuwei-sop-expanded") !== "0"); // 一人公司下「SOP库」子板块展开态
+  const [sopTree, setSopTree] = useState<any[]>([]); // SOP 树节点（侧栏渲染 + SopView 取名字/版本）
+  const [activeSopId, setActiveSopId] = useState<string | null>(null); // 当前查看的 SOP
+  const [sopCatOpen, setSopCatOpen] = useState<Set<string>>(() => new Set()); // 侧栏哪些 SOP 类别展开了
+  const [sopDrag, setSopDrag] = useState<string | null>(null); // 正在拖拽的节点 id
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
   // DM 私聊本质也是 room(type==="dm")，复用 activeRoomId 进入。dmSelfId=从哪名员工的侧栏点进来的，
   // 用于标题栏显示「对方」名字(镜像：小笨侧栏点=显示小数，小数侧栏点=显示小笨)。
   const [dmSelfId, setDmSelfId] = useState<string | null>(null);
   const [roomMenu, setRoomMenu] = useState(false); // 标题栏里群的 ⋯ 菜单(成员/清空/删除)是否展开
   // 一人公司右键菜单：{x,y, 类型, 目标} —— 右键员工/群/公司标题弹出管理项。dm=删除私聊
-  const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room" | "dm"; id?: string; name?: string }>(null);
+  const [teamMenu, setTeamMenu] = useState<null | { x: number; y: number; kind: "company" | "employee" | "room" | "dm" | "sop" | "sop-category"; id?: string; name?: string }>(null);
   // 一人公司板块要列群/员工：模块开着时拉一次 + 监听变更
   useEffect(() => {
     if (!teamEnabled) return;
     const api = (window as any).wuwei?.team;
     api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
     api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
+    api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
     const off = window.wuwei.onEvent?.((ch: string, p: any) => {
       if (ch === "evt:team-rooms") setTeamRooms(p?.rooms || []);
       else if (ch === "evt:team" && p) setTeamEmployees(p.employees || []);
+      else if (ch === "evt:sop") setSopTree(p?.tree || []);
     });
     return off;
   }, [teamEnabled]);
+  // ── SOP 库侧栏树：递归渲染 + 原生拖拽移动 ──
+  const sopChildren = (pid?: string) => [...sopTree].filter((n: any) => (n.parentId || "") === (pid || "")).sort((a: any, b: any) => a.order - b.order);
+  const onSopDrop = (targetNode: any) => {
+    const id = sopDrag; setSopDrag(null);
+    if (!id || id === targetNode.id) return;
+    const api = (window as any).wuwei?.team;
+    // 拖到类别 → 移进该类别末尾；拖到 SOP → 作为它的同级、落在它前面
+    if (targetNode.kind === "category") void api?.sopMove?.(id, targetNode.id, sopChildren(targetNode.id).length);
+    else void api?.sopMove?.(id, targetNode.parentId, targetNode.order);
+  };
+  const renderSopTree = (pid: string | undefined, depth: number): any =>
+    sopChildren(pid).map((n: any) => {
+      const pad = { paddingLeft: 10 + depth * 12 } as React.CSSProperties;
+      if (n.kind === "category") {
+        const open = sopCatOpen.has(n.id);
+        return (
+          <div key={n.id}>
+            <button
+              className="tool-sub-item sop-cat"
+              style={pad}
+              draggable
+              onDragStart={() => setSopDrag(n.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); onSopDrop(n); }}
+              onClick={() => { const s = new Set(sopCatOpen); if (s.has(n.id)) s.delete(n.id); else s.add(n.id); setSopCatOpen(s); }}
+              onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "sop-category", id: n.id, name: n.name }); }}
+            >
+              <svg className={"tool-chev" + (open ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+              <span className="tool-sub-nm">{n.name}</span>
+              <span className="tool-sub-cnt">{sopChildren(n.id).length}</span>
+            </button>
+            {open && renderSopTree(n.id, depth + 1)}
+          </div>
+        );
+      }
+      return (
+        <button
+          key={n.id}
+          className={"tool-sub-item sop-item" + (appView === "sop" && activeSopId === n.id ? " on" : "")}
+          style={pad}
+          draggable
+          onDragStart={() => setSopDrag(n.id)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); onSopDrop(n); }}
+          onClick={() => { setActiveSopId(n.id); setAppView("sop"); setAgiView(null); }}
+          onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "sop", id: n.id, name: n.name }); }}
+        >
+          <span className="sop-item-dot" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+          </span>
+          <span className="tool-sub-nm">{n.name}</span>
+          <span className="tool-sub-cnt">v{n.currentVersion || 0}</span>
+        </button>
+      );
+    });
   const [babyExists, setBabyExists] = useState(() => localStorage.getItem("minicc-baby-exists") === "1");
   const [babyDiary, setBabyDiaryState] = useState("");
   const [babyCurious, setBabyCuriousState] = useState("");
@@ -6267,6 +6330,20 @@ export function App() {
                 {groupsExpanded && teamRooms.filter((r:any)=>r.type!=="dm").length === 0 && (
                   <div className="tool-sub-hint">{lang === "en" ? "No groups yet — right-click 「My Company」 to create one." : "还没有群 · 右键「一人公司」建群"}</div>
                 )}
+                {/* SOP 库子板块头：公司标准流程文档库（树形，可展开/折叠、右键管理、拖拽） */}
+                <button
+                  className="tool-sub-sec"
+                  onClick={() => { const v = !sopExpanded; setSopExpanded(v); localStorage.setItem("wuwei-sop-expanded", v ? "1" : "0"); }}
+                  onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "sop-category" }); }}
+                >
+                  <svg className={"tool-chev" + (sopExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                  <span className="tool-sub-sec-nm">{lang === "en" ? "SOPs" : "SOP库"}</span>
+                  <span className="tool-sub-sec-cnt">{sopTree.filter((n:any)=>n.kind==="sop").length}</span>
+                </button>
+                {sopExpanded && renderSopTree(undefined, 0)}
+                {sopExpanded && sopTree.length === 0 && (
+                  <div className="tool-sub-hint">{lang === "en" ? "No SOPs yet — right-click 「SOPs」 to add." : "还没有 SOP · 右键「SOP库」新建"}</div>
+                )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
                   <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
                     {lang === "en" ? "Add teammates →" : "去添加员工 →"}
@@ -6310,6 +6387,19 @@ export function App() {
                 </>)}
                 {teamMenu.kind === "dm" && (<>
                   <Item danger label={lang === "en" ? "Delete chat" : "删除私聊"} on={async () => { close(); if (confirm(lang === "en" ? `Delete this private chat?` : `删除与「${teamMenu.name}」的私聊？删后可重新发起。`)) { await api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }} />
+                </>)}
+                {/* SOP 类别（含顶层「SOP库」头：teamMenu.id 为空=在根建）：新建子类别/新建SOP/重命名/删除 */}
+                {teamMenu.kind === "sop-category" && (<>
+                  <Item label={lang === "en" ? "New subcategory" : "新建子类别"} on={async () => { close(); const nm = prompt(lang === "en" ? "Category name" : "类别名称"); if (nm && nm.trim()) await api?.sopCreate?.("category", nm.trim(), teamMenu.id); }} />
+                  <Item label={lang === "en" ? "New SOP" : "新建 SOP"} on={async () => { close(); const nm = prompt(lang === "en" ? "SOP title" : "SOP 标题"); if (!nm || !nm.trim()) return; const key = prompt(lang === "en" ? "taskKey (unique, e.g. deploy-vercel)" : "taskKey（唯一去重键，如 deploy-vercel）", nm.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) || undefined; const r = await api?.sopCreate?.("sop", nm.trim(), teamMenu.id, { taskKey: key }); if (r?.exists) { alert(lang === "en" ? "A SOP with that taskKey already exists (one process = one SOP)." : "已存在相同 taskKey 的 SOP（一事一 SOP，未重复创建）。"); } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (teamMenu.id) setSopCatOpen((s) => new Set(s).add(teamMenu.id!)); }} />
+                  {teamMenu.id && <Item label={lang === "en" ? "Rename" : "重命名"} on={async () => { const nm = prompt(lang === "en" ? "New name" : "新名称", teamMenu.name); close(); if (nm && nm.trim()) await api?.sopRename?.(teamMenu.id, nm.trim()); }} />}
+                  {teamMenu.id && <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete category "${teamMenu.name}" and everything inside?` : `删除类别「${teamMenu.name}」及其下所有内容？`)) await api?.sopDelete?.(teamMenu.id); }} />}
+                </>)}
+                {/* 单个 SOP：重命名/删除（新建子项走类别菜单） */}
+                {teamMenu.kind === "sop" && (<>
+                  <Item label={lang === "en" ? "Open" : "打开"} on={() => { close(); setActiveSopId(teamMenu.id!); setAppView("sop"); setAgiView(null); }} />
+                  <Item label={lang === "en" ? "Rename" : "重命名"} on={async () => { const nm = prompt(lang === "en" ? "New name" : "新名称", teamMenu.name); close(); if (nm && nm.trim()) await api?.sopRename?.(teamMenu.id, nm.trim()); }} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete SOP "${teamMenu.name}"?` : `删除 SOP「${teamMenu.name}」？`)) { await api?.sopDelete?.(teamMenu.id); if (activeSopId === teamMenu.id) { setActiveSopId(null); setAppView(null); } } }} />
                 </>)}
               </div>
             </>
@@ -7317,6 +7407,26 @@ export function App() {
                   )}
                 />
               )}
+            </div>
+          </div>
+        )}
+        {/* SOP 库详情：侧栏点某个 SOP 进来，主区显示查看/编辑/版本 */}
+        {teamEnabled && appView === "sop" && activeSopId && (
+          <div className="team-panel">
+            <div className="team-panel-head">
+              <span className="team-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" />
+                </svg>
+                {lang === "en" ? "SOP" : "SOP 库"}
+              </span>
+              <button className="team-panel-close" onClick={() => setAppView(null)} title={lang === "en" ? "Back to chat" : "返回对话"}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                {lang === "en" ? "Back" : "返回"}
+              </button>
+            </div>
+            <div className="team-panel-body">
+              <SopView en={lang === "en"} sopId={activeSopId} nodes={sopTree} renderMd={(tx) => <MarkdownView text={tx} />} />
             </div>
           </div>
         )}
