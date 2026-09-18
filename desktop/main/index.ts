@@ -97,7 +97,7 @@ import {
 import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
 import { employeeMemoryPath, loadEmployees, loadApps } from "./team/store.js";
 import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
-import { findOrCreateDm, appendMessage as appendDmMessage } from "./team/room.js";
+import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -1507,6 +1507,8 @@ const dmTeammateTool: Tool = {
     }
 
     const dm = findOrCreateDm(selfId, target.id, [selfName, target.name]);
+    // 广播房间列表：新建的这条 DM 要立刻进两边员工的侧栏镜像子列表（teamRooms 靠 evt:team-rooms 更新）。
+    send("evt:team-rooms", { rooms: loadRooms() });
     // 先把发起方这条消息落进私聊并广播，让界面立刻看到「我发了什么」
     const msgs = appendDmMessage(dm.id, { speaker: { id: selfId, name: selfName, kind: "agent" }, text: message });
     send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
