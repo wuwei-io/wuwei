@@ -5783,6 +5783,18 @@ export function App() {
                 </>)}
                 {teamMenu.kind === "room" && (<>
                   <Item label={lang === "en" ? "Open" : "进入"} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item
+                    label={lang === "en" ? "Max wake…" : "最多唤醒人数…"}
+                    on={() => {
+                      close();
+                      const cur = (teamRooms.find((r: any) => r.id === teamMenu.id)?.maxWake) ?? 3;
+                      const v = prompt(lang === "en" ? "How many teammates to wake at once (1-20)?" : "群里一条消息最多同时唤醒几人（1-20）？", String(cur));
+                      if (v == null) return;
+                      const n = Math.round(Number(v));
+                      if (!Number.isFinite(n)) return;
+                      void api?.roomUpdate?.(teamMenu.id, { maxWake: Math.max(1, Math.min(20, n)) });
+                    }}
+                  />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
                   <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`)) await api?.roomDelete?.(teamMenu.id); }} />
                 </>)}
