@@ -62,7 +62,9 @@ export function applyEmployee<T extends { name: string }>(
   const sys = buildEmployeeSystem(emp, baseSys, dyn); // 员工身份在前、无为降为运行环境(见 store.ts)
   // dm_teammate（员工私聊）是团队协作的基础能力，不受员工工具白名单裁剪——
   // 即便员工只勾了很窄的工具，也应始终能私信同事。
-  const ALWAYS_KEEP = new Set(["dm_teammate"]);
+  // SOP 库的三个只读工具（查/读/列）永久保留：即便员工工具白名单很窄，也应能查阅公司标准流程。
+  // write_sop（会写盘）不永久保留，遵从员工的工具白名单裁剪。
+  const ALWAYS_KEEP = new Set(["dm_teammate", "search_sop", "read_sop", "list_sops"]);
   const tools = emp.tools?.length
     ? allTools.filter((t) => emp.tools!.includes(t.name) || ALWAYS_KEEP.has(t.name))
     : allTools;

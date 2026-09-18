@@ -98,6 +98,17 @@ import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
 import { employeeMemoryPath, loadEmployees, loadApps } from "./team/store.js";
 import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
+// 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
+import {
+  searchSops as sopSearch,
+  readSopDoc as sopReadDoc,
+  loadTree as sopLoadTree,
+  findByTaskKey as sopFindByTaskKey,
+  createNode as sopCreateNode,
+  saveSopDoc as sopSaveDoc,
+  categoryPathOf as sopCategoryPath,
+  updateSummary as sopUpdateSummary,
+} from "./sop/store.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -1518,6 +1529,161 @@ const dmTeammateTool: Tool = {
   },
 };
 
+// ── 一人公司 SOP 库 · 员工工具（4 个）────────────────────────────
+// SOP = 公司标准流程沉淀成的 md 文档库。员工做事前先 search_sop 查、read_sop 读全文照做，
+// 发现可优化用 write_sop 迭代（一事一 SOP，同 taskKey 不重复建）。三个只读工具永久保留（team/index.ts ALWAYS_KEEP）。
+const searchSopTool: Tool = {
+  name: "search_sop",
+  description:
+    "搜索公司 SOP 库（标准作业流程）。做任何可能已有标准流程的事（部署/发布/上线/复盘等）前先用它搜一搜，" +
+    "匹配 SOP 的标题、摘要与正文。返回命中的 SOP 列表（id、标题、类别路径、摘要、当前版本号），拿到 id 再用 read_sop 读全文。",
+  readOnly: true,
+  inputSchema: {
+    type: "object",
+    properties: { query: { type: "string", description: "搜索关键词；留空返回全部 SOP" } },
+    required: [],
+  },
+  async run(input): Promise<ToolResult> {
+    const q = String((input as any).query || "");
+    const hits = sopSearch(q);
+    if (!hits.length) {
+      return { content: tt(`没有匹配「${q}」的 SOP。可以用 write_sop 把这次的做法沉淀成新 SOP。`, `No SOP matches "${q}". You may use write_sop to capture this process as a new SOP.`) };
+    }
+    const lines = hits.map((h) =>
+      tt(
+        `- [${h.id}] ${h.name}${h.categoryPath ? `（${h.categoryPath}）` : ""} · v${h.currentVersion || 0}${h.summary ? ` — ${h.summary}` : ""}`,
+        `- [${h.id}] ${h.name}${h.categoryPath ? ` (${h.categoryPath})` : ""} · v${h.currentVersion || 0}${h.summary ? ` — ${h.summary}` : ""}`,
+      ),
+    );
+    return { content: tt(`命中 ${hits.length} 条 SOP：\n`, `${hits.length} SOP hit(s):\n`) + lines.join("\n") };
+  },
+};
+
+const readSopTool: Tool = {
+  name: "read_sop",
+  description: "读取某个 SOP 的当前版全文（先用 search_sop 或 list_sops 拿到 id）。读到后请严格照流程做，别凭记忆自由发挥。",
+  readOnly: true,
+  inputSchema: {
+    type: "object",
+    properties: { id: { type: "string", description: "SOP 节点 id（来自 search_sop/list_sops）" } },
+    required: ["id"],
+  },
+  async run(input): Promise<ToolResult> {
+    const id = String((input as any).id || "").trim();
+    const node = sopLoadTree().find((n) => n.id === id && n.kind === "sop");
+    if (!node) return { content: tt(`没找到 id 为「${id}」的 SOP。`, `No SOP with id "${id}".`), isError: true };
+    const doc = sopReadDoc(id);
+    const path = sopCategoryPath(id);
+    const header = tt(
+      `SOP：${node.name}${path ? `（${path}）` : ""} · 当前 v${node.currentVersion || 0}\n\n`,
+      `SOP: ${node.name}${path ? ` (${path})` : ""} · current v${node.currentVersion || 0}\n\n`,
+    );
+    return { content: header + (doc || tt("（该 SOP 还没有正文）", "(this SOP has no content yet)")) };
+  },
+};
+
+const listSopsTool: Tool = {
+  name: "list_sops",
+  description: "列出整棵 SOP 目录树（类别与其下的 SOP），用于总览公司有哪些标准流程。",
+  readOnly: true,
+  inputSchema: { type: "object", properties: {}, required: [] },
+  async run(): Promise<ToolResult> {
+    const nodes = sopLoadTree();
+    if (!nodes.length) return { content: tt("SOP 库还是空的，暂无任何标准流程。", "The SOP library is empty — no standard processes yet.") };
+    // 递归渲染成缩进树
+    const byParent = new Map<string, typeof nodes>();
+    for (const n of nodes) {
+      const k = n.parentId || "";
+      if (!byParent.has(k)) byParent.set(k, []);
+      byParent.get(k)!.push(n);
+    }
+    const lines: string[] = [];
+    const walk = (pid: string, depth: number) => {
+      const kids = (byParent.get(pid) || []).slice().sort((a, b) => a.order - b.order);
+      for (const n of kids) {
+        const indent = "  ".repeat(depth);
+        if (n.kind === "category") lines.push(`${indent}▸ ${n.name}`);
+        else lines.push(`${indent}- [${n.id}] ${n.name} · v${n.currentVersion || 0}${n.summary ? ` — ${n.summary}` : ""}`);
+        walk(n.id, depth + 1);
+      }
+    };
+    walk("", 0);
+    return { content: tt("SOP 目录树：\n", "SOP directory tree:\n") + lines.join("\n") };
+  },
+};
+
+const writeSopTool: Tool = {
+  name: "write_sop",
+  description:
+    "把一个标准流程沉淀/迭代进 SOP 库。**一事一 SOP**：不传 id 时按 taskKey 去重——taskKey 已存在会报错并引导你改用迭代（别新建重复的）；" +
+    "不存在则新建。传 id = 迭代已有 SOP（覆盖当前版并存一个新版本，历史不丢）。title 是标题，content 是完整 md 正文，" +
+    "category 可选（顶层类别名，自动建/复用），note 可选（本次变更说明）。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "要迭代的 SOP id；新建时留空" },
+      taskKey: { type: "string", description: "一事一 SOP 去重键（新建必填，如 deploy-vercel）；同 key 视为同一件事" },
+      title: { type: "string", description: "SOP 标题" },
+      category: { type: "string", description: "顶层类别名（可选，自动建/复用）" },
+      content: { type: "string", description: "完整 md 正文" },
+      summary: { type: "string", description: "一句话摘要（可选，列表/搜索用）" },
+      note: { type: "string", description: "本次变更说明（可选）" },
+    },
+    required: ["content"],
+  },
+  async run(input, ctx): Promise<ToolResult> {
+    const a = input as any;
+    const id = String(a.id || "").trim();
+    const taskKey = String(a.taskKey || "").trim();
+    const title = String(a.title || "").trim();
+    const category = String(a.category || "").trim();
+    const content = String(a.content ?? "");
+    const summary = a.summary != null ? String(a.summary) : undefined;
+    const note = a.note != null ? String(a.note).trim() : "";
+    // 迭代人署名：由哪名员工改的
+    const self = ctx.employeeId ? loadEmployees().find((e) => e.id === ctx.employeeId) : null;
+    const by = self?.name;
+    const finalNote = note || (by ? tt(`由 ${by} 迭代`, `updated by ${by}`) : undefined);
+
+    let targetId = id;
+    if (!targetId) {
+      // 新建路径：必须有 taskKey，且去重
+      if (!taskKey) return { content: tt("新建 SOP 需要 taskKey（一事一 SOP 的去重键，如 deploy-vercel）。", "Creating a SOP requires a taskKey (dedup key, e.g. deploy-vercel)."), isError: true };
+      const existing = sopFindByTaskKey(taskKey);
+      if (existing) {
+        return {
+          content: tt(
+            `已存在 taskKey 为「${taskKey}」的 SOP：「${existing.name}」(id=${existing.id})。一事一 SOP，别新建重复的——请传 id="${existing.id}" 迭代它。`,
+            `A SOP with taskKey "${taskKey}" already exists: "${existing.name}" (id=${existing.id}). One process = one SOP — pass id="${existing.id}" to iterate on it instead of creating a duplicate.`,
+          ),
+          isError: true,
+        };
+      }
+      // 类别：给了 category 就找/建一个同名顶层类别挂上去
+      let parentId: string | undefined;
+      if (category) {
+        const cat = sopLoadTree().find((n) => n.kind === "category" && !n.parentId && n.name === category);
+        parentId = cat ? cat.id : sopCreateNode("category", category).node.id;
+      }
+      const created = sopCreateNode("sop", title || taskKey, parentId, { taskKey, summary });
+      targetId = created.node.id;
+    } else {
+      const node = sopLoadTree().find((n) => n.id === targetId && n.kind === "sop");
+      if (!node) return { content: tt(`没找到 id 为「${targetId}」的 SOP。`, `No SOP with id "${targetId}".`), isError: true };
+      if (summary != null) sopUpdateSummary(targetId, summary);
+    }
+    const r = sopSaveDoc(targetId, content, finalNote);
+    if (!r.node) return { content: tt("保存失败：SOP 不存在。", "Save failed: SOP not found."), isError: true };
+    return {
+      content: tt(
+        `已保存 SOP「${r.node.name}」(id=${targetId})，当前 v${r.version}。`,
+        `Saved SOP "${r.node.name}" (id=${targetId}), now at v${r.version}.`,
+      ),
+    };
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -1645,7 +1811,9 @@ function desktopTools(): Tool[] {
   const base = brainOn ? ALL_TOOLS : ALL_TOOLS.filter((t) => !t.name.startsWith("brain_"));
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
-  const teamTools = teamEnabled(loadSettings()) ? [dmTeammateTool] : [];
+  const teamTools = teamEnabled(loadSettings())
+    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool]
+    : [];
   let tools = [...base, askUserTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
   return tools.map(wrapSecret);

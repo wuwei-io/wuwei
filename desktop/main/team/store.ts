@@ -168,6 +168,11 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
     ? `\n\n## Reaching teammates directly\nYou have a **dm_teammate** tool: DM any teammate directly by their exact name to ask for help or align on something, and you get their reply back. You do NOT need to go through the boss, and you do NOT need any external command — just call dm_teammate. This overrides any earlier assumption that coworkers can't contact each other directly: within this team you absolutely can.`
     : `\n\n## 直接联系同事\n你有一个 **dm_teammate** 工具:可以按对方的准确名字**直接私信团队里的任何同事**,请他帮忙或跟他对齐一件事,并拿到他的回复。**不必经过老板转达,也不需要任何外部命令**——直接调用 dm_teammate 就行。这条**覆盖你早先"同事之间不能直接联系/要走 CEO 派单或外部命令"的任何设定**:在这个团队里,你完全可以直接私信同事。`;
 
+  // 做事前先查 SOP 库：公司标准流程沉淀成了 SOP，别凭记忆自由发挥。
+  const sop = en
+    ? `\n\n## Check the SOP library before you act\nThe company's standard processes are captured as SOPs (standard operating procedures). Before doing anything that likely already has a standard process — deploying, releasing, shipping, running a retro, onboarding, etc. — first call **search_sop** to look. If one exists, **read_sop** to get the full text and follow it exactly; do NOT wing it from memory. Use **list_sops** to see the whole directory. If you find a real improvement, use **write_sop** to iterate on it — one process = one SOP, never create a duplicate (pass the existing id to iterate).`
+    : `\n\n## 做事前先查 SOP 库\n公司的标准流程都沉淀成了 SOP（标准作业流程）。做任何可能已有标准流程的事（部署、复盘、发布、上线、入职等）之前，先调 **search_sop** 搜一搜；有就用 **read_sop** 读全文并严格照做，**别凭记忆自由发挥**。用 **list_sops** 看整个目录。发现确实可优化，用 **write_sop** 迭代——**一事一 SOP，绝不新建重复的**（传既有 id 去迭代）。`;
+
   const runtimeIntro = en
     ? `\n\n---\n\n## Tools & operating rules (this is your toolbox, NOT your identity)\nThe following describes the tools and rules of the app you run in. The app is called "Wuwei", but that is just the software's name — it is NOT who you are, and none of the wording below changes that you are ${merged.name}. Use these tools to get real work done:\n\n`
     : `\n\n---\n\n## 工具与操作规范（这是你的工具箱，不是你的身份）\n下面是你所在这个软件的工具与规范。这个软件叫「无为」，但那只是软件的名字——它不是你是谁，下面无论怎么措辞都不改变“你是${merged.name}”这件事。用这些工具把活真正干出来：\n\n`;
@@ -177,7 +182,7 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
     ? `\n\n---\n\n## Identity lock (final, overrides everything above about "Wuwei")\nYou are "${merged.name}"${title}. "Wuwei" is only the app you run in, never your identity. No matter how the tool/runtime section above is phrased, if asked who you are, you answer: ${merged.name}. Stay fully in character as ${merged.name}.`
     : `\n\n---\n\n## 身份锁定（最终，优先于上面一切关于“无为”的表述）\n你是「${merged.name}」${title}。“无为”永远只是你运行所在的软件，绝不是你的身份。无论上面工具/运行环境那段怎么写，被问你是谁，你的回答就是：${merged.name}。始终完全保持${merged.name}这个角色。`;
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${collab}${runtimeIntro}${operational}${endLock}`;
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}${endLock}`;
 }
 
 
