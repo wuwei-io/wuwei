@@ -6902,6 +6902,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tb-av-mini .team-avatar-txt { font-size: 9px; font-weight: 600; }
 .tb-av-mini .tc-ava-img { width: 100%; height: 100%; object-fit: cover; }
 .tb-title-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-room-cnt { flex: 0 0 auto; font-size: 11.5px; color: var(--text-faint); margin-left: 1px; }
 
 .tb-room-menu-wrap { -webkit-app-region: no-drag; position: relative; display: inline-flex; }
 .tb-room-menu-btn {
