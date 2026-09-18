@@ -6220,6 +6220,13 @@ export function App() {
                                 <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
                                 <span className="tool-sub-convo-t">{other?.name || otherId}</span>
                                 <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
+                                <button
+                                  className="tool-sub-convo-del"
+                                  title={lang === "en" ? "Delete chat" : "删除私聊"}
+                                  onClick={(e) => { e.stopPropagation(); if (confirm(lang === "en" ? "Delete this private chat?" : `删除与「${other?.name || otherId}」的私聊？删后可重新发起。`)) { void (window as any).wuwei?.team?.roomDelete?.(r.id); if (activeRoomId === r.id) { setActiveRoomId(null); setAppView("store"); } } }}
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                                </button>
                               </div>
                             );
                           })}
