@@ -56,6 +56,45 @@ export function createRoom(name: string, members: string[], coordinator?: string
   return room;
 }
 
+// ───────────────────────── 私聊（2 人房间）─────────────────────────
+// 私聊 = 「2 个成员的 room」。刻意不新建 dm 模块：room 的存储/投影/编排/停止锁全部
+// 对任意两名 agent 泛化（见 projection.ts projectFor），私聊只需加 type/dmKey 两个判别字段。
+
+/** 私聊去重键：与成员顺序无关，[a,b].sort().join("__") */
+export function dmKeyOf(a: string, b: string): string {
+  return [a, b].sort().join("__");
+}
+
+/**
+ * 建一个私聊房间（仿 createRoom）。
+ * @param a,b   两名成员 employee.id
+ * @param names 两名成员显示名（[a名, b名]），用于拼房间名；缺省用 id 兜底
+ */
+export function createDm(a: string, b: string, names?: [string, string]): Room {
+  const room: Room = {
+    id: randomUUID(),
+    name: `${names?.[0] || a} · ${names?.[1] || b}`,
+    type: "dm",
+    dmKey: dmKeyOf(a, b),
+    members: [...new Set([a, b])],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    maxWake: 1, // 私聊只有一名对话方，永远只唤醒收信方，不需要预算闸
+  };
+  saveRooms([room, ...loadRooms()]);
+  return room;
+}
+
+/**
+ * 找到或新建两人的私聊：已存在（type==="dm" 且 dmKey 相同）直接返回，防重复建；
+ * 否则新建。删除复用现有 deleteRoom。
+ */
+export function findOrCreateDm(a: string, b: string, names?: [string, string]): Room {
+  const key = dmKeyOf(a, b);
+  const found = loadRooms().find((r) => r.type === "dm" && r.dmKey === key);
+  return found ?? createDm(a, b, names);
+}
+
 export function updateRoom(id: string, patch: Partial<Room>): Room[] {
   const list = loadRooms().map((r) =>
     r.id === id ? { ...r, ...patch, id: r.id, updatedAt: Date.now() } : r,

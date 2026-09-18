@@ -51,6 +51,7 @@ export interface ToolContext {
   env?: Record<string, string>; // 本地密钥注入(仅本机子进程可见，模型看不到)：bash 工具据此合并环境变量
   sessionId?: string; // 执行该工具的会话 id：ask_user 据此把选择框/通知绑到正确的会话(多会话并发时不串)
   memoryFile?: string; // remember 工具写到哪个记忆文件：员工私聊会话指向该员工专属记忆，缺省=全局 memory.md
+  employeeId?: string; // 执行该工具的员工 id：dm_teammate 据此确定「发起方」，缺省=非员工（普通人类会话）
 }
 
 export interface ToolResult {

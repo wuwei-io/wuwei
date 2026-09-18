@@ -91,6 +91,17 @@ export interface RoomMessage {
 export interface Room {
   id: string;
   name: string;
+  /**
+   * 房间形态。缺省（老数据没有此字段）一律当 "room"（群），向后兼容。
+   *   · "room" = 多员工群聊（可 @ 唤醒、可设协调者）
+   *   · "dm"   = 两名员工/人的私聊，复用同一套 room 存储与投影，只是判别用
+   */
+  type?: "room" | "dm";
+  /**
+   * 私聊去重键：两名成员 id 排序后 join，`[a,b].sort().join("__")`。
+   * 只有 type==="dm" 才有值；用于 findOrCreateDm 防止同两人重复建私聊。
+   */
+  dmKey?: string;
   /** 成员（employee.id）。顺序即界面显示顺序 */
   members: string[];
   /**

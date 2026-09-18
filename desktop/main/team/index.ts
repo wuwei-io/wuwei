@@ -60,7 +60,12 @@ export function applyEmployee<T extends { name: string }>(
   if (!emp) return { sys: baseSys, tools: allTools, employee: null };
   const dyn = loadEmployeeMemory(emp.id); // 聊天中 remember 攒的专属动态记忆
   const sys = buildEmployeeSystem(emp, baseSys, dyn); // 员工身份在前、无为降为运行环境(见 store.ts)
-  const tools = emp.tools?.length ? allTools.filter((t) => emp.tools!.includes(t.name)) : allTools;
+  // dm_teammate（员工私聊）是团队协作的基础能力，不受员工工具白名单裁剪——
+  // 即便员工只勾了很窄的工具，也应始终能私信同事。
+  const ALWAYS_KEEP = new Set(["dm_teammate"]);
+  const tools = emp.tools?.length
+    ? allTools.filter((t) => emp.tools!.includes(t.name) || ALWAYS_KEEP.has(t.name))
+    : allTools;
   return { sys, tools, employee: emp };
 }
 

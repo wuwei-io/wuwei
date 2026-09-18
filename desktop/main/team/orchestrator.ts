@@ -20,6 +20,11 @@ export type RunEmployeeArgs = {
   signal: AbortSignal;
   /** 实时进度回调（思考/工具活动），主进程据此转发给界面显示，不落消息流 */
   onProgress?: (ev: ProgressEv) => void;
+  /**
+   * 本轮要额外剔除的工具名。用于私聊防递归：跑「收信方」这一轮时传 ["dm_teammate"]，
+   * 让响应方不能在响应里再发起私信，否则两名员工会互相 dm_teammate 无限套娃。
+   */
+  excludeTools?: string[];
 };
 
 /** 员工干活时的实时进度（思考/工具）。只用来给界面显示，绝不进群消息流。 */
@@ -167,5 +172,81 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
   } finally {
     running.delete(roomId);
     deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: false });
+  }
+}
+
+/**
+ * 私聊一轮：员工 A 给员工 B 发了 incomingText（A 的消息已由调用方 appendMessage 落进 dm），
+ * 让 B（responderId）读投影后的历史、回一句、落库并广播，返回 B 的回复文本给 A。
+ *
+ * 与群不同处：
+ *   · 免 @ 自动唤醒——私聊只有两人，收信方即唯一响应者，不走 pickResponders。
+ *   · 防无限递归——响应轮把 dm_teammate 从工具集剔除（excludeTools），B 不能在回信里再发起私信。
+ *   · 复用 running:Map 防同一个 dm 并发跑两轮（与群同锁）。
+ */
+export async function runDmTurn(
+  dmId: string,
+  responderId: string,
+  incomingText: string,
+  deps: OrchestratorDeps,
+): Promise<string> {
+  if (running.has(dmId)) {
+    // 同一私聊正在跑上一轮：不并发，直接告诉发起方对方在忙，避免消息流错位
+    return "（对方正在处理上一条消息，稍后再试。）";
+  }
+  const room = loadRooms().find((r) => r.id === dmId);
+  if (!room) return "";
+  const emp = loadEmployees().find((e) => e.id === responderId);
+  if (!emp) return "";
+
+  // 私聊里「另一位」= 发起方，用于场景提示词里点名「你在和 X 私聊」
+  const otherId = (room.members || []).find((id) => id !== responderId);
+  const other = otherId ? loadEmployees().find((e) => e.id === otherId) : null;
+  const otherName = other?.name || otherId || "对方";
+
+  const ac = new AbortController();
+  running.set(dmId, ac);
+  deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: true });
+
+  try {
+    const base = deps.baseSys();
+    const proj = projectFor(responderId, loadRoomMessages(dmId));
+    if (!proj.length) return "";
+    // 投影最后一条恒为 user（收信方视角别人的话），取它当本轮 input，其余当历史
+    const lastMsg = proj[proj.length - 1];
+    const input =
+      lastMsg.content
+        .map((b: any) => (b?.type === "text" ? b.text : ""))
+        .join("")
+        .trim() || incomingText;
+    const history = proj.slice(0, -1);
+
+    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。`;
+    const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
+
+    const out = await deps.runEmployee({
+      employee: emp,
+      sys,
+      history,
+      input,
+      signal: ac.signal,
+      excludeTools: ["dm_teammate"], // 防递归：响应方这轮不能再发起私信
+      onProgress: (ev) =>
+        deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }),
+    });
+    if (ac.signal.aborted) return "";
+    deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
+    const text = (out || "").trim() || "（没有输出）";
+    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text });
+    return text;
+  } catch (e: any) {
+    if (ac.signal.aborted) return "";
+    deps.log("team", "私聊出错", emp.name, String(e?.message || e).slice(0, 200));
+    const errText = `出错了：${String(e?.message || e).slice(0, 300)}`;
+    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: errText, error: true });
+    return errText;
+  } finally {
+    running.delete(dmId);
+    deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: false });
   }
 }

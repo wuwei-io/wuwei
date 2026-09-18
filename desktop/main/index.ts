@@ -95,7 +95,9 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
-import { employeeMemoryPath } from "./team/store.js";
+import { employeeMemoryPath, loadEmployees, loadApps } from "./team/store.js";
+import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
+import { findOrCreateDm, appendMessage as appendDmMessage } from "./team/room.js";
 
 // 数据目录 .minicc→.wuwei 改名后的一次性迁移，须在任何数据读取前执行。
 // （edition/数据目录名/APP_ID 等已在最顶部 ./edition.js 解析并写入 process.env。）
@@ -222,6 +224,34 @@ function providerForEmployee(emp: { model?: { providerId: string; model: string 
   }
 }
 
+// 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
+// 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
+// excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools }: RunEmployeeArgs): Promise<string> => {
+  const p = providerForEmployee(employee) || provider;
+  if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
+  const all = desktopTools();
+  let tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
+  if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
+  const map = new Map(tools.map((t) => [t.name, t]));
+  // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
+  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id }, map, agentOpts);
+  if (history.length) a.setMessages(history as any);
+  // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
+  await a.send(input, {
+    onText: (delta: string) => onProgress?.({ kind: "text", delta }),
+    onToolStart: (id: string, name: string) => onProgress?.({ kind: "tool-start", id, name }),
+    onToolEnd: (id: string, _r: string, isError: boolean) => onProgress?.({ kind: "tool-end", id, isError }),
+  } as any, signal);
+  const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
+  return last ? msgFullText(last as any) : "";
+};
+
+// 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
+function teamOrchestratorDeps(): OrchestratorDeps {
+  return { send, log, runEmployee: runEmployeeTurn, baseSys: () => sysPrompt };
+}
+
 function syncTeamModule(s: Settings | null) {
   if (teamEnabled(s))
     registerTeam(ipcMain, {
@@ -248,25 +278,7 @@ function syncTeamModule(s: Settings | null) {
         void emitAccount();
       },
       baseSys: () => sysPrompt,
-      // 跑一名员工一轮（房间用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
-      // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
-      runEmployee: async ({ employee, sys, history, input, signal, onProgress }) => {
-        const p = providerForEmployee(employee) || provider;
-        if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
-        const all = desktopTools();
-        const tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
-        const map = new Map(tools.map((t) => [t.name, t]));
-        const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id) }, map, agentOpts);
-        if (history.length) a.setMessages(history as any);
-        // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
-        await a.send(input, {
-          onText: (delta: string) => onProgress?.({ kind: "text", delta }),
-          onToolStart: (id: string, name: string) => onProgress?.({ kind: "tool-start", id, name }),
-          onToolEnd: (id: string, _r: string, isError: boolean) => onProgress?.({ kind: "tool-end", id, isError }),
-        } as any, signal);
-        const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
-        return last ? msgFullText(last as any) : "";
-      },
+      runEmployee: runEmployeeTurn,
     });
   else unregisterTeam(ipcMain);
 }
@@ -1445,6 +1457,58 @@ const askUserTool: Tool = {
   },
 };
 
+// dm_teammate：让当前员工给另一名员工发一条私信并同步等回复（员工↔员工私聊）。
+// 走「阻塞等结果」范式（同 ask_user）：run 里 await runDmTurn 把目标员工跑一轮，拿到回复作为工具结果返回发起方。
+// 防递归：runDmTurn 跑目标那一轮会剔掉 dm_teammate，目标不能在回信里再私信别人（见 orchestrator）。
+const dmTeammateTool: Tool = {
+  name: "dm_teammate",
+  description:
+    "给你团队里的另一名员工发一条私信，并同步拿到对方的回复。用于你需要某位同事的专长帮忙、" +
+    "或要和某人对齐一件事时——直接私聊他，不必经过老板转达。name 填对方的名字（要和团队里的名字完全一致），" +
+    "message 填你要对他说的话。会返回对方的回复给你。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "要私信的同事名字（须与团队成员名完全一致）" },
+      message: { type: "string", description: "你要对他说的话" },
+    },
+    required: ["name", "message"],
+  },
+  async run(input, ctx): Promise<ToolResult> {
+    const selfId = ctx.employeeId;
+    if (!selfId) {
+      return { content: tt("dm_teammate 只能由员工使用（当前会话没有绑定员工身份）。", "dm_teammate can only be used by an employee (this session has no employee identity)."), isError: true };
+    }
+    const name = String((input as any).name || "").trim();
+    const message = String((input as any).message || "").trim();
+    if (!name || !message) {
+      return { content: tt("需要提供 name（同事名字）和 message（要说的话）。", "Both name (teammate) and message are required."), isError: true };
+    }
+
+    const all = loadEmployees();
+    const self = all.find((e) => e.id === selfId);
+    const selfName = self?.name || selfId;
+    // 「停用」= 所属应用被停用（与选人列表同义）；用户自建员工（无 fromApp）永不停用。
+    const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
+    const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
+
+    const target = available.find((e) => e.name === name);
+    if (!target) {
+      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可私信的同事）", "(no other teammates available)");
+      return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
+    }
+
+    const dm = findOrCreateDm(selfId, target.id, [selfName, target.name]);
+    // 先把发起方这条消息落进私聊并广播，让界面立刻看到「我发了什么」
+    const msgs = appendDmMessage(dm.id, { speaker: { id: selfId, name: selfName, kind: "agent" }, text: message });
+    send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
+    // 同步跑目标员工一轮，拿回复回给发起方
+    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps());
+    return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -1571,7 +1635,9 @@ function desktopTools(): Tool[] {
   const brainOn = brainAvailable(loadSettings());
   const base = brainOn ? ALL_TOOLS : ALL_TOOLS.filter((t) => !t.name.startsWith("brain_"));
   const en = process.env.WUWEI_LANG === "en";
-  let tools = [...base, askUserTool, ...BROWSER_TOOLS, ...mcpTools()];
+  // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
+  const teamTools = teamEnabled(loadSettings()) ? [dmTeammateTool] : [];
+  let tools = [...base, askUserTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
   return tools.map(wrapSecret);
 }
@@ -1646,7 +1712,9 @@ function getAgent(id: string): Agent | null {
     // 用该会话自己的 provider 建 agent(而非全局)——出生即绑自己的模型，全局漂移带不动它
     // 员工私聊会话：remember 工具写到该员工专属记忆文件（下次 applyEmployee 会加载它）。
     const memoryFile = empBound ? employeeMemoryPath(meta!.employeeId!) : undefined;
-    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile }, empToolMap, agentOpts);
+    // 员工私聊会话：把 employeeId 塞进 ToolContext，员工用 dm_teammate 时据此确定「发起方」。
+    const employeeId = empBound ? meta!.employeeId! : undefined;
+    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile, employeeId }, empToolMap, agentOpts);
     a.setMessages(loadMessages(id));
     if (meta?.usage) a.setUsage(meta.usage); // 恢复该会话的用量
     agents.set(id, a);
