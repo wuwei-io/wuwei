@@ -4504,6 +4504,10 @@ body {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .add-st-dialog .btns button:disabled { opacity: 0.5; cursor: default; }
+/* 统一确认弹窗：危险操作(删除/清空)用红色确定按钮 */
+.add-st-dialog .btns button.allow.danger { background: #d9463e; border-color: #d9463e; }
+.add-st-dialog .btns button.allow.danger:hover { filter: brightness(1.08); }
+.confirm-dialog .btns button:not(.allow):hover { border-color: var(--accent); color: var(--accent); }
 /* ── 群设置弹窗 ── */
 .room-set .st-field { margin-bottom: 18px; }
 .room-set .rs-wake { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
