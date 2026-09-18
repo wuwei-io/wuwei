@@ -12,9 +12,11 @@ type Props = {
   sopId: string;
   nodes: SopNode[]; // 整棵树（用于取当前节点的名字/taskKey/版本号 + 类别路径）
   renderMd?: (text: string) => ReactNode;
+  // 统一样式化确认弹窗（App 提供，替代原生 confirm()）
+  askConfirm?: (opts: { title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void }) => void;
 };
 
-export function SopView({ en, sopId, nodes, renderMd }: Props) {
+export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
   const [tab, setTab] = useState<"view" | "edit" | "versions">("view");
   const [doc, setDoc] = useState("");
   const [draft, setDraft] = useState("");
@@ -65,14 +67,18 @@ export function SopView({ en, sopId, nodes, renderMd }: Props) {
     setViewingVer(n);
   };
 
-  const doRollback = async (n: number) => {
-    if (!confirm(en ? `Roll back to v${n}? This creates a new version; history is kept.` : `回滚到 v${n}？会作为新版本写入，历史不会丢。`)) return;
-    await api?.sopRollback?.(sopId, n);
-    const r = await api?.sopDoc?.(sopId);
-    const t = r?.text || ""; setDoc(t); setDraft(t);
-    const vr = await api?.sopVersions?.(sopId);
-    setVersions(vr?.versions || []);
-    setViewingVer(null);
+  const doRollback = (n: number) => {
+    const run = async () => {
+      await api?.sopRollback?.(sopId, n);
+      const r = await api?.sopDoc?.(sopId);
+      const t = r?.text || ""; setDoc(t); setDraft(t);
+      const vr = await api?.sopVersions?.(sopId);
+      setVersions(vr?.versions || []);
+      setViewingVer(null);
+    };
+    const msg = en ? `Roll back to v${n}? This creates a new version; history is kept.` : `回滚到 v${n}？会作为新版本写入，历史不会丢。`;
+    if (askConfirm) askConfirm({ message: msg, onOk: () => { void run(); } });
+    else void run();
   };
 
   if (!node) {

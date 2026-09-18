@@ -2280,6 +2280,37 @@ function RoomSettingsModal({
     </div>
   );
 }
+// SOP 文字输入弹窗：替代原生 prompt()（Electron 里 prompt 返回 null 不可用）。
+// 风格复用 perm-overlay + add-st-dialog + st-input，玄墨黑 VI，回车=确定、Esc/遮罩=取消。
+type SopPromptOpts = { title: string; label?: string; defaultValue?: string; placeholder?: string; okText?: string; onOk: (text: string) => void };
+function SopPromptDialog({ en, opts, onClose }: { en: boolean; opts: SopPromptOpts; onClose: () => void }) {
+  const [val, setVal] = useState(opts.defaultValue || "");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const submit = () => { const tx = val.trim(); onClose(); if (tx) opts.onOk(tx); };
+  return (
+    <div className="perm-overlay" style={{ zIndex: 1300 }} onClick={onClose}>
+      <div className="add-st-dialog" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>{opts.title}</h3>
+        <div className="st-field" style={{ marginBottom: 0 }}>
+          {opts.label && <label className="st-label">{opts.label}</label>}
+          <input
+            ref={ref}
+            className="st-input"
+            value={val}
+            placeholder={opts.placeholder}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } else if (e.key === "Escape") onClose(); }}
+          />
+        </div>
+        <div className="btns" style={{ marginTop: 16 }}>
+          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+          <button className="allow" onClick={submit}>{opts.okText || (en ? "Confirm" : "确定")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function GlobeIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flex: "0 0 auto", display: "block" }}>
@@ -3529,6 +3560,9 @@ export function App() {
   // 统一样式化确认弹窗(替代原生 confirm())：玄墨黑 VI、遮罩点击关、圆角卡片，复用 perm-overlay + add-st-dialog
   const [confirmDlg, setConfirmDlg] = useState<{ title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void } | null>(null);
   const askConfirm = (opts: { title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void }) => setConfirmDlg(opts);
+  // SOP 文字输入弹窗（替代 Electron 里不可用的 prompt()）：新建类别/新建SOP/重命名
+  const [sopPrompt, setSopPrompt] = useState<SopPromptOpts | null>(null);
+  const askPrompt = (opts: SopPromptOpts) => setSopPrompt(opts);
   const [showLoginForm, setShowLoginForm] = useState(false); // 应用内登录框
   const [showLoginIntro, setShowLoginIntro] = useState(false); // 未登录发消息先弹的登录激励卡（点登录再切登录框）
   const [loginIntroReason, setLoginIntroReason] = useState<string | null>(null); // 弹登录卡的具体原因(额度用完/需登录等)，直接显在卡里，别让新用户懵
@@ -6398,16 +6432,16 @@ export function App() {
                 </>)}
                 {/* SOP 类别（含顶层「SOP库」头：teamMenu.id 为空=在根建）：新建子类别/新建SOP/重命名/删除 */}
                 {teamMenu.kind === "sop-category" && (<>
-                  <Item label={lang === "en" ? "New subcategory" : "新建子类别"} on={async () => { close(); const nm = prompt(lang === "en" ? "Category name" : "类别名称"); if (nm && nm.trim()) await api?.sopCreate?.("category", nm.trim(), teamMenu.id); }} />
-                  <Item label={lang === "en" ? "New SOP" : "新建 SOP"} on={async () => { close(); const nm = prompt(lang === "en" ? "SOP title" : "SOP 标题"); if (!nm || !nm.trim()) return; const key = prompt(lang === "en" ? "taskKey (unique, e.g. deploy-vercel)" : "taskKey（唯一去重键，如 deploy-vercel）", nm.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) || undefined; const r = await api?.sopCreate?.("sop", nm.trim(), teamMenu.id, { taskKey: key }); if (r?.exists) { alert(lang === "en" ? "A SOP with that taskKey already exists (one process = one SOP)." : "已存在相同 taskKey 的 SOP（一事一 SOP，未重复创建）。"); } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (teamMenu.id) setSopCatOpen((s) => new Set(s).add(teamMenu.id!)); }} />
-                  {teamMenu.id && <Item label={lang === "en" ? "Rename" : "重命名"} on={async () => { const nm = prompt(lang === "en" ? "New name" : "新名称", teamMenu.name); close(); if (nm && nm.trim()) await api?.sopRename?.(teamMenu.id, nm.trim()); }} />}
-                  {teamMenu.id && <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete category "${teamMenu.name}" and everything inside?` : `删除类别「${teamMenu.name}」及其下所有内容？`)) await api?.sopDelete?.(teamMenu.id); }} />}
+                  <Item label={lang === "en" ? "New subcategory" : "新建子类别"} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: lang === "en" ? "New subcategory" : "新建子类别", label: lang === "en" ? "Category name" : "类别名称", placeholder: lang === "en" ? "e.g. Deployment" : "如：部署上线", onOk: (nm) => { void api?.sopCreate?.("category", nm, pid); } }); }} />
+                  <Item label={lang === "en" ? "New SOP" : "新建 SOP"} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: lang === "en" ? "New SOP" : "新建 SOP", label: lang === "en" ? "SOP title" : "SOP 标题", placeholder: lang === "en" ? "e.g. Deploy to Vercel" : "如：部署到 Vercel", onOk: async (nm) => { const key = nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || undefined; const r = await api?.sopCreate?.("sop", nm, pid, { taskKey: key }); if (r?.exists) { const eid = r?.node?.id; askConfirm({ title: lang === "en" ? "SOP already exists" : "该事已有 SOP", message: lang === "en" ? "One process = one SOP. Open the existing one to iterate on it?" : "一事一 SOP，未重复创建。去迭代现有的这份？", okText: lang === "en" ? "Open" : "去迭代", onOk: () => { if (eid) { setActiveSopId(eid); setAppView("sop"); setAgiView(null); } } }); return; } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (pid) setSopCatOpen((s) => new Set(s).add(pid)); } }); }} />
+                  {teamMenu.id && <Item label={lang === "en" ? "Rename" : "重命名"} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: lang === "en" ? "Rename" : "重命名", label: lang === "en" ? "New name" : "新名称", defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />}
+                  {teamMenu.id && <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: lang === "en" ? `Delete category "${nm}" and everything inside?` : `删除类别「${nm}」及其下所有内容？`, danger: true, onOk: () => { void api?.sopDelete?.(id); } }); }} />}
                 </>)}
                 {/* 单个 SOP：重命名/删除（新建子项走类别菜单） */}
                 {teamMenu.kind === "sop" && (<>
                   <Item label={lang === "en" ? "Open" : "打开"} on={() => { close(); setActiveSopId(teamMenu.id!); setAppView("sop"); setAgiView(null); }} />
-                  <Item label={lang === "en" ? "Rename" : "重命名"} on={async () => { const nm = prompt(lang === "en" ? "New name" : "新名称", teamMenu.name); close(); if (nm && nm.trim()) await api?.sopRename?.(teamMenu.id, nm.trim()); }} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete SOP "${teamMenu.name}"?` : `删除 SOP「${teamMenu.name}」？`)) { await api?.sopDelete?.(teamMenu.id); if (activeSopId === teamMenu.id) { setActiveSopId(null); setAppView(null); } } }} />
+                  <Item label={lang === "en" ? "Rename" : "重命名"} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: lang === "en" ? "Rename" : "重命名", label: lang === "en" ? "New name" : "新名称", defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: lang === "en" ? `Delete SOP "${nm}"?` : `删除 SOP「${nm}」？`, danger: true, onOk: () => { void api?.sopDelete?.(id); if (activeSopId === id) { setActiveSopId(null); setAppView(null); } } }); }} />
                 </>)}
               </div>
             </>
@@ -7434,7 +7468,7 @@ export function App() {
               </button>
             </div>
             <div className="team-panel-body">
-              <SopView en={lang === "en"} sopId={activeSopId} nodes={sopTree} renderMd={(tx) => <MarkdownView text={tx} />} />
+              <SopView en={lang === "en"} sopId={activeSopId} nodes={sopTree} renderMd={(tx) => <MarkdownView text={tx} />} askConfirm={askConfirm} />
             </div>
           </div>
         )}
@@ -9378,6 +9412,8 @@ export function App() {
           </div>
         </div>
       )}
+      {/* SOP 文字输入弹窗：替代原生 prompt()（新建类别/新建SOP/重命名） */}
+      {sopPrompt && <SopPromptDialog en={lang === "en"} opts={sopPrompt} onClose={() => setSopPrompt(null)} />}
       {/* 检查更新结果：居中弹窗提示（检查中/已最新/发现新版下载中） */}
       {updateMsg && (
         <div className="perm-overlay" onClick={() => setUpdateMsg("")}>
