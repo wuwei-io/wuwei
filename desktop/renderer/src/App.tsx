@@ -2197,6 +2197,88 @@ function PayResultModal({ result, onClose, onRetry }: { result: PayResult; onClo
     </div>
   );
 }
+// 群设置模态：改群名 / 最多唤醒(maxWake) / 协调者。风格复用设置弹窗(add-st-dialog)+玄墨黑 VI。
+function RoomSettingsModal({
+  en, room, employees, onClose, onSave,
+}: {
+  en: boolean;
+  room: { id: string; name: string; members: string[]; coordinator?: string; maxWake?: number };
+  employees: any[];
+  onClose: () => void;
+  onSave: (patch: { name: string; maxWake: number; coordinator?: string }) => void | Promise<void>;
+}) {
+  const clamp = (n: number) => Math.min(20, Math.max(1, Math.round(n) || 1));
+  const [name, setName] = useState(room.name || "");
+  const [maxWake, setMaxWake] = useState(clamp(room.maxWake ?? 3));
+  const [coordinator, setCoordinator] = useState<string | undefined>(room.coordinator);
+  const [saving, setSaving] = useState(false);
+  const members = (room.members || [])
+    .map((id) => employees.find((e: any) => e.id === id))
+    .filter(Boolean) as any[];
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    await onSave({
+      name: name.trim() || (en ? "New group" : "新群"),
+      maxWake,
+      coordinator: coordinator && (room.members || []).includes(coordinator) ? coordinator : undefined,
+    });
+  };
+  return (
+    <div className="perm-overlay" onClick={onClose}>
+      <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
+        <h3>{en ? "Group settings" : "群设置"}</h3>
+        <div className="st-field">
+          <label className="st-label">{en ? "Group name" : "群名"}</label>
+          <input
+            className="st-input"
+            value={name}
+            maxLength={40}
+            placeholder={en ? "Group name" : "给群起个名字"}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
+          />
+        </div>
+        <div className="st-field">
+          <label className="st-label">{en ? "Max wake per message" : "最多同时唤醒"}</label>
+          <div className="rs-wake">
+            <div className="rs-stepper">
+              <button type="button" className="rs-step" disabled={maxWake <= 1} aria-label={en ? "Decrease" : "减少"} onClick={() => setMaxWake((v) => clamp(v - 1))}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14" /></svg>
+              </button>
+              <span className="rs-wake-num">{maxWake}</span>
+              <button type="button" className="rs-step" disabled={maxWake >= 20} aria-label={en ? "Increase" : "增加"} onClick={() => setMaxWake((v) => clamp(v + 1))}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+            </div>
+            <div className="rs-chips">
+              {[3, 5, 8, 12, 20].map((n) => (
+                <button type="button" key={n} className={"rs-chip" + (maxWake === n ? " on" : "")} onClick={() => setMaxWake(n)}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <p className="st-hint">{en ? "How many teammates one message can wake to work in parallel — more is faster but burns more credits." : "一条消息最多同时叫醒几个同事并行干活，多=更快但更烧额度。"}</p>
+        </div>
+        {members.length > 0 && (
+          <div className="st-field">
+            <label className="st-label">{en ? "Coordinator" : "协调者"}</label>
+            <div className="rs-coord">
+              <button type="button" className={"rs-coord-item" + (!coordinator ? " on" : "")} onClick={() => setCoordinator(undefined)}>{en ? "None" : "不设"}</button>
+              {members.map((m) => (
+                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{m.name}</button>
+              ))}
+            </div>
+            <p className="st-hint">{en ? "The coordinator replies without being @-ed and helps split up the work. Leave as None so everyone needs an @." : "协调者无需 @ 也会响应，帮忙拆活派活。选「不设」则谁都得被 @ 才说话。"}</p>
+          </div>
+        )}
+        <div className="btns">
+          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+          <button className="allow" disabled={saving} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function GlobeIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flex: "0 0 auto", display: "block" }}>
@@ -3377,6 +3459,7 @@ export function App() {
   const [planOpen, setPlanOpen] = useState(false); // ③ 升级套餐弹窗
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
+  const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
   const [showLoginForm, setShowLoginForm] = useState(false); // 应用内登录框
   const [showLoginIntro, setShowLoginIntro] = useState(false); // 未登录发消息先弹的登录激励卡（点登录再切登录框）
   const [loginIntroReason, setLoginIntroReason] = useState<string | null>(null); // 弹登录卡的具体原因(额度用完/需登录等)，直接显在卡里，别让新用户懵
@@ -5783,18 +5866,7 @@ export function App() {
                 </>)}
                 {teamMenu.kind === "room" && (<>
                   <Item label={lang === "en" ? "Open" : "进入"} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
-                  <Item
-                    label={lang === "en" ? "Max wake…" : "最多唤醒人数…"}
-                    on={() => {
-                      close();
-                      const cur = (teamRooms.find((r: any) => r.id === teamMenu.id)?.maxWake) ?? 3;
-                      const v = prompt(lang === "en" ? "How many teammates to wake at once (1-20)?" : "群里一条消息最多同时唤醒几人（1-20）？", String(cur));
-                      if (v == null) return;
-                      const n = Math.round(Number(v));
-                      if (!Number.isFinite(n)) return;
-                      void api?.roomUpdate?.(teamMenu.id, { maxWake: Math.max(1, Math.min(20, n)) });
-                    }}
-                  />
+                  <Item label={lang === "en" ? "Settings" : "群设置"} on={() => { setRoomSettings({ id: teamMenu.id! }); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
                   <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`)) await api?.roomDelete?.(teamMenu.id); }} />
                 </>)}
@@ -9338,6 +9410,24 @@ export function App() {
           }}
         />
       )}
+      {roomSettings && (() => {
+        const room = teamRooms.find((r: any) => r.id === roomSettings.id);
+        if (!room) return null;
+        return (
+          <RoomSettingsModal
+            en={lang === "en"}
+            room={room}
+            employees={teamEmployees}
+            onClose={() => setRoomSettings(null)}
+            onSave={async (patch) => {
+              const api = (window as any).wuwei?.team;
+              const res = await api?.roomUpdate?.(room.id, patch);
+              if (res?.rooms) setTeamRooms(res.rooms); // 主进程也会广播 evt:team-rooms，这里直接用返回值即时刷新
+              setRoomSettings(null);
+            }}
+          />
+        );
+      })()}
       {secretPrompt && (
         <div className="perm-overlay" onClick={() => setSecretPrompt(null)}>
           <div className="add-st-dialog sec-prompt" onClick={(e) => e.stopPropagation()}>

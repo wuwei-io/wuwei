@@ -4503,6 +4503,48 @@ body {
 .add-st-dialog .btns button.allow {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
+.add-st-dialog .btns button:disabled { opacity: 0.5; cursor: default; }
+/* ── 群设置弹窗 ── */
+.room-set .st-field { margin-bottom: 18px; }
+.room-set .rs-wake { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.room-set .rs-stepper {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--border-strong); border-radius: 10px; padding: 3px;
+  background: var(--bg);
+}
+.room-set .rs-step {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: 7px;
+  background: transparent; color: var(--text); cursor: pointer; transition: background 0.12s;
+}
+.room-set .rs-step:hover:not(:disabled) { background: var(--accent-soft); }
+.room-set .rs-step:disabled { opacity: 0.35; cursor: default; }
+.room-set .rs-wake-num {
+  min-width: 30px; text-align: center; font-size: 16px; font-weight: 650;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.room-set .rs-chips { display: inline-flex; gap: 6px; }
+.room-set .rs-chip {
+  min-width: 30px; padding: 5px 9px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-faint); cursor: pointer; font-size: 12.5px; line-height: 1;
+  transition: all 0.12s;
+}
+.room-set .rs-chip:hover { color: var(--text); border-color: var(--accent); }
+.room-set .rs-chip.on {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+.room-set .rs-coord { display: flex; flex-wrap: wrap; gap: 7px; }
+.room-set .rs-coord-item {
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-faint); cursor: pointer; font-size: 12.5px; line-height: 1.2;
+  transition: all 0.12s; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.room-set .rs-coord-item:hover { color: var(--text); border-color: var(--accent); }
+.room-set .rs-coord-item.on {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
 /* 设置里 API Key 自动检测反馈 */
 .skey-msg {
   margin: 6px 0 0;
