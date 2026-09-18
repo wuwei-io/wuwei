@@ -20,6 +20,7 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; done: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
   const [mention, setMention] = useState<string | null>(null); // @ 补全：输入 @ 后的查询词，null=不显示
+  const [mentionIdx, setMentionIdx] = useState(0); // @ 弹窗当前高亮项(键盘 ↑↓ 导航)
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
@@ -35,6 +36,21 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
   const room = rooms.find((r) => r.id === cur) || null;
   const empOf = (id: string) => employees.find((e) => e.id === id);
   const nameOf = (id: string) => empOf(id)?.name || id;
+
+  // @ 补全候选：所有人 + 群成员，按查询词过滤。抽到组件层，弹窗渲染与键盘导航共用同一份。
+  const mentionAll = en ? "Everyone" : "所有人";
+  const mentionCands: { id: string; name: string }[] = (() => {
+    if (mention === null || !room) return [];
+    const cand0 = [{ id: "__all__", name: mentionAll }, ...room.members.map((id) => ({ id, name: nameOf(id) }))];
+    const q = mention.toLowerCase();
+    return cand0.filter((c) => !q || c.name.toLowerCase().includes(q));
+  })();
+  const pickMention = (name: string) => {
+    const inserted = name === mentionAll ? (en ? "all" : "所有人") : name;
+    setText((t) => t.replace(/@[^\s@]*$/, `@${inserted} `));
+    setMention(null);
+    setMentionIdx(0);
+  };
 
   useEffect(() => {
     api?.rooms().then((r: any) => setRooms(r?.rooms || []));
@@ -309,23 +325,18 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
 
       {/* 输入框：抄主对话框风格——整体一个大圆角框，发送/停止按钮内嵌右下，对齐 */}
       <div className="tc-composer">
-        {/* @ 补全：输入 @ 弹出成员 + 所有人，点选插入 */}
-        {mention !== null && (() => {
-          const all = en ? "Everyone" : "所有人";
-          // 候选带上 id（所有人用特殊 id），好取头像
-          const cand0: { id: string; name: string }[] = [{ id: "__all__", name: all }, ...room.members.map((id) => ({ id, name: nameOf(id) }))];
-          const q = mention.toLowerCase();
-          const cands = cand0.filter((c) => !q || c.name.toLowerCase().includes(q));
-          if (cands.length === 0) return null;
-          const pick = (name: string) => {
-            const inserted = name === all ? (en ? "all" : "所有人") : name;
-            setText((t) => t.replace(/@[^\s@]*$/, `@${inserted} `));
-            setMention(null);
-          };
+        {/* @ 补全：输入 @ 弹出成员 + 所有人。鼠标点选或键盘 ↑↓ 高亮 + Enter 选中 */}
+        {mention !== null && mentionCands.length > 0 && (() => {
+          const cands = mentionCands;
           return (
             <div className="tc-mention">
-              {cands.map((c) => (
-                <button key={c.id} className={"tc-mention-item" + (c.id === "__all__" ? " all" : "")} onMouseDown={(e) => { e.preventDefault(); pick(c.name); }}>
+              {cands.map((c, i) => (
+                <button
+                  key={c.id}
+                  className={"tc-mention-item" + (c.id === "__all__" ? " all" : "") + (i === mentionIdx ? " on" : "")}
+                  onMouseEnter={() => setMentionIdx(i)}
+                  onMouseDown={(e) => { e.preventDefault(); pickMention(c.name); }}
+                >
                   {c.id === "__all__" ? (
                     <span className="tc-mention-av all">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
@@ -348,9 +359,16 @@ export function RoomView({ en, employees, onBack, initialRoomId }: Props) {
             setText(v);
             const m = /@([^\s@]*)$/.exec(v); // 光标处末尾的 @查询
             setMention(m ? m[1] : null);
+            setMentionIdx(0); // 查询词变了，高亮回到第一项
           }}
           onKeyDown={(e) => {
-            if (e.key === "Escape" && mention !== null) { setMention(null); return; }
+            // @ 弹窗开着：↑↓ 移高亮、Enter 选中、Esc 关闭；都 preventDefault，别触发发送/换行
+            if (mention !== null && mentionCands.length > 0) {
+              if (e.key === "ArrowDown") { e.preventDefault(); setMentionIdx((i) => (i + 1) % mentionCands.length); return; }
+              if (e.key === "ArrowUp") { e.preventDefault(); setMentionIdx((i) => (i - 1 + mentionCands.length) % mentionCands.length); return; }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); pickMention(mentionCands[Math.min(mentionIdx, mentionCands.length - 1)].name); return; }
+              if (e.key === "Escape") { e.preventDefault(); setMention(null); return; }
+            }
             if (e.key === "Enter" && !e.shiftKey && mention === null) { e.preventDefault(); send(); }
           }}
         />

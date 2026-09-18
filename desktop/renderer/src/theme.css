@@ -6815,7 +6815,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   background: transparent; color: var(--text); font: inherit; font-size: 13.5px;
   text-align: left; cursor: pointer;
 }
-.tc-mention-item:hover { background: var(--accent-soft); }
+.tc-mention-item:hover,
+.tc-mention-item.on { background: var(--accent-soft); }
 .tc-mention-item.all { font-weight: 600; }
 .tc-mention-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* @ 补全里的圆形头像（适当大小 22px） */
