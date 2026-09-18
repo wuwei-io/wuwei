@@ -3526,6 +3526,9 @@ export function App() {
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
   const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
+  // 统一样式化确认弹窗(替代原生 confirm())：玄墨黑 VI、遮罩点击关、圆角卡片，复用 perm-overlay + add-st-dialog
+  const [confirmDlg, setConfirmDlg] = useState<{ title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void } | null>(null);
+  const askConfirm = (opts: { title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void }) => setConfirmDlg(opts);
   const [showLoginForm, setShowLoginForm] = useState(false); // 应用内登录框
   const [showLoginIntro, setShowLoginIntro] = useState(false); // 未登录发消息先弹的登录激励卡（点登录再切登录框）
   const [loginIntroReason, setLoginIntroReason] = useState<string | null>(null); // 弹登录卡的具体原因(额度用完/需登录等)，直接显在卡里，别让新用户懵
@@ -5676,9 +5679,14 @@ export function App() {
     setAgiView("baby"); babyRefresh();
   }
   function deleteBaby() {
-    if (!confirm("确定删除这个数字婴儿的对接吗?(不会删它的记忆数据,只从界面移除)")) return;
-    setBabyExists(false); localStorage.setItem("minicc-baby-exists", "0");
-    if (agiView === "baby") setAgiView(null);
+    askConfirm({
+      message: lang === "en" ? "Remove this digital baby connection? (Its memory data is kept, only removed from the UI)" : "确定删除这个数字婴儿的对接吗?(不会删它的记忆数据,只从界面移除)",
+      danger: true,
+      onOk: () => {
+        setBabyExists(false); localStorage.setItem("minicc-baby-exists", "0");
+        if (agiView === "baby") setAgiView(null);
+      },
+    });
   }
   function openBaby() {
     setAgiView("baby"); babyRefresh();
@@ -6288,7 +6296,7 @@ export function App() {
                                 <button
                                   className="tool-sub-convo-del"
                                   title={lang === "en" ? "Delete chat" : "删除私聊"}
-                                  onClick={(e) => { e.stopPropagation(); if (confirm(lang === "en" ? "Delete this private chat?" : `删除与「${other?.name || otherId}」的私聊？删后可重新发起。`)) { void (window as any).wuwei?.team?.roomDelete?.(r.id); if (activeRoomId === r.id) { setActiveRoomId(null); setAppView("store"); } } }}
+                                  onClick={(e) => { e.stopPropagation(); askConfirm({ message: lang === "en" ? "Delete this private chat?" : `删除与「${other?.name || otherId}」的私聊？删后可重新发起。`, danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete?.(r.id); if (activeRoomId === r.id) { setActiveRoomId(null); setAppView("store"); } } }); }}
                                 >
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                                 </button>
@@ -6377,16 +6385,16 @@ export function App() {
                   <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("employee", teamMenu.id!)} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`)) await api?.removeEmployee?.(teamMenu.id); }} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.removeEmployee?.(teamMenu.id); } }); }} />
                 </>)}
                 {teamMenu.kind === "room" && (<>
                   <Item label={lang === "en" ? "Open" : "进入"} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "Settings" : "群设置"} on={() => { setRoomSettings({ id: teamMenu.id! }); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={async () => { close(); if (confirm(lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`)) await api?.roomDelete?.(teamMenu.id); }} />
+                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); } }); }} />
                 </>)}
                 {teamMenu.kind === "dm" && (<>
-                  <Item danger label={lang === "en" ? "Delete chat" : "删除私聊"} on={async () => { close(); if (confirm(lang === "en" ? `Delete this private chat?` : `删除与「${teamMenu.name}」的私聊？删后可重新发起。`)) { await api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }} />
+                  <Item danger label={lang === "en" ? "Delete chat" : "删除私聊"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete this private chat?` : `删除与「${teamMenu.name}」的私聊？删后可重新发起。`, danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }); }} />
                 </>)}
                 {/* SOP 类别（含顶层「SOP库」头：teamMenu.id 为空=在根建）：新建子类别/新建SOP/重命名/删除 */}
                 {teamMenu.kind === "sop-category" && (<>
@@ -7734,11 +7742,11 @@ export function App() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
                           {lang === "en" ? "Group settings" : "群设置"}
                         </button>
-                        <button className="tb-room-menu-item" onClick={async () => { setRoomMenu(false); if (!window.confirm(lang === "en" ? "Clear all messages in this group?" : "清空本群全部消息？")) return; await (window as any).wuwei?.team?.roomClear(room.id); }}>
+                        <button className="tb-room-menu-item" onClick={() => { setRoomMenu(false); askConfirm({ message: lang === "en" ? "Clear all messages in this group?" : "清空本群全部消息？", danger: true, onOk: () => { void (window as any).wuwei?.team?.roomClear(room.id); } }); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" /></svg>
                           {lang === "en" ? "Clear messages" : "清空消息"}
                         </button>
-                        <button className="tb-room-menu-item danger" onClick={async () => { setRoomMenu(false); if (!window.confirm(lang === "en" ? `Delete group "${room.name}"? Chat history is removed too.` : `删除群「${room.name}」？聊天记录一并删除。`)) return; await (window as any).wuwei?.team?.roomDelete(room.id); setActiveRoomId(null); setAppView("store"); }}>
+                        <button className="tb-room-menu-item danger" onClick={() => { setRoomMenu(false); askConfirm({ message: lang === "en" ? `Delete group "${room.name}"? Chat history is removed too.` : `删除群「${room.name}」？聊天记录一并删除。`, danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete(room.id); setActiveRoomId(null); setAppView("store"); } }); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
                           {lang === "en" ? "Delete group" : "删除群"}
                         </button>
@@ -9146,8 +9154,7 @@ export function App() {
                       className="trash-purge"
                       title={lang === "en" ? "Delete permanently, cannot undo" : "彻底删除,不可恢复"}
                       onClick={() => {
-                        if (confirm(lang === "en" ? `Permanently delete "${title}"? This cannot be undone.` : `彻底删除「${title}」？此操作不可恢复。`))
-                          window.wuwei.purgeTrash(ti.id);
+                        askConfirm({ message: lang === "en" ? `Permanently delete "${title}"? This cannot be undone.` : `彻底删除「${title}」？此操作不可恢复。`, danger: true, onOk: () => window.wuwei.purgeTrash(ti.id) });
                       }}
                     >
                       {lang === "en" ? "Delete" : "彻底删除"}
@@ -9161,8 +9168,7 @@ export function App() {
                 <button
                   className="trash-empty"
                   onClick={() => {
-                    if (confirm(lang === "en" ? `Empty trash? This permanently deletes ${trash.length} chat(s).` : `清空回收站？将彻底删除 ${trash.length} 个对话，不可恢复。`))
-                      window.wuwei.emptyTrash();
+                    askConfirm({ message: lang === "en" ? `Empty trash? This permanently deletes ${trash.length} chat(s).` : `清空回收站？将彻底删除 ${trash.length} 个对话，不可恢复。`, danger: true, onOk: () => window.wuwei.emptyTrash() });
                   }}
                 >
                   {lang === "en" ? "Empty trash" : "清空回收站"}
@@ -9356,6 +9362,21 @@ export function App() {
           }}
           onSuccess={onWuweiLoggedIn}
         />
+      )}
+      {/* 统一确认弹窗：替代原生 confirm()，玄墨黑 VI、遮罩点击=取消、danger 用红色确定按钮 */}
+      {confirmDlg && (
+        <div className="perm-overlay" style={{ zIndex: 1300 }} onClick={() => setConfirmDlg(null)}>
+          <div className="add-st-dialog confirm-dialog" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            {confirmDlg.title && <h3 style={{ marginTop: 0 }}>{confirmDlg.title}</h3>}
+            <div className="s-note" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, margin: confirmDlg.title ? "0 0 4px" : "2px 0 4px" }}>{confirmDlg.message}</div>
+            <div className="btns" style={{ marginTop: 16 }}>
+              <button onClick={() => setConfirmDlg(null)}>{lang === "en" ? "Cancel" : "取消"}</button>
+              <button className={"allow" + (confirmDlg.danger ? " danger" : "")} onClick={() => { const fn = confirmDlg.onOk; setConfirmDlg(null); fn(); }}>
+                {confirmDlg.okText || (lang === "en" ? "Confirm" : "确定")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* 检查更新结果：居中弹窗提示（检查中/已最新/发现新版下载中） */}
       {updateMsg && (
