@@ -3609,6 +3609,7 @@ export function App() {
             (newWqActive && !baseWqActive);                                           // 周额度 inactive→active
           if (!ok) return;
           stop();
+          setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
           setWuwei(me);
           const plan = PRO_PLANS.find((p) => p.sku === clientSku);
           const isTrial = clientSku === "plan_trial";
@@ -3633,6 +3634,7 @@ export function App() {
           const newBalance = me.coin.balance;
           if (newBalance <= baseBalance) return; // 未到账继续等
           stop();
+          setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
           setWuwei(me);
           setPayResult({ kind: "coin", added: newBalance - baseBalance, bonus: 0, balance: newBalance, order: "" });
         }
