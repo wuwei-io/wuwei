@@ -8,10 +8,25 @@ import type { ReactNode } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 
-// footer：App 传入的底部状态栏(连通灯+订阅/本月额度)。群没有「单一模型」，所以不复用主对话框那条
-// 完整的模型/上下文栏，只显示对群有意义的连通性与账号额度。App 拥有这些 state，故用 render-prop 注入。
+// footer：App 传入的底部状态栏，现在复用主对话那条完整的 <ComposerFoot>(连通灯 + 平台/模型默认选择器 +
+// 思考档 + 本月额度/周余量 + 上下文统计)。群/私聊没有 per-session 的「模型」，选择器切的是「全局默认模型」——
+// 和主对话是同一套 state/handler，切了全局默认就变。上下文统计则传本群/私聊自己的估算值(per-room)，故 footer
+// 改成 render-prop 函数：App 把 room 的 contextK 注入 <ComposerFoot roomMode contextK>。
 // dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: ReactNode };
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number }) => ReactNode };
+
+// 群/私聊没有主进程回报的精确 token 数(那是 per-session 的)，这里按消息文本长度粗估：
+// CJK 字符 ≈ 1 token/字，其余(英文/符号/空格) ≈ 0.3 token/字。只用于底栏「上下文 ~x.xk」展示，标了 ~ 表示估算。
+function estimateRoomContextK(msgs: { text?: string }[]): number {
+  let tokens = 0;
+  for (const m of msgs) {
+    const s = m.text || "";
+    let cjk = 0;
+    for (const ch of s) if (/[㐀-鿿豈-﫿぀-ヿ가-힯]/.test(ch)) cjk++;
+    tokens += cjk + (s.length - cjk) * 0.3;
+  }
+  return tokens / 1000;
+}
 
 export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer }: Props) {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -389,7 +404,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           </button>
         )}
       </div>
-      {footer && <div className="tc-room-foot">{footer}</div>}
+      {footer && <div className="tc-room-foot">{footer({ contextK: estimateRoomContextK(msgs) })}</div>}
     </div>
   );
 }

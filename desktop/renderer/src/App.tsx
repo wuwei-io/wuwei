@@ -5664,6 +5664,409 @@ export function App() {
   const ctxPct = Math.min(100, Math.round((usage.lastInput / ctxWin) * 100));
   const ctxWinLabel = ctxWin >= 1_000_000 ? (ctxWin / 1_000_000).toFixed(1) + "M" : Math.round(ctxWin / 1000) + "k";
 
+  // 共享底栏：主对话 composer-foot 抽成渲染函数，群/私聊(RoomView) 复用同一套。
+  // opts.roomMode：隐藏 mode-mini(那是主会话 per-session 模式，对群无意义)；opts.contextK：群自己的上下文估算值。
+  const renderComposerFoot = (opts?: { roomMode?: boolean; contextK?: number }) => {
+    const roomMode = !!opts?.roomMode;
+    const ctxK = opts?.contextK ?? usage.lastInput / 1000;
+    return (
+          <div className={"composer-foot" + (footCompact ? " compact" : "")}>
+            <div className="conn-light-wrap">
+              <button
+                className={`conn-light conn-${conn.status}`}
+                title={t("conn.lightTitle", "连通状态（点击查看）")}
+                onClick={() => setShowConn((v) => !v)}
+              />
+              {showConn && (
+                <>
+                  <div className="mq-overlay" onClick={() => setShowConn(false)} />
+                  <div className="conn-pop">
+                    <div className="conn-pop-title">
+                      <span className={`conn-dot conn-${conn.status}`} />
+                      {conn.status === "green"
+                        ? (lang === "en" ? "Connected" : "已连通")
+                        : conn.status === "yellow"
+                          ? (lang === "en" ? "Errors — not fully connected" : "有报错，未完全连通")
+                          : conn.status === "red"
+                            ? (lang === "en" ? "Not connected / not configured" : "未连通 / 未配置")
+                            : (lang === "en" ? "Checking…" : "检测中…")}
+                    </div>
+                    <p className="conn-pop-reason">{conn.reason}</p>
+                    <div className="conn-pop-actions">
+                      <button
+                        onClick={() => {
+                          setShowConn(false);
+                          void runConnCheck();
+                        }}
+                      >
+                        {lang === "en" ? "Re-check" : "重新检测"}
+                      </button>
+                      {(conn.status === "red" || conn.status === "yellow") && (
+                        <button
+                          className="allow"
+                          onClick={() => {
+                            setShowConn(false);
+                            setSettingsTab("model");
+                            setShowSettings(true);
+                          }}
+                        >
+                          {conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            {!roomMode && (
+            <div className="mode-mini" title={modeOf(currentId) === "manual" ? t("mode.manualTip") : modeOf(currentId) === "cont" ? (lang === "en" ? "Smart-continue: auto-approve + keep advancing toward the goal after each turn" : "智能继续：自动放行权限 + 跑完一轮自己朝目标接着推进") : t("mode.autoTip")}>
+              {(showManual || modeOf(currentId) === "manual") && (
+                <button className={modeOf(currentId) === "manual" ? "on" : ""} onClick={() => setMode(currentId, "manual")}>
+                  {t("mode.manual")}
+                </button>
+              )}
+              <button className={modeOf(currentId) === "auto" ? "on" : ""} onClick={() => setMode(currentId, "auto")}>
+                {t("mode.auto")}
+              </button>
+              <button className={modeOf(currentId) === "cont" ? "on" : ""} onClick={() => setMode(currentId, "cont")}>
+                {lang === "en" ? "Smart-continue" : "智能继续"}
+              </button>
+            </div>
+            )}
+
+            {/* 脑网络后台进度：索引构建 / 概念抽取，实时可见，点击进设置查看 */}
+            {(idxProg?.building || conProg?.running) && (
+              <button
+                className="brain-prog"
+                title={t("brainprog.title", "点击打开脑网络")}
+                onClick={() => {
+                  setSettingsTab("brain");
+                  setShowSettings(true);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "2px 8px",
+                  border: "1px solid var(--border, #e2e2e2)",
+                  borderRadius: 999,
+                  background: "var(--chip-bg, #f4f4f5)",
+                  fontSize: 11,
+                  color: "var(--text-2, #666)",
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                }}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#3b82f6",
+                    animation: "pulse 1.2s ease-in-out infinite",
+                  }}
+                />
+                {idxProg?.building
+                  ? idxProg.phase === "scan"
+                    ? (lang === "en" ? `Index · scanning ${idxProg.files} docs` : `索引·扫描 ${idxProg.files} 文档`)
+                    : (lang === "en" ? `Index ${idxProg.done}/${idxProg.total || "…"} chunks` : `索引 ${idxProg.done}/${idxProg.total || "…"} 块`)
+                  : (lang === "en" ? `Extract ${conProg?.done}/${conProg?.total}` : `抽概念 ${conProg?.done}/${conProg?.total}`)}
+              </button>
+            )}
+
+            <div className="model-quick">
+              <button
+                className="mq-btn mq-prov"
+                title={curPreset ? pLabel(curPreset, lang) : meta.backend}
+                onClick={(e) => {
+                  openMqMenu(e);
+                  if (!showProviderMenu) void window.wuwei.track?.("open_platform_menu", { provider: curProviderId });
+                  setShowProviderMenu((v) => !v);
+                }}
+              >
+                <span className="mq-txt">{(curPreset ? pLabel(curPreset, lang) : meta.backend).replace(/（.*$/, "").replace(/\s*\(.*$/, "")}</span>
+                <span className="mq-caret">▾</span>
+              </button>
+              <span className="mq-mid">·</span>
+              <button
+                className="mq-btn mq-mod"
+                title={meta.model}
+                onClick={(e) => {
+                  // 访客门禁：未登录且当前不是免费体验 → 点模型也引导登录
+                  if (!wuwei && !curPreset?.anon) { setShowLoginIntro(true); return; }
+                  // 打开切换器时重新拉一次后台目录：后台上新/下架模型(如豆包上线、牛来下架)即时可见，不用重启
+                  if (!showModelMenu) { window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
+                  openMqMenu(e);
+                  setShowModelMenu((v) => !v);
+                }}
+              >
+                <span className="mq-txt">{MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
+                <span className="mq-caret">▾</span>
+              </button>
+              {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
+                  档位越高思考越深，也越慢越贵；时长受限时降档能明显提高「一次跑完」的概率。 */}
+              {showEffortPicker && EFFORT_MODELS.test(meta.model) && (
+                <>
+                  <span className="mq-mid">·</span>
+                  <button
+                    className="mq-btn mq-eff"
+                    title={t("eff.title", "思考档位：越高越深入，也越慢越贵")}
+                    onClick={(e) => {
+                      openMqMenu(e);
+                      setShowEffortMenu((v) => !v);
+                    }}
+                  >
+                    <span className="mq-txt">{effortLabel(effort, lang)}</span>
+                    <span className="mq-caret">▾</span>
+                  </button>
+                </>
+              )}
+              {showEffortMenu && (
+                <>
+                  <div className="mq-overlay" onClick={() => setShowEffortMenu(false)} />
+                  <div className="mq-menu mq-menu-eff" style={{ left: mqMenuLeft }}>
+                    <div className="mq-head">{t("eff.head", "思考档位")}</div>
+                    {EFFORT_OPTIONS.map((o) => (
+                      <button
+                        key={o.id}
+                        className={"mq-item mq-item-col" + (o.id === effort ? " on" : "")}
+                        onClick={() => {
+                          setEffort(o.id);
+                          setShowEffortMenu(false);
+                          void (async () => {
+                            const r = await window.wuwei.getSettings();
+                            window.wuwei.setSettings({ ...((r?.settings as any) || {}), effort: o.id });
+                          })();
+                        }}
+                      >
+                        <span className="mq-item-main">
+                          {lang === "en" ? o.en : o.zh}
+                          {o.id === effort && <span className="mq-check">✓</span>}
+                        </span>
+                        <span className="mq-item-sub">{lang === "en" ? o.enDesc : o.zhDesc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {showProviderMenu && (
+                <>
+                  <div className="mq-overlay" onClick={() => setShowProviderMenu(false)} />
+                  <div className="mq-menu mq-menu-prov" style={{ left: mqMenuLeft }}>
+                    <div className="mq-head">{lang === "en" ? "Switch provider" : "切换平台"}</div>
+                    {providerList.map((p) => (
+                      <button
+                        key={p.id}
+                        className={"mq-item" + (p.id === curProviderId ? " on" : "")}
+                        onClick={() => quickProvider(p)}
+                      >
+                        <span>{pLabel(p, lang)}</span>
+                        {p.id === curProviderId && <span className="mq-check">✓</span>}
+                      </button>
+                    ))}
+                    <div className="mq-sep" />
+                    <button
+                      className="mq-item mq-more"
+                      onClick={() => {
+                        setShowProviderMenu(false);
+                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部供应商设置需登录
+                        setSettingsTab("platforms");
+                        setShowSettings(true);
+                      }}
+                    >
+                      {t("mq.allProviders", "全部供应商设置…")}
+                    </button>
+                  </div>
+                </>
+              )}
+              {showModelMenu && (
+                <>
+                  <div className="mq-overlay" onClick={() => setShowModelMenu(false)} />
+                  <div className="mq-menu" style={{ left: mqMenuLeft }}>
+                    <div
+                      className="mq-head"
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t("mq.switchModel", "切换模型")} · {curPreset ? pLabel(curPreset, lang) : meta.backend}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
+                        title={lang === "en" ? "Model pricing" : "模型费用说明"}
+                        style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 5, border: "none", cursor: "pointer", background: "transparent", color: "inherit", opacity: 0.65, fontSize: 11 }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 16v-5M12 8h.01" /></svg>
+                        {lang === "en" ? "Pricing" : "费用说明"}
+                      </button>
+                      {hasMoreModels && (
+                        <span style={{ display: "inline-flex", gap: 2, flex: "0 0 auto" }}>
+                          {[
+                            { k: false, t: lang === "en" ? "Common" : "常用" },
+                            { k: true, t: lang === "en" ? "All" : "全部" },
+                          ].map((o) => (
+                            <button
+                              key={o.t}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowAllModels(o.k);
+                              }}
+                              style={{
+                                padding: "1px 8px",
+                                borderRadius: 5,
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: 11,
+                                background: showAllModels === o.k ? "#274A63" : "transparent",
+                                color: showAllModels === o.k ? "#F4F6F8" : "inherit",
+                                opacity: showAllModels === o.k ? 1 : 0.55,
+                              }}
+                            >
+                              {o.t}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    {shownModels.length === 0 && <div className="mq-empty">{lang === "en" ? "No preset models — add one in Settings" : "无预设模型，去设置里填"}</div>}
+                    {shownModels.map((m) => {
+                      const gated = !wuwei && loginReqModelIds.has(m); // 未登录 + 需登录模型 → 灰置引导
+                      return (
+                      <button
+                        key={m}
+                        className={"mq-item" + (m === meta.model ? " on" : "")}
+                        style={gated ? { opacity: 0.5 } : undefined}
+                        title={gated ? (lang === "en" ? "Sign in to use free" : "登录后可免费使用") : undefined}
+                        onClick={() => { if (gated) { setShowModelMenu(false); setShowLoginIntro(true); return; } quickModel(m); }}
+                      >
+                        <span>
+                          {MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
+                          {gated && (
+                            <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
+                              {lang === "en" ? "Sign in" : "登录可用"}
+                            </span>
+                          )}
+                          {!gated && freeModelIds.has(m) && (
+                            <span
+                              style={{
+                                marginLeft: 6,
+                                fontSize: 10,
+                                padding: "1px 5px",
+                                borderRadius: 4,
+                                background: "#1f9d55",
+                                color: "#fff",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              {/* 免登录模型(anon)标「免登录」，登录版免费模型标「免费」，让用户一眼分清哪个要登录 */}
+                              {loginReqModelIds.has(m)
+                                ? (lang === "en" ? "Free" : "免费")
+                                : (lang === "en" ? "No login" : "免登录")}
+                            </span>
+                          )}
+                          {modelBadges.get(m) && modelBadges.get(m)!.toLowerCase() !== "free" && (
+                            <span
+                              style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#e8722c", color: "#fff", verticalAlign: "middle" }}
+                            >
+                              {lang === "en" ? badgeEn(modelBadges.get(m)!) : badgeCn(modelBadges.get(m)!)}
+                            </span>
+                          )}
+                        </span>
+                        {m === meta.model && <span className="mq-check">✓</span>}
+                      </button>
+                      );
+                    })}
+                    <div className="mq-sep" />
+                    <button
+                      className="mq-item mq-more"
+                      onClick={() => {
+                        setShowModelMenu(false);
+                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部设置/换平台需登录
+                        setSettingsTab("model");
+                        setShowSettings(true);
+                      }}
+                    >
+                      {t("mq.allSettings", "全部设置 / 换平台…")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <span className="foot-spacer" />
+
+            <span
+              className="foot-status"
+              title={t("foot.statusTitle", "运行状态 · 本轮上下文 token · 订阅额度(5小时/周)或余额。点击看详情")}
+              onClick={() => setShowUsage((v) => !v)}
+            >
+              <span
+                className={"fs-hit" + (busy || runningSet.size > 0 ? " fs-busy" : "") + (runningSet.size > 0 ? " fs-clickable" : "")}
+                title={runningSet.size > 0 ? (lang === "en" ? "Click to view/stop running tasks" : "点击查看/停止运行中的任务") : undefined}
+                onClick={(e) => {
+                  if (runningSet.size === 0) return;
+                  e.stopPropagation(); // 别触发用量面板
+                  setShowTasks((v) => !v);
+                  setShowUsage(false);
+                }}
+              >
+                {runningSet.size > 1
+                  ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`
+                  : busy
+                    ? `● ${t("foot.running")}`
+                    : runningSet.size === 1
+                      ? `● ${t("foot.bgRunning")}`
+                      : `○ ${t("foot.ready")}`}
+              </span>
+              <span className="fs-extra fs-hit">
+                <span title={roomMode ? (lang === "en" ? "Estimated from this room's message text" : "按本群/私聊消息文本长度估算") : undefined}>
+                  {t("foot.context")} {roomMode ? "~" : ""}{ctxK.toFixed(1)}k
+                </span>
+                {/* 无为托管会员：底部栏常显本周额度已用%，≥50%黄、≥80%红，提醒省着用。
+                    仅「纯无为托管付费平台+付费模型」显示：排除免费体验(anon)和免费模型——它们不吃周额度；
+                    切到 Claude/GPT 自己的订阅号(非 wuwei-)也不显示。 */}
+                {curProviderId.startsWith("wuwei-") && !curPreset?.anon && !freeModelIds.has(meta.model) && wuwei?.membership?.weeklyQuota?.active && (() => {
+                  const wq = wuwei.membership!.weeklyQuota!;
+                  const usedPct = Math.max(0, Math.min(100, 100 - wq.remainingPct));
+                  const tone = usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "";
+                  return (
+                    <>
+                      <span className="fs-dot">·</span>
+                      <span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span>
+                    </>
+                  );
+                })()}
+                {meta.sub && rate && typeof rate.primaryUsedPercent === "number" && (
+                  <>
+                    <span className="fs-dot">·</span>
+                    {(rate.primaryWindowMinutes ?? 300) >= 1440 ? (
+                      // 主窗口已是周尺度(Codex 168h)：只显示一个「周」用量，不再摆短窗口
+                      <span>{lang === "en" ? "Week" : "周"} {rate.primaryUsedPercent}%</span>
+                    ) : (
+                      <>
+                        <span>{lang === "en" ? "5h" : "5小时"} {rate.primaryUsedPercent}%</span>
+                        <span className="fs-dot">·</span>
+                        <span>{lang === "en" ? "Week" : "周"} {rate.secondaryUsedPercent ?? 0}%</span>
+                      </>
+                    )}
+                  </>
+                )}
+                {!meta.sub && account.balance && (
+                  <>
+                    <span className="fs-dot">·</span>
+                    <span>
+                      {account.balance.total
+                        ? (lang === "en" ? `Balance ¥${account.balance.total}` : `余额 ${account.balance.total} 元`)
+                        : (lang === "en" ? `Spent ¥${account.balance.consumed}` : `已消耗 ${account.balance.consumed} 元`)}
+                    </span>
+                  </>
+                )}
+              </span>
+              <span className="fs-caret">▾</span>
+            </span>
+          </div>
+    );
+  };
+
   return (
     <div className={"shell" + (showBrowser && !browserDetached && browserMode === "full" ? " browser-full" : "")}>
       {/* 侧栏收起时，更新药丸改为固定浮动在左下角——否则药丸只在侧栏里，收起后用户永远看不到「发现新版本」 */}
@@ -6897,35 +7300,10 @@ export function App() {
                   initialRoomId={activeRoomId}
                   dmSelfId={dmSelfId}
                   onBack={() => setAppView("store")}
-                  footer={(
-                    // 群/私聊底部状态栏：连通灯 + 账号级订阅/本月额度。群没有单一模型，故不展示模型名/上下文栏。
-                    <>
-                      <button
-                        className={`conn-light conn-${conn.status}`}
-                        title={conn.reason || t("conn.lightTitle", "连通状态")}
-                        onClick={() => { if (conn.status === "red" || conn.status === "yellow") { setSettingsTab("model"); setShowSettings(true); } else void runConnCheck(); }}
-                      />
-                      <span className="tc-room-foot-txt">
-                        {conn.status === "green" ? (lang === "en" ? "Connected" : "已连通")
-                          : conn.status === "yellow" ? (lang === "en" ? "Errors" : "有报错")
-                          : conn.status === "red" ? (lang === "en" ? "Not connected" : "未连通")
-                          : (lang === "en" ? "Checking…" : "检测中…")}
-                      </span>
-                      {curProviderId.startsWith("wuwei-") && wuwei?.membership?.weeklyQuota?.active && (() => {
-                        const wq = wuwei.membership!.weeklyQuota!;
-                        const usedPct = Math.max(0, Math.min(100, 100 - wq.remainingPct));
-                        const tone = usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "";
-                        return (<><span className="fs-dot">·</span><span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span></>);
-                      })()}
-                      {meta.sub && rate && typeof rate.primaryUsedPercent === "number" && (
-                        <>
-                          <span className="fs-dot">·</span>
-                          {(rate.primaryWindowMinutes ?? 300) >= 1440
-                            ? <span>{lang === "en" ? "Week" : "周"} {rate.primaryUsedPercent}%</span>
-                            : <span>{lang === "en" ? "Week" : "周"} {rate.secondaryUsedPercent ?? 0}%</span>}
-                        </>
-                      )}
-                    </>
+                  footer={(ctx) => (
+                    // 群/私聊底部状态栏：复用主对话完整的 <ComposerFoot>。roomMode 隐藏 per-session 的自动/智能继续档，
+                    // 平台/模型选择器切的是全局默认模型(和主对话同一套 state)，上下文统计传本群自己的估算值(ctx.contextK)。
+                    renderComposerFoot({ roomMode: true, contextK: ctx.contextK })
                   )}
                 />
               )}
@@ -7972,398 +8350,7 @@ export function App() {
             )}
           </div>
 
-          <div className={"composer-foot" + (footCompact ? " compact" : "")}>
-            <div className="conn-light-wrap">
-              <button
-                className={`conn-light conn-${conn.status}`}
-                title={t("conn.lightTitle", "连通状态（点击查看）")}
-                onClick={() => setShowConn((v) => !v)}
-              />
-              {showConn && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowConn(false)} />
-                  <div className="conn-pop">
-                    <div className="conn-pop-title">
-                      <span className={`conn-dot conn-${conn.status}`} />
-                      {conn.status === "green"
-                        ? (lang === "en" ? "Connected" : "已连通")
-                        : conn.status === "yellow"
-                          ? (lang === "en" ? "Errors — not fully connected" : "有报错，未完全连通")
-                          : conn.status === "red"
-                            ? (lang === "en" ? "Not connected / not configured" : "未连通 / 未配置")
-                            : (lang === "en" ? "Checking…" : "检测中…")}
-                    </div>
-                    <p className="conn-pop-reason">{conn.reason}</p>
-                    <div className="conn-pop-actions">
-                      <button
-                        onClick={() => {
-                          setShowConn(false);
-                          void runConnCheck();
-                        }}
-                      >
-                        {lang === "en" ? "Re-check" : "重新检测"}
-                      </button>
-                      {(conn.status === "red" || conn.status === "yellow") && (
-                        <button
-                          className="allow"
-                          onClick={() => {
-                            setShowConn(false);
-                            setSettingsTab("model");
-                            setShowSettings(true);
-                          }}
-                        >
-                          {conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="mode-mini" title={modeOf(currentId) === "manual" ? t("mode.manualTip") : modeOf(currentId) === "cont" ? (lang === "en" ? "Smart-continue: auto-approve + keep advancing toward the goal after each turn" : "智能继续：自动放行权限 + 跑完一轮自己朝目标接着推进") : t("mode.autoTip")}>
-              {(showManual || modeOf(currentId) === "manual") && (
-                <button className={modeOf(currentId) === "manual" ? "on" : ""} onClick={() => setMode(currentId, "manual")}>
-                  {t("mode.manual")}
-                </button>
-              )}
-              <button className={modeOf(currentId) === "auto" ? "on" : ""} onClick={() => setMode(currentId, "auto")}>
-                {t("mode.auto")}
-              </button>
-              <button className={modeOf(currentId) === "cont" ? "on" : ""} onClick={() => setMode(currentId, "cont")}>
-                {lang === "en" ? "Smart-continue" : "智能继续"}
-              </button>
-            </div>
-
-            {/* 脑网络后台进度：索引构建 / 概念抽取，实时可见，点击进设置查看 */}
-            {(idxProg?.building || conProg?.running) && (
-              <button
-                className="brain-prog"
-                title={t("brainprog.title", "点击打开脑网络")}
-                onClick={() => {
-                  setSettingsTab("brain");
-                  setShowSettings(true);
-                }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "2px 8px",
-                  border: "1px solid var(--border, #e2e2e2)",
-                  borderRadius: 999,
-                  background: "var(--chip-bg, #f4f4f5)",
-                  fontSize: 11,
-                  color: "var(--text-2, #666)",
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                }}
-              >
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: "#3b82f6",
-                    animation: "pulse 1.2s ease-in-out infinite",
-                  }}
-                />
-                {idxProg?.building
-                  ? idxProg.phase === "scan"
-                    ? (lang === "en" ? `Index · scanning ${idxProg.files} docs` : `索引·扫描 ${idxProg.files} 文档`)
-                    : (lang === "en" ? `Index ${idxProg.done}/${idxProg.total || "…"} chunks` : `索引 ${idxProg.done}/${idxProg.total || "…"} 块`)
-                  : (lang === "en" ? `Extract ${conProg?.done}/${conProg?.total}` : `抽概念 ${conProg?.done}/${conProg?.total}`)}
-              </button>
-            )}
-
-            <div className="model-quick">
-              <button
-                className="mq-btn mq-prov"
-                title={curPreset ? pLabel(curPreset, lang) : meta.backend}
-                onClick={(e) => {
-                  openMqMenu(e);
-                  if (!showProviderMenu) void window.wuwei.track?.("open_platform_menu", { provider: curProviderId });
-                  setShowProviderMenu((v) => !v);
-                }}
-              >
-                <span className="mq-txt">{(curPreset ? pLabel(curPreset, lang) : meta.backend).replace(/（.*$/, "").replace(/\s*\(.*$/, "")}</span>
-                <span className="mq-caret">▾</span>
-              </button>
-              <span className="mq-mid">·</span>
-              <button
-                className="mq-btn mq-mod"
-                title={meta.model}
-                onClick={(e) => {
-                  // 访客门禁：未登录且当前不是免费体验 → 点模型也引导登录
-                  if (!wuwei && !curPreset?.anon) { setShowLoginIntro(true); return; }
-                  // 打开切换器时重新拉一次后台目录：后台上新/下架模型(如豆包上线、牛来下架)即时可见，不用重启
-                  if (!showModelMenu) { window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
-                  openMqMenu(e);
-                  setShowModelMenu((v) => !v);
-                }}
-              >
-                <span className="mq-txt">{MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
-                <span className="mq-caret">▾</span>
-              </button>
-              {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
-                  档位越高思考越深，也越慢越贵；时长受限时降档能明显提高「一次跑完」的概率。 */}
-              {showEffortPicker && EFFORT_MODELS.test(meta.model) && (
-                <>
-                  <span className="mq-mid">·</span>
-                  <button
-                    className="mq-btn mq-eff"
-                    title={t("eff.title", "思考档位：越高越深入，也越慢越贵")}
-                    onClick={(e) => {
-                      openMqMenu(e);
-                      setShowEffortMenu((v) => !v);
-                    }}
-                  >
-                    <span className="mq-txt">{effortLabel(effort, lang)}</span>
-                    <span className="mq-caret">▾</span>
-                  </button>
-                </>
-              )}
-              {showEffortMenu && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowEffortMenu(false)} />
-                  <div className="mq-menu mq-menu-eff" style={{ left: mqMenuLeft }}>
-                    <div className="mq-head">{t("eff.head", "思考档位")}</div>
-                    {EFFORT_OPTIONS.map((o) => (
-                      <button
-                        key={o.id}
-                        className={"mq-item mq-item-col" + (o.id === effort ? " on" : "")}
-                        onClick={() => {
-                          setEffort(o.id);
-                          setShowEffortMenu(false);
-                          void (async () => {
-                            const r = await window.wuwei.getSettings();
-                            window.wuwei.setSettings({ ...((r?.settings as any) || {}), effort: o.id });
-                          })();
-                        }}
-                      >
-                        <span className="mq-item-main">
-                          {lang === "en" ? o.en : o.zh}
-                          {o.id === effort && <span className="mq-check">✓</span>}
-                        </span>
-                        <span className="mq-item-sub">{lang === "en" ? o.enDesc : o.zhDesc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {showProviderMenu && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowProviderMenu(false)} />
-                  <div className="mq-menu mq-menu-prov" style={{ left: mqMenuLeft }}>
-                    <div className="mq-head">{lang === "en" ? "Switch provider" : "切换平台"}</div>
-                    {providerList.map((p) => (
-                      <button
-                        key={p.id}
-                        className={"mq-item" + (p.id === curProviderId ? " on" : "")}
-                        onClick={() => quickProvider(p)}
-                      >
-                        <span>{pLabel(p, lang)}</span>
-                        {p.id === curProviderId && <span className="mq-check">✓</span>}
-                      </button>
-                    ))}
-                    <div className="mq-sep" />
-                    <button
-                      className="mq-item mq-more"
-                      onClick={() => {
-                        setShowProviderMenu(false);
-                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部供应商设置需登录
-                        setSettingsTab("platforms");
-                        setShowSettings(true);
-                      }}
-                    >
-                      {t("mq.allProviders", "全部供应商设置…")}
-                    </button>
-                  </div>
-                </>
-              )}
-              {showModelMenu && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowModelMenu(false)} />
-                  <div className="mq-menu" style={{ left: mqMenuLeft }}>
-                    <div
-                      className="mq-head"
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t("mq.switchModel", "切换模型")} · {curPreset ? pLabel(curPreset, lang) : meta.backend}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
-                        title={lang === "en" ? "Model pricing" : "模型费用说明"}
-                        style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 5, border: "none", cursor: "pointer", background: "transparent", color: "inherit", opacity: 0.65, fontSize: 11 }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 16v-5M12 8h.01" /></svg>
-                        {lang === "en" ? "Pricing" : "费用说明"}
-                      </button>
-                      {hasMoreModels && (
-                        <span style={{ display: "inline-flex", gap: 2, flex: "0 0 auto" }}>
-                          {[
-                            { k: false, t: lang === "en" ? "Common" : "常用" },
-                            { k: true, t: lang === "en" ? "All" : "全部" },
-                          ].map((o) => (
-                            <button
-                              key={o.t}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowAllModels(o.k);
-                              }}
-                              style={{
-                                padding: "1px 8px",
-                                borderRadius: 5,
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: 11,
-                                background: showAllModels === o.k ? "#274A63" : "transparent",
-                                color: showAllModels === o.k ? "#F4F6F8" : "inherit",
-                                opacity: showAllModels === o.k ? 1 : 0.55,
-                              }}
-                            >
-                              {o.t}
-                            </button>
-                          ))}
-                        </span>
-                      )}
-                    </div>
-                    {shownModels.length === 0 && <div className="mq-empty">{lang === "en" ? "No preset models — add one in Settings" : "无预设模型，去设置里填"}</div>}
-                    {shownModels.map((m) => {
-                      const gated = !wuwei && loginReqModelIds.has(m); // 未登录 + 需登录模型 → 灰置引导
-                      return (
-                      <button
-                        key={m}
-                        className={"mq-item" + (m === meta.model ? " on" : "")}
-                        style={gated ? { opacity: 0.5 } : undefined}
-                        title={gated ? (lang === "en" ? "Sign in to use free" : "登录后可免费使用") : undefined}
-                        onClick={() => { if (gated) { setShowModelMenu(false); setShowLoginIntro(true); return; } quickModel(m); }}
-                      >
-                        <span>
-                          {MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
-                          {gated && (
-                            <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
-                              {lang === "en" ? "Sign in" : "登录可用"}
-                            </span>
-                          )}
-                          {!gated && freeModelIds.has(m) && (
-                            <span
-                              style={{
-                                marginLeft: 6,
-                                fontSize: 10,
-                                padding: "1px 5px",
-                                borderRadius: 4,
-                                background: "#1f9d55",
-                                color: "#fff",
-                                verticalAlign: "middle",
-                              }}
-                            >
-                              {/* 免登录模型(anon)标「免登录」，登录版免费模型标「免费」，让用户一眼分清哪个要登录 */}
-                              {loginReqModelIds.has(m)
-                                ? (lang === "en" ? "Free" : "免费")
-                                : (lang === "en" ? "No login" : "免登录")}
-                            </span>
-                          )}
-                          {modelBadges.get(m) && modelBadges.get(m)!.toLowerCase() !== "free" && (
-                            <span
-                              style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#e8722c", color: "#fff", verticalAlign: "middle" }}
-                            >
-                              {lang === "en" ? badgeEn(modelBadges.get(m)!) : badgeCn(modelBadges.get(m)!)}
-                            </span>
-                          )}
-                        </span>
-                        {m === meta.model && <span className="mq-check">✓</span>}
-                      </button>
-                      );
-                    })}
-                    <div className="mq-sep" />
-                    <button
-                      className="mq-item mq-more"
-                      onClick={() => {
-                        setShowModelMenu(false);
-                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部设置/换平台需登录
-                        setSettingsTab("model");
-                        setShowSettings(true);
-                      }}
-                    >
-                      {t("mq.allSettings", "全部设置 / 换平台…")}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <span className="foot-spacer" />
-
-            <span
-              className="foot-status"
-              title={t("foot.statusTitle", "运行状态 · 本轮上下文 token · 订阅额度(5小时/周)或余额。点击看详情")}
-              onClick={() => setShowUsage((v) => !v)}
-            >
-              <span
-                className={"fs-hit" + (busy || runningSet.size > 0 ? " fs-busy" : "") + (runningSet.size > 0 ? " fs-clickable" : "")}
-                title={runningSet.size > 0 ? (lang === "en" ? "Click to view/stop running tasks" : "点击查看/停止运行中的任务") : undefined}
-                onClick={(e) => {
-                  if (runningSet.size === 0) return;
-                  e.stopPropagation(); // 别触发用量面板
-                  setShowTasks((v) => !v);
-                  setShowUsage(false);
-                }}
-              >
-                {runningSet.size > 1
-                  ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`
-                  : busy
-                    ? `● ${t("foot.running")}`
-                    : runningSet.size === 1
-                      ? `● ${t("foot.bgRunning")}`
-                      : `○ ${t("foot.ready")}`}
-              </span>
-              <span className="fs-extra fs-hit">
-                <span>
-                  {t("foot.context")} {(usage.lastInput / 1000).toFixed(1)}k
-                </span>
-                {/* 无为托管会员：底部栏常显本周额度已用%，≥50%黄、≥80%红，提醒省着用。
-                    仅「纯无为托管付费平台+付费模型」显示：排除免费体验(anon)和免费模型——它们不吃周额度；
-                    切到 Claude/GPT 自己的订阅号(非 wuwei-)也不显示。 */}
-                {curProviderId.startsWith("wuwei-") && !curPreset?.anon && !freeModelIds.has(meta.model) && wuwei?.membership?.weeklyQuota?.active && (() => {
-                  const wq = wuwei.membership!.weeklyQuota!;
-                  const usedPct = Math.max(0, Math.min(100, 100 - wq.remainingPct));
-                  const tone = usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "";
-                  return (
-                    <>
-                      <span className="fs-dot">·</span>
-                      <span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span>
-                    </>
-                  );
-                })()}
-                {meta.sub && rate && typeof rate.primaryUsedPercent === "number" && (
-                  <>
-                    <span className="fs-dot">·</span>
-                    {(rate.primaryWindowMinutes ?? 300) >= 1440 ? (
-                      // 主窗口已是周尺度(Codex 168h)：只显示一个「周」用量，不再摆短窗口
-                      <span>{lang === "en" ? "Week" : "周"} {rate.primaryUsedPercent}%</span>
-                    ) : (
-                      <>
-                        <span>{lang === "en" ? "5h" : "5小时"} {rate.primaryUsedPercent}%</span>
-                        <span className="fs-dot">·</span>
-                        <span>{lang === "en" ? "Week" : "周"} {rate.secondaryUsedPercent ?? 0}%</span>
-                      </>
-                    )}
-                  </>
-                )}
-                {!meta.sub && account.balance && (
-                  <>
-                    <span className="fs-dot">·</span>
-                    <span>
-                      {account.balance.total
-                        ? (lang === "en" ? `Balance ¥${account.balance.total}` : `余额 ${account.balance.total} 元`)
-                        : (lang === "en" ? `Spent ¥${account.balance.consumed}` : `已消耗 ${account.balance.consumed} 元`)}
-                    </span>
-                  </>
-                )}
-              </span>
-              <span className="fs-caret">▾</span>
-            </span>
-          </div>
+          {renderComposerFoot()}
         </div>
 
         {showTasks && runningSet.size > 0 && (
