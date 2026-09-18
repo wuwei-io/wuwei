@@ -3439,6 +3439,10 @@ export function App() {
   } | null>(null);
   const wuweiRef = useRef(wuwei); // 空依赖事件闭包里读最新登录态(否则 wuwei 冻结在挂载时=未登录)
   wuweiRef.current = wuwei;
+  // 海外 Paddle 结账后台轮询定时器：付款在系统浏览器完成，客户端无回调，只能轮询 wuweiMe 检测到账。
+  // 存 ref 便于「再次点付款先清上一个」+「组件卸载清理」，绝不留下永远跑的定时器。
+  const enPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (enPollRef.current) { clearInterval(enPollRef.current); enPollRef.current = null; } }, []);
   // 后台轮询客服未读（不清未读）：登录 且 聊天窗未开时，每 20s 查一次，有回复亮红点
   useEffect(() => {
     if (!wuwei || showSupportChat) return;
@@ -3571,6 +3575,69 @@ export function App() {
       `https://wuweiai.io/en/checkout?sku=${encodeURIComponent(enSku)}` +
       (uid ? `&uid=${encodeURIComponent(uid)}&email=${encodeURIComponent(email)}` : "");
     window.wuwei.openExternal(url);
+    // ── 结账后后台轮询：Paddle 付款在系统浏览器完成，无内嵌回调，靠轮询 wuweiMe 检测到账 → 弹成功窗 ──
+    // 先抓基线（余额 / 会员态）；付款成功即以「新值 vs 基线」判定，成功后停轮询并弹 PayResultModal。
+    const base = wuweiRef.current;
+    const baseBalance = base?.coin.balance ?? 0;
+    const baseTier = base?.membership?.tier ?? "free";
+    const tsOf = (v?: string | number | null): number => {
+      if (v == null) return 0;
+      const n = typeof v === "number" ? v : Date.parse(v);
+      return Number.isNaN(n) ? 0 : n;
+    };
+    const baseExpire = tsOf(base?.membership?.expireAt);
+    const baseWqActive = base?.membership?.weeklyQuota?.active ?? false;
+    const isPlan = clientSku.startsWith("plan_"); // plan_* = 会员订阅→"pro"；其余 = 积分包→"coin"
+    // 再次点付款：先清掉上一个轮询，避免叠加多个定时器
+    if (enPollRef.current) { clearInterval(enPollRef.current); enPollRef.current = null; }
+    let ticks = 0;
+    const MAX_TICKS = 75; // 4s × 75 ≈ 5 分钟，超时静默停（不弹错误）
+    const stop = () => { if (enPollRef.current) { clearInterval(enPollRef.current); enPollRef.current = null; } };
+    enPollRef.current = setInterval(() => {
+      ticks += 1;
+      if (ticks > MAX_TICKS) { stop(); return; } // 超时静默停
+      void window.wuwei.wuweiMe().then((me) => {
+        if (!me || !enPollRef.current) return; // 已被清理（卸载/重开）则丢弃这次结果
+        if (isPlan) {
+          const m = me.membership;
+          const newTier = m?.tier ?? "free";
+          const newExpire = tsOf(m?.expireAt);
+          const newWqActive = m?.weeklyQuota?.active ?? false;
+          const ok =
+            (newTier !== "free" && (baseTier === "free" || newTier !== baseTier)) || // 无→有 / tier 升级
+            newExpire > baseExpire ||                                                 // expire_at 变新（续费/延长）
+            (newWqActive && !baseWqActive);                                           // 周额度 inactive→active
+          if (!ok) return;
+          stop();
+          setWuwei(me);
+          const plan = PRO_PLANS.find((p) => p.sku === clientSku);
+          const isTrial = clientSku === "plan_trial";
+          const planName = isTrial
+            ? (lang === "en" ? "$1 Trial" : "¥1 体验")
+            : plan ? (lang === "en" ? plan.nameEn : plan.name) : (m?.plan || "Pro");
+          const expTs = tsOf(m?.expireAt);
+          const expire = expTs
+            ? fmtDate(new Date(expTs))
+            : fmtDate(isTrial ? new Date(Date.now() + 7 * 24 * 3600_000) : addMonths(new Date(), 1));
+          setPayResult({
+            kind: "pro",
+            planName,
+            expire,
+            giftCoins: isTrial ? 0 : ((lang === "en" ? plan?.coinsEn : plan?.coins) ?? 0),
+            signin: isTrial ? 20 : (plan?.signin ?? 0),
+            perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt),
+            saved: plan?.saved || undefined,
+            order: "",
+          });
+        } else {
+          const newBalance = me.coin.balance;
+          if (newBalance <= baseBalance) return; // 未到账继续等
+          stop();
+          setWuwei(me);
+          setPayResult({ kind: "coin", added: newBalance - baseBalance, bonus: 0, balance: newBalance, order: "" });
+        }
+      }).catch(() => { /* 单次拉取失败忽略，下个 tick 再试 */ });
+    }, 4000);
   }
   // 应用内登录框成功回调：更新账号 + 关框 + (若从发送门槛来)续发刚才拦下的消息
   function onWuweiLoggedIn(me: WuweiMe, action?: "login" | "register" | "reset") {
