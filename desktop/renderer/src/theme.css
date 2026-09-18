@@ -6943,3 +6943,14 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tb-room-menu-item.danger { color: var(--danger, #b4483a); }
 .tb-room-menu-item.danger svg { color: var(--danger, #b4483a); }
 .tb-room-menu-item.danger:hover { background: color-mix(in srgb, var(--danger, #b4483a) 9%, transparent); }
+
+/* 群/私聊气泡内 markdown 收紧间距：MarkdownView 的 .md 默认块间距是给主对话宽气泡的，塞进气泡太松。
+   react-markdown 已把 \n\n 解析成段落边界，气泡的 pre-wrap 对已解析 md 无副作用，只需收块间距。 */
+.tc-bubble .md { white-space: normal; }
+.tc-bubble .md > :first-child { margin-top: 0; }
+.tc-bubble .md > :last-child { margin-bottom: 0; }
+.tc-bubble .md p { margin: 0.35em 0; }
+.tc-bubble .md ul, .tc-bubble .md ol { margin: 0.35em 0; padding-left: 1.4em; }
+.tc-bubble .md li { margin: 0.12em 0; }
+.tc-bubble .md li > p { margin: 0.12em 0; }
+.tc-bubble .md pre { margin: 0.4em 0; }
