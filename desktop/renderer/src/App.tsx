@@ -6035,7 +6035,9 @@ export function App() {
                     </>
                   );
                 })()}
-                {meta.sub && rate && typeof rate.primaryUsedPercent === "number" && (
+                {/* 群/私聊(roomMode)里员工跑订阅号会真的吃你的订阅额度，所以只要 rate 有数据就显示 5小时/周；
+                    主对话则按当前会话是否订阅(meta.sub)判断。 */}
+                {(meta.sub || roomMode) && rate && typeof rate.primaryUsedPercent === "number" && (
                   <>
                     <span className="fs-dot">·</span>
                     {(rate.primaryWindowMinutes ?? 300) >= 1440 ? (
