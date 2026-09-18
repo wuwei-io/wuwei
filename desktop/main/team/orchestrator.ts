@@ -250,3 +250,32 @@ export async function runDmTurn(
     deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: false });
   }
 }
+
+/**
+ * 人类在私聊界面里发言（从 dmSelfId 视角看这条 dm，responderId=界面里显示的「对方」）：
+ * 把人类这句话落库并广播（speaker 记成人类，投影时对响应方 = user 输入），再唤醒对方回一句。
+ *
+ * 与群不同：私聊固定唤醒「另一名成员」，不走 pickResponders（无需 @、无需协调者）。
+ * 与 dm_teammate（员工↔员工）不同：那条是员工主动发起、A 的消息由工具侧先落库；
+ * 这条是人类↔员工，人类消息由本函数落库。两条路径都最终复用 runDmTurn 跑响应方
+ * （投影/防递归 excludeTools/停止锁全在里面），互不影响。
+ */
+export async function runDmHumanTurn(
+  dmId: string,
+  responderId: string,
+  humanText: string,
+  deps: OrchestratorDeps,
+): Promise<void> {
+  const room = loadRooms().find((r) => r.id === dmId);
+  if (!room) return;
+  const text = (humanText || "").trim();
+  if (!text) return;
+  if (running.has(dmId)) return; // 同一私聊不并发跑两轮（与 runDmTurn 同锁）
+
+  // 1. 人类这句话先落库并广播——speaker.kind="human" 让界面靠右显示，
+  //    投影层 projectFor 里 id≠responderId 会当作对方发来的 user 输入喂给响应员工。
+  pushAndBroadcast(deps, dmId, { speaker: { id: "me", name: "我", kind: "human" }, text });
+
+  // 2. 唤醒「对方」回一句：复用 runDmTurn，投影会把人类这句当 input、防递归 excludeTools 照旧生效。
+  await runDmTurn(dmId, responderId, text, deps);
+}

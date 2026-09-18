@@ -9,7 +9,7 @@ import type { IpcMain } from "electron";
 import type { Employee, Room, TeamAppCard } from "../../../src/team/types.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
-import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, type RunEmployeeArgs } from "./orchestrator.js";
+import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, runDmHumanTurn, type RunEmployeeArgs } from "./orchestrator.js";
 import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom, clearRoomMessages, deleteRoomMessage } from "./room.js";
 import {
   addEmployees,
@@ -212,14 +212,19 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     running: isRoomRunning(String(id || "")),
   }));
 
-  // 在群里发言：存消息 → 按 @ 决定唤醒谁 → 并行跑 → 结果回群。不 await，进度走 evt:team-room
-  ipcMain.handle("team:room:send", (_e, id: string, text: string) => {
-    void runRoomTurn(String(id || ""), String(text || ""), {
-      send: deps.send,
-      log: deps.log,
-      runEmployee: deps.runEmployee,
-      baseSys: deps.baseSys,
-    });
+  // 在群/私聊里发言：不 await，进度走 evt:team-room
+  //  · 群(普通 room)：存消息 → 按 @ 决定唤醒谁 → 并行跑 → 结果回群。
+  //  · 私聊(type==="dm")：dmResponderId=界面「对方」id → 人类消息落库 → 唤醒对方回一句（不走 pickResponders）。
+  ipcMain.handle("team:room:send", (_e, id: string, text: string, dmResponderId?: string) => {
+    const rid = String(id || "");
+    const orchDeps = { send: deps.send, log: deps.log, runEmployee: deps.runEmployee, baseSys: deps.baseSys };
+    const room = loadRooms().find((r) => r.id === rid);
+    const responder = String(dmResponderId || "");
+    if (room?.type === "dm" && responder) {
+      void runDmHumanTurn(rid, responder, String(text || ""), orchDeps);
+    } else {
+      void runRoomTurn(rid, String(text || ""), orchDeps);
+    }
     return { ok: true };
   });
 

@@ -10,9 +10,10 @@ import { EmployeeAvatar } from "./EmployeeAvatar.js";
 
 // footer：App 传入的底部状态栏(连通灯+订阅/本月额度)。群没有「单一模型」，所以不复用主对话框那条
 // 完整的模型/上下文栏，只显示对群有意义的连通性与账号额度。App 拥有这些 state，故用 render-prop 注入。
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; footer?: ReactNode };
+// dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: ReactNode };
 
-export function RoomView({ en, employees, onBack, initialRoomId, footer }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer }: Props) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<RoomMessage[]>([]);
@@ -105,7 +106,10 @@ export function RoomView({ en, employees, onBack, initialRoomId, footer }: Props
     if (!t || !cur || running) return;
     setText("");
     setHint("");
-    void api.roomSend(cur, t);
+    // 私聊(type==="dm")：唤醒「对方」= 非当前视角(dmSelfId)的那名成员，让人类能像微信一样直接跟员工对话。
+    // 群场景不传 dmResponder，主进程仍走 @/协调者的 pickResponders。
+    const dmResponder = room?.type === "dm" ? (room.members || []).find((m) => m !== dmSelfId) : undefined;
+    void api.roomSend(cur, t, dmResponder);
   };
 
   // 一个小头像（用于成员堆叠、消息气泡）

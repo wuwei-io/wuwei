@@ -6895,6 +6895,7 @@ export function App() {
                   en={lang === "en"}
                   employees={teamEmployees}
                   initialRoomId={activeRoomId}
+                  dmSelfId={dmSelfId}
                   onBack={() => setAppView("store")}
                   footer={(
                     // 群/私聊底部状态栏：连通灯 + 账号级订阅/本月额度。群没有单一模型，故不展示模型名/上下文栏。
