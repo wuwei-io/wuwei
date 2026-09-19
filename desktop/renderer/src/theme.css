@@ -7022,3 +7022,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .sop-ver-preview-bar { display: flex; align-items: center; gap: 12px; }
 .sop-ver-preview-t { font-size: 13px; font-weight: 700; color: var(--accent); }
 .sop-ver-preview-bar .tc-btn { margin-left: auto; }
+
+/* 群/私聊底栏(窄于主对话)：允许换行,避免元素多时撑宽挤出横向滚动条。不用overflow:hidden(会裁上弹菜单)。 */
+.tc-room-foot { min-width: 0; max-width: 100%; }
+.tc-room-foot .composer-foot { flex-wrap: wrap; row-gap: 3px; max-width: 100%; }
