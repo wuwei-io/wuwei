@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
+import { tx, setTxMode, useTx } from "./tx.js";
 import { BRAND_LOGOS } from "./brandLogos.js";
 import { BrandLogo } from "./modelLogos.js";
 import { WECHAT_CS_QR } from "./wechatCsQr.js";
@@ -3594,6 +3595,8 @@ export function App() {
   const [loginResume, setLoginResume] = useState(false); // 登录成功后是否续发刚才拦下的消息
   const [lang, setLangState] = useState<Lang>(getLang()); // 界面语言
   const t = makeT(lang);
+  useTx(); // 订阅翻译显示层：译文到货/切换翻译态时刷新本组件里的 tx() 覆盖文本
+  const [translateMode, setTranslateMode] = useState(false); // 翻译显示态(仅供发英文版截图，纯覆盖不改数据)
   // 供空依赖 onEvent 事件 handler 取「最新」语言/翻译函数：闭包会冻结挂载时的 lang/t，
   // 直接用会导致切换界面语言后、事件生成的提示/报错仍是挂载时旧语言(如中文版仍显示英文报错)。
   const langRef = useRef(lang);
@@ -3676,6 +3679,22 @@ export function App() {
       else if (c === "Digit5") { e.preventDefault(); setQuotaWarn({ model: "claude-opus-4-8", usedPct: 85, resetsAt: new Date(Date.now() + 20 * 864e5).toISOString() }); }
       else if (c === "Digit6") { e.preventDefault(); setFreeCapModal({ model: "gpt-oss-20b-free", balance: 0 }); }
       else if (c === "Digit9") { e.preventDefault(); openPay("shortage"); } // 兼容旧快捷键
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+  // 一键三合一（Ctrl/⌘+Shift+T）：在「中文原文」和「英文(UI 语言 + 动态内容都翻成英文)」之间来回切。
+  // 专供发 X 英文版截图：一按切英文 UI 并把会话/员工/群标题与消息临时译成英文覆盖显示；再按切回中文显示原文。
+  // 纯覆盖层，绝不改底层数据；缓存常驻内存，来回切直接命中。
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === "KeyT" || e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        const goEn = langRef.current !== "en";
+        changeLang(goEn ? "en" : "zh"); // 切 i18n UI 语言(现有机制)
+        setTranslateMode(goEn); // 状态栏提示
+        setTxMode(goEn); // 开/关动态内容翻译覆盖
+      }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -6176,6 +6195,20 @@ export function App() {
 
   return (
     <div className={"shell" + (showBrowser && !browserDetached && browserMode === "full" ? " browser-full" : "")}>
+      {/* 翻译显示态提示条(Ctrl/⌘+Shift+T 触发)：告诉用户当前是「英文覆盖显示」，截好图再按一下切回中文原文。纯覆盖不改数据。 */}
+      {translateMode && (
+        <div
+          style={{
+            position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 90,
+            display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999,
+            background: "rgba(22,25,30,0.92)", color: "#fff", fontSize: 12.5, fontWeight: 500,
+            boxShadow: "0 4px 18px rgba(0,0,0,0.28)", pointerEvents: "none", WebkitAppRegion: "no-drag",
+          } as React.CSSProperties}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h9" /><path d="M9 3v2c0 5-2.5 8-6 9" /><path d="M5 9c0 3 3 5.5 7 6.5" /><path d="M13 19l4-9 4 9" /><path d="M14.5 16h5" /></svg>
+          <span>{lang === "en" ? "Translation overlay on — press Ctrl+Shift+T to restore Chinese" : "翻译显示中 · 再按 Ctrl+Shift+T 切回中文"}</span>
+        </div>
+      )}
       {/* 侧栏收起时，更新药丸改为固定浮动在左下角——否则药丸只在侧栏里，收起后用户永远看不到「发现新版本」 */}
       {collapsed && updateReady && updateReady.version !== updateChipHidden && (
         <div style={{ position: "fixed", left: 14, bottom: 14, zIndex: 60, width: 190, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -6272,7 +6305,7 @@ export function App() {
                           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                         >
                           <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                          <span className="tool-sub-nm">{e.name}</span>
+                          <span className="tool-sub-nm">{tx(e.name)}</span>
                         </button>
                         {(empSessions.length > 0 || empDms.length > 0) && (
                           <button
@@ -6295,7 +6328,7 @@ export function App() {
                               onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
                               onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
                             >
-                              <span className="tool-sub-convo-t">{s.title || (lang === "en" ? "New chat" : "新对话")}</span>
+                              <span className="tool-sub-convo-t">{tx(s.title) || (lang === "en" ? "New chat" : "新对话")}</span>
                               <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
                               <button
                                 className="tool-sub-convo-del"
@@ -6365,7 +6398,7 @@ export function App() {
                         return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
                       })}
                     </span>
-                    <span className="tool-sub-nm">{r.name}</span>
+                    <span className="tool-sub-nm">{tx(r.name)}</span>
                     <span className="tool-sub-cnt">{r.members?.length || 0}</span>
                   </button>
                 ))}
@@ -6557,7 +6590,7 @@ export function App() {
                 )}
                 {s.discuss && <span className="s-discuss" title={t("side.discuss", "待讨论：需过会议讨论")}>{t("side.discussBadge", "议")}</span>}
                 {s.done && <span className="s-done" title={t("side.done", "已完成")}>✓</span>}
-                <span className="s-title">{s.title}</span>
+                <span className="s-title">{tx(s.title)}</span>
                 <span className="s-time" title={new Date(s.updatedAt).toLocaleString()}>
                   {relTime(s.updatedAt)}
                 </span>
@@ -6632,7 +6665,7 @@ export function App() {
                       >
                         <span className="group-caret">{collapsed ? "▸" : "▾"}</span>
                         <span className="group-name" title={g}>
-                          {g}
+                          {tx(g)}
                         </span>
                         <span className="group-count">{rows.length}</span>
                       </div>
@@ -7725,7 +7758,7 @@ export function App() {
                         return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
                       })}
                     </span>
-                    <span className="tb-title-txt">{room.name}</span>
+                    <span className="tb-title-txt">{tx(room.name)}</span>
                     <span className="tb-room-cnt">（{room.members?.length || 0}）</span>
                   </>
                 );
@@ -7737,7 +7770,7 @@ export function App() {
                 return (
                   <>
                     <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={curEmp.name} /></span>
-                    <span className="tb-title-txt">{curEmp.name}</span>
+                    <span className="tb-title-txt">{tx(curEmp.name)}</span>
                   </>
                 );
               }
@@ -10188,6 +10221,7 @@ function ItemView({
   onEdit?: () => void;
   onResend?: () => void;
 }) {
+  const txf = useTx(); // 翻译显示层订阅：翻译态下用户消息正文也译成英文覆盖显示
   if (item.type === "user")
     return (
       <div className="user-block" data-anchor={item.anchor}>
@@ -10210,7 +10244,7 @@ function ItemView({
                 ))}
               </div>
             )}
-            {maskSecrets(item.text)}
+            {maskSecrets(txf(item.text))}
           </div>
         </div>
         <div className="turn-foot user">
@@ -11230,7 +11264,8 @@ const MarkdownView = React.memo(function MarkdownView({
   text: string;
   highlight?: boolean;
 }) {
-  const clean = maskSecrets(tightenMarkdown(text));
+  const txf = useTx(); // 翻译显示层：翻译态下把消息正文临时译成英文覆盖显示(纯覆盖，不改数据)
+  const clean = maskSecrets(tightenMarkdown(txf(text)));
   return (
     <div className="md">
       <Markdown

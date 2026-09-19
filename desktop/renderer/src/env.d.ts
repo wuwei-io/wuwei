@@ -114,6 +114,7 @@ export interface WuweiApi {
   setContSessions(ids: string[]): void;
   suggestNow(sid: string): Promise<void>;
   judgeAskRisk(questions: any[], rules?: string): Promise<{ risky: boolean; reason: string }>;
+  translateBatch(texts: string[]): Promise<string[]>;
   listTrash(): Promise<TrashItem[]>;
   restoreSession(id: string): void;
   purgeTrash(id: string): void;

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
+import { useTx } from "../tx.js";
 
 // footer：App 传入的底部状态栏，现在复用主对话那条完整的 <ComposerFoot>(连通灯 + 平台/模型默认选择器 +
 // 思考档 + 本月额度/周余量 + 上下文统计)。群/私聊没有 per-session 的「模型」，选择器切的是「全局默认模型」——
@@ -29,6 +30,7 @@ function estimateRoomContextK(msgs: { text?: string }[]): number {
 }
 
 export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd }: Props) {
+  const tx = useTx(); // 翻译显示层：翻译态下群名/员工名/发言人名临时译成英文覆盖显示(纯覆盖，不改数据)
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<RoomMessage[]>([]);
@@ -219,7 +221,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                     <span className="tc-ava"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
                     <span className="tc-emp-meta">
                       <span className="tc-emp-nm">
-                        <b title={e.name}>{e.name}</b>
+                        <b title={e.name}>{tx(e.name)}</b>
                         {e.title && <span className="tc-role" title={e.title}>{e.title}</span>}
                       </span>
                       {e.blurb && <span className="tc-emp-desc" title={e.blurb}>{e.blurb}</span>}
@@ -296,7 +298,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                 </span>
                 <span className="tc-room-meta">
                   <span className="tc-room-nm">
-                    {r.name}
+                    {tx(r.name)}
                     {r.coordinator && <span className="tc-room-host">{nameOf(r.coordinator)} {en ? "hosts" : "主持"}</span>}
                   </span>
                   {r.lastText && <span className="tc-room-last">{r.lastText}</span>}
@@ -332,7 +334,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                 </span>
               )}
               <span className="tc-msg-body">
-                {!mine && <span className="tc-msg-who">{m.speaker.name}</span>}
+                {!mine && <span className="tc-msg-who">{tx(m.speaker.name)}</span>}
                 <span className="tc-bubble">{renderMd ? renderMd(m.text) : m.text}</span>
               </span>
               {/* 悬停出现的删除单条：直接删，不弹确认（撤销成本低、群消息不金贵） */}
@@ -364,7 +366,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               <div className="tc-prog-detail">
                 {Object.entries(progress).map(([id, p]) => (
                   <div className="tc-prog-emp" key={id}>
-                    <div className="tc-prog-name">{p.name}</div>
+                    <div className="tc-prog-name">{tx(p.name)}</div>
                     {p.tools.length > 0 && (
                       <div className="tc-prog-tools">
                         {p.tools.map((t, i) => (
@@ -420,7 +422,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                   ) : (
                     <span className="tc-mention-av"><EmployeeAvatar icon={empOf(c.id)?.icon} avatarData={empOf(c.id)?.avatarData} name={c.name} /></span>
                   )}
-                  <span className="tc-mention-nm">{c.name}</span>
+                  <span className="tc-mention-nm">{tx(c.name)}</span>
                 </button>
               ))}
             </div>
