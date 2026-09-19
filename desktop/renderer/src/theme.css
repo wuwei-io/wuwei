@@ -6858,19 +6858,15 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-mention-av.all { background: var(--spark, #C05F3C); color: #fff; }
 .tc-mention-av.all svg { width: 13px; height: 13px; }
 
-/* 群消息：悬停出现的删除单条按钮 */
+/* 群消息底部操作栏(气泡下方独立一行，对齐主对话)：复制/删除小图标 + 时间，悬停显现 */
 .tc-msg { position: relative; min-width: 0; }
-.tc-msg-del {
-  position: absolute; left: 39px; bottom: -4px; z-index: 1;
-  width: 20px; height: 20px; display: grid; place-items: center;
-  border: none; border-radius: 6px; background: transparent;
-  color: var(--text-faint); cursor: pointer; opacity: 0;
-  transition: opacity .12s, color .12s, background .12s;
-}
-.tc-msg.mine .tc-msg-del { left: auto; right: 0; } /* 自己的消息靠右下 */
-.tc-msg-del svg { width: 13px; height: 13px; }
-.tc-msg:hover .tc-msg-del { opacity: 1; }
-.tc-msg-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
+.tc-msg-meta { display: flex; align-items: center; gap: 4px; margin-top: 3px; opacity: 0; transition: opacity .12s; }
+.tc-msg.mine .tc-msg-meta { justify-content: flex-end; }
+.tc-msg:hover .tc-msg-meta { opacity: 1; }
+.tc-msg-act { width: 22px; height: 22px; display: grid; place-items: center; border: none; border-radius: 6px; background: transparent; color: var(--text-faint); cursor: pointer; transition: color .12s, background .12s; }
+.tc-msg-act:hover { color: var(--text); background: rgba(127,127,127,.1); }
+.tc-msg-act svg { width: 13px; height: 13px; }
+.tc-msg-time { font-size: 10.5px; color: var(--text-faint); margin-left: 2px; }
 .tc-bubble { overflow-wrap: anywhere; }
 
 /* ── 侧栏：员工可展开的会话子列表（微信通讯录式） ── */

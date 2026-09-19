@@ -63,6 +63,13 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const room = rooms.find((r) => r.id === cur) || null;
   const empOf = (id: string) => employees.find((e) => e.id === id);
   const nameOf = (id: string) => empOf(id)?.name || id;
+  const relT = (ts: number) => {
+    const d = Date.now() - (ts || 0);
+    if (d < 60000) return en ? "just now" : "刚刚";
+    if (d < 3600000) return Math.floor(d / 60000) + (en ? "m ago" : " 分钟前");
+    if (d < 86400000) return Math.floor(d / 3600000) + (en ? "h ago" : " 小时前");
+    return Math.floor(d / 86400000) + (en ? "d ago" : " 天前");
+  };
 
   // @ 补全候选：所有人 + 群成员，按查询词过滤。抽到组件层，弹窗渲染与键盘导航共用同一份。
   const mentionAll = en ? "Everyone" : "所有人";
@@ -372,15 +379,17 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                     )}
                   </div>
                 )}
+                {/* 气泡下方独立操作栏(对齐主对话)：复制 / 删除 + 时间，悬停显现 */}
+                <div className="tc-msg-meta">
+                  <button className="tc-msg-act" title={en ? "Copy" : "复制"} onClick={() => { try { navigator.clipboard?.writeText(m.text); } catch { /* ignore */ } }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                  </button>
+                  <button className="tc-msg-act" title={en ? "Delete" : "删除"} onClick={() => cur && api?.roomMsgDelete(cur, m.id)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </button>
+                  <span className="tc-msg-time">{relT(m.ts)}</span>
+                </div>
               </span>
-              {/* 悬停出现的删除单条：直接删，不弹确认（撤销成本低、群消息不金贵） */}
-              <button
-                className="tc-msg-del"
-                title={en ? "Delete message" : "删除这条"}
-                onClick={() => cur && api?.roomMsgDelete(cur, m.id)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
             </div>
           );
         })}
