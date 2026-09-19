@@ -30,7 +30,7 @@ export type RunEmployeeArgs = {
 /** 员工干活时的实时进度（思考/工具）。只用来给界面显示，绝不进群消息流。 */
 export type ProgressEv =
   | { kind: "text"; delta: string }
-  | { kind: "tool-start"; id: string; name: string }
+  | { kind: "tool-start"; id: string; name: string; input?: unknown }
   | { kind: "tool-end"; id: string; isError: boolean };
 
 export type OrchestratorDeps = {
@@ -44,6 +44,31 @@ export type OrchestratorDeps = {
 
 /** 正在跑的群轮次，用于「停止」 */
 const running = new Map<string, AbortController>();
+
+// 员工干活的实时进度「真相源」——放在主进程(干活本就在这层跑)，不寄生在界面。
+// 界面只订阅 evt:team-room-progress 增量；切走再回来时先 getRoomProgress 拉一次全量补齐，
+// 否则切走期间广播的进度没界面接收就丢了(广播不留存)，回来只会从零重新统计。
+export type LiveTool = { id?: string; name: string; input?: unknown; done: boolean; isError?: boolean };
+export type LiveEmp = { empId: string; name: string; text: string; tools: LiveTool[] };
+const roomProgress = new Map<string, Map<string, LiveEmp>>(); // roomId → empId → 该员工本轮进度
+
+/** 把一条进度事件并入房间进度真相源(与界面 RoomView 的累加逻辑镜像)。kind:"done"→清该员工。 */
+function applyProg(roomId: string, empId: string, empName: string, ev: ProgressEv | { kind: "done" }) {
+  let m = roomProgress.get(roomId);
+  if (!m) { m = new Map(); roomProgress.set(roomId, m); }
+  if (ev.kind === "done") { m.delete(empId); return; }
+  let cur = m.get(empId);
+  if (!cur) { cur = { empId, name: empName, text: "", tools: [] }; m.set(empId, cur); }
+  cur.name = empName || cur.name;
+  if (ev.kind === "text") cur.text = (cur.text + (ev.delta || "")).slice(-800);
+  else if (ev.kind === "tool-start") cur.tools.push({ id: ev.id, name: ev.name, input: ev.input, done: false });
+  else if (ev.kind === "tool-end") { for (let i = cur.tools.length - 1; i >= 0; i--) if (!cur.tools[i].done) { cur.tools[i].done = true; cur.tools[i].isError = ev.isError; break; } }
+}
+/** 界面切进某房间时拉当前全量进度(补齐切走期间错过的增量)。 */
+export function getRoomProgress(roomId: string): LiveEmp[] {
+  return Array.from(roomProgress.get(roomId)?.values() || []);
+}
+function clearRoomProgress(roomId: string) { roomProgress.delete(roomId); }
 
 export function abortRoom(roomId: string) {
   running.get(roomId)?.abort();
@@ -151,9 +176,10 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
             input,
             signal: ac.signal,
             // 进度只广播、不落库：界面据此显示"谁正在想什么、调了什么工具"，可展开/收起，跑完即清。
-            onProgress: (ev) => deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }),
+            onProgress: (ev) => { applyProg(roomId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }); },
           });
           if (ac.signal.aborted) return;
+          applyProg(roomId, emp.id, emp.name, { kind: "done" });
           deps.send("evt:team-room-progress", { roomId, empId: emp.id, done: true }); // 该员工干完，界面清掉他的进度块
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
@@ -175,6 +201,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     // 兜底清掉本轮所有员工的进度块——正常收尾各员工已各自发过 done(幂等，清不存在的 key 无害)，
     // 但被 abort / 异常中途退出时 done 不会发，不清就会残留一个「正在干活…」永远转、看着像卡死。
     for (const empId of responders) deps.send("evt:team-room-progress", { roomId, empId, done: true });
+    clearRoomProgress(roomId); // 本轮结束，清进度真相源
     deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: false });
   }
 }
@@ -235,10 +262,10 @@ export async function runDmTurn(
       input,
       signal: ac.signal,
       excludeTools: ["dm_teammate"], // 防递归：响应方这轮不能再发起私信
-      onProgress: (ev) =>
-        deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }),
+      onProgress: (ev) => { applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
     if (ac.signal.aborted) return "";
+    applyProg(dmId, emp.id, emp.name, { kind: "done" });
     deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
     const text = (out || "").trim() || "（没有输出）";
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text });
@@ -251,6 +278,8 @@ export async function runDmTurn(
     return errText;
   } finally {
     running.delete(dmId);
+    deps.send("evt:team-room-progress", { roomId: dmId, empId: responderId, done: true }); // abort/异常兜底清进度块
+    clearRoomProgress(dmId); // 本轮结束，清进度真相源
     deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: false });
   }
 }

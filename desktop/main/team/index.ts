@@ -25,7 +25,7 @@ import {
 } from "../sop/store.js";
 import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
-import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, runDmHumanTurn, type RunEmployeeArgs } from "./orchestrator.js";
+import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, runDmHumanTurn, getRoomProgress, type RunEmployeeArgs } from "./orchestrator.js";
 import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom, clearRoomMessages, deleteRoomMessage } from "./room.js";
 import {
   addEmployees,
@@ -106,6 +106,7 @@ const CHANNELS = [
   "team:room:update",
   "team:room:delete",
   "team:room:messages",
+  "team:room:progress",
   "team:room:send",
   "team:room:abort",
   "team:room:clear",
@@ -240,6 +241,11 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   ipcMain.handle("team:room:messages", (_e, id: string) => ({
     messages: loadRoomMessages(String(id || "")),
     running: isRoomRunning(String(id || "")),
+  }));
+
+  // 界面切进某房间时拉「当前全量进度」——补齐切走期间错过的增量(进度真相源在主进程，见 orchestrator getRoomProgress)。
+  ipcMain.handle("team:room:progress", (_e, id: string) => ({
+    progress: getRoomProgress(String(id || "")),
   }));
 
   // 在群/私聊里发言：不 await，进度走 evt:team-room

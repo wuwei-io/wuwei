@@ -207,6 +207,7 @@ const api = {
     roomUpdate: (id: string, patch: unknown) => ipcRenderer.invoke("team:room:update", id, patch),
     roomDelete: (id: string) => ipcRenderer.invoke("team:room:delete", id),
     roomMessages: (id: string) => ipcRenderer.invoke("team:room:messages", id),
+    roomProgress: (id: string) => ipcRenderer.invoke("team:room:progress", id),
     // dmResponderId：私聊(type==="dm")场景传「对方」员工 id，让主进程唤醒对方回复；群场景不传。
     roomSend: (id: string, text: string, dmResponderId?: string) => ipcRenderer.invoke("team:room:send", id, text, dmResponderId),
     roomAbort: (id: string) => ipcRenderer.invoke("team:room:abort", id),

@@ -2,6 +2,7 @@
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
+import { researchToolLabel } from "./toolLabel.js";
 import { BRAND_LOGOS } from "./brandLogos.js";
 import { BrandLogo } from "./modelLogos.js";
 import { WECHAT_CS_QR } from "./wechatCsQr.js";
@@ -353,21 +354,7 @@ function parseCharterText(text: string): { research: string; ruleDo: string; rul
   };
 }
 // 调研实时进度：把一次工具调用翻成人话("正在搜索：xxx"/"正在读网页：xxx")，喂进弹窗提示框
-function researchToolLabel(name: string, input: any, en: boolean): string {
-  const raw = input?.query ?? input?.q ?? input?.url ?? input?.file_path ?? input?.path ?? input?.pattern ?? "";
-  const s = String(raw).replace(/\s+/g, " ").trim().slice(0, 300); // 不硬截断，显示时靠 CSS 省略号 + 悬停 title 看全
-  const tail = s ? "：" + s : "";
-  const tailEn = s ? ": " + s : "";
-  switch (name) {
-    case "web_search": return en ? `Searching${tailEn}` : `正在搜索${tail}`;
-    case "web_fetch": return en ? `Reading page${tailEn}` : `正在读网页${tail}`;
-    case "write_file": case "edit_file": return en ? `Writing${tailEn}` : `正在写入${tail}`;
-    case "read_file": return en ? `Reading${tailEn}` : `正在读取${tail}`;
-    case "bash": case "powershell": return en ? `Running command${tailEn}` : `执行命令${tail}`;
-    case "grep": case "glob": return en ? `Searching files${tailEn}` : `检索文件${tail}`;
-    default: return en ? `${name}${tailEn}` : `${name}${tail}`;
-  }
-}
+// researchToolLabel 已抽到 ./toolLabel.js（主对话进度 + AI 员工进度共用同一套措辞）。
 
 // 一沾这些就别替用户拿主意——宁可停下来等人，也不能自动替他决定
 const RISKY_ASK = /删除|清空|覆盖|抹掉|销毁|上线|发布|部署|生产|正式环境|prod\b|线上|付款|支付|下单|花钱|转账|发邮件|发消息|通知(客户|用户|大家)|授权|权限|密钥|token|密码|回滚|重置|drop\s+table|truncate|rm\s+-rf|强制推送|force\s*push/i;

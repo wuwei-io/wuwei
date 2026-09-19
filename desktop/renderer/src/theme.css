@@ -6633,7 +6633,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 @keyframes tcbounce { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 .tc-chat-hint { font-size: 12.5px; color: var(--accent); padding: 4px; }
 /* 进度块（可展开/收起，不进消息流） */
-.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; }
+.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; width: 100%; max-width: 560px; }
 .tc-prog-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: transparent; border: none; cursor: pointer; font: inherit; color: var(--text-dim); }
 .tc-prog-who { font-size: 12.5px; flex: 1; text-align: left; }
 .tc-prog-caret { width: 15px; height: 15px; color: var(--text-faint); transition: transform .18s; }
@@ -6645,6 +6645,13 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-prog-tool { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-dim); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
 .tc-prog-tool svg { width: 12px; height: 12px; color: var(--text-faint); }
 .tc-prog-tool.done svg { color: var(--bamboo, #5C8A73); }
+/* 员工干活明细：每个工具调用一行「人话标签」(正在搜索：xxx)，竖排，对标主对话进度 */
+.tc-prog-steps { display: flex; flex-direction: column; gap: 4px; }
+.tc-prog-step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); min-width: 0; }
+.tc-prog-step svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--text-faint); }
+.tc-prog-step.done svg { color: var(--bamboo, #5C8A73); }
+.tc-prog-step.err svg { color: var(--danger, #C4553B); }
+.tc-prog-step-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tc-prog-think { font-size: 12px; color: var(--text-faint); line-height: 1.6; white-space: pre-wrap; max-height: 120px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 10px; }
 /* 停止后的「继续」入口 */
 .tc-prog-resume { display: flex; align-items: center; gap: 12px; padding: 2px 2px 2px 4px; }

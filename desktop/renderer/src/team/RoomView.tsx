@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 import { useTx } from "../tx.js";
+import { researchToolLabel } from "../toolLabel.js";
 
 // footer：App 传入的底部状态栏，现在复用主对话那条完整的 <ComposerFoot>(连通灯 + 平台/模型默认选择器 +
 // 思考档 + 本月额度/周余量 + 上下文统计)。群/私聊没有 per-session 的「模型」，选择器切的是「全局默认模型」——
@@ -38,7 +39,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
   // 员工干活进度：empId → {name, 思考文本, 工具列表}。只显示、不进消息流；跑完清掉。
-  const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; done: boolean }[] }>>({});
+  const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; input?: unknown; done: boolean; isError?: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
   const [justStopped, setJustStopped] = useState(false); // 刚点了「停止」→ 冒出「继续」入口
   // 最近一轮在干活的员工（进度块跑完/被停会清空 progress，先快照下来，「继续」时据此重新点名唤醒）
@@ -102,8 +103,8 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
             const pc = prev[empId] || { name: p.empName || "", text: "", tools: [] };
             const next = { ...pc, name: p.empName || pc.name };
             if (p.kind === "text") next.text = (pc.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
-            else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, done: false }];
-            else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true }; break; } next.tools = t; }
+            else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, input: p.input, done: false }];
+            else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true, isError: p.isError }; break; } next.tools = t; }
             return { ...prev, [empId]: next };
           });
           return c;
@@ -117,9 +118,17 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   useEffect(() => {
     if (!cur) return;
     setHint("");
+    setProgress({}); // 切房间先清空，再从主进程拉「该房间当前全量进度」补齐切走期间错过的增量
     api?.roomMessages(cur).then((r: any) => {
       setMsgs(r?.messages || []);
       setRunning(!!r?.running);
+    });
+    api?.roomProgress?.(cur).then((r: any) => {
+      const live = (r?.progress || []) as { empId: string; name: string; text: string; tools: { name: string; input?: unknown; done: boolean; isError?: boolean }[] }[];
+      if (!live.length) return;
+      const rec: Record<string, { name: string; text: string; tools: { name: string; input?: unknown; done: boolean; isError?: boolean }[] }> = {};
+      for (const e of live) rec[e.empId] = { name: e.name, text: e.text, tools: e.tools };
+      setProgress(rec);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur]);
@@ -357,15 +366,21 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         })}
         {/* 员工干活进度：思考+工具，可展开看详细。只显示不进群消息流，跑完自动消失。 */}
         {Object.keys(progress).length > 0 && (() => {
-          // 收起时的摘要：谁在干 + 调了几个工具，让用户一眼看出「在干活」还是「挂了」。
-          const toolCount = Object.values(progress).reduce((n, p) => n + p.tools.length, 0);
-          const toolSummary = toolCount > 0 ? (en ? ` · ${toolCount} ${toolCount === 1 ? "tool" : "tools"}` : ` · ${toolCount} 个工具`) : "";
+          // 收起摘要：谁在干 + 当前正在做什么(最近一个未完成工具的人话标签)，一眼看出在干嘛。
+          const allTools = Object.values(progress).flatMap((p) => p.tools);
+          const active = [...allTools].reverse().find((t) => !t.done);
+          const doneCount = allTools.filter((t) => t.done).length;
+          const detail = active
+            ? " · " + researchToolLabel(active.name, active.input, en)
+            : allTools.length > 0
+              ? (en ? ` · ${doneCount}/${allTools.length} done` : ` · 已完成 ${doneCount}/${allTools.length}`)
+              : "";
           return (
           <div className="tc-prog">
             <button className="tc-prog-bar" onClick={() => setExpanded((v) => !v)}>
               <span className="tc-chat-typing"><span /><span /><span /></span>
               <span className="tc-prog-who">
-                {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}{toolSummary}
+                {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}{detail}
               </span>
               <svg className={"tc-prog-caret" + (expanded ? " up" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
@@ -375,15 +390,18 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                   <div className="tc-prog-emp" key={id}>
                     <div className="tc-prog-name">{tx(p.name)}</div>
                     {p.tools.length > 0 && (
-                      <div className="tc-prog-tools">
-                        {p.tools.map((t, i) => (
-                          <span className={"tc-prog-tool" + (t.done ? " done" : "")} key={i}>
+                      <div className="tc-prog-steps">
+                        {p.tools.map((t, i) => {
+                          const label = researchToolLabel(t.name, t.input, en);
+                          return (
+                          <div className={"tc-prog-step" + (t.done ? " done" : "") + (t.isError ? " err" : "")} key={i} title={label}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                               {t.done ? <path d="M20 6 9 17l-5-5" /> : <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
                             </svg>
-                            {t.name}
-                          </span>
-                        ))}
+                            <span className="tc-prog-step-t">{label}</span>
+                          </div>
+                          );
+                        })}
                       </div>
                     )}
                     {p.text && <div className="tc-prog-think">{p.text}</div>}
