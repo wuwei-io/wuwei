@@ -3290,7 +3290,7 @@ export function App() {
           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "sop", id: n.id, name: n.name }); }}
         >
           <span className="sop-item-dot" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5" /><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" /></svg>
           </span>
           <span className="tool-sub-nm">{n.name}</span>
           <span className="tool-sub-cnt">v{n.currentVersion || 0}</span>
@@ -6409,6 +6409,13 @@ export function App() {
         {teamMenu && (() => {
           const api = (window as any).wuwei?.team;
           const close = () => setTeamMenu(null);
+          // 手动刷新：重拉员工/群/SOP（没等到自动广播时兜底，免得重启）
+          const refreshTeam = () => {
+            api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
+            api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
+            api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
+            close();
+          };
           const pin = (kind: "employee" | "room", id: string) => {
             if (kind === "employee") void api?.employeePin?.(id);
             else void api?.roomPin?.(id);
@@ -6424,6 +6431,7 @@ export function App() {
                 {teamMenu.kind === "company" && (<>
                   <Item label={lang === "en" ? "Add teammate" : "新建/导入员工"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "New group" : "建群"} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
                 </>)}
                 {teamMenu.kind === "employee" && (<>
                   <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
@@ -6446,6 +6454,7 @@ export function App() {
                   <Item label={lang === "en" ? "New SOP" : "新建 SOP"} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: lang === "en" ? "New SOP" : "新建 SOP", label: lang === "en" ? "SOP title" : "SOP 标题", placeholder: lang === "en" ? "e.g. Deploy to Vercel" : "如：部署到 Vercel", onOk: async (nm) => { const key = nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || undefined; const r = await api?.sopCreate?.("sop", nm, pid, { taskKey: key }); if (r?.exists) { const eid = r?.node?.id; askConfirm({ title: lang === "en" ? "SOP already exists" : "该事已有 SOP", message: lang === "en" ? "One process = one SOP. Open the existing one to iterate on it?" : "一事一 SOP，未重复创建。去迭代现有的这份？", okText: lang === "en" ? "Open" : "去迭代", onOk: () => { if (eid) { setActiveSopId(eid); setAppView("sop"); setAgiView(null); } } }); return; } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (pid) setSopCatOpen((s) => new Set(s).add(pid)); } }); }} />
                   {teamMenu.id && <Item label={lang === "en" ? "Rename" : "重命名"} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: lang === "en" ? "Rename" : "重命名", label: lang === "en" ? "New name" : "新名称", defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />}
                   {teamMenu.id && <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: lang === "en" ? `Delete category "${nm}" and everything inside?` : `删除类别「${nm}」及其下所有内容？`, danger: true, onOk: () => { void api?.sopDelete?.(id); } }); }} />}
+                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={() => { api?.sopTree?.().then((r: any) => setSopTree(r?.tree || [])); close(); }} />
                 </>)}
                 {/* 单个 SOP：重命名/删除（新建子项走类别菜单） */}
                 {teamMenu.kind === "sop" && (<>
