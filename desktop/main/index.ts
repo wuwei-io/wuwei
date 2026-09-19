@@ -1675,6 +1675,7 @@ const writeSopTool: Tool = {
     }
     const r = sopSaveDoc(targetId, content, finalNote);
     if (!r.node) return { content: tt("保存失败：SOP 不存在。", "Save failed: SOP not found."), isError: true };
+    send("evt:sop", { tree: sopLoadTree() }); // 广播让侧栏/SopView 即时刷新——AI 用 write_sop 写的 SOP 也立刻显示(否则只有手动 IPC 建/改才刷新，AI 写的要重启才见，正是本次修的 bug)
     return {
       content: tt(
         `已保存 SOP「${r.node.name}」(id=${targetId})，当前 v${r.version}。`,
