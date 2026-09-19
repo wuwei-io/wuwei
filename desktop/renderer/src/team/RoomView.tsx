@@ -38,6 +38,9 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   // 员工干活进度：empId → {name, 思考文本, 工具列表}。只显示、不进消息流；跑完清掉。
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; done: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
+  const [justStopped, setJustStopped] = useState(false); // 刚点了「停止」→ 冒出「继续」入口
+  // 最近一轮在干活的员工（进度块跑完/被停会清空 progress，先快照下来，「继续」时据此重新点名唤醒）
+  const lastWorkersRef = useRef<{ id: string; name: string }[]>([]);
   const [mention, setMention] = useState<string | null>(null); // @ 补全：输入 @ 后的查询词，null=不显示
   const [mentionIdx, setMentionIdx] = useState(0); // @ 弹窗当前高亮项(键盘 ↑↓ 导航)
   const [creating, setCreating] = useState(false);
@@ -116,15 +119,51 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs.length, running]);
 
+  // 快照「谁在干活」：进度块随时会因跑完/被停而清空，先把当前在场的员工记下来，供「继续」重新点名。
+  useEffect(() => {
+    const ws = Object.entries(progress).map(([id, p]) => ({ id, name: p.name }));
+    if (ws.length) lastWorkersRef.current = ws;
+  }, [progress]);
+
+  // 新一轮真的跑起来了（running 变 true）→ 收起「继续」入口，别和运行中的停止按钮打架。
+  useEffect(() => {
+    if (running) setJustStopped(false);
+  }, [running]);
+
+  // 换群/私聊：清掉「继续」入口，别把上一个会话的状态带过来。
+  useEffect(() => {
+    setJustStopped(false);
+    lastWorkersRef.current = [];
+  }, [cur]);
+
   const send = () => {
     const t = text.trim();
     if (!t || !cur || running) return;
     setText("");
     setHint("");
+    setJustStopped(false);
     // 私聊(type==="dm")：唤醒「对方」= 非当前视角(dmSelfId)的那名成员，让人类能像微信一样直接跟员工对话。
     // 群场景不传 dmResponder，主进程仍走 @/协调者的 pickResponders。
     const dmResponder = room?.type === "dm" ? (room.members || []).find((m) => m !== dmSelfId) : undefined;
     void api.roomSend(cur, t, dmResponder);
+  };
+
+  // 「继续」：停止后从头接着干。员工被中止时的半成品并没有落库(orchestrator 在 aborted 时直接 return，
+  // 不保存部分输出)，所以这里做的是「重新点名刚才那几位、发一条『接着上一步做』的指令」——不是逐字续跑，
+  // 而是让同一批人带着上下文再跑一轮。私聊直接唤醒对方；群里 @ 上刚才在干活的成员，确保能被唤醒。
+  const resume = () => {
+    if (!cur || running) return;
+    const workers = lastWorkersRef.current;
+    if (!workers.length) return;
+    setJustStopped(false);
+    setHint("");
+    if (room?.type === "dm") {
+      const dmResponder = (room.members || []).find((m) => m !== dmSelfId);
+      void api.roomSend(cur, en ? "Please continue from where you left off." : "接着上一步继续做。", dmResponder);
+    } else {
+      const at = workers.map((w) => `@${w.name}`).join(" ");
+      void api.roomSend(cur, `${at} ${en ? "please continue from where you left off." : "接着上一步继续做。"}`);
+    }
   };
 
   // 一个小头像（用于成员堆叠、消息气泡）
@@ -308,12 +347,16 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           );
         })}
         {/* 员工干活进度：思考+工具，可展开看详细。只显示不进群消息流，跑完自动消失。 */}
-        {Object.keys(progress).length > 0 && (
+        {Object.keys(progress).length > 0 && (() => {
+          // 收起时的摘要：谁在干 + 调了几个工具，让用户一眼看出「在干活」还是「挂了」。
+          const toolCount = Object.values(progress).reduce((n, p) => n + p.tools.length, 0);
+          const toolSummary = toolCount > 0 ? (en ? ` · ${toolCount} ${toolCount === 1 ? "tool" : "tools"}` : ` · ${toolCount} 个工具`) : "";
+          return (
           <div className="tc-prog">
             <button className="tc-prog-bar" onClick={() => setExpanded((v) => !v)}>
               <span className="tc-chat-typing"><span /><span /><span /></span>
               <span className="tc-prog-who">
-                {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}
+                {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}{toolSummary}
               </span>
               <svg className={"tc-prog-caret" + (expanded ? " up" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
@@ -339,6 +382,17 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                 ))}
               </div>
             )}
+          </div>
+          );
+        })()}
+        {/* 停止后的「继续」入口：重新点名刚才那几位、发一条「接着做」的指令再跑一轮（不是逐字续跑，半成品没落库）。 */}
+        {!running && justStopped && lastWorkersRef.current.length > 0 && (
+          <div className="tc-prog-resume">
+            <span className="tc-prog-resume-t">{en ? "Stopped." : "已停止。"}</span>
+            <button className="tc-prog-resume-btn" onClick={resume}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v4h4" /></svg>
+              {en ? "Continue" : "继续"}
+            </button>
           </div>
         )}
         {hint && <div className="tc-chat-hint">{hint}</div>}
@@ -395,7 +449,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           }}
         />
         {running ? (
-          <button className="send-btn stop" onClick={() => void api.roomAbort(room.id)} title={en ? "Stop" : "停止"}>
+          <button className="send-btn stop" onClick={() => { void api.roomAbort(room.id); setJustStopped(true); }} title={en ? "Stop" : "停止"}>
             <span className="stop-sq" />
           </button>
         ) : (
