@@ -6611,12 +6611,12 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-room-cnt { font-size: 12px; color: var(--text-faint); flex: 0 0 auto; }
 
 /* 群内聊天 */
-.tc-chat-pane { display: flex; flex-direction: column; height: 100%; padding-bottom: 0; overflow-x: hidden; }
+.tc-chat-pane { display: flex; flex-direction: column; height: 100%; padding: 0; overflow-x: hidden; }
 .tc-chat-members { display: flex; gap: 5px; flex-wrap: wrap; margin-left: auto; max-width: 46%; justify-content: flex-end; }
 .tc-host-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); display: inline-block; margin-left: 4px; }
-.tc-chat-flow { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 14px; padding: 18px 4px 8px; }
+.tc-chat-flow { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 14px; padding: 18px 22px 8px; }
 .tc-chat-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 20px; }
-.tc-msg { display: flex; gap: 9px; max-width: 78%; }
+.tc-msg { display: flex; gap: 9px; max-width: 92%; }
 .tc-msg.mine { align-self: flex-end; flex-direction: row-reverse; }
 .tc-msg-av { width: 30px; height: 30px; border-radius: 9px; overflow: hidden; flex: 0 0 auto; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .tc-msg-av svg { width: 15px; height: 15px; }
@@ -6633,7 +6633,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 @keyframes tcbounce { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 .tc-chat-hint { font-size: 12.5px; color: var(--accent); padding: 4px; }
 /* 进度块（可展开/收起，不进消息流） */
-.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; width: 100%; max-width: 560px; }
+.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; width: 100%; max-width: 720px; }
 .tc-prog-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: transparent; border: none; cursor: pointer; font: inherit; color: var(--text-dim); }
 .tc-prog-who { font-size: 12.5px; flex: 1; text-align: left; }
 .tc-prog-caret { width: 15px; height: 15px; color: var(--text-faint); transition: transform .18s; }
@@ -6652,7 +6652,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-prog-step.done svg { color: var(--bamboo, #5C8A73); }
 .tc-prog-step.err svg { color: var(--danger, #C4553B); }
 .tc-prog-step-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.tc-prog-think { font-size: 12px; color: var(--text-faint); line-height: 1.6; white-space: pre-wrap; max-height: 120px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 10px; }
+.tc-prog-think { font-size: 12px; color: var(--text-faint); line-height: 1.6; white-space: pre-wrap; max-height: 240px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 10px; }
 /* 停止后的「继续」入口 */
 .tc-prog-resume { display: flex; align-items: center; gap: 12px; padding: 2px 2px 2px 4px; }
 .tc-prog-resume-t { font-size: 12.5px; color: var(--text-faint); }
@@ -6664,7 +6664,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-composer {
   flex: 0 0 auto;
   display: flex; align-items: flex-end; gap: 8px;
-  margin: 8px 0 14px;
+  margin: 8px 22px 14px;
   padding: 8px 10px 8px 14px;
   border: 1px solid var(--border); border-radius: 14px;
   background: var(--bg-soft);
@@ -6672,7 +6672,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-composer:focus-within { border-color: var(--accent); }
 /* 群/私聊底部状态栏：复用主对话完整的 .composer-foot(平台/模型选择器+连通灯+额度+上下文)。
    .tc-room-foot 只当「间距外壳」，样式全交给里面的 .composer-foot，避免与其打架。 */
-.tc-room-foot { flex: 0 0 auto; display: flex; margin: -2px 2px 10px; min-width: 0; }
+.tc-room-foot { flex: 0 0 auto; display: flex; margin: -2px 22px 10px; min-width: 0; }
 .tc-room-foot .composer-foot { flex: 1; min-width: 0; padding-top: 0; }
 .tc-composer textarea {
   flex: 1; min-width: 0; resize: none; box-sizing: border-box;

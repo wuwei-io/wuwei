@@ -404,7 +404,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         })}
                       </div>
                     )}
-                    {p.text && <div className="tc-prog-think">{p.text}</div>}
+                    {p.text && <div className="tc-prog-think" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>{p.text}</div>}
                   </div>
                 ))}
               </div>
