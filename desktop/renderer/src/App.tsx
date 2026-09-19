@@ -8545,7 +8545,9 @@ export function App() {
             )}
           </div>
 
-          {renderComposerFoot()}
+          {/* 只在主对话视图渲染主底栏；群/私聊(appView==="rooms")用 RoomView 自己的底栏，
+              否则两处 renderComposerFoot 同时挂载会让连通/额度等弹窗重复出现两个。 */}
+          {appView === null && renderComposerFoot()}
         </div>
 
         {showTasks && runningSet.size > 0 && (
