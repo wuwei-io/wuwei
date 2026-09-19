@@ -52,6 +52,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
   const [newCoord, setNewCoord] = useState<string>("");
   const endRef = useRef<HTMLDivElement | null>(null);
+  const curRef = useRef<string | null>(null); // 给 onEvent 闭包读最新 cur(避免用捕获的旧值 / 在 setState 里套 setState 的反模式)
   const api = (window as any).wuwei?.team;
 
   // 从侧边栏点某个群进来 → 直接进那个群（外部指定优先）
@@ -83,32 +84,22 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     const off = (window as any).wuwei?.onEvent?.((ch: string, p: any) => {
       if (ch === "evt:team-rooms") setRooms(p?.rooms || []);
       else if (ch === "evt:team-room") {
-        setCur((c) => {
-          if (p?.roomId === c) {
-            setMsgs(p.messages || []);
-            setRunning(!!p.running);
-          }
-          return c;
-        });
+        if (p?.roomId === curRef.current) { setMsgs(p.messages || []); setRunning(!!p.running); }
       } else if (ch === "evt:team-room-hint") {
-        // 只认当前打开房间的 hint(用 setCur 读最新值，别用闭包里捕获的旧 cur)，防跨房间串显。
-        // no-responders 存哨兵、渲染时按当前语言转双语文案(切语言也能正确显示)。
-        setCur((c) => { if (p?.roomId === c) setHint(p?.code === "no-responders" ? "@@no-responders@@" : (p?.hint || "")); return c; });
+        // 只认当前打开房间的 hint(curRef 读最新值)，防跨房间串显。no-responders 存哨兵、渲染时按语言转双语。
+        if (p?.roomId === curRef.current) setHint(p?.code === "no-responders" ? "@@no-responders@@" : (p?.hint || ""));
       } else if (ch === "evt:team-room-progress") {
+        if (p?.roomId !== curRef.current) return; // 别的房间的进度不串显到当前房间
         const empId = p?.empId;
         if (!empId) return;
-        setCur((c) => {
-          if (p?.roomId !== c) return c; // 别的房间的进度不串显到当前房间
-          setProgress((prev) => {
-            if (p.done) { const n = { ...prev }; delete n[empId]; return n; } // 该员工干完，清掉他的进度
-            const pc = prev[empId] || { name: p.empName || "", text: "", tools: [] };
-            const next = { ...pc, name: p.empName || pc.name };
-            if (p.kind === "text") next.text = (pc.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
-            else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, input: p.input, done: false }];
-            else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true, isError: p.isError }; break; } next.tools = t; }
-            return { ...prev, [empId]: next };
-          });
-          return c;
+        setProgress((prev) => {
+          if (p.done) { const n = { ...prev }; delete n[empId]; return n; } // 该员工干完，清掉他的进度
+          const pc = prev[empId] || { name: p.empName || "", text: "", tools: [] };
+          const next = { ...pc, name: p.empName || pc.name };
+          if (p.kind === "text") next.text = (pc.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
+          else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, input: p.input, done: false }];
+          else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true, isError: p.isError }; break; } next.tools = t; }
+          return { ...prev, [empId]: next };
         });
       }
     });
@@ -117,6 +108,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   }, []);
 
   useEffect(() => {
+    curRef.current = cur; // 同步给 onEvent 闭包
     if (!cur) return;
     setHint("");
     setProgress({}); // 切房间先清空，再从主进程拉「该房间当前全量进度」补齐切走期间错过的增量
@@ -407,7 +399,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           <div className="tc-prog">
             <button className="tc-prog-bar" onClick={() => setExpanded((v) => !v)}>
               <span className="tc-chat-typing"><span /><span /><span /></span>
-              <span className="tc-prog-who">
+              <span className="tc-prog-who" title={Object.values(progress).map((p) => p.name).join("、") + (en ? " working…" : " 正在干活…") + detail}>
                 {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}{detail}
               </span>
               <svg className={"tc-prog-caret" + (expanded ? " up" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>

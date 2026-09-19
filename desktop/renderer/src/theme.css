@@ -6635,7 +6635,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* 进度块（可展开/收起，不进消息流） */
 .tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; width: 100%; max-width: 720px; }
 .tc-prog-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: transparent; border: none; cursor: pointer; font: inherit; color: var(--text-dim); }
-.tc-prog-who { font-size: 12.5px; flex: 1; text-align: left; }
+.tc-prog-who { font-size: 12.5px; flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-prog-caret { width: 15px; height: 15px; color: var(--text-faint); transition: transform .18s; }
 .tc-prog-caret.up { transform: rotate(180deg); }
 .tc-prog-detail { padding: 4px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
@@ -6658,7 +6658,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-msg-steps-bar:hover { color: var(--text-dim); }
 .tc-msg-steps-caret { transition: transform .18s; }
 .tc-msg-steps-caret.up { transform: rotate(180deg); }
-.tc-msg-steps-detail { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 9px 11px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--border); max-width: 560px; }
+.tc-msg-steps-detail { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 9px 11px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--border); max-width: min(560px, 100%); box-sizing: border-box; }
 .tc-msg-step { display: flex; flex-direction: column; gap: 3px; }
 .tc-msg-step .tc-prog-step-t { white-space: normal; overflow: visible; text-overflow: clip; } /* 落库明细里 label 换行看全 */
 .tc-msg-step-result { font-size: 11px; color: var(--text-faint); white-space: pre-wrap; word-break: break-word; max-height: 110px; overflow-y: auto; padding-left: 19px; line-height: 1.55; }
@@ -6861,12 +6861,13 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* 群消息：悬停出现的删除单条按钮 */
 .tc-msg { position: relative; min-width: 0; }
 .tc-msg-del {
-  align-self: center; flex: 0 0 auto;
-  width: 22px; height: 22px; display: grid; place-items: center;
+  position: absolute; left: 39px; bottom: -4px; z-index: 1;
+  width: 20px; height: 20px; display: grid; place-items: center;
   border: none; border-radius: 6px; background: transparent;
   color: var(--text-faint); cursor: pointer; opacity: 0;
   transition: opacity .12s, color .12s, background .12s;
 }
+.tc-msg.mine .tc-msg-del { left: auto; right: 0; } /* 自己的消息靠右下 */
 .tc-msg-del svg { width: 13px; height: 13px; }
 .tc-msg:hover .tc-msg-del { opacity: 1; }
 .tc-msg-del:hover { color: var(--danger, #b4483a); background: color-mix(in srgb, var(--danger, #b4483a) 10%, transparent); }
