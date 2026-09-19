@@ -72,6 +72,13 @@ export interface TeamAppCard extends TeamApp {
  *    装不下"三个人在同一个上下文里说话"，所以房间必须自己存一份原始多方流，
  *    发给某个员工前再投影成他视角的 user/assistant 交替历史（见 projection.ts）。
  */
+/** AI 员工干一条回复时的一个工具调用步骤，随消息落库、永久可回看「具体干了啥」。 */
+export interface MsgStep {
+  name: string;
+  input?: unknown;
+  result?: string;
+  isError?: boolean;
+}
 export interface RoomMessage {
   id: string;
   ts: number;
@@ -86,6 +93,10 @@ export interface RoomMessage {
   mentions?: string[];
   /** 出错时留痕，界面上标红，不当正常发言参与后续投影 */
   error?: boolean;
+  /** AI 员工干这轮调用的工具序列（含参数/结果），随消息永久落库，界面可展开回看。 */
+  steps?: MsgStep[];
+  /** 员工这轮的思考文本（可选，随消息留存）。 */
+  thought?: string;
 }
 
 export interface Room {

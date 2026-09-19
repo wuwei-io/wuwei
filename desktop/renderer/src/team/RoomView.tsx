@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 import { useTx } from "../tx.js";
-import { researchToolLabel } from "../toolLabel.js";
+import { researchToolLabel, toolInputPreview } from "../toolLabel.js";
 
 // footer：App 传入的底部状态栏，现在复用主对话那条完整的 <ComposerFoot>(连通灯 + 平台/模型默认选择器 +
 // 思考档 + 本月额度/周余量 + 上下文统计)。群/私聊没有 per-session 的「模型」，选择器切的是「全局默认模型」——
@@ -41,6 +41,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   // 员工干活进度：empId → {name, 思考文本, 工具列表}。只显示、不进消息流；跑完清掉。
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; input?: unknown; done: boolean; isError?: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
+  const [openSteps, setOpenSteps] = useState<Set<string>>(new Set()); // 哪些历史消息的「执行过程」被展开了
   const [justStopped, setJustStopped] = useState(false); // 刚点了「停止」→ 冒出「继续」入口
   // 最近一轮在干活的员工（进度块跑完/被停会清空 progress，先快照下来，「继续」时据此重新点名唤醒）
   const lastWorkersRef = useRef<{ id: string; name: string }[]>([]);
@@ -352,6 +353,33 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               <span className="tc-msg-body">
                 {!mine && <span className="tc-msg-who">{tx(m.speaker.name)}</span>}
                 <span className="tc-bubble">{renderMd ? renderMd(m.text) : m.text}</span>
+                {/* 执行过程永久留存：这条员工回复当轮调了哪些工具(参数/结果)，随消息落库，可展开回看 */}
+                {!mine && m.steps && m.steps.length > 0 && (
+                  <div className="tc-msg-steps">
+                    <button className="tc-msg-steps-bar" onClick={() => setOpenSteps((s) => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })}>
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" /></svg>
+                      <span>{en ? `Execution · ${m.steps.length} ${m.steps.length === 1 ? "step" : "steps"}` : `执行过程 · ${m.steps.length} 步`}</span>
+                      <svg className={"tc-msg-steps-caret" + (openSteps.has(m.id) ? " up" : "")} viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                    </button>
+                    {openSteps.has(m.id) && (
+                      <div className="tc-msg-steps-detail">
+                        {m.steps.map((s, i) => {
+                          const label = toolInputPreview(s.name, s.input, en) || s.name;
+                          return (
+                            <div className="tc-msg-step" key={i}>
+                              <div className={"tc-prog-step" + (s.isError ? " err" : " done")} title={label}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{s.isError ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M20 6 9 17l-5-5" />}</svg>
+                                <span className="tc-prog-step-t">{label}</span>
+                              </div>
+                              {s.result && <div className="tc-msg-step-result">{s.result.length > 240 ? s.result.slice(0, 240) + "…" : s.result}</div>}
+                            </div>
+                          );
+                        })}
+                        {m.thought && <div className="tc-prog-think">{m.thought}</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </span>
               {/* 悬停出现的删除单条：直接删，不弹确认（撤销成本低、群消息不金贵） */}
               <button

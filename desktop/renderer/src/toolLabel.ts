@@ -15,3 +15,25 @@ export function researchToolLabel(name: string, input: any, en: boolean): string
     default: return en ? `${name}${tailEn}` : `${name}${tail}`;
   }
 }
+
+// 工具「详细」预览：展开某个工具时显示它到底执行了什么(命令全文/路径/query/坐标等)。
+// 比 researchToolLabel(一句话标题)更细。主对话工具卡片 + AI 员工进度展开区共用。
+export function toolInputPreview(name: string, input: any, en: boolean): string {
+  const inp = (input || {}) as any;
+  switch (name) {
+    case "bash": return "$ " + String(inp.command || "");
+    case "powershell": return "PS> " + String(inp.command || "");
+    case "read_file": return (en ? "Read " : "读取 ") + String(inp.path || "");
+    case "write_file": return (en ? "Write " : "写入 ") + String(inp.path || "");
+    case "edit_file": return (en ? "Edit " : "编辑 ") + String(inp.path || "");
+    case "grep": return (en ? `Search "${inp.pattern ?? ""}"` : `搜索 “${inp.pattern ?? ""}”`) + (inp.path ? (en ? `  ·  path ${inp.path}` : `  ·  路径 ${inp.path}`) : "");
+    case "glob": return (en ? `Match ${inp.pattern ?? inp.glob ?? ""}` : `匹配 ${inp.pattern ?? inp.glob ?? ""}`) + (inp.path ? (en ? `  ·  path ${inp.path}` : `  ·  路径 ${inp.path}`) : "");
+    case "web_search": return (en ? `Web search: ${inp.query ?? ""}` : `搜索网络：${inp.query ?? ""}`);
+    case "web_fetch": return (en ? `Fetch ${inp.url ?? ""}` : `抓取 ${inp.url ?? ""}`);
+    case "browser_open": return (en ? `Browser open ${inp.url ?? ""}` : `浏览器打开 ${inp.url ?? ""}`);
+    case "browser_click": return (en ? `Click ${inp.selector ?? ""}` : `点击 ${inp.selector ?? ""}`);
+    case "remember": return (en ? `Remember: ${inp.text ?? ""}` : `记住：${inp.text ?? ""}`);
+    default: { const s = JSON.stringify(inp); return s === "{}" ? "" : s; }
+  }
+}
+

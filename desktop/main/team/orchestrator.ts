@@ -4,7 +4,7 @@
 // 真正把 Agent 跑起来的能力由主进程通过 deps.runEmployee 注入——provider 的构造、
 // 工具集、凭证刷新那套逻辑都在主进程，这里不重复实现，也不 import 内核的 Agent。
 
-import type { Employee, Room, RoomMessage } from "../../../src/team/types.js";
+import type { Employee, Room, RoomMessage, MsgStep } from "../../../src/team/types.js";
 import type { Message } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
@@ -31,7 +31,7 @@ export type RunEmployeeArgs = {
 export type ProgressEv =
   | { kind: "text"; delta: string }
   | { kind: "tool-start"; id: string; name: string; input?: unknown }
-  | { kind: "tool-end"; id: string; isError: boolean };
+  | { kind: "tool-end"; id: string; isError: boolean; result?: string };
 
 export type OrchestratorDeps = {
   send: (channel: string, payload?: unknown) => void;
@@ -48,7 +48,7 @@ const running = new Map<string, AbortController>();
 // 员工干活的实时进度「真相源」——放在主进程(干活本就在这层跑)，不寄生在界面。
 // 界面只订阅 evt:team-room-progress 增量；切走再回来时先 getRoomProgress 拉一次全量补齐，
 // 否则切走期间广播的进度没界面接收就丢了(广播不留存)，回来只会从零重新统计。
-export type LiveTool = { id?: string; name: string; input?: unknown; done: boolean; isError?: boolean };
+export type LiveTool = { id?: string; name: string; input?: unknown; done: boolean; isError?: boolean; result?: string };
 export type LiveEmp = { empId: string; name: string; text: string; tools: LiveTool[] };
 const roomProgress = new Map<string, Map<string, LiveEmp>>(); // roomId → empId → 该员工本轮进度
 
@@ -62,11 +62,20 @@ function applyProg(roomId: string, empId: string, empName: string, ev: ProgressE
   cur.name = empName || cur.name;
   if (ev.kind === "text") cur.text = (cur.text + (ev.delta || "")).slice(-800);
   else if (ev.kind === "tool-start") cur.tools.push({ id: ev.id, name: ev.name, input: ev.input, done: false });
-  else if (ev.kind === "tool-end") { for (let i = cur.tools.length - 1; i >= 0; i--) if (!cur.tools[i].done) { cur.tools[i].done = true; cur.tools[i].isError = ev.isError; break; } }
+  else if (ev.kind === "tool-end") { for (let i = cur.tools.length - 1; i >= 0; i--) if (!cur.tools[i].done) { cur.tools[i].done = true; cur.tools[i].isError = ev.isError; cur.tools[i].result = ev.result; break; } }
 }
 /** 界面切进某房间时拉当前全量进度(补齐切走期间错过的增量)。 */
 export function getRoomProgress(roomId: string): LiveEmp[] {
   return Array.from(roomProgress.get(roomId)?.values() || []);
+}
+/** 落库前取某员工本轮执行明细(工具序列+思考)，附到回复消息永久留存、可回看。 */
+function snapshotEmp(roomId: string, empId: string): { steps: MsgStep[]; thought: string } {
+  const e = roomProgress.get(roomId)?.get(empId);
+  if (!e) return { steps: [], thought: "" };
+  return {
+    steps: e.tools.map((t) => ({ name: t.name, input: t.input, result: t.result, isError: t.isError })),
+    thought: e.text || "",
+  };
 }
 function clearRoomProgress(roomId: string) { roomProgress.delete(roomId); }
 
@@ -179,11 +188,14 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
             onProgress: (ev) => { applyProg(roomId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }); },
           });
           if (ac.signal.aborted) return;
+          const snap = snapshotEmp(roomId, emp.id); // 落库前取本轮执行明细(applyProg done 会清空真相源)
           applyProg(roomId, emp.id, emp.name, { kind: "done" });
           deps.send("evt:team-room-progress", { roomId, empId: emp.id, done: true }); // 该员工干完，界面清掉他的进度块
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
             text: (out || "").trim() || "（没有输出）",
+            steps: snap.steps.length ? snap.steps : undefined, // 执行明细随消息落库，永久可展开回看
+            thought: snap.thought || undefined,
           });
         } catch (e: any) {
           if (ac.signal.aborted) return;
@@ -252,7 +264,7 @@ export async function runDmTurn(
         .trim() || incomingText;
     const history = proj.slice(0, -1);
 
-    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。`;
+    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。私聊里 dm_teammate 等个别工具不可用是正常设计，别向用户提「某某工具不可用」这类话，直接把事做了或直说结果即可。`;
     const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
     const out = await deps.runEmployee({
@@ -265,10 +277,11 @@ export async function runDmTurn(
       onProgress: (ev) => { applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
     if (ac.signal.aborted) return "";
+    const snap = snapshotEmp(dmId, emp.id); // 落库前取执行明细
     applyProg(dmId, emp.id, emp.name, { kind: "done" });
     deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
     const text = (out || "").trim() || "（没有输出）";
-    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text });
+    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined });
     return text;
   } catch (e: any) {
     if (ac.signal.aborted) return "";
