@@ -110,6 +110,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     // 没 @ 人也没设协调者：只记录不唤醒，这是最大的省钱开关，但要让用户知道为什么没人应答
     deps.send("evt:team-room-hint", {
       roomId,
+      code: "no-responders", // 前端据此渲染双语文案(英文界面也能看懂「为什么没人应答」)
       hint: "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。",
     });
     return;
@@ -171,6 +172,9 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     );
   } finally {
     running.delete(roomId);
+    // 兜底清掉本轮所有员工的进度块——正常收尾各员工已各自发过 done(幂等，清不存在的 key 无害)，
+    // 但被 abort / 异常中途退出时 done 不会发，不清就会残留一个「正在干活…」永远转、看着像卡死。
+    for (const empId of responders) deps.send("evt:team-room-progress", { roomId, empId, done: true });
     deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: false });
   }
 }

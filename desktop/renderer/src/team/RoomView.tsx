@@ -14,7 +14,7 @@ import { useTx } from "../tx.js";
 // 和主对话是同一套 state/handler，切了全局默认就变。上下文统计则传本群/私聊自己的估算值(per-room)，故 footer
 // 改成 render-prop 函数：App 把 room 的 contextK 注入 <ComposerFoot roomMode contextK>。
 // dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number }) => ReactNode; renderMd?: (text: string) => ReactNode };
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number; running: boolean }) => ReactNode; renderMd?: (text: string) => ReactNode };
 
 // 群/私聊没有主进程回报的精确 token 数(那是 per-session 的)，这里按消息文本长度粗估：
 // CJK 字符 ≈ 1 token/字，其余(英文/符号/空格) ≈ 0.3 token/字。只用于底栏「上下文 ~x.xk」展示，标了 ~ 表示估算。
@@ -88,18 +88,25 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           }
           return c;
         });
-      } else if (ch === "evt:team-room-hint") setHint(p?.hint || "");
-      else if (ch === "evt:team-room-progress") {
+      } else if (ch === "evt:team-room-hint") {
+        // 只认当前打开房间的 hint(用 setCur 读最新值，别用闭包里捕获的旧 cur)，防跨房间串显。
+        // no-responders 存哨兵、渲染时按当前语言转双语文案(切语言也能正确显示)。
+        setCur((c) => { if (p?.roomId === c) setHint(p?.code === "no-responders" ? "@@no-responders@@" : (p?.hint || "")); return c; });
+      } else if (ch === "evt:team-room-progress") {
         const empId = p?.empId;
         if (!empId) return;
-        setProgress((prev) => {
-          if (p.done) { const n = { ...prev }; delete n[empId]; return n; } // 该员工干完，清掉他的进度
-          const cur = prev[empId] || { name: p.empName || "", text: "", tools: [] };
-          const next = { ...cur, name: p.empName || cur.name };
-          if (p.kind === "text") next.text = (cur.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
-          else if (p.kind === "tool-start") next.tools = [...cur.tools, { name: p.name, done: false }];
-          else if (p.kind === "tool-end") { const t = [...cur.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true }; break; } next.tools = t; }
-          return { ...prev, [empId]: next };
+        setCur((c) => {
+          if (p?.roomId !== c) return c; // 别的房间的进度不串显到当前房间
+          setProgress((prev) => {
+            if (p.done) { const n = { ...prev }; delete n[empId]; return n; } // 该员工干完，清掉他的进度
+            const pc = prev[empId] || { name: p.empName || "", text: "", tools: [] };
+            const next = { ...pc, name: p.empName || pc.name };
+            if (p.kind === "text") next.text = (pc.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
+            else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, done: false }];
+            else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true }; break; } next.tools = t; }
+            return { ...prev, [empId]: next };
+          });
+          return c;
         });
       }
     });
@@ -397,7 +404,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
             </button>
           </div>
         )}
-        {hint && <div className="tc-chat-hint">{hint}</div>}
+        {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (en ? "No one was called on. @ an employee, or set a standing coordinator in the group settings." : "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。") : hint}</div>}
         <div ref={endRef} />
       </div>
 
@@ -460,7 +467,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           </button>
         )}
       </div>
-      {footer && <div className="tc-room-foot">{footer({ contextK: estimateRoomContextK(msgs) })}</div>}
+      {footer && <div className="tc-room-foot">{footer({ contextK: estimateRoomContextK(msgs), running })}</div>}
     </div>
   );
 }

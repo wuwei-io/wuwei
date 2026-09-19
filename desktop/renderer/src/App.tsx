@@ -5790,8 +5790,9 @@ export function App() {
 
   // 共享底栏：主对话 composer-foot 抽成渲染函数，群/私聊(RoomView) 复用同一套。
   // opts.roomMode：隐藏 mode-mini(那是主会话 per-session 模式，对群无意义)；opts.contextK：群自己的上下文估算值。
-  const renderComposerFoot = (opts?: { roomMode?: boolean; contextK?: number }) => {
+  const renderComposerFoot = (opts?: { roomMode?: boolean; contextK?: number; roomRunning?: boolean }) => {
     const roomMode = !!opts?.roomMode;
+    const roomRunning = !!opts?.roomRunning; // 群/私聊底栏那颗灯：反映「本房间 turn」运行态，而非主会话 runningSet(否则误导排障)
     const ctxK = opts?.contextK ?? usage.lastInput / 1000;
     return (
           <div className={"composer-foot" + (footCompact ? " compact" : "")}>
@@ -6133,7 +6134,9 @@ export function App() {
                   setShowUsage(false);
                 }}
               >
-                {runningSet.size > 1
+                {roomMode
+                  ? (roomRunning ? `● ${lang === "en" ? "Working…" : "员工干活中"}` : `○ ${t("foot.ready")}`)
+                  : runningSet.size > 1
                   ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`
                   : busy
                     ? `● ${t("foot.running")}`
@@ -7465,7 +7468,7 @@ export function App() {
                   footer={(ctx) => (
                     // 群/私聊底部状态栏：复用主对话完整的 <ComposerFoot>。roomMode 隐藏 per-session 的自动/智能继续档，
                     // 平台/模型选择器切的是全局默认模型(和主对话同一套 state)，上下文统计传本群自己的估算值(ctx.contextK)。
-                    renderComposerFoot({ roomMode: true, contextK: ctx.contextK })
+                    renderComposerFoot({ roomMode: true, contextK: ctx.contextK, roomRunning: ctx.running })
                   )}
                 />
               )}
