@@ -2234,6 +2234,41 @@ ipcMain.handle("chat:judgeAskRisk", async (_e, questions: any[], rules?: string)
   }
 });
 
+// 翻译显示层：把中文动态内容(会话标题/员工名/消息正文)批量译成英文，仅供发英文版截图用。
+// 纯覆盖显示，绝不写回任何底层数据。走当前已配置的 provider(与自动标题/风险判官同一条链路)，
+// 免登录/免额度接口已停用故不能用；provider 缺失时原样返回中文，静默降级不报错。
+ipcMain.handle("i18n:translate-batch", async (_e, texts: string[]) => {
+  const list = Array.isArray(texts) ? texts.map((s) => String(s ?? "")) : [];
+  if (!provider || list.length === 0) return list;
+  try {
+    const res = await provider.complete(
+      "You are a professional Chinese→English translator for a software UI. You receive a JSON array of strings " +
+        "(chat titles, employee/room names, or chat message bodies) that may be in Chinese. Translate each into natural, " +
+        "concise English. Preserve any Markdown, code, numbers, URLs and placeholders. Keep the array order and length " +
+        "IDENTICAL to the input. Return ONLY a JSON array of the translated strings — no prose, no explanation, no code fence.",
+      [{ role: "user", content: [{ type: "text", text: JSON.stringify(list) }] }] as any,
+      [],
+      {},
+    );
+    const whole = (res.content || [])
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("")
+      .trim();
+    const jsonStr = whole
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
+    const arr = JSON.parse(jsonStr);
+    if (Array.isArray(arr) && arr.length === list.length) {
+      return arr.map((v: any, i: number) => (typeof v === "string" && v.trim() ? v : list[i]));
+    }
+    return list;
+  } catch {
+    return list; // 翻译失败 → 原样返回中文，界面继续可用
+  }
+});
+
 function createWindow() {
   const b = loadWindowBounds(); // 上次窗口尺寸/位置
   // 窗口/任务栏图标：dev 下 electron.exe 用默认图标，显式指向 build/icon.png；

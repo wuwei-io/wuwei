@@ -161,6 +161,8 @@ const api = {
   setContSessions: (ids: string[]) => ipcRenderer.send("chat:cont-sessions", ids),
   suggestNow: (sid: string) => ipcRenderer.invoke("chat:suggest", sid) as Promise<void>,
   judgeAskRisk: (questions: any[], rules?: string) => ipcRenderer.invoke("chat:judgeAskRisk", questions, rules) as Promise<{ risky: boolean; reason: string }>,
+  // 翻译显示层：批量把中文动态内容译成英文(纯显示，不写回数据)。返回同序等长数组，失败/无 provider 原样返回。
+  translateBatch: (texts: string[]) => ipcRenderer.invoke("i18n:translate-batch", texts) as Promise<string[]>,
   // 回收站:软删除的会话可恢复,7 天后自动彻底清除
   listTrash: () => ipcRenderer.invoke("session:list-trash") as Promise<any[]>,
   restoreSession: (id: string) => ipcRenderer.send("session:restore", id),
