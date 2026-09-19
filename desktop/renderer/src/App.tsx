@@ -6195,20 +6195,7 @@ export function App() {
 
   return (
     <div className={"shell" + (showBrowser && !browserDetached && browserMode === "full" ? " browser-full" : "")}>
-      {/* 翻译显示态提示条(Ctrl/⌘+Shift+T 触发)：告诉用户当前是「英文覆盖显示」，截好图再按一下切回中文原文。纯覆盖不改数据。 */}
-      {translateMode && (
-        <div
-          style={{
-            position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 90,
-            display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999,
-            background: "rgba(22,25,30,0.92)", color: "#fff", fontSize: 12.5, fontWeight: 500,
-            boxShadow: "0 4px 18px rgba(0,0,0,0.28)", pointerEvents: "none", WebkitAppRegion: "no-drag",
-          } as React.CSSProperties}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h9" /><path d="M9 3v2c0 5-2.5 8-6 9" /><path d="M5 9c0 3 3 5.5 7 6.5" /><path d="M13 19l4-9 4 9" /><path d="M14.5 16h5" /></svg>
-          <span>{lang === "en" ? "Translation overlay on — press Ctrl+Shift+T to restore Chinese" : "翻译显示中 · 再按 Ctrl+Shift+T 切回中文"}</span>
-        </div>
-      )}
+      {/* 翻译显示态提示条已移除：用户要对整个窗口截图，提示条会入镜不合适。翻译态仍由 translateMode 驱动（Ctrl/⌘+Shift+T 切换），只是不再显示这个浮动提示。 */}
       {/* 侧栏收起时，更新药丸改为固定浮动在左下角——否则药丸只在侧栏里，收起后用户永远看不到「发现新版本」 */}
       {collapsed && updateReady && updateReady.version !== updateChipHidden && (
         <div style={{ position: "fixed", left: 14, bottom: 14, zIndex: 60, width: 190, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -6358,7 +6345,7 @@ export function App() {
                                 onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
                               >
                                 <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                                <span className="tool-sub-convo-t">{other?.name || otherId}</span>
+                                <span className="tool-sub-convo-t">{tx(other?.name || otherId)}</span>
                                 <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
                                 <button
                                   className="tool-sub-convo-del"
@@ -7745,7 +7732,7 @@ export function App() {
                 return (
                   <>
                     <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                    <span className="tb-title-txt">{other?.name || otherId}</span>
+                    <span className="tb-title-txt">{tx(other?.name || otherId)}</span>
                   </>
                 );
               }
