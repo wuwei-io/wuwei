@@ -94,8 +94,9 @@ import {
   type SessionBal,
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
-import { registerTeam, unregisterTeam, applyEmployee } from "./team/index.js";
-import { employeeMemoryPath, loadEmployees, loadApps } from "./team/store.js";
+import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
+import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee } from "./team/store.js";
+import type { Employee } from "../../src/team/types.js";
 import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
@@ -1685,6 +1686,106 @@ const writeSopTool: Tool = {
   },
 };
 
+// ── 一人公司 · 团队管理工具（3 个）：让 AI(尤其 CEO 小笨)能自己建/改/删员工，别再绕过工具直接改 employees.json ──
+// 都走 store API + broadcastTeam() 广播，通讯录/管理页即时刷新。
+const clampStr = (v: unknown): string | undefined => { const s = String(v ?? "").trim(); return s || undefined; };
+
+const createEmployeeTool: Tool = {
+  name: "create_employee",
+  description:
+    "在一人公司里新建一名 AI 员工(同事)，建完立刻出现在通讯录，无需重启。**别自己去改 employees.json 或用命令行建员工，用这个工具。** " +
+    "name=名字(团队内唯一)，persona=身份与职责(必填，说清他是谁/负责什么/不做什么)；可选 title=职位、blurb=一句话介绍、soul=性格与说话风格、aboutUser=关于老板、memory=长期记忆、icon=图标名。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "名字，团队内唯一" },
+      title: { type: "string", description: "职位，如「产品」「文案」" },
+      blurb: { type: "string", description: "一句话介绍(卡片副标题)" },
+      persona: { type: "string", description: "身份与职责(必填)：他是谁、负责什么、不做什么" },
+      soul: { type: "string", description: "性格与说话风格(可选)" },
+      aboutUser: { type: "string", description: "关于老板/服务对象(可选)" },
+      memory: { type: "string", description: "长期记忆/背景(可选)" },
+      icon: { type: "string", description: "内置图标名：pen/code/chart/palette/brain/coin/crystal/ring/sprout，缺省用名字首字" },
+    },
+    required: ["name", "persona"],
+  },
+  async run(input): Promise<ToolResult> {
+    const a = input as any;
+    const name = clampStr(a.name);
+    const persona = clampStr(a.persona);
+    if (!name || !persona) return { content: tt("需要 name(名字) 和 persona(身份与职责)。", "name and persona are required."), isError: true };
+    const all = loadEmployees();
+    if (all.some((e) => e.name === name)) return { content: tt(`已经有叫「${name}」的同事了。换个名字，或用 update_employee 改现有那位。`, `A teammate named "${name}" already exists. Use a different name or update_employee.`), isError: true };
+    const id = "emp-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e4).toString(36);
+    const order = all.reduce((m, e) => Math.max(m, e.order ?? -1), -1) + 1; // 排到通讯录末尾
+    const emp: Employee = { id, name, persona, title: clampStr(a.title), blurb: clampStr(a.blurb), soul: clampStr(a.soul), aboutUser: clampStr(a.aboutUser), memory: clampStr(a.memory), icon: clampStr(a.icon), order };
+    addEmployees([emp]);
+    broadcastTeam();
+    return { content: tt(`已新建同事「${name}」${emp.title ? `（${emp.title}）` : ""}，已出现在通讯录，可以直接私信或拉进群。`, `Created teammate "${name}". It now shows in Contacts.`) };
+  },
+};
+
+const updateEmployeeTool: Tool = {
+  name: "update_employee",
+  description:
+    "修改一名现有员工的资料/人格：按 name 定位(要和通讯录里的名字完全一致)，只传要改的字段。可改 newName(改名)、title、blurb、persona、soul、aboutUser、memory、icon。改完通讯录即时刷新。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "要修改的同事当前名字(须完全一致)" },
+      newName: { type: "string", description: "新名字(可选，改名用)" },
+      title: { type: "string" }, blurb: { type: "string" }, persona: { type: "string" },
+      soul: { type: "string" }, aboutUser: { type: "string" }, memory: { type: "string" }, icon: { type: "string" },
+    },
+    required: ["name"],
+  },
+  async run(input): Promise<ToolResult> {
+    const a = input as any;
+    const name = clampStr(a.name);
+    if (!name) return { content: tt("需要 name(要修改的同事名字)。", "name is required."), isError: true };
+    const emp = loadEmployees().find((e) => e.name === name);
+    if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
+    const patch: Record<string, unknown> = {};
+    if (a.newName != null) patch.name = clampStr(a.newName);
+    for (const k of ["title", "blurb", "persona", "soul", "aboutUser", "memory", "icon"]) if (a[k] != null) patch[k] = clampStr(a[k]);
+    if (patch.name === undefined && "name" in patch) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true };
+    if (patch.persona === undefined && "persona" in patch) return { content: tt("persona 不能清空。", "persona cannot be cleared."), isError: true };
+    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段。", "Nothing to update."), isError: true };
+    updateEmployee(emp.id, patch);
+    broadcastTeam();
+    return { content: tt(`已更新同事「${name}」。`, `Updated teammate "${name}".`) };
+  },
+};
+
+const deleteEmployeeTool: Tool = {
+  name: "delete_employee",
+  description:
+    "删除一名员工(不可撤销，慎用)：按 name 定位，且必须再传 confirm=true 才真正删除——这是防误删的护栏。删除会移除该员工及其人格文件，通讯录即时刷新。删自己或删掉后没人干活前请先想清楚。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "要删除的同事名字(须完全一致)" },
+      confirm: { type: "boolean", description: "必须为 true 才执行删除(防误删护栏)" },
+    },
+    required: ["name", "confirm"],
+  },
+  async run(input, ctx): Promise<ToolResult> {
+    const a = input as any;
+    const name = clampStr(a.name);
+    if (!name) return { content: tt("需要 name。", "name is required."), isError: true };
+    if (a.confirm !== true) return { content: tt(`未删除：删除是不可撤销操作，请确认后再传 confirm=true。`, "Not deleted: deletion is irreversible, pass confirm=true to proceed."), isError: true };
+    const emp = loadEmployees().find((e) => e.name === name);
+    if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
+    if (ctx.employeeId === emp.id) return { content: tt("不能删除你自己。", "You can't delete yourself."), isError: true };
+    removeEmployee(emp.id);
+    broadcastTeam();
+    return { content: tt(`已删除同事「${name}」。`, `Deleted teammate "${name}".`) };
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -1813,7 +1914,7 @@ function desktopTools(): Tool[] {
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
-    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool]
+    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool]
     : [];
   let tools = [...base, askUserTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文

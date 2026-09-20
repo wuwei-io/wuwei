@@ -148,9 +148,17 @@ function snapshot(): { apps: TeamAppCard[]; employees: Employee[] } {
   return { apps: buildCards(), employees: loadEmployees() };
 }
 
+// 保存 deps.send 引用，供 index.ts 里的 AI 工具(create/update/delete_employee)改完员工后重广播 evt:team，
+// 让通讯录/管理页即时刷新（否则 AI 建的员工要重启才见——就像 AI 绕过工具直接改 employees.json 的老问题）。
+let teamSend: TeamDeps["send"] | null = null;
+export function broadcastTeam(): void {
+  teamSend?.("evt:team", snapshot());
+}
+
 export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   if (registered) return; // 开关热切换时可能重复调用，IPC 不能重复注册
   registered = true;
+  teamSend = deps.send;
   deps.log("team", "模块已启用");
 
   const push = () => deps.send("evt:team", snapshot());
