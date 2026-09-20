@@ -2315,6 +2315,117 @@ function CompanySettingsModal({ en, onClose }: { en: boolean; onClose: () => voi
     </div>
   );
 }
+// 定时任务触发规则 → 人话(与主进程 triggerText 镜像)。
+function schedTriggerText(t: any, en: boolean): string {
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  if (!t) return "";
+  if (t.kind === "daily") return en ? `daily ${p2(t.hour)}:${p2(t.minute)}` : `每天 ${p2(t.hour)}:${p2(t.minute)}`;
+  if (t.kind === "weekly") return en ? `${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}` : `每${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}`;
+  if (t.kind === "monthly") return en ? `day ${t.day} ${p2(t.hour)}:${p2(t.minute)}` : `每月${t.day}号 ${p2(t.hour)}:${p2(t.minute)}`;
+  if (t.kind === "interval") return en ? `every ${t.everyMinutes}m` : `每${t.everyMinutes}分钟`;
+  return "";
+}
+
+// 定时任务 新建/编辑 弹窗：触发规则(每天/每周/每月/间隔) + 内容(引用SOP 或 内嵌文档) + 启用开关。
+function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolean; employeeId: string; task?: any; sopNodes: { id: string; name: string }[]; onClose: () => void }) {
+  const api = (window as any).wuwei?.team;
+  const t0 = task?.trigger || { kind: "daily", hour: 20, minute: 0 };
+  const [name, setName] = useState(task?.name || "");
+  const [kind, setKind] = useState<string>(t0.kind || "daily");
+  const [hour, setHour] = useState<number>(t0.hour ?? 20);
+  const [minute, setMinute] = useState<number>(t0.minute ?? 0);
+  const [weekday, setWeekday] = useState<number>(t0.weekday ?? 1);
+  const [day, setDay] = useState<number>(t0.day ?? 1);
+  const [everyMinutes, setEveryMinutes] = useState<number>(t0.everyMinutes ?? 60);
+  const [mode, setMode] = useState<"sop" | "doc">(task?.sopId ? "sop" : "doc");
+  const [sopId, setSopId] = useState<string>(task?.sopId || (sopNodes[0]?.id || ""));
+  const [doc, setDoc] = useState<string>(task?.doc || "");
+  const [enabled, setEnabled] = useState<boolean>(task?.enabled !== false);
+  const [saving, setSaving] = useState(false);
+  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const num = (v: string, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.floor(Number(v) || 0)));
+
+  const save = async () => {
+    if (saving) return;
+    const nm = name.trim();
+    if (!nm) return;
+    let trigger: any;
+    if (kind === "daily") trigger = { kind, hour, minute };
+    else if (kind === "weekly") trigger = { kind, weekday, hour, minute };
+    else if (kind === "monthly") trigger = { kind, day, hour, minute };
+    else trigger = { kind: "interval", everyMinutes: Math.max(1, everyMinutes) };
+    const payload: any = { employeeId, name: nm, trigger, enabled };
+    if (mode === "sop" && sopId) { payload.sopId = sopId; } else { payload.doc = doc.trim(); }
+    if (!payload.sopId && !payload.doc) return; // 内容不能空
+    setSaving(true);
+    if (task?.id) await api?.scheduleUpdate?.(task.id, payload);
+    else await api?.scheduleCreate?.(payload);
+    onClose();
+  };
+
+  return (
+    <div className="perm-overlay" onClick={onClose}>
+      <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
+        <h3>{task?.id ? (en ? "Edit schedule" : "编辑定时任务") : (en ? "New schedule" : "新建定时任务")}</h3>
+        <div className="st-field">
+          <label className="st-label">{en ? "Task name" : "任务名"}</label>
+          <input className="st-input" value={name} maxLength={40} placeholder={en ? "e.g. Daily site review" : "如：每日网站复盘"} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="st-field">
+          <label className="st-label">{en ? "Trigger" : "触发频率"}</label>
+          <div className="rs-chips" style={{ marginBottom: 8 }}>
+            {[["daily", en ? "Daily" : "每天"], ["weekly", en ? "Weekly" : "每周"], ["monthly", en ? "Monthly" : "每月"], ["interval", en ? "Interval" : "间隔"]].map(([k, lbl]) => (
+              <button type="button" key={k} className={"rs-chip" + (kind === k ? " on" : "")} onClick={() => setKind(k)}>{lbl}</button>
+            ))}
+          </div>
+          <div className="sched-trigger-row">
+            {kind === "weekly" && (
+              <select className="tc-input tc-select" value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>
+                {wk.map((w, i) => <option key={i} value={i}>{w}</option>)}
+              </select>
+            )}
+            {kind === "monthly" && (
+              <span className="sched-inline">{en ? "day" : "每月"}<input className="st-input sched-num" type="number" min={1} max={31} value={day} onChange={(e) => setDay(num(e.target.value, 1, 31))} />{en ? "" : "号"}</span>
+            )}
+            {kind === "interval" ? (
+              <span className="sched-inline">{en ? "every" : "每"}<input className="st-input sched-num" type="number" min={1} value={everyMinutes} onChange={(e) => setEveryMinutes(Math.max(1, Math.floor(Number(e.target.value) || 1)))} />{en ? "min" : "分钟"}</span>
+            ) : (
+              <span className="sched-inline">
+                <input className="st-input sched-num" type="number" min={0} max={23} value={hour} onChange={(e) => setHour(num(e.target.value, 0, 23))} />:
+                <input className="st-input sched-num" type="number" min={0} max={59} value={minute} onChange={(e) => setMinute(num(e.target.value, 0, 59))} />
+              </span>
+            )}
+          </div>
+          <p className="st-hint">{en ? "24-hour, local time. Interval min 1 minute." : "24 小时制、本机时区。间隔最小 1 分钟。"}</p>
+        </div>
+        <div className="st-field">
+          <label className="st-label">{en ? "Content" : "任务内容"}</label>
+          <div className="rs-chips" style={{ marginBottom: 8 }}>
+            <button type="button" className={"rs-chip" + (mode === "sop" ? " on" : "")} onClick={() => setMode("sop")} disabled={sopNodes.length === 0}>{en ? "Reference SOP" : "引用 SOP"}</button>
+            <button type="button" className={"rs-chip" + (mode === "doc" ? " on" : "")} onClick={() => setMode("doc")}>{en ? "Inline doc" : "内嵌文档"}</button>
+          </div>
+          {mode === "sop" ? (
+            sopNodes.length > 0 ? (
+              <select className="tc-input tc-select" value={sopId} onChange={(e) => setSopId(e.target.value)}>
+                {sopNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+              </select>
+            ) : <p className="st-hint">{en ? "No SOP yet — write one first, or use an inline doc." : "还没有 SOP，先去建一个，或改用内嵌文档。"}</p>
+          ) : (
+            <textarea className="tc-textarea" rows={5} value={doc} placeholder={en ? "Write what to do when triggered…" : "写清到点后要做什么、按什么流程执行…"} onChange={(e) => setDoc(e.target.value)} />
+          )}
+        </div>
+        <label className="sched-enable"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {en ? "Enabled" : "启用"}</label>
+        <div className="btns">
+          {task?.id && <button className="danger" style={{ marginRight: "auto" }} onClick={async () => { await api?.scheduleDelete?.(task.id); onClose(); }}>{en ? "Delete" : "删除"}</button>}
+          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+          <button className="allow" disabled={saving || !name.trim()} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // SOP 文字输入弹窗：替代原生 prompt()（Electron 里 prompt 返回 null 不可用）。
 // 风格复用 perm-overlay + add-st-dialog + st-input，玄墨黑 VI，回车=确定、Esc/遮罩=取消。
 type SopPromptOpts = { title: string; label?: string; defaultValue?: string; placeholder?: string; okText?: string; onOk: (text: string) => void };
@@ -3269,6 +3380,8 @@ export function App() {
   const [sopCatOpen, setSopCatOpen] = useState<Set<string>>(() => new Set()); // 侧栏哪些 SOP 类别展开了
   const [sopDrag, setSopDrag] = useState<string | null>(null); // 正在拖拽的节点 id
   const [empDrag, setEmpDrag] = useState<string | null>(null); // 通讯录里正在拖拽排序的员工 id
+  const [schedules, setSchedules] = useState<any[]>([]); // 定时任务列表(全公司)
+  const [scheduleModal, setScheduleModal] = useState<{ employeeId: string; task?: any } | null>(null); // 定时任务新建/编辑模态
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
   // DM 私聊本质也是 room(type==="dm")，复用 activeRoomId 进入。dmSelfId=从哪名员工的侧栏点进来的，
   // 用于标题栏显示「对方」名字(镜像：小笨侧栏点=显示小数，小数侧栏点=显示小笨)。
@@ -3283,10 +3396,12 @@ export function App() {
     api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
     api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
     api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
+    api?.scheduleList?.().then((r: any) => setSchedules(r?.schedules || []));
     const off = window.wuwei.onEvent?.((ch: string, p: any) => {
       if (ch === "evt:team-rooms") setTeamRooms(p?.rooms || []);
       else if (ch === "evt:team" && p) setTeamEmployees(p.employees || []);
       else if (ch === "evt:sop") setSopTree(p?.tree || []);
+      else if (ch === "evt:team-schedules") setSchedules(p?.schedules || []);
     });
     return off;
   }, [teamEnabled]);
@@ -6325,6 +6440,7 @@ export function App() {
                   const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                   // 该员工参与的私聊(镜像)：同一条 dm 会在双方侧栏各显示一次，各自显示「对方」
                   const empDms = teamRooms.filter((r: any) => r.type === "dm" && (r.members || []).includes(e.id)).sort((a:any,b:any)=>(b.updatedAt||0)-(a.updatedAt||0));
+                  const empSchedules = schedules.filter((s: any) => s.employeeId === e.id);
                   const isExpanded = empExpanded.has(e.id);
                   const activeEmp = sessions.find((s) => s.id === currentId)?.employeeId === e.id && appView === null;
                   // 点员工行 = 进他固定的专属会话(最近那次，延续上下文)；没聊过才新建
@@ -6419,6 +6535,21 @@ export function App() {
                               </div>
                             );
                           })}
+                          {/* 模块③：该员工的定时任务。到点自动唤醒他按内容执行。 */}
+                          <div className="tool-sub-grouplabel with-gap">{lang === "en" ? "Schedules" : "定时任务"}</div>
+                          {empSchedules.map((s: any) => (
+                            <div key={s.id} className="tool-sub-convo tool-sub-sched" title={schedTriggerText(s.trigger, lang === "en")}>
+                              <span className={"sched-dot" + (s.enabled ? " on" : "")} />
+                              <span className="tool-sub-convo-t">{s.name}</span>
+                              <span className="tool-sub-convo-tm">{schedTriggerText(s.trigger, lang === "en")}</span>
+                              <button className="tool-sub-convo-del" title={lang === "en" ? "Edit" : "编辑"} onClick={(ev) => { ev.stopPropagation(); setScheduleModal({ employeeId: e.id, task: s }); }}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                              </button>
+                            </div>
+                          ))}
+                          <button className="tool-sub-newconvo" onClick={() => setScheduleModal({ employeeId: e.id })}>
+                            + {lang === "en" ? "New schedule" : "新建定时任务"}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -9776,6 +9907,15 @@ export function App() {
           providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
           employee={editEmp}
           onClose={() => setEditEmp(null)}
+        />
+      )}
+      {scheduleModal && (
+        <ScheduleModal
+          en={lang === "en"}
+          employeeId={scheduleModal.employeeId}
+          task={scheduleModal.task}
+          sopNodes={(sopTree || []).filter((n: any) => n.kind === "sop").map((n: any) => ({ id: n.id, name: n.name }))}
+          onClose={() => setScheduleModal(null)}
         />
       )}
       {secretPrompt && (

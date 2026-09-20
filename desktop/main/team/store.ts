@@ -7,12 +7,13 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Employee, TeamApp } from "../../../src/team/types.js";
+import type { Employee, TeamApp, ScheduledTask, ScheduleTrigger } from "../../../src/team/types.js";
 
 const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei", "team");
 const APPS = join(DIR, "apps.json");
 const EMPLOYEES = join(DIR, "employees.json");
 const CONFIG = join(DIR, "config.json");
+const SCHEDULES = join(DIR, "schedules.json");
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -45,10 +46,12 @@ export function saveEmployees(list: Employee[]) {
   writeJson(EMPLOYEES, list);
 }
 
-/** 一人公司级配置(config.json)。目前只有转派链最大层数，后续可扩展其它公司级设置。 */
+/** 一人公司级配置(config.json)。 */
 export interface TeamConfig {
   /** dm_teammate 转派链最大层数(链上员工数)：1=不允许转派，3=最多三层(如 小笨→小码→小美)。默认 3。 */
   maxDmLevels?: number;
+  /** 定时任务总开关：false=全部暂停不触发(与单任务开关叠加)。缺省视为开启。 */
+  schedulesEnabled?: boolean;
 }
 
 export function loadTeamConfig(): TeamConfig {
@@ -60,6 +63,76 @@ export function saveTeamConfig(patch: Partial<TeamConfig>): TeamConfig {
   const next = { ...loadTeamConfig(), ...patch };
   writeJson(CONFIG, next);
   return next;
+}
+
+// ── 定时任务 ──────────────────────────────────────────────
+export function loadSchedules(): ScheduledTask[] {
+  const v = readJson<ScheduledTask[]>(SCHEDULES, []);
+  return Array.isArray(v) ? v : [];
+}
+export function saveSchedules(list: ScheduledTask[]) { writeJson(SCHEDULES, list); }
+
+/** 间隔类任务的最小间隔(分钟)：防手滑设成每几秒把额度烧穿。 */
+export const MIN_INTERVAL_MINUTES = 1;
+
+/** 计算下次触发时间(ms，本机时区)。fromMs=起算时刻。 */
+export function computeNextRun(trigger: ScheduleTrigger, fromMs: number): number {
+  if (trigger.kind === "interval") {
+    const step = Math.max(MIN_INTERVAL_MINUTES, Math.floor(trigger.everyMinutes || 0)) * 60000;
+    return fromMs + step;
+  }
+  const at = new Date(fromMs);
+  at.setHours(trigger.hour || 0, trigger.minute || 0, 0, 0);
+  if (trigger.kind === "daily") {
+    if (at.getTime() <= fromMs) at.setDate(at.getDate() + 1);
+    return at.getTime();
+  }
+  if (trigger.kind === "weekly") {
+    const delta = ((trigger.weekday || 0) - at.getDay() + 7) % 7;
+    at.setDate(at.getDate() + delta);
+    if (at.getTime() <= fromMs) at.setDate(at.getDate() + 7);
+    return at.getTime();
+  }
+  // monthly：该月没有该号(如 31)就落到月末
+  const setToMonthDay = (d: Date, day: number) => {
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(Math.max(1, day), last));
+    d.setHours(trigger.hour || 0, trigger.minute || 0, 0, 0);
+  };
+  setToMonthDay(at, trigger.day || 1);
+  if (at.getTime() <= fromMs) { at.setMonth(at.getMonth() + 1, 1); setToMonthDay(at, trigger.day || 1); }
+  return at.getTime();
+}
+
+export function addSchedule(t: Omit<ScheduledTask, "id" | "createdAt" | "nextRunAt">): ScheduledTask {
+  const list = loadSchedules();
+  const now = Date.now();
+  const task: ScheduledTask = {
+    ...t,
+    id: "sch-" + now.toString(36) + "-" + Math.floor(Math.random() * 1e4).toString(36),
+    createdAt: now,
+    nextRunAt: computeNextRun(t.trigger, now),
+  };
+  list.push(task);
+  saveSchedules(list);
+  return task;
+}
+
+export function updateSchedule(id: string, patch: Partial<ScheduledTask>): ScheduledTask[] {
+  const list = loadSchedules().map((s) => {
+    if (s.id !== id) return s;
+    const next = { ...s, ...patch, id: s.id, createdAt: s.createdAt };
+    if (patch.trigger) next.nextRunAt = computeNextRun(patch.trigger, Date.now()); // 改了触发规则→重算下次
+    return next;
+  });
+  saveSchedules(list);
+  return list;
+}
+
+export function removeSchedule(id: string): ScheduledTask[] {
+  const list = loadSchedules().filter((s) => s.id !== id);
+  saveSchedules(list);
+  return list;
 }
 
 /**

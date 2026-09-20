@@ -95,8 +95,9 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
-import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee } from "./team/store.js";
-import type { Employee } from "../../src/team/types.js";
+import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES } from "./team/store.js";
+import { startScheduler, stopScheduler } from "./team/scheduler.js";
+import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
@@ -299,7 +300,31 @@ function syncTeamModule(s: Settings | null) {
       baseSys: () => sysPrompt,
       runEmployee: runEmployeeTurn,
     });
-  else unregisterTeam(ipcMain);
+  else { unregisterTeam(ipcMain); stopScheduler(); return; }
+
+  // 定时任务调度器：只在 team 模块开着时跑。到点在负责人专属会话里执行一轮。
+  startScheduler({
+    log,
+    readSopContent: (sopId) => { try { return sopReadDoc(sopId) || ""; } catch { return ""; } },
+    runForEmployee: (employeeId, text) => {
+      const emp = loadEmployees().find((e) => e.id === employeeId);
+      if (!emp) return;
+      // 优先复用该员工最近的专属会话(结果就落在「你俩的对话」里可回看)；没有就新建一个，但不切走用户当前视图。
+      const latest = listSessions().filter((s: any) => s.employeeId === employeeId).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+      let sid = latest?.id as string | undefined;
+      if (!sid) {
+        sid = randomUUID();
+        setSessionEmployee(sid, employeeId, emp.name);
+        if (emp.model?.providerId && emp.model.model) {
+          const gs = loadSettings();
+          const slot = (gs?.creds || {})[emp.model.providerId] || {};
+          setSessionBinding(sid, { providerId: emp.model.providerId, model: emp.model.model, baseUrl: slot.baseUrl });
+        }
+        send("evt:sessions", listSessions());
+      }
+      void startTurn(sid, text);
+    },
+  });
 }
 
 function mimeFor(path: string): string | null {
@@ -1786,6 +1811,106 @@ const deleteEmployeeTool: Tool = {
   },
 };
 
+// ── 一人公司 · 定时任务工具（3 个）：AI 可自己给员工排/查/删定时任务 ──
+function broadcastSchedules() { send("evt:team-schedules", { schedules: loadSchedules() }); }
+// 校验+规整 AI 传来的触发规则；返回 {trigger} 或 {err}。
+function parseTrigger(raw: any): { trigger?: ScheduleTrigger; err?: string } {
+  const t = raw || {};
+  const kind = String(t.kind || "").trim();
+  const hm = (h: unknown, m: unknown) => ({ hour: Math.min(23, Math.max(0, Math.floor(Number(h) || 0))), minute: Math.min(59, Math.max(0, Math.floor(Number(m) || 0))) });
+  if (kind === "daily") return { trigger: { kind: "daily", ...hm(t.hour, t.minute) } };
+  if (kind === "weekly") return { trigger: { kind: "weekly", weekday: Math.min(6, Math.max(0, Math.floor(Number(t.weekday) || 0))), ...hm(t.hour, t.minute) } };
+  if (kind === "monthly") return { trigger: { kind: "monthly", day: Math.min(31, Math.max(1, Math.floor(Number(t.day) || 1))), ...hm(t.hour, t.minute) } };
+  if (kind === "interval") {
+    const every = Math.floor(Number(t.everyMinutes) || 0);
+    if (every < MIN_INTERVAL_MINUTES) return { err: tt(`间隔最小 ${MIN_INTERVAL_MINUTES} 分钟。`, `Minimum interval is ${MIN_INTERVAL_MINUTES} minute(s).`) };
+    return { trigger: { kind: "interval", everyMinutes: every } };
+  }
+  return { err: tt("trigger.kind 必须是 daily/weekly/monthly/interval 之一。", "trigger.kind must be one of daily/weekly/monthly/interval.") };
+}
+function triggerText(t: ScheduleTrigger, en = false): string {
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  if (t.kind === "daily") return en ? `daily ${p2(t.hour)}:${p2(t.minute)}` : `每天 ${p2(t.hour)}:${p2(t.minute)}`;
+  if (t.kind === "weekly") return en ? `${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}` : `每${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}`;
+  if (t.kind === "monthly") return en ? `day ${t.day} ${p2(t.hour)}:${p2(t.minute)}` : `每月${t.day}号 ${p2(t.hour)}:${p2(t.minute)}`;
+  return en ? `every ${t.everyMinutes} min` : `每 ${t.everyMinutes} 分钟`;
+}
+
+const createScheduleTool: Tool = {
+  name: "create_schedule",
+  description:
+    "给一名员工建定时任务：到点自动唤醒他、按内容执行一轮(结果落在他专属会话)。" +
+    "employeeName=负责人(名字须一致)，name=任务名，trigger=触发规则对象，内容二选一：sopId(引用SOP、执行时读全文，优先) 或 doc(内嵌的执行文档)。" +
+    "trigger.kind: 'daily'{hour,minute} 每天 / 'weekly'{weekday(0=周日…6=周六),hour,minute} 每周 / 'monthly'{day(1-31),hour,minute} 每月 / 'interval'{everyMinutes} 每N分钟(每几小时填 N×60，最小1)。时刻 24 小时制、本机时区。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      employeeName: { type: "string", description: "负责人名字(须与团队一致)" },
+      name: { type: "string", description: "任务名" },
+      trigger: { type: "object", description: "{kind:'daily'|'weekly'|'monthly'|'interval', ...}，见工具说明" },
+      sopId: { type: "string", description: "引用的 SOP id(可选，优先)" },
+      doc: { type: "string", description: "内嵌执行文档(sopId 缺省时用)" },
+      enabled: { type: "boolean", description: "是否启用，缺省 true" },
+    },
+    required: ["employeeName", "name", "trigger"],
+  },
+  async run(input): Promise<ToolResult> {
+    const a = input as any;
+    const employeeName = clampStr(a.employeeName);
+    const name = clampStr(a.name);
+    if (!employeeName || !name) return { content: tt("需要 employeeName 和 name。", "employeeName and name are required."), isError: true };
+    const emp = loadEmployees().find((e) => e.name === employeeName);
+    if (!emp) return { content: tt(`没找到叫「${employeeName}」的同事。`, `No teammate named "${employeeName}".`), isError: true };
+    const sopId = clampStr(a.sopId);
+    const doc = clampStr(a.doc);
+    if (!sopId && !doc) return { content: tt("内容二选一：给 sopId(引用SOP) 或 doc(执行文档)。", "Provide either sopId or doc as the task content."), isError: true };
+    const { trigger, err } = parseTrigger(a.trigger);
+    if (err || !trigger) return { content: err || tt("触发规则无效。", "Invalid trigger."), isError: true };
+    const task = addSchedule({ employeeId: emp.id, name, trigger, sopId, doc, enabled: a.enabled !== false });
+    broadcastSchedules();
+    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${emp.name}: ${triggerText(trigger, true)}.`) };
+  },
+};
+
+const listSchedulesTool: Tool = {
+  name: "list_schedules",
+  description: "列出定时任务(可选按 employeeName 过滤)，看有哪些、归谁、什么频率、开没开。",
+  readOnly: true,
+  inputSchema: { type: "object", properties: { employeeName: { type: "string", description: "只看某位同事的(可选)" } } },
+  async run(input): Promise<ToolResult> {
+    const emps = loadEmployees();
+    const filterName = clampStr((input as any).employeeName);
+    const fid = filterName ? emps.find((e) => e.name === filterName)?.id : undefined;
+    let list = loadSchedules();
+    if (filterName) list = list.filter((s) => s.employeeId === fid);
+    if (!list.length) return { content: tt("还没有定时任务。", "No scheduled tasks yet.") };
+    const lines = list.map((s) => {
+      const nm = emps.find((e) => e.id === s.employeeId)?.name || s.employeeId;
+      return `· [${s.id}] ${s.name} — ${nm} · ${triggerText(s.trigger)} · ${s.enabled ? "启用" : "暂停"}${s.sopId ? " · 引用SOP" : ""}`;
+    });
+    return { content: (filterName ? `「${filterName}」的定时任务：\n` : "定时任务：\n") + lines.join("\n") };
+  },
+};
+
+const deleteScheduleTool: Tool = {
+  name: "delete_schedule",
+  description: "删除一个定时任务：传 id(来自 list_schedules)。",
+  readOnly: false,
+  inputSchema: { type: "object", properties: { id: { type: "string", description: "任务 id" } }, required: ["id"] },
+  async run(input): Promise<ToolResult> {
+    const id = clampStr((input as any).id);
+    if (!id) return { content: tt("需要 id。", "id is required."), isError: true };
+    const before = loadSchedules();
+    const task = before.find((s) => s.id === id);
+    if (!task) return { content: tt(`没找到 id 为「${id}」的定时任务。`, `No schedule with id "${id}".`), isError: true };
+    removeSchedule(id);
+    broadcastSchedules();
+    return { content: tt(`已删除定时任务「${task.name}」。`, `Deleted schedule "${task.name}".`) };
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -1914,7 +2039,7 @@ function desktopTools(): Tool[] {
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
-    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool]
+    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
   let tools = [...base, askUserTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文

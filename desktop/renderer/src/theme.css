@@ -6926,6 +6926,14 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* 通讯录员工拖拽排序：拖起来半透明 + 抓手光标 */
 .tool-sub-row[draggable="true"] { cursor: grab; }
 .tool-sub-row.dragging { opacity: .5; }
+/* 定时任务行：左侧小圆点标启用态(绿=开、灰=停) */
+.sched-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+.sched-dot.on { background: var(--bamboo, #5C8A73); }
+/* 定时任务弹窗：触发时刻输入行 */
+.sched-trigger-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sched-inline { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-size: 13px; }
+.sched-num { width: 62px; text-align: center; padding: 6px 4px; }
+.sched-enable { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); cursor: pointer; margin: 2px 0 4px; }
 .tool-sub-convo {
   -webkit-app-region: no-drag;
   display: flex; align-items: center; gap: 8px; width: 100%;

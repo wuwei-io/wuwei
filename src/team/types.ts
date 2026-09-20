@@ -106,6 +106,41 @@ export interface RoomMessage {
   thought?: string;
 }
 
+// ───────────────────────── 定时任务（员工自运转）─────────────────────────
+
+/**
+ * 触发规则。四种：每天 / 每周某天 / 每月某号 / 固定间隔（分钟，含每几小时=N×60）。
+ * 时刻用 24 小时制 hour(0-23)+minute(0-59)；weekday 0=周日…6=周六；day=1-31(该月没有该号则跳到月末)。
+ */
+export type ScheduleTrigger =
+  | { kind: "daily"; hour: number; minute: number }
+  | { kind: "weekly"; weekday: number; hour: number; minute: number }
+  | { kind: "monthly"; day: number; hour: number; minute: number }
+  | { kind: "interval"; everyMinutes: number };
+
+/**
+ * 一个定时任务：到点自动唤醒 negotiator=负责人(员工)，让他按 content(引用的 SOP 或 内嵌文档) 执行一轮。
+ * 执行落在该员工的专属会话里（触发→收到→进度→结果），可回看。
+ */
+export interface ScheduledTask {
+  id: string;
+  /** 负责人：到点唤醒哪名员工执行（employee.id） */
+  employeeId: string;
+  /** 任务名，列表展示 */
+  name: string;
+  trigger: ScheduleTrigger;
+  /** 内容二选一：引用 SOP（sopId，执行时读全文）优先；否则用内嵌文档 doc。 */
+  sopId?: string;
+  doc?: string;
+  /** 单任务开关：false=暂停不触发（与全局总开关叠加） */
+  enabled: boolean;
+  createdAt: number;
+  /** 上次实际触发时间(ms) */
+  lastRunAt?: number;
+  /** 下次应触发时间(ms)，调度器据此判断；由 trigger 计算得出 */
+  nextRunAt?: number;
+}
+
 export interface Room {
   id: string;
   name: string;

@@ -44,6 +44,10 @@ import {
   loadTeamConfig,
   saveTeamConfig,
   reorderEmployees,
+  loadSchedules,
+  addSchedule,
+  updateSchedule,
+  removeSchedule,
 } from "./store.js";
 
 export type TeamDeps = {
@@ -168,6 +172,13 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   // 一人公司级配置(转派链最大层数等)
   ipcMain.handle("team:config:get", () => loadTeamConfig());
   ipcMain.handle("team:config:set", (_e, patch: unknown) => saveTeamConfig((patch || {}) as any));
+
+  // 定时任务：增删改查。变更后广播 evt:team-schedules 让界面即时刷新。
+  const pushSchedules = () => deps.send("evt:team-schedules", { schedules: loadSchedules() });
+  ipcMain.handle("team:schedule:list", () => ({ schedules: loadSchedules() }));
+  ipcMain.handle("team:schedule:create", (_e, t: unknown) => { const task = addSchedule((t || {}) as any); pushSchedules(); return { ok: true, task, schedules: loadSchedules() }; });
+  ipcMain.handle("team:schedule:update", (_e, id: string, patch: unknown) => { updateSchedule(String(id || ""), (patch || {}) as any); pushSchedules(); return { ok: true, schedules: loadSchedules() }; });
+  ipcMain.handle("team:schedule:delete", (_e, id: string) => { removeSchedule(String(id || "")); pushSchedules(); return { ok: true, schedules: loadSchedules() }; });
 
   ipcMain.handle("team:install", (_e, appId: string) => {
     const app = findBuiltinApp(String(appId || ""));
