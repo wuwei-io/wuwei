@@ -45,6 +45,42 @@ export type OrchestratorDeps = {
 /** 正在跑的群轮次，用于「停止」 */
 const running = new Map<string, AbortController>();
 
+/**
+ * 同一房间/私聊的「人类发言」串行队列：忙时排到队尾、当前轮跑完自动接上，
+ * 而不是像旧代码 `running.has(key) → return` 那样把第二条消息直接吞掉——
+ * 那正是「同一员工第二次唤醒没反应」的根因(第二条被并发锁挡下、根本没跑、也没任何反馈)。
+ */
+const turnQueue = new Map<string, Array<() => Promise<void>>>();
+
+/**
+ * 把一轮执行排进 key 的串行队列。
+ * @returns true=当前已有轮次在跑、这条被排队；false=队列空、立即开跑。
+ */
+function enqueueTurn(key: string, task: () => Promise<void>): boolean {
+  const existing = turnQueue.get(key);
+  if (existing) { existing.push(task); return true; } // 忙：排队尾
+  const q: Array<() => Promise<void>> = [];
+  turnQueue.set(key, q);
+  void (async () => {
+    try {
+      await task();
+      // 依次消费排队期间新进来的轮次；每轮都能看到前一轮已落库的结果(snapshot 在各 task 内部现取)
+      while (q.length) { const next = q.shift(); if (next) await next(); }
+    } finally {
+      turnQueue.delete(key);
+    }
+  })();
+  return false;
+}
+
+/** 该房间/私聊是否有轮次在跑或排队中——底栏运行灯据此稳定亮起，别在两轮之间闪灭。 */
+function busy(key: string): boolean {
+  return running.has(key) || (turnQueue.get(key)?.length ?? 0) > 0;
+}
+
+/** 员工被唤醒后先落的「收到」应答文案。跑完才落正式回复(带 steps)。 */
+const ACK_TEXT = "收到，正在处理…";
+
 // 员工干活的实时进度「真相源」——放在主进程(干活本就在这层跑)，不寄生在界面。
 // 界面只订阅 evt:team-room-progress 增量；切走再回来时先 getRoomProgress 拉一次全量补齐，
 // 否则切走期间广播的进度没界面接收就丢了(广播不留存)，回来只会从零重新统计。
@@ -92,10 +128,12 @@ export function abortRoom(roomId: string) {
 export function forceStopRoom(roomId: string) {
   running.get(roomId)?.abort();
   running.delete(roomId);
+  const q = turnQueue.get(roomId);
+  if (q) q.length = 0; // 「停止」= 连排队中的后续轮次也一起清掉，别停完当前又自动接着跑
 }
 
 export function isRoomRunning(roomId: string): boolean {
-  return running.has(roomId);
+  return busy(roomId);
 }
 
 function pushAndBroadcast(
@@ -104,7 +142,7 @@ function pushAndBroadcast(
   msg: Omit<RoomMessage, "id" | "ts">,
 ): RoomMessage[] {
   const msgs = appendMessage(roomId, msg);
-  deps.send("evt:team-room", { roomId, messages: msgs, running: running.has(roomId) });
+  deps.send("evt:team-room", { roomId, messages: msgs, running: busy(roomId) });
   return msgs;
 }
 
@@ -120,14 +158,13 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
   if (!room) return;
   const text = (userText || "").trim();
   if (!text) return;
-  if (running.has(roomId)) return; // 同一群不并发跑两轮
 
   const all = loadEmployees();
   const members = room.members
     .map((id) => all.find((e) => e.id === id))
     .filter((e): e is Employee => !!e);
 
-  // 1. 人类这句话先落盘并广播（不管有没有人被唤醒，都得留在上下文里）
+  // 1. 人类这句话先落盘并广播（不管忙不忙、有没有人被唤醒，都立刻显示 + 留在上下文里）
   const responders = pickResponders(
     text,
     members.map((m) => ({ id: m.id, name: m.name })),
@@ -150,13 +187,33 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     return;
   }
 
+  // 2. 执行轮走串行队列：当前轮在跑就排队、跑完自动接上(而非丢弃这条)。
+  const queued = enqueueTurn(roomId, () => runRoomResponders(roomId, room, members, responders, deps));
+  if (queued) {
+    deps.send("evt:team-room-hint", { roomId, code: "queued", hint: "正在处理上一条，这条已排队，稍后自动接上。" });
+  }
+}
+
+/** 跑一轮群响应：唤醒 responders 里的每名员工(先各回一条「收到」，再并行干活、落正式回复)。 */
+async function runRoomResponders(
+  roomId: string,
+  room: Room,
+  members: Employee[],
+  responders: string[],
+  deps: OrchestratorDeps,
+): Promise<void> {
   const ac = new AbortController();
   running.set(roomId, ac);
   deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: true });
 
   try {
     const base = deps.baseSys();
-    // 快照：本轮所有员工都基于「人类这句话为止」的历史，互不影响
+    // 每名被唤醒的员工先回一条「收到」应答，让用户即时看到「有人接了」，进度块随后挂上。
+    for (const empId of responders) {
+      const emp = members.find((m) => m.id === empId);
+      if (emp) pushAndBroadcast(deps, roomId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: ACK_TEXT, ack: true });
+    }
+    // 快照：本轮所有员工都基于「到此为止(含刚落的收到)」的历史，互不影响。收到消息投影时会被跳过。
     const snapshot = loadRoomMessages(roomId);
 
     await Promise.all(
@@ -214,7 +271,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     // 但被 abort / 异常中途退出时 done 不会发，不清就会残留一个「正在干活…」永远转、看着像卡死。
     for (const empId of responders) deps.send("evt:team-room-progress", { roomId, empId, done: true });
     clearRoomProgress(roomId); // 本轮结束，清进度真相源
-    deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: false });
+    deps.send("evt:team-room", { roomId, messages: loadRoomMessages(roomId), running: busy(roomId) }); // 还有排队轮则灯不灭
   }
 }
 
@@ -250,6 +307,9 @@ export async function runDmTurn(
   const ac = new AbortController();
   running.set(dmId, ac);
   deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: true });
+
+  // 先回一条「收到」，用户即时看到对方接了活；投影会跳过它，不喂回模型。
+  pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: ACK_TEXT, ack: true });
 
   try {
     const base = deps.baseSys();
@@ -293,7 +353,7 @@ export async function runDmTurn(
     running.delete(dmId);
     deps.send("evt:team-room-progress", { roomId: dmId, empId: responderId, done: true }); // abort/异常兜底清进度块
     clearRoomProgress(dmId); // 本轮结束，清进度真相源
-    deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: false });
+    deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: busy(dmId) }); // 还有排队轮则灯不灭
   }
 }
 
@@ -316,12 +376,16 @@ export async function runDmHumanTurn(
   if (!room) return;
   const text = (humanText || "").trim();
   if (!text) return;
-  if (running.has(dmId)) return; // 同一私聊不并发跑两轮（与 runDmTurn 同锁）
 
   // 1. 人类这句话先落库并广播——speaker.kind="human" 让界面靠右显示，
   //    投影层 projectFor 里 id≠responderId 会当作对方发来的 user 输入喂给响应员工。
+  //    不管忙不忙都立刻落，用户即时看到自己发的话(旧代码在此之前就 running.has→return 把整条吞了)。
   pushAndBroadcast(deps, dmId, { speaker: { id: "me", name: "我", kind: "human" }, text });
 
-  // 2. 唤醒「对方」回一句：复用 runDmTurn，投影会把人类这句当 input、防递归 excludeTools 照旧生效。
-  await runDmTurn(dmId, responderId, text, deps);
+  // 2. 唤醒「对方」回一句走串行队列：忙时排队、跑完自动接上，不再直接丢弃这条。
+  //    复用 runDmTurn，投影会把人类这句当 input、防递归 excludeTools 照旧生效。
+  const queued = enqueueTurn(dmId, () => runDmTurn(dmId, responderId, text, deps).then(() => undefined));
+  if (queued) {
+    deps.send("evt:team-room-hint", { roomId: dmId, code: "queued", hint: "正在处理上一条，这条已排队，稍后自动接上。" });
+  }
 }

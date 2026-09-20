@@ -95,7 +95,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         if (p?.roomId === curRef.current) { setMsgs(p.messages || []); setRunning(!!p.running); }
       } else if (ch === "evt:team-room-hint") {
         // 只认当前打开房间的 hint(curRef 读最新值)，防跨房间串显。no-responders 存哨兵、渲染时按语言转双语。
-        if (p?.roomId === curRef.current) setHint(p?.code === "no-responders" ? "@@no-responders@@" : (p?.hint || ""));
+        if (p?.roomId === curRef.current) setHint(p?.code === "no-responders" ? "@@no-responders@@" : p?.code === "queued" ? "@@queued@@" : (p?.hint || ""));
       } else if (ch === "evt:team-room-progress") {
         if (p?.roomId !== curRef.current) return; // 别的房间的进度不串显到当前房间
         const empId = p?.empId;
@@ -137,6 +137,11 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs.length, running]);
+
+  // 「已排队」提示是瞬时反馈：下一条消息(上一轮的回复 / 本轮的「收到」)落地就撤掉，别一直挂着。
+  useEffect(() => {
+    setHint((h) => (h === "@@queued@@" ? "" : h));
+  }, [msgs.length]);
 
   // 快照「谁在干活」：进度块随时会因跑完/被停而清空，先把当前在场的员工记下来，供「继续」重新点名。
   useEffect(() => {
@@ -344,7 +349,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         {msgs.map((m) => {
           const mine = m.speaker.kind === "human";
           return (
-            <div className={"tc-msg" + (mine ? " mine" : "") + (m.error ? " err" : "")} key={m.id}>
+            <div className={"tc-msg" + (mine ? " mine" : "") + (m.error ? " err" : "") + (m.ack ? " ack" : "")} key={m.id}>
               {!mine && (
                 <span className="tc-msg-av">
                   <EmployeeAvatar icon={empOf(m.speaker.id)?.icon} avatarData={empOf(m.speaker.id)?.avatarData} name={m.speaker.name} />
@@ -378,7 +383,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                             </div>
                           );
                         })}
-                        {m.thought && <div className="tc-prog-think">{m.thought}</div>}
+                        {m.thought && <div className="tc-prog-think">{renderMd ? renderMd(m.thought) : m.thought}</div>}
                       </div>
                     )}
                   </div>
@@ -437,7 +442,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         })}
                       </div>
                     )}
-                    {p.text && <div className="tc-prog-think" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>{p.text}</div>}
+                    {p.text && <div className="tc-prog-think" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>{renderMd ? renderMd(p.text) : p.text}</div>}
                   </div>
                 ))}
               </div>
@@ -455,7 +460,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
             </button>
           </div>
         )}
-        {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (en ? "No one was called on. @ an employee, or set a standing coordinator in the group settings." : "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。") : hint}</div>}
+        {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (en ? "No one was called on. @ an employee, or set a standing coordinator in the group settings." : "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。") : hint === "@@queued@@" ? (en ? "Still on the previous message — this one is queued and will run right after." : "正在处理上一条，这条已排队，稍后自动接上。") : hint}</div>}
         <div ref={endRef} />
       </div>
 

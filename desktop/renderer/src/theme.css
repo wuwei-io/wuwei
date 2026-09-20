@@ -6626,6 +6626,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-bubble { padding: 9px 13px; border-radius: 12px; background: var(--bg-soft); border: 1px solid var(--border); font-size: 13.5px; line-height: 1.72; white-space: pre-wrap; word-break: break-word; }
 .tc-msg.mine .tc-bubble { background: var(--accent); color: #fff; border-color: transparent; }
 .tc-msg.err .tc-bubble { border-color: var(--danger, #b4483a); color: var(--danger, #b4483a); background: transparent; }
+/* 「收到」应答：弱化成一条轻确认，别和正式回复抢视觉——虚线描边、字更小更淡 */
+.tc-msg.ack .tc-bubble { background: transparent; border-style: dashed; color: var(--text-faint); font-size: 12.5px; padding: 5px 11px; }
 .tc-chat-typing { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-faint); padding: 2px 4px; }
 .tc-chat-typing span { width: 5px; height: 5px; border-radius: 50%; background: var(--text-faint); animation: tcbounce 1.2s infinite ease-in-out; }
 .tc-chat-typing span:nth-child(2) { animation-delay: .15s; }

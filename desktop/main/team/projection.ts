@@ -32,6 +32,7 @@ export function projectFor(selfId: string, msgs: RoomMessage[]): Message[] {
   const out: Message[] = [];
   for (const m of msgs) {
     if (m.error) continue; // 出错留痕不参与上下文，否则模型会学着一起报错
+    if (m.ack) continue; // 「收到」应答只是 UI 确认，不是正文，别喂回模型
     const text = (m.text || "").trim();
     if (!text) continue;
     if (m.speaker.id === selfId) {
