@@ -1758,6 +1758,9 @@ body {
   white-space: pre-wrap;
   word-break: break-all;
 }
+/* 工具产出的图片(截图 / send_image 生图)：内联缩略图，点开看大图 */
+.tool-img { margin: 8px 0 2px; cursor: zoom-in; }
+.tool-img img { max-width: min(360px, 100%); max-height: 300px; border-radius: 10px; border: 1px solid var(--border); display: block; object-fit: contain; }
 .tool .result {
   margin: 6px 0 0;
   padding: 8px 11px;

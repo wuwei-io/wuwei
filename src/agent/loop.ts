@@ -70,7 +70,7 @@ export interface AgentHooks {
   onText?(delta: string): void;
   requestPermission?(tool: Tool, input: Record<string, unknown>): Promise<PermissionDecision>;
   onToolStart?(id: string, name: string, input: Record<string, unknown>): void;
-  onToolEnd?(id: string, result: string, isError: boolean): void;
+  onToolEnd?(id: string, result: string, isError: boolean, image?: string): void;
   onAssistantDone?(): void;
   onUsage?(u: UsageReport): void; // 每步回报累计用量 + 本轮自足值
   onRateLimits?(rl: import("../types.js").RateLimits): void; // 订阅额度快照
@@ -505,7 +505,7 @@ export class Agent {
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
           const out = await tool.run(call.input, { ...this.ctx, signal }); // 传中断信号,停止时杀长命令
-          hooks.onToolEnd?.(call.id, out.content, !!out.isError);
+          hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image);
           const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
           resultsBlocks[idx] = {
             type: "tool_result",

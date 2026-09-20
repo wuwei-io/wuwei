@@ -1911,6 +1911,39 @@ const deleteScheduleTool: Tool = {
   },
 };
 
+// 发图工具：把本地图片(如生图工具产出的文件)发进对话框，内联显示+可点开预览。
+// 走 ToolResult.image → tool_result 多模态：模型也看得到、历史合法(图片只能在 user/tool_result，不能在 assistant)。
+const sendImageTool: Tool = {
+  name: "send_image",
+  description:
+    "把一张本地图片发到当前对话框里内联显示、可点开看大图(例如你用生图/下载工具存到本地的图)。path=图片绝对路径；caption=可选说明。支持 png/jpg/jpeg/gif/webp，单张≤8MB。生成图片后用它发出来，别只给路径。",
+  readOnly: true,
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "图片文件的绝对路径" },
+      caption: { type: "string", description: "图片说明(可选)" },
+    },
+    required: ["path"],
+  },
+  async run(input): Promise<ToolResult> {
+    const p = String((input as any).path || "").trim();
+    if (!p) return { content: tt("需要 path(图片路径)。", "path is required."), isError: true };
+    try {
+      const buf = readFileSync(p);
+      if (buf.length > 8 * 1024 * 1024) return { content: tt("图片太大(>8MB)，发不了。", "Image too large (>8MB)."), isError: true };
+      const ext = (p.toLowerCase().split(".").pop() || "");
+      const mime = ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" } as Record<string, string>)[ext];
+      if (!mime) return { content: tt("只支持 png/jpg/jpeg/gif/webp。", "Only png/jpg/jpeg/gif/webp supported."), isError: true };
+      const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+      const cap = String((input as any).caption || "").trim();
+      return { content: cap || tt("已把图片发到对话框(可点开看大图)。", "Image sent to the chat."), image: dataUrl };
+    } catch (e: any) {
+      return { content: tt(`读不到这张图：${String(e?.message || e).slice(0, 150)}`, `Cannot read image: ${String(e?.message || e).slice(0, 150)}`), isError: true };
+    }
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -2041,7 +2074,7 @@ function desktopTools(): Tool[] {
   const teamTools = teamEnabled(loadSettings())
     ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
-  let tools = [...base, askUserTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
+  let tools = [...base, askUserTool, sendImageTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
   return tools.map(wrapSecret);
 }
@@ -3041,7 +3074,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
           send("evt:assistant-replace", { sid: useId, text: cleaned }); // 前端把泄漏的 XML 换成干净正文
         },
         onToolStart: (id, name, input) => { toolDepth++; send("evt:tool-start", { sid: useId, id, name, input }); },
-        onToolEnd: (id, result, isError) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError }); },
+        onToolEnd: (id, result, isError, image) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError, image }); },
         requestPermission: (tool, input) =>
           new Promise((resolve) => {
             const id = ++permSeq;

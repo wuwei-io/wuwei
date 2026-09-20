@@ -49,6 +49,7 @@ type Item =
       result?: string;
       isError?: boolean;
       status: "running" | "done";
+      image?: string; // 工具返回的图片(截图/send_image 生图)，dataUrl；界面内联缩略图 + 点开预览
     }
   | { type: "notice"; text: string };
 
@@ -194,7 +195,14 @@ function messagesToItems(messages: any[]): Item[] {
         else if (b.type === "image") imgs.push(b.dataUrl);
         else if (b.type === "tool_result" && toolById[b.tool_use_id]) {
           const t = toolById[b.tool_use_id];
-          t.result = b.content;
+          // 图片类工具(截图/send_image)结果是多模态数组[文本+图片]：拆出图片单独渲染，文本进 result。
+          if (Array.isArray(b.content)) {
+            t.result = b.content.filter((x: any) => x?.type === "text").map((x: any) => x.text).join("");
+            const img = b.content.find((x: any) => x?.type === "image");
+            if (img?.dataUrl) t.image = img.dataUrl;
+          } else {
+            t.result = b.content;
+          }
           t.isError = b.is_error;
           t.status = "done";
         }
@@ -4709,7 +4717,7 @@ export function App() {
               real = p.length - 1 - idx;
             }
             const c = [...p];
-            c[real] = { ...(c[real] as any), result: payload.result, isError: payload.isError, status: "done" };
+            c[real] = { ...(c[real] as any), result: payload.result, isError: payload.isError, status: "done", image: payload.image || (c[real] as any).image };
             return c;
           });
           break;
@@ -11686,6 +11694,12 @@ const ToolView = React.memo(function ToolView({ item }: { item: Extract<Item, { 
         </span>
         {hasDetail && <span className="tcaret">{open ? "▾" : "▸"}</span>}
       </div>
+      {/* 工具产出的图片(截图 / send_image 生图)：始终内联显示，点开看大图。 */}
+      {item.image && (
+        <div className="tool-img" onClick={() => openImageLightbox?.(item.image!)} title={en ? "Click to view" : "点开看大图"}>
+          <img src={item.image} alt="" />
+        </div>
+      )}
       {open && cmd && <div className="tcmd">$ {cmd}</div>}
       {open && !cmd && inputStr && <div className="tcmd">{inputStr}</div>}
       {open && diff}
