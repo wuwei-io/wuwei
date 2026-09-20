@@ -238,7 +238,7 @@ function providerForEmployee(emp: { model?: { providerId: string; model: string 
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools }: RunEmployeeArgs): Promise<string> => {
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth }: RunEmployeeArgs): Promise<string> => {
   const p = providerForEmployee(employee) || provider;
   if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
   const all = desktopTools();
@@ -246,7 +246,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
   const map = new Map(tools.map((t) => [t.name, t]));
   // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
-  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id }, map, agentOpts);
+  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth }, map, agentOpts);
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
@@ -1523,8 +1523,8 @@ const dmTeammateTool: Tool = {
     // 先把发起方这条消息落进私聊并广播，让界面立刻看到「我发了什么」
     const msgs = appendDmMessage(dm.id, { speaker: { id: selfId, name: selfName, kind: "agent" }, text: message });
     send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
-    // 同步跑目标员工一轮，拿回复回给发起方
-    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps());
+    // 同步跑目标员工一轮，拿回复回给发起方。深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。
+    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1);
     return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
   },
 };

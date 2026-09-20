@@ -8,7 +8,7 @@ import type { Employee, Room, RoomMessage, MsgStep } from "../../../src/team/typ
 import type { Message } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
-import { loadEmployees, buildEmployeeSystem, loadEmployeeMemory } from "./store.js";
+import { loadEmployees, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./store.js";
 
 export type RunEmployeeArgs = {
   employee: Employee;
@@ -21,10 +21,12 @@ export type RunEmployeeArgs = {
   /** 实时进度回调（思考/工具活动），主进程据此转发给界面显示，不落消息流 */
   onProgress?: (ev: ProgressEv) => void;
   /**
-   * 本轮要额外剔除的工具名。用于私聊防递归：跑「收信方」这一轮时传 ["dm_teammate"]，
-   * 让响应方不能在响应里再发起私信，否则两名员工会互相 dm_teammate 无限套娃。
+   * 本轮要额外剔除的工具名。用于私聊防递归：转派链到达上限那一轮传 ["dm_teammate"]，
+   * 让响应方不能再发起私信，否则会无限套娃。
    */
   excludeTools?: string[];
+  /** 私信转派深度：透传给工具上下文，dm_teammate 据此再+1 限制链长。缺省 0=最外层。 */
+  dmDepth?: number;
 };
 
 /** 员工干活时的实时进度（思考/工具）。只用来给界面显示，绝不进群消息流。 */
@@ -80,6 +82,16 @@ function busy(key: string): boolean {
 
 /** 员工被唤醒后先落的「收到」应答文案。跑完才落正式回复(带 steps)。 */
 const ACK_TEXT = "收到，正在处理…";
+
+/**
+ * dm_teammate 转派链最大深度(responder 深度 ≥ 此值时剔除 dm_teammate、不能再往下转)。
+ * = 一人公司设置里的「最多层数」- 1（层数=链上员工数，如 3 层 → 深度上限 2：小笨0→小码1→小美2 到顶）。
+ * 读配置，缺省 3 层；下限 1 层(=不允许转派)。防无限套娃。
+ */
+function maxDmDepth(): number {
+  const levels = Math.max(1, Math.floor(loadTeamConfig().maxDmLevels ?? 3));
+  return levels - 1;
+}
 
 // 员工干活的实时进度「真相源」——放在主进程(干活本就在这层跑)，不寄生在界面。
 // 界面只订阅 evt:team-room-progress 增量；切走再回来时先 getRoomProgress 拉一次全量补齐，
@@ -281,14 +293,18 @@ async function runRoomResponders(
  *
  * 与群不同处：
  *   · 免 @ 自动唤醒——私聊只有两人，收信方即唯一响应者，不走 pickResponders。
- *   · 防无限递归——响应轮把 dm_teammate 从工具集剔除（excludeTools），B 不能在回信里再发起私信。
+ *   · 防无限递归——用 depth 限制转派链长：depth ≥ MAX_DM_DEPTH 时才把 dm_teammate 从工具集剔除，
+ *     让转派链最多 MAX_DM_DEPTH+1 名员工(如 小笨→小码→小美)，到顶不能再往下转，天然不会死循环。
  *   · 复用 running:Map 防同一个 dm 并发跑两轮（与群同锁）。
+ *
+ * @param depth 本轮响应方在转派链上的深度：人类/群直接唤醒=0，每被 dm_teammate 转派一层+1。
  */
 export async function runDmTurn(
   dmId: string,
   responderId: string,
   incomingText: string,
   deps: OrchestratorDeps,
+  depth = 0,
 ): Promise<string> {
   if (running.has(dmId)) {
     // 同一私聊正在跑上一轮：不并发，直接告诉发起方对方在忙，避免消息流错位
@@ -333,7 +349,9 @@ export async function runDmTurn(
       history,
       input,
       signal: ac.signal,
-      excludeTools: ["dm_teammate"], // 防递归：响应方这轮不能再发起私信
+      // 转派链到顶才剔除 dm_teammate；未到顶允许本轮继续往下转派(小笨→小码→小美)。上限读一人公司设置。
+      excludeTools: depth >= maxDmDepth() ? ["dm_teammate"] : [],
+      dmDepth: depth, // 透传深度：本轮员工若再调 dm_teammate，工具据此 +1
       onProgress: (ev) => { applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
     if (ac.signal.aborted) return "";

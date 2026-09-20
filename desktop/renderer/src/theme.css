@@ -1,4 +1,19 @@
 /* 无为桌面主题：无为品牌 VI · 默认深色（玄墨底 + 月白字 + 靛青导航 + 朱赭一念火种） */
+
+/* 内置彩色 emoji 字体(Noto Color Emoji, COLRv1, woff2 压到 ~5.5MB, OFL 可商用)。
+   Win10 自带 Segoe UI Emoji 版本旧、缺 Emoji 14+ 的新符号(如 🛟)会显示成豆腐块□。
+   放进字体栈兜底：原生 emoji 优先(Win11/Mac 好看且随系统更新)，缺字才落到内置这只，保证任何 emoji 都能显示。
+   相对路径由 Vite 打包并改写(base './'→file:// 可用)。 */
+@font-face {
+  font-family: "Noto Color Emoji";
+  src: url("./assets/NotoColorEmoji.woff2") format("woff2");
+  font-display: swap;
+  /* 只接管补充平面 emoji(U+1F000–1FAFF，🛟=1F6DF 在此)。
+     故意不含 BMP 的符号/dingbat(如 ✳ 2733、▶ 25B6、◀ 25C0)——那些是 UI 里靠 CSS 上色的文本字形，
+     交给系统按文本呈现，别被彩色 emoji 抢渲染(否则界面上的 ✳ 转圈会变成丑绿 emoji)。 */
+  unicode-range: U+1F000-1FAFF;
+}
+
 :root {
   --bg: #16191e; /* 玄墨黑·主底 */
   --bg-soft: #191d23; /* 主区略提 */
@@ -19,12 +34,15 @@
   --red: #b4483a; /* 朱赭压深·错误 */
   --red-bg: rgba(180, 72, 58, 0.16);
   --warn: #c8933f; /* 暖金·警告 */
-  --mono: "JetBrains Mono", "SF Mono", Consolas, Menlo, monospace;
+  /* 末尾内置 Noto Color Emoji：只覆盖补充平面 emoji(见 @font-face unicode-range)，兜底系统缺的新 emoji。
+     不列原生 Apple/Segoe emoji 字体——它们会把 BMP dingbat(✳▶◀)抢成彩色 emoji；
+     BMP emoji 仍由浏览器自动回退到系统原生字体，外观与原来一致。 */
+  --mono: "JetBrains Mono", "SF Mono", Consolas, Menlo, monospace, "Noto Color Emoji";
   /* 拉丁优先 Inter/系统 UI；中文优先「苹方(Mac)/微软雅黑(Win)」正常字重，思源放后面兜底
-     —— 避免中文回退到细体(Source Han Light)显得很瘦。 */
+     —— 避免中文回退到细体(Source Han Light)显得很瘦。末尾 Noto emoji 同上。 */
   --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Microsoft YaHei", "Source Han Sans SC", "Noto Sans CJK SC", "Helvetica Neue",
-    Arial, sans-serif;
+    Arial, "Noto Color Emoji", sans-serif;
 }
 
 /* ============ 可切换主题（均遵循无为 VI）============ */
@@ -1800,6 +1818,11 @@ body {
 /* Markdown 渲染（有层次：标题/加粗/列表/代码/表格） */
 .md {
   line-height: 1.72;
+  /* 渲染后的 markdown 靠块级元素本身排版，块间换行不该保留成空白。
+     不写死这条时，一旦 .md 落在 white-space:pre-wrap 的容器里(如 .tc-prog-think 思考/执行过程)，
+     各块之间的原文换行会被保留、叠加块级 margin → 段落间巨大空白(反复出现的老毛病)。
+     代码块 <pre> 有自身 white-space:pre，不受影响。 */
+  white-space: normal;
 }
 .md > *:first-child {
   margin-top: 0;
@@ -6302,7 +6325,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 }
 .tc-modal {
   width: 100%;
-  max-width: 460px;
+  max-width: 560px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -6635,7 +6658,12 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 @keyframes tcbounce { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 .tc-chat-hint { font-size: 12.5px; color: var(--accent); padding: 4px; }
 /* 进度块（可展开/收起，不进消息流） */
-.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; width: 100%; max-width: 720px; }
+/* flex-shrink:0 是关键：本块带 overflow:hidden，按 CSS 规范作为纵向 flex item 时 min-height:auto→0，
+   聊天流一长、flex 有压缩压力时它会被独家挤成 0 高(只剩 2px 边框、内容被裁没=进度块"看不见")。
+   钉死不收缩，内容超出让 .tc-chat-flow 自己滚动。
+   margin-left 39px = 头像(30)+间距(9)，让进度块左缘与员工消息气泡对齐；宽度收到同一列(右缘≈92%)、
+   用 calc 保证叠加左边距后绝不横向溢出。 */
+.tc-prog { border: 1px solid var(--border); border-radius: 11px; background: var(--bg-soft); overflow: hidden; align-self: flex-start; margin-left: 39px; width: calc(100% - 39px); max-width: calc(92% - 39px); flex-shrink: 0; }
 .tc-prog-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: transparent; border: none; cursor: pointer; font: inherit; color: var(--text-dim); }
 .tc-prog-who { font-size: 12.5px; flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-prog-caret { width: 15px; height: 15px; color: var(--text-faint); transition: transform .18s; }
@@ -6660,9 +6688,9 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-msg-steps-bar:hover { color: var(--text-dim); }
 .tc-msg-steps-caret { transition: transform .18s; }
 .tc-msg-steps-caret.up { transform: rotate(180deg); }
-.tc-msg-steps-detail { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 9px 11px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--border); max-width: min(560px, 100%); box-sizing: border-box; }
+.tc-msg-steps-detail { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding: 9px 11px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--border); width: 100%; box-sizing: border-box; }
 .tc-msg-step { display: flex; flex-direction: column; gap: 3px; }
-.tc-msg-step .tc-prog-step-t { white-space: normal; overflow: visible; text-overflow: clip; } /* 落库明细里 label 换行看全 */
+.tc-msg-step .tc-prog-step-t { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; overflow-wrap: anywhere; } /* 落库明细里 label 换行看全，长串强制断行不越界 */
 .tc-msg-step-head { width: 100%; border: none; background: transparent; font: inherit; text-align: left; padding: 0; cursor: default; }
 .tc-msg-step-head.has-result { cursor: pointer; }
 .tc-msg-step-head.has-result:hover .tc-prog-step-t { color: var(--text); }
@@ -6892,6 +6920,12 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tool-sub-chev .tool-chev.open { transform: rotate(90deg); }
 /* 顶部多留 4px，让缩进子块从父员工行下缘明显脱开；border-left 在中性父行下才看得清层级 */
 .tool-sub-convos { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 4px 30px; padding-left: 8px; border-left: 1.5px solid var(--border); }
+/* 子模块灰字小标题(「你俩的对话」/「与同事的私聊」)：让两块视觉独立。with-gap=与上一块留间距。 */
+.tool-sub-grouplabel { font-size: 10.5px; color: var(--text-faint); padding: 2px 4px 1px; letter-spacing: .02em; user-select: none; }
+.tool-sub-grouplabel.with-gap { margin-top: 8px; }
+/* 通讯录员工拖拽排序：拖起来半透明 + 抓手光标 */
+.tool-sub-row[draggable="true"] { cursor: grab; }
+.tool-sub-row.dragging { opacity: .5; }
 .tool-sub-convo {
   -webkit-app-region: no-drag;
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -6899,6 +6933,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   background: transparent; color: var(--text-faint);
   font-size: 12px; text-align: left; cursor: pointer;
   transition: background .12s, color .12s;
+  min-height: 30px; box-sizing: border-box; /* 钉死行高(≥删除叉叉20px+上下padding10)：悬停切换时间/叉叉不再改变行高、不抖动 */
 }
 .tool-sub-convo:hover { background: rgba(127,127,127,.09); color: var(--text); }
 /* 选中子对话：accent 底 + accent 左竖条，明确"这才是被选中的那一项"(呼应 .session-item.active 规范) */
@@ -7044,6 +7079,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .sop-ver-preview-t { font-size: 13px; font-weight: 700; color: var(--accent); }
 .sop-ver-preview-bar .tc-btn { margin-left: auto; }
 
-/* 群/私聊底栏(窄于主对话)：允许换行,避免元素多时撑宽挤出横向滚动条。不用overflow:hidden(会裁上弹菜单)。 */
+/* 群/私聊底栏(窄于主对话)：一律不换行(换行很丑)，元素多时靠模型名等可收缩项省略号截断。不用overflow:hidden(会裁上弹菜单)。 */
 .tc-room-foot { min-width: 0; max-width: 100%; }
-.tc-room-foot .composer-foot { flex-wrap: wrap; row-gap: 3px; max-width: 100%; }
+.tc-room-foot .composer-foot { flex-wrap: nowrap; max-width: 100%; }

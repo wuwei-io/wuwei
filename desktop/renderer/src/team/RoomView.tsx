@@ -53,6 +53,8 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
   const [newCoord, setNewCoord] = useState<string>("");
   const endRef = useRef<HTMLDivElement | null>(null);
+  const flowRef = useRef<HTMLDivElement | null>(null); // 聊天流滚动容器
+  const stuckRef = useRef(true); // 聊天流是否吸底：默认吸底；用户往上滚→false 不再自动拽回，滚回底部→true 恢复
   const curRef = useRef<string | null>(null); // 给 onEvent 闭包读最新 cur(避免用捕获的旧值 / 在 setState 里套 setState 的反模式)
   const api = (window as any).wuwei?.team;
 
@@ -104,7 +106,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           if (p.done) { const n = { ...prev }; delete n[empId]; return n; } // 该员工干完，清掉他的进度
           const pc = prev[empId] || { name: p.empName || "", text: "", tools: [] };
           const next = { ...pc, name: p.empName || pc.name };
-          if (p.kind === "text") next.text = (pc.text + (p.delta || "")).slice(-800); // 只留最近思考，别无限涨
+          if (p.kind === "text") next.text = pc.text + (p.delta || ""); // 全量保留员工输出，不截断顶部(主进程也存完整；框有 max-height 滚动，长了往上滚看全)
           else if (p.kind === "tool-start") next.tools = [...pc.tools, { name: p.name, input: p.input, done: false }];
           else if (p.kind === "tool-end") { const t = [...pc.tools]; for (let i = t.length - 1; i >= 0; i--) if (!t[i].done) { t[i] = { ...t[i], done: true, isError: p.isError }; break; } next.tools = t; }
           return { ...prev, [empId]: next };
@@ -117,6 +119,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
 
   useEffect(() => {
     curRef.current = cur; // 同步给 onEvent 闭包
+    stuckRef.current = true; // 进新房间默认吸底看最新
     if (!cur) return;
     setHint("");
     setProgress({}); // 切房间先清空，再从主进程拉「该房间当前全量进度」补齐切走期间错过的增量
@@ -135,8 +138,16 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   }, [cur]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    // 即时滚动(非 smooth)：smooth 动画期间的中间 onScroll 会把 stuck 误判成 false、打断后续吸底。只在吸底时滚。
+    if (stuckRef.current) endRef.current?.scrollIntoView({ block: "end" });
   }, [msgs.length, running]);
+
+  // 进度块出现/增长(工具+1、思考流变长)也吸底——否则块冒在折叠区下方，用户得手动往下滚才看到。
+  // 用即时滚动(非 smooth)：流式高频更新时 smooth 会排队卡顿。同样受 stuckRef 门控。
+  const progSig = Object.values(progress).reduce((n, p) => n + p.tools.length + p.text.length, Object.keys(progress).length);
+  useEffect(() => {
+    if (stuckRef.current) endRef.current?.scrollIntoView({ block: "end" });
+  }, [progSig]);
 
   // 「已排队」提示是瞬时反馈：下一条消息(上一轮的回复 / 本轮的「收到」)落地就撤掉，别一直挂着。
   useEffect(() => {
@@ -166,6 +177,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     setText("");
     setHint("");
     setJustStopped(false);
+    stuckRef.current = true; // 自己发了消息，吸底看它
     // 私聊(type==="dm")：唤醒「对方」= 非当前视角(dmSelfId)的那名成员，让人类能像微信一样直接跟员工对话。
     // 群场景不传 dmResponder，主进程仍走 @/协调者的 pickResponders。
     const dmResponder = room?.type === "dm" ? (room.members || []).find((m) => m !== dmSelfId) : undefined;
@@ -181,6 +193,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     if (!workers.length) return;
     setJustStopped(false);
     setHint("");
+    stuckRef.current = true; // 点了继续，吸底看进展
     if (room?.type === "dm") {
       const dmResponder = (room.members || []).find((m) => m !== dmSelfId);
       void api.roomSend(cur, en ? "Please continue from where you left off." : "接着上一步继续做。", dmResponder);
@@ -338,7 +351,12 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   // 顶栏(群名/成员/⋯)已上移到软件标题栏(App 里)，这里不再重复渲染，直接进消息流。
   return (
     <div className="tc-pane tc-chat-pane">
-      <div className="tc-chat-flow">
+      <div
+        className="tc-chat-flow"
+        ref={flowRef}
+        // 智能吸底：用户滚到底(<48px)才随新消息吸底；往上翻看历史就不自动拽回，滚回底部自动恢复。
+        onScroll={() => { const el = flowRef.current; if (el) stuckRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}
+      >
         {msgs.length === 0 && (
           <div className="tc-chat-empty">
             {en
@@ -442,7 +460,12 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         })}
                       </div>
                     )}
-                    {p.text && <div className="tc-prog-think" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>{renderMd ? renderMd(p.text) : p.text}</div>}
+                    {p.text && <div
+                      className="tc-prog-think"
+                      // 智能吸底：用户滚到底(stuck≠"0")才随新内容吸底；往上滚看历史就不再拽回，滚回底部自动恢复吸底。
+                      onScroll={(e) => { const el = e.currentTarget; el.dataset.stuck = (el.scrollHeight - el.scrollTop - el.clientHeight < 24) ? "1" : "0"; }}
+                      ref={(el) => { if (el && el.dataset.stuck !== "0") el.scrollTop = el.scrollHeight; }}
+                    >{renderMd ? renderMd(p.text) : p.text}</div>}
                   </div>
                 ))}
               </div>

@@ -16,7 +16,7 @@ import { BabyHero } from "./baby/BabyHero.js";
 import { BabyPyramid } from "./baby/BabyPyramid.js";
 import * as Ic from "./baby/icons.js";
 // 「AI 员工团队」可选模块：整个渲染层只在这里引一次（可插拔契约，见设计方案第七节）
-import { AppStore } from "./team/AppStore.js";
+import { AppStore, EmployeeEditModal } from "./team/AppStore.js";
 import { RoomView } from "./team/RoomView.js";
 import { SopView } from "./team/SopView.js";
 import { EmployeeAvatar } from "./team/EmployeeAvatar.js";
@@ -2268,6 +2268,53 @@ function RoomSettingsModal({
     </div>
   );
 }
+// 一人公司设置模态：目前只有「转派链最多层数」(dm_teammate 员工互相转派)。风格复用群设置(add-st-dialog)。
+function CompanySettingsModal({ en, onClose }: { en: boolean; onClose: () => void }) {
+  const api = (window as any).wuwei?.team;
+  const clamp = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
+  const [levels, setLevels] = useState(3);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { api?.configGet?.().then((c: any) => setLevels(clamp(c?.maxDmLevels ?? 3))); /* eslint-disable-next-line */ }, []);
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    await api?.configSet?.({ maxDmLevels: levels });
+    onClose();
+  };
+  return (
+    <div className="perm-overlay" onClick={onClose}>
+      <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
+        <h3>{en ? "Company settings" : "一人公司设置"}</h3>
+        <div className="st-field">
+          <label className="st-label">{en ? "Max transfer-chain levels" : "转派链最多层数"}</label>
+          <div className="rs-wake">
+            <div className="rs-stepper">
+              <button type="button" className="rs-step" disabled={levels <= 1} aria-label={en ? "Decrease" : "减少"} onClick={() => setLevels((v) => clamp(v - 1))}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14" /></svg>
+              </button>
+              <span className="rs-wake-num">{levels}</span>
+              <button type="button" className="rs-step" disabled={levels >= 5} aria-label={en ? "Increase" : "增加"} onClick={() => setLevels((v) => clamp(v + 1))}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+            </div>
+            <div className="rs-chips">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button type="button" key={n} className={"rs-chip" + (levels === n ? " on" : "")} onClick={() => setLevels(n)}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <p className="st-hint">{en
+            ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
+            : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}</p>
+        </div>
+        <div className="btns">
+          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+          <button className="allow" disabled={saving} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // SOP 文字输入弹窗：替代原生 prompt()（Electron 里 prompt 返回 null 不可用）。
 // 风格复用 perm-overlay + add-st-dialog + st-input，玄墨黑 VI，回车=确定、Esc/遮罩=取消。
 type SopPromptOpts = { title: string; label?: string; defaultValue?: string; placeholder?: string; okText?: string; onOk: (text: string) => void };
@@ -3221,6 +3268,7 @@ export function App() {
   const [activeSopId, setActiveSopId] = useState<string | null>(null); // 当前查看的 SOP
   const [sopCatOpen, setSopCatOpen] = useState<Set<string>>(() => new Set()); // 侧栏哪些 SOP 类别展开了
   const [sopDrag, setSopDrag] = useState<string | null>(null); // 正在拖拽的节点 id
+  const [empDrag, setEmpDrag] = useState<string | null>(null); // 通讯录里正在拖拽排序的员工 id
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // 当前在看的群(从侧边栏点进来)
   // DM 私聊本质也是 room(type==="dm")，复用 activeRoomId 进入。dmSelfId=从哪名员工的侧栏点进来的，
   // 用于标题栏显示「对方」名字(镜像：小笨侧栏点=显示小数，小数侧栏点=显示小笨)。
@@ -3545,6 +3593,8 @@ export function App() {
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
   const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
+  const [companySettings, setCompanySettings] = useState(false); // 一人公司设置模态(转派链最多层数)
+  const [editEmp, setEditEmp] = useState<any | null>(null); // 右键员工「编辑」→ 在当前界面直接弹编辑框(不跳转到一人公司管理页)
   // 统一样式化确认弹窗(替代原生 confirm())：玄墨黑 VI、遮罩点击关、圆角卡片，复用 perm-overlay + add-st-dialog
   const [confirmDlg, setConfirmDlg] = useState<{ title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void } | null>(null);
   const askConfirm = (opts: { title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void }) => setConfirmDlg(opts);
@@ -5830,7 +5880,7 @@ export function App() {
                 </>
               )}
             </div>
-            {!roomMode && (
+            {!roomMode && !sessions.find((s) => s.id === currentId)?.employeeId /* 一人公司员工私聊会话也隐藏「自动/智能继续」档 */ && (
             <div className="mode-mini" title={modeOf(currentId) === "manual" ? t("mode.manualTip") : modeOf(currentId) === "cont" ? (lang === "en" ? "Smart-continue: auto-approve + keep advancing toward the goal after each turn" : "智能继续：自动放行权限 + 跑完一轮自己朝目标接着推进") : t("mode.autoTip")}>
               {(showManual || modeOf(currentId) === "manual") && (
                 <button className={modeOf(currentId) === "manual" ? "on" : ""} onClick={() => setMode(currentId, "manual")}>
@@ -6122,7 +6172,7 @@ export function App() {
                 }}
               >
                 {roomMode
-                  ? (roomRunning ? `● ${lang === "en" ? "Working…" : "员工干活中"}` : `○ ${t("foot.ready")}`)
+                  ? `○ ${t("foot.ready")}` /* 群/私聊底栏不显示「员工干活中」(会撑长导致换行)——运行态已由进度块+停止按钮体现，这里只保持默认 */
                   : runningSet.size > 1
                   ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`
                   : busy
@@ -6258,8 +6308,20 @@ export function App() {
                   <span className="tool-sub-sec-nm">{lang === "en" ? "Contacts" : "通讯录"}</span>
                   <span className="tool-sub-sec-cnt">{teamEmployees.length}</span>
                 </button>
-                {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式） */}
-                {contactsExpanded && [...teamEmployees].sort((a:any,b:any)=>(b.pinnedAt||0)-(a.pinnedAt||0)).map((e: any) => {
+                {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式）。支持拖拽调整顺序。 */}
+                {contactsExpanded && (() => {
+                  // 排序：置顶(pinnedAt)优先，其次手动拖拽序(order)，都没有按原序。
+                  const sortedEmps = [...teamEmployees].sort((a: any, b: any) => (b.pinnedAt || 0) - (a.pinnedAt || 0) || (a.order ?? 9999) - (b.order ?? 9999));
+                  // 拖拽落下：把被拖的员工插到目标位置，重排后把新顺序落库(order=下标)。
+                  const onEmpDrop = (targetId: string) => {
+                    const id = empDrag; setEmpDrag(null);
+                    if (!id || id === targetId) return;
+                    const ids = sortedEmps.map((x: any) => x.id).filter((x: string) => x !== id);
+                    const ti = ids.indexOf(targetId);
+                    ids.splice(ti < 0 ? ids.length : ti, 0, id);
+                    void (window as any).wuwei?.team?.employeeReorder?.(ids);
+                  };
+                  return sortedEmps.map((e: any) => {
                   const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                   // 该员工参与的私聊(镜像)：同一条 dm 会在双方侧栏各显示一次，各自显示「对方」
                   const empDms = teamRooms.filter((r: any) => r.type === "dm" && (r.members || []).includes(e.id)).sort((a:any,b:any)=>(b.updatedAt||0)-(a.updatedAt||0));
@@ -6274,7 +6336,14 @@ export function App() {
                   };
                   return (
                     <div className="tool-sub-emp" key={e.id}>
-                      <div className={"tool-sub-row" + (activeEmp ? " on" : "")}>
+                      <div
+                        className={"tool-sub-row" + (activeEmp ? " on" : "") + (empDrag === e.id ? " dragging" : "")}
+                        draggable
+                        onDragStart={() => setEmpDrag(e.id)}
+                        onDragEnd={() => setEmpDrag(null)}
+                        onDragOver={(ev) => { if (empDrag) ev.preventDefault(); }}
+                        onDrop={(ev) => { ev.preventDefault(); onEmpDrop(e.id); }}
+                      >
                         <button
                           className="tool-sub-item"
                           title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
@@ -6296,6 +6365,8 @@ export function App() {
                       </div>
                       {isExpanded && (
                         <div className="tool-sub-convos">
+                          {/* 模块①：你和这名员工的对话 */}
+                          <div className="tool-sub-grouplabel">{lang === "en" ? "Chats" : "你俩的对话"}</div>
                           {empSessions.map((s) => (
                             <div
                               key={s.id}
@@ -6319,7 +6390,8 @@ export function App() {
                           <button className="tool-sub-newconvo" onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}>
                             + {lang === "en" ? "New chat" : "新对话"}
                           </button>
-                          {/* 员工间私聊(镜像)：显示「对方」头像+名，点进复用 RoomView。dmSelfId=e.id 让标题显示对方 */}
+                          {/* 模块②：该员工与其他同事的私聊(镜像)。有才显示，带灰字标题 + 与上一块留间距，两块视觉独立。 */}
+                          {empDms.length > 0 && <div className="tool-sub-grouplabel with-gap">{lang === "en" ? "DMs with teammates" : "与同事的私聊"}</div>}
                           {empDms.map((r: any) => {
                             const otherId = (r.members || []).find((m: string) => m !== e.id);
                             const other = teamEmployees.find((x: any) => x.id === otherId);
@@ -6351,7 +6423,8 @@ export function App() {
                       )}
                     </div>
                   );
-                })}
+                  });
+                })()}
                 {/* 群聊子板块头：独立展开/收起，后续群多了(按项目分)也清爽 */}
                 <button
                   className="tool-sub-sec"
@@ -6431,11 +6504,12 @@ export function App() {
                 {teamMenu.kind === "company" && (<>
                   <Item label={lang === "en" ? "Add teammate" : "新建/导入员工"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "New group" : "建群"} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Settings" : "设置"} on={() => { setCompanySettings(true); close(); }} />
                   <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
                 </>)}
                 {teamMenu.kind === "employee" && (<>
                   <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
+                  <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { const emp = teamEmployees.find((x: any) => x.id === teamMenu.id); if (emp) setEditEmp(emp); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("employee", teamMenu.id!)} />
                   <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.removeEmployee?.(teamMenu.id); } }); }} />
                 </>)}
@@ -9694,6 +9768,16 @@ export function App() {
           />
         );
       })()}
+      {companySettings && <CompanySettingsModal en={lang === "en"} onClose={() => setCompanySettings(false)} />}
+      {/* 右键员工「编辑」：顶层弹编辑框，覆盖在当前界面上，不切走 appView。保存后 evt:team 广播自动刷新侧栏。 */}
+      {editEmp && (
+        <EmployeeEditModal
+          en={lang === "en"}
+          providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
+          employee={editEmp}
+          onClose={() => setEditEmp(null)}
+        />
+      )}
       {secretPrompt && (
         <div className="perm-overlay" onClick={() => setSecretPrompt(null)}>
           <div className="add-st-dialog sec-prompt" onClick={(e) => e.stopPropagation()}>

@@ -41,6 +41,9 @@ import {
   loadEmployeeMemory,
   employeeMemoryPath,
   buildEmployeeSystem,
+  loadTeamConfig,
+  saveTeamConfig,
+  reorderEmployees,
 } from "./store.js";
 
 export type TeamDeps = {
@@ -154,6 +157,10 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
 
   ipcMain.handle("team:state", () => snapshot());
 
+  // 一人公司级配置(转派链最大层数等)
+  ipcMain.handle("team:config:get", () => loadTeamConfig());
+  ipcMain.handle("team:config:set", (_e, patch: unknown) => saveTeamConfig((patch || {}) as any));
+
   ipcMain.handle("team:install", (_e, appId: string) => {
     const app = findBuiltinApp(String(appId || ""));
     if (!app) return { ok: false, error: "unknown_app" };
@@ -189,6 +196,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   });
 
   ipcMain.handle("team:employee:pin", (_e, id: string) => { pinEmployee(String(id || "")); push(); return { ok: true, ...snapshot() }; });
+  ipcMain.handle("team:employee:reorder", (_e, ids: unknown) => { reorderEmployees(Array.isArray(ids) ? ids.map(String) : []); push(); return { ok: true, ...snapshot() }; });
   ipcMain.handle("team:room:pin", (_e, id: string) => { pinRoom(String(id || "")); deps.send("evt:team-rooms", { rooms: loadRooms() }); return { ok: true, rooms: loadRooms() }; });
 
   // 扫描本机可导入的员工来源（openclaw 的 IDENTITY.md）。纯读文件，不需要 openclaw 在运行。

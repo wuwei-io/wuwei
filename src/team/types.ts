@@ -40,6 +40,8 @@ export interface Employee {
   fromApp?: string;
   /** 置顶时间戳；有值=置顶，按它降序排前 */
   pinnedAt?: number;
+  /** 通讯录里的手动排序序号（升序）。拖拽调整位置时写入；缺省的排在有值的之后。 */
+  order?: number;
 }
 
 /**

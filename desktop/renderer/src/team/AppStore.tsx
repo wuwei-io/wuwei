@@ -138,6 +138,140 @@ const ICON_CHOICES = ["", "pen", "code", "chart", "palette", "brain", "coin", "c
 
 type ProviderOpt = { id: string; label: string; models: string[] };
 
+// 员工编辑弹窗：独立组件，AppStore(管理页) 与 App(右键「编辑」在当前界面直接弹，不跳转到一人公司) 共用。
+// 自带草稿状态；保存/删除后回调 onSaved(带最新列表)再 onClose。
+export function EmployeeEditModal({
+  en, providers, employee, onClose, onSaved,
+}: {
+  en: boolean;
+  providers?: ProviderOpt[];
+  employee: Employee;
+  onClose: () => void;
+  onSaved?: (r: { apps?: TeamAppCard[]; employees?: Employee[] }) => void;
+}) {
+  const api = (window as any).wuwei?.team;
+  const [edit, setEdit] = useState<Employee>(employee);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  return (
+    <>
+      <div className="tc-modal-mask" onClick={onClose}>
+        <div className="tc-modal" onClick={(ev) => ev.stopPropagation()}>
+          <div className="tc-modal-head">
+            <span>{en ? "Edit teammate" : "编辑员工"}</span>
+            <button className="tc-modal-x" onClick={onClose} title={en ? "Close" : "关闭"}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          <div className="tc-field">
+            <label>{en ? "Avatar" : "头像"}</label>
+            <div className="tc-ava-row">
+              <span className="tc-ava-preview">
+                <EmployeeAvatar icon={edit.icon} avatarData={edit.avatarData} name={edit.name} />
+              </span>
+              <div className="tc-ava-actions">
+                <label className="tc-btn-ghost tc-upload">
+                  {en ? "Upload image" : "上传图片"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ""; if (f) setCropFile(f); }} />
+                </label>
+                {edit.avatarData && (
+                  <button className="tc-btn-ghost danger" onClick={() => setEdit({ ...edit, avatarData: undefined })}>{en ? "Remove photo" : "移除照片"}</button>
+                )}
+              </div>
+            </div>
+            <div className="tc-icon-grid" style={{ marginTop: 10, opacity: edit.avatarData ? 0.45 : 1 }}>
+              {ICON_CHOICES.map((ic) => (
+                <button key={ic || "_txt"} className={"tc-icon-opt" + (!edit.avatarData && (edit.icon || "") === ic ? " on" : "")} title={ic || (en ? "Initial" : "首字")} onClick={() => setEdit({ ...edit, icon: ic || undefined, avatarData: undefined })}>
+                  {ic ? <EmployeeAvatar icon={ic} name={edit.name} /> : <span className="team-avatar-txt">{edit.name.slice(0, 1) || "员"}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="tc-field">
+            <label>{en ? "Name" : "名字"}</label>
+            <input className="tc-input" value={edit.name} maxLength={12} onChange={(ev) => setEdit({ ...edit, name: ev.target.value })} />
+          </div>
+          <div className="tc-field">
+            <label>{en ? "Title" : "职位"}</label>
+            <input className="tc-input" value={edit.title || ""} maxLength={8} placeholder={en ? "e.g. Copywriter" : "如：文案"} onChange={(ev) => setEdit({ ...edit, title: ev.target.value })} />
+          </div>
+          <div className="tc-field">
+            <label>{en ? "One-liner" : "简介"}</label>
+            <input className="tc-input" value={edit.blurb || ""} maxLength={30} placeholder={en ? "A short line under the name" : "名字下方的一句话"} onChange={(ev) => setEdit({ ...edit, blurb: ev.target.value })} />
+          </div>
+
+          {providers && providers.length > 0 && (
+            <div className="tc-field">
+              <label>{en ? "Model" : "模型"}<em>{en ? "which platform & model this teammate uses" : "这名员工用哪个平台和模型"}</em></label>
+              <div className="tc-model-row">
+                <select className="tc-input tc-select" value={edit.model?.providerId || ""} onChange={(ev) => { const pid = ev.target.value; if (!pid) { setEdit({ ...edit, model: undefined }); return; } const p = providers.find((x) => x.id === pid); setEdit({ ...edit, model: { providerId: pid, model: p?.models?.[0] || "" } }); }}>
+                  <option value="">{en ? "Follow current chat" : "跟随当前会话"}</option>
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                {edit.model?.providerId && (() => {
+                  const p = providers.find((x) => x.id === edit.model!.providerId);
+                  const models = p?.models || [];
+                  return models.length > 0 ? (
+                    <select className="tc-input tc-select" value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })}>
+                      {models.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  ) : (
+                    <input className="tc-input" placeholder={en ? "model id" : "模型名"} value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })} />
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          <div className="tc-divider"><span>{en ? "Persona files" : "人格定义"}</span></div>
+          <div className="tc-field">
+            <label>{en ? "Identity & duties" : "身份与职责"}<em>{en ? "who they are, what they own, what they don't" : "他是谁、负责什么、不做什么"}</em></label>
+            <textarea className="tc-textarea" rows={5} value={edit.persona || ""} onChange={(ev) => setEdit({ ...edit, persona: ev.target.value })} />
+          </div>
+          <div className="tc-field">
+            <label>{en ? "Personality & voice" : "性格与说话风格"}<em>{en ? "tone, temperament, how they talk" : "语气、脾气、表达习惯"}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.soul || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, soul: ev.target.value })} />
+          </div>
+          <div className="tc-field">
+            <label>{en ? "About the boss" : "关于老板"}<em>{en ? "who they serve, preferences, projects" : "服务的人是谁、偏好、在做的项目"}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.aboutUser || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, aboutUser: ev.target.value })} />
+          </div>
+          <div className="tc-field">
+            <label>{en ? "Long-term memory" : "长期记忆"}<em>{en ? "background & conclusions to always remember" : "需长期记住的背景、约定、结论"}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.memory || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, memory: ev.target.value })} />
+          </div>
+
+          <div className="tc-modal-foot">
+            <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(en ? `Delete "${edit.name}"? This can't be undone.` : `删除员工「${edit.name}」？此操作不可撤销。`)) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{en ? "Delete" : "删除员工"}</button>
+            <span style={{ flex: 1 }} />
+            <button className="tc-btn-ghost" onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+            <button className="tc-btn" disabled={!edit.name.trim() || !edit.persona.trim()} onClick={async () => {
+              const r = await api.updateEmployee(edit.id, {
+                name: edit.name.trim(),
+                title: (edit.title || "").trim() || undefined,
+                blurb: (edit.blurb || "").trim() || undefined,
+                icon: edit.icon,
+                avatarData: edit.avatarData ?? null,
+                persona: edit.persona.trim(),
+                soul: (edit.soul || "").trim() || null,
+                aboutUser: (edit.aboutUser || "").trim() || null,
+                memory: (edit.memory || "").trim() || null,
+                model: edit.model?.providerId && edit.model.model ? edit.model : null,
+              });
+              onSaved?.(r || {});
+              onClose();
+            }}>{en ? "Save" : "保存"}</button>
+          </div>
+        </div>
+      </div>
+      {cropFile && (
+        <AvatarCropper file={cropFile} en={en} onCancel={() => setCropFile(null)} onDone={(dataUrl) => { setEdit({ ...edit, avatarData: dataUrl }); setCropFile(null); }} />
+      )}
+    </>
+  );
+}
+
 export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boolean; onEmployees?: (list: Employee[]) => void; onOpenChat?: () => void; providers?: ProviderOpt[] }) {
   const [state, setState] = useState<TeamState>({ apps: [], employees: [] });
   const [busy, setBusy] = useState<string | null>(null);
@@ -146,10 +280,8 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
   const [scan, setScan] = useState<ImportSource[] | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [imported, setImported] = useState<string>("");
-  // 编辑员工：edit=正在编辑的草稿（改头像/名字/职位/简介），null=没在编辑
+  // 编辑员工：edit=正在编辑的员工(交给共享的 EmployeeEditModal)，null=没在编辑
   const [edit, setEdit] = useState<Employee | null>(null);
-  // 待裁剪的图片文件：用户选了本地图 → 进裁剪器 → 确认后写回 edit.avatarData
-  const [cropFile, setCropFile] = useState<File | null>(null);
   // 「添加员工」弹窗：装团队包 / 从 openclaw 导入 都收进这里，不再摊在主界面。
   const [showAdd, setShowAdd] = useState(false);
 
@@ -436,184 +568,14 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
         </div>
       )}
 
-      {/* 编辑员工：改头像/名字/职位/简介，人格提示词较长单独在别处编辑，这里先管这四项 */}
+      {/* 编辑员工：复用共享的 EmployeeEditModal(与 App 右键「编辑」同一个) */}
       {edit && (
-        <div className="tc-modal-mask" onClick={() => setEdit(null)}>
-          <div className="tc-modal" onClick={(ev) => ev.stopPropagation()}>
-            <div className="tc-modal-head">
-              <span>{en ? "Edit teammate" : "编辑员工"}</span>
-              <button className="tc-modal-x" onClick={() => setEdit(null)} title={en ? "Close" : "关闭"}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            <div className="tc-field">
-              <label>{en ? "Avatar" : "头像"}</label>
-              <div className="tc-ava-row">
-                {/* 当前头像大预览 */}
-                <span className="tc-ava-preview">
-                  <EmployeeAvatar icon={edit.icon} avatarData={edit.avatarData} name={edit.name} />
-                </span>
-                <div className="tc-ava-actions">
-                  <label className="tc-btn-ghost tc-upload">
-                    {en ? "Upload image" : "上传图片"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      onChange={(ev) => {
-                        const f = ev.target.files?.[0];
-                        ev.target.value = ""; // 允许重选同一文件
-                        if (f) setCropFile(f);
-                      }}
-                    />
-                  </label>
-                  {edit.avatarData && (
-                    <button className="tc-btn-ghost danger" onClick={() => setEdit({ ...edit, avatarData: undefined })}>
-                      {en ? "Remove photo" : "移除照片"}
-                    </button>
-                  )}
-                </div>
-              </div>
-              {/* 内置图标：没上传照片时选一个,或作为兜底 */}
-              <div className="tc-icon-grid" style={{ marginTop: 10, opacity: edit.avatarData ? 0.45 : 1 }}>
-                {ICON_CHOICES.map((ic) => (
-                  <button
-                    key={ic || "_txt"}
-                    className={"tc-icon-opt" + (!edit.avatarData && (edit.icon || "") === ic ? " on" : "")}
-                    title={ic || (en ? "Initial" : "首字")}
-                    onClick={() => setEdit({ ...edit, icon: ic || undefined, avatarData: undefined })}
-                  >
-                    {ic ? <EmployeeAvatar icon={ic} name={edit.name} /> : <span className="team-avatar-txt">{edit.name.slice(0, 1) || "员"}</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="tc-field">
-              <label>{en ? "Name" : "名字"}</label>
-              <input className="tc-input" value={edit.name} maxLength={12} onChange={(ev) => setEdit({ ...edit, name: ev.target.value })} />
-            </div>
-            <div className="tc-field">
-              <label>{en ? "Title" : "职位"}</label>
-              <input className="tc-input" value={edit.title || ""} maxLength={8} placeholder={en ? "e.g. Copywriter" : "如：文案"} onChange={(ev) => setEdit({ ...edit, title: ev.target.value })} />
-            </div>
-            <div className="tc-field">
-              <label>{en ? "One-liner" : "简介"}</label>
-              <input className="tc-input" value={edit.blurb || ""} maxLength={30} placeholder={en ? "A short line under the name" : "名字下方的一句话"} onChange={(ev) => setEdit({ ...edit, blurb: ev.target.value })} />
-            </div>
-
-            {/* 模型：员工绑自己的平台+模型（对应对话框底栏的选平台/选模型）。缺省=跟随当前会话模型。
-                这样文案用便宜快的、评审用贵的，成本自然分层；也避免"没绑模型回退到失效的全局模型"报 401。 */}
-            {providers && providers.length > 0 && (
-              <div className="tc-field">
-                <label>{en ? "Model" : "模型"}<em>{en ? "which platform & model this teammate uses" : "这名员工用哪个平台和模型"}</em></label>
-                <div className="tc-model-row">
-                  <select
-                    className="tc-input tc-select"
-                    value={edit.model?.providerId || ""}
-                    onChange={(ev) => {
-                      const pid = ev.target.value;
-                      if (!pid) { setEdit({ ...edit, model: undefined }); return; }
-                      const p = providers.find((x) => x.id === pid);
-                      setEdit({ ...edit, model: { providerId: pid, model: p?.models?.[0] || "" } });
-                    }}
-                  >
-                    <option value="">{en ? "Follow current chat" : "跟随当前会话"}</option>
-                    {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                  {edit.model?.providerId && (() => {
-                    const p = providers.find((x) => x.id === edit.model!.providerId);
-                    const models = p?.models || [];
-                    return models.length > 0 ? (
-                      <select
-                        className="tc-input tc-select"
-                        value={edit.model.model || ""}
-                        onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })}
-                      >
-                        {models.map((m) => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        className="tc-input"
-                        placeholder={en ? "model id" : "模型名"}
-                        value={edit.model.model || ""}
-                        onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })}
-                      />
-                    );
-                  })()}
-                </div>
-              </div>
-            )}
-
-            {/* 人格定义：对应 openclaw 的 IDENTITY/SOUL/USER/MEMORY。聊天时拼进系统提示词，
-                员工据此了解上下文、约束行为、知道自己擅长啥。 */}
-            <div className="tc-divider"><span>{en ? "Persona files" : "人格定义"}</span></div>
-            <div className="tc-field">
-              <label>{en ? "Identity & duties" : "身份与职责"}<em>{en ? "who they are, what they own, what they don't" : "他是谁、负责什么、不做什么"}</em></label>
-              <textarea className="tc-textarea" rows={5} value={edit.persona || ""} onChange={(ev) => setEdit({ ...edit, persona: ev.target.value })} />
-            </div>
-            <div className="tc-field">
-              <label>{en ? "Personality & voice" : "性格与说话风格"}<em>{en ? "tone, temperament, how they talk" : "语气、脾气、表达习惯"}</em></label>
-              <textarea className="tc-textarea" rows={3} value={edit.soul || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, soul: ev.target.value })} />
-            </div>
-            <div className="tc-field">
-              <label>{en ? "About the boss" : "关于老板"}<em>{en ? "who they serve, preferences, projects" : "服务的人是谁、偏好、在做的项目"}</em></label>
-              <textarea className="tc-textarea" rows={3} value={edit.aboutUser || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, aboutUser: ev.target.value })} />
-            </div>
-            <div className="tc-field">
-              <label>{en ? "Long-term memory" : "长期记忆"}<em>{en ? "background & conclusions to always remember" : "需长期记住的背景、约定、结论"}</em></label>
-              <textarea className="tc-textarea" rows={3} value={edit.memory || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, memory: ev.target.value })} />
-            </div>
-
-            <div className="tc-modal-foot">
-              <button
-                className="tc-btn-ghost danger tc-del-emp"
-                onClick={async () => {
-                  if (!confirm(en ? `Delete "${edit.name}"? This can't be undone.` : `删除员工「${edit.name}」？此操作不可撤销。`)) return;
-                  const r = await api.removeEmployee(edit.id);
-                  if (r?.apps) setState({ apps: r.apps, employees: r.employees });
-                  setEdit(null);
-                }}
-              >
-                {en ? "Delete" : "删除员工"}
-              </button>
-              <span style={{ flex: 1 }} />
-              <button className="tc-btn-ghost" onClick={() => setEdit(null)}>{en ? "Cancel" : "取消"}</button>
-              <button
-                className="tc-btn"
-                disabled={!edit.name.trim() || !edit.persona.trim()}
-                onClick={async () => {
-                  const r = await api.updateEmployee(edit.id, {
-                    name: edit.name.trim(),
-                    title: (edit.title || "").trim() || undefined,
-                    blurb: (edit.blurb || "").trim() || undefined,
-                    icon: edit.icon,
-                    avatarData: edit.avatarData ?? null, // null=显式清除已存的头像图
-                    persona: edit.persona.trim(),
-                    soul: (edit.soul || "").trim() || null,
-                    aboutUser: (edit.aboutUser || "").trim() || null,
-                    memory: (edit.memory || "").trim() || null,
-                    model: edit.model?.providerId && edit.model.model ? edit.model : null, // null=跟随当前会话
-                  });
-                  if (r?.apps) setState({ apps: r.apps, employees: r.employees });
-                  setEdit(null);
-                }}
-              >
-                {en ? "Save" : "保存"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 头像裁剪器：选了本地图就弹出，确认后写回 edit.avatarData（还没保存，点弹窗保存才落库） */}
-      {cropFile && edit && (
-        <AvatarCropper
-          file={cropFile}
+        <EmployeeEditModal
           en={en}
-          onCancel={() => setCropFile(null)}
-          onDone={(dataUrl) => { setEdit({ ...edit, avatarData: dataUrl }); setCropFile(null); }}
+          providers={providers}
+          employee={edit}
+          onClose={() => setEdit(null)}
+          onSaved={(r) => { if (r?.apps) setState({ apps: r.apps as any, employees: (r.employees || []) as any }); }}
         />
       )}
     </div>

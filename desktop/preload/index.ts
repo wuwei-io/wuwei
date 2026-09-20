@@ -193,12 +193,15 @@ const api = {
   // 渲染层只在开关为真时才会用到它们，整块删掉即可摘除该模块。
   team: {
     state: () => ipcRenderer.invoke("team:state"),
+    configGet: () => ipcRenderer.invoke("team:config:get"),
+    configSet: (patch: unknown) => ipcRenderer.invoke("team:config:set", patch),
     install: (appId: string) => ipcRenderer.invoke("team:install", appId),
     uninstall: (appId: string) => ipcRenderer.invoke("team:uninstall", appId),
     toggle: (appId: string) => ipcRenderer.invoke("team:toggle", appId),
     updateEmployee: (id: string, patch: unknown) => ipcRenderer.invoke("team:employee:update", id, patch),
     removeEmployee: (id: string) => ipcRenderer.invoke("team:employee:remove", id),
     employeePin: (id: string) => ipcRenderer.invoke("team:employee:pin", id),
+    employeeReorder: (ids: string[]) => ipcRenderer.invoke("team:employee:reorder", ids),
     roomPin: (id: string) => ipcRenderer.invoke("team:room:pin", id),
     chat: (employeeId: string) => ipcRenderer.invoke("team:chat", employeeId),
     rooms: () => ipcRenderer.invoke("team:rooms"),

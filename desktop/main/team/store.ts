@@ -12,6 +12,7 @@ import type { Employee, TeamApp } from "../../../src/team/types.js";
 const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei", "team");
 const APPS = join(DIR, "apps.json");
 const EMPLOYEES = join(DIR, "employees.json");
+const CONFIG = join(DIR, "config.json");
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -42,6 +43,23 @@ export function loadEmployees(): Employee[] {
 
 export function saveEmployees(list: Employee[]) {
   writeJson(EMPLOYEES, list);
+}
+
+/** 一人公司级配置(config.json)。目前只有转派链最大层数，后续可扩展其它公司级设置。 */
+export interface TeamConfig {
+  /** dm_teammate 转派链最大层数(链上员工数)：1=不允许转派，3=最多三层(如 小笨→小码→小美)。默认 3。 */
+  maxDmLevels?: number;
+}
+
+export function loadTeamConfig(): TeamConfig {
+  const v = readJson<TeamConfig>(CONFIG, {});
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+export function saveTeamConfig(patch: Partial<TeamConfig>): TeamConfig {
+  const next = { ...loadTeamConfig(), ...patch };
+  writeJson(CONFIG, next);
+  return next;
 }
 
 /**
@@ -245,6 +263,14 @@ export function ensurePersonaFiles(emp: Employee): void {
 /** 删员工时连带清掉他的人格文件目录。 */
 function removePersonaFiles(id: string): void {
   try { rmSync(personaDir(id), { recursive: true, force: true }); } catch { /* ignore */ }
+}
+
+/** 通讯录手动排序：按传入的 id 顺序给每个员工写 order=下标；不在列表里的保持原样(排后面)。 */
+export function reorderEmployees(orderedIds: string[]): Employee[] {
+  const pos = new Map(orderedIds.map((id, i) => [id, i]));
+  const list = loadEmployees().map((e) => (pos.has(e.id) ? { ...e, order: pos.get(e.id) } : e));
+  saveEmployees(list);
+  return list;
 }
 
 /** 置顶/取消置顶员工：pinnedAt 有值即置顶，按它降序排前面。 */
