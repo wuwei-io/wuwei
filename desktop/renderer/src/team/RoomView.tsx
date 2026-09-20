@@ -42,6 +42,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [progress, setProgress] = useState<Record<string, { name: string; text: string; tools: { name: string; input?: unknown; done: boolean; isError?: boolean }[] }>>({});
   const [expanded, setExpanded] = useState(false); // 进度是否展开看详细
   const [openSteps, setOpenSteps] = useState<Set<string>>(new Set()); // 哪些历史消息的「执行过程」被展开了
+  const [openResults, setOpenResults] = useState<Set<string>>(new Set()); // 哪些工具步骤的「结果」被展开了(默认收起，点击手动展开)
   const [justStopped, setJustStopped] = useState(false); // 刚点了「停止」→ 冒出「继续」入口
   // 最近一轮在干活的员工（进度块跑完/被停会清空 progress，先快照下来，「继续」时据此重新点名唤醒）
   const lastWorkersRef = useRef<{ id: string; name: string }[]>([]);
@@ -364,13 +365,16 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                       <div className="tc-msg-steps-detail">
                         {m.steps.map((s, i) => {
                           const label = toolInputPreview(s.name, s.input, en) || s.name;
+                          const rkey = m.id + ":" + i;
+                          const ropen = openResults.has(rkey);
                           return (
                             <div className="tc-msg-step" key={i}>
-                              <div className={"tc-prog-step" + (s.isError ? " err" : " done")} title={label}>
+                              <button className={"tc-prog-step tc-msg-step-head" + (s.isError ? " err" : " done") + (s.result ? " has-result" : "")} title={label} onClick={() => { if (!s.result) return; setOpenResults((o) => { const n = new Set(o); if (n.has(rkey)) n.delete(rkey); else n.add(rkey); return n; }); }}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{s.isError ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M20 6 9 17l-5-5" />}</svg>
                                 <span className="tc-prog-step-t">{label}</span>
-                              </div>
-                              {s.result && <div className="tc-msg-step-result">{s.result.length > 240 ? s.result.slice(0, 240) + "…" : s.result}</div>}
+                                {s.result && <svg className={"tc-msg-step-caret" + (ropen ? " up" : "")} viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>}
+                              </button>
+                              {s.result && ropen && <div className="tc-msg-step-result">{s.result}</div>}
                             </div>
                           );
                         })}

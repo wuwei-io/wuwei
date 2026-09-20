@@ -60,7 +60,7 @@ function applyProg(roomId: string, empId: string, empName: string, ev: ProgressE
   let cur = m.get(empId);
   if (!cur) { cur = { empId, name: empName, text: "", tools: [] }; m.set(empId, cur); }
   cur.name = empName || cur.name;
-  if (ev.kind === "text") cur.text = (cur.text + (ev.delta || "")).slice(-800);
+  if (ev.kind === "text") cur.text = cur.text + (ev.delta || ""); // 存完整思考流——落库回看不裁顶部(实时进度块靠 CSS max-height 滚动显示，不怕长)
   else if (ev.kind === "tool-start") cur.tools.push({ id: ev.id, name: ev.name, input: ev.input, done: false });
   else if (ev.kind === "tool-end") { for (let i = cur.tools.length - 1; i >= 0; i--) if (!cur.tools[i].done) { cur.tools[i].done = true; cur.tools[i].isError = ev.isError; cur.tools[i].result = ev.result; break; } }
 }
