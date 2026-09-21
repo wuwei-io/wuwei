@@ -50,12 +50,13 @@ for (const f of files) {
   const sizeMB = statSync(local).size / 1024 / 1024;
   const upload = () =>
     sizeMB > 8
-      ? // 跨境上传：小分片(4MB)+限并发+大超时，避免单片 60s 超时
-        client.multipartUpload(key, local, { parallel: 3, partSize: 4 * 1024 * 1024, timeout: 600000 })
+      ? // 跨境上传(GitHub美→杭州OSS)极不稳：小分片(2MB)+串行(parallel:1，跨境最稳、少连接争用)+大超时。
+        client.multipartUpload(key, local, { parallel: 1, partSize: 2 * 1024 * 1024, timeout: 600000 })
       : client.put(key, local, { timeout: 600000 });
 
   let lastErr;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const MAX = 5; // 跨境时段性超时：多重试几次+退避，riding out 坏网络窗口
+  for (let attempt = 1; attempt <= MAX; attempt++) {
     try {
       await upload();
       console.log(`[oss] ✓ ${BASE}${f}  (${sizeMB.toFixed(1)}MB)`);
@@ -63,7 +64,8 @@ for (const f of files) {
       break;
     } catch (e) {
       lastErr = e;
-      console.warn(`[oss] 第${attempt}次上传 ${f} 失败：${e?.message || e}${attempt < 3 ? "，重试…" : ""}`);
+      console.warn(`[oss] 第${attempt}次上传 ${f} 失败：${e?.message || e}${attempt < MAX ? "，重试…" : ""}`);
+      if (attempt < MAX) await new Promise((r) => setTimeout(r, attempt * 5000)); // 退避 5s/10s/15s/20s
     }
   }
   if (lastErr) {
