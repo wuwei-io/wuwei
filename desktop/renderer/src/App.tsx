@@ -725,7 +725,7 @@ function buildPayOpts(trialEligible: boolean): PayPlanOpt[] {
   const trial: PayPlanOpt = {
     sku: "plan_trial", kind: "trial", name: "¥1 体验 · 7 天", nameEn: "$1 Trial · 7 days",
     price: 1, priceUsd: 1, unit: " / 7 天", unitEn: " / 7d", days: 7, coins: 0, signin: 20,
-    badge: "首单专享", badgeEn: "First-time", badgeType: "val",
+    badge: "最超值 · 1块钱试7天", badgeEn: "Best deal · 7 days for $1", badgeType: "val",
     sub: "先花 1 块试 7 天 Pro，够爽再升级", subEn: "Try Pro 7 days for $1 first",
   };
   const plans = PRO_PLANS.map<PayPlanOpt>((p) => ({
@@ -1863,6 +1863,11 @@ function TrialPayModal({
     : isMaxTier
       ? "别再 ChatGPT Pro 200刀、Claude Max 200刀、Gemini 顶配分开交，无为一份全给你"
       : "别再 ChatGPT 20刀、Claude 20刀、Gemini 20刀分开交，无为一份全给你";
+  // 价格锚点（会员 tab 底部）：包月单价低至 ¥18/千币，vs 按需买积分包最优 ¥22.1/千币（pack_l），
+  // 指向 Max 档「低至/最多」措辞，数值真实非虚标（Pro 档单价高于积分包，故不笼统说"包月更省"）。
+  const packAnchor = en
+    ? "Buying credits as you go costs more — membership goes as low as $0.36/1k credits, up to ~19% off."
+    : "按需买币更贵，包月低至 ¥18/千币，比按需买最多省约 19%。";
   const [qr, setQr] = useState("");
   const [orderId, setOrderId] = useState("");
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
@@ -1974,6 +1979,10 @@ function TrialPayModal({
             );
           })}
         </div>
+        {/* 价格锚点：会员 tab 且未选体验包时显示，引导「包月比按需买更省」往高客单走 */}
+        {tab === "plan" && cur.kind !== "trial" && (
+          <div className="trial-anchor">{packAnchor}</div>
+        )}
 
         <div className="trial-grid">
           {/* 左：国内二维码 / 海外 Paddle 按钮（跟随选中套餐） */}
@@ -1982,7 +1991,9 @@ function TrialPayModal({
               <div className="trial-paddle">
                 <div className="trial-paddle-price">{price}<small>{unit}</small></div>
                 <button className="trial-pay-btn" onClick={() => { void window.wuwei.track?.("paddle_pay_click", { sku: cur.sku, price }); onPaddle(cur); }}>{`Pay ${price}`}<PayArrow /></button>
-                <div className="trial-sub2">Secure checkout via Paddle</div>
+                <div className="trial-sub2">{isPack ? "Secure checkout via Paddle" : "Secure checkout · Cancel anytime"}</div>
+                {/* PayPal 提示：Paddle 结账页支持 PayPal 但不能手动置顶，提示用户别硬刷卡（中东信用卡常失败） */}
+                <div className="trial-pay-methods">Cards, PayPal &amp; more accepted at checkout</div>
               </div>
             ) : phase === "ready" && qr ? (
               <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">支付宝扫码 <b>{price}</b> · 自动到账</div></>
