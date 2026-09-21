@@ -4896,9 +4896,14 @@ export function App() {
               setShowAcctMenu(false);
               setCoinShortage({ message: "freecap", balance: 0, freecap: true });
               shortageShownAt.current = Date.now();
+              // ⭐埋点(补回归):这条 freecap 也是「一元/升级弹窗」，后台漏斗数的就是 credits_shortage_shown。
+              // 之前只有 refreshWuweiForShortage 发，freecap 这条付费窗路径漏了→后台弹窗数恒 0。
+              void window.wuwei.track?.("credits_shortage_shown", { reason: "freecap", payPage: lang === "en" ? "paddle" : "alipay" });
             } else {
               // 还有币/周额度 → 引导(明天继续 / 一键切托管付费模型)
               setFreeCapModal({ model: meta.model, balance: bal });
+              // 引导窗单独埋点:让「碰免费顶但还有币/额度」的次数在漏斗里可见(不计入付费弹窗，语义不同)。
+              void window.wuwei.track?.("free_cap_guide_shown", { model: meta.model, balance: bal });
             }
             suppressInlineNotice = true;
           } else if (isCoinOut && loggedIn) {
