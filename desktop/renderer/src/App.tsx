@@ -3809,6 +3809,20 @@ export function App() {
   const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
   const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number } | null>(null); // 免费模型当天次数用完(已登录)→弹窗引导
   const [quotaWarn, setQuotaWarn] = useState<{ model: string; usedPct: number; resetsAt: string | null } | null>(null); // 用高价模型烧周额度过快(≥50/80%)→弹窗建议切省钱模型
+  // 所有付费/提醒弹窗「展示」统一埋点：依赖用 !!state(布尔)，只在弹窗打开的一刻发一次(对象内容更新不重复发)。
+  // 后台「弹窗提示总数」按这些 *_shown 事件汇总，可下钻看谁/IP/地区/时间/弹了什么/点了什么。
+  useEffect(() => {
+    if (coinShortage) void window.wuwei.track?.("credits_shortage_shown", { context: coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : (coinShortage.message || "shortage"), canRebind: !!coinShortage.rebind, payPage: langRef.current === "en" ? "paddle" : "alipay" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!coinShortage]);
+  useEffect(() => {
+    if (quotaWarn) void window.wuwei.track?.("quota_warn_shown", { model: quotaWarn.model, usedPct: quotaWarn.usedPct });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!quotaWarn]);
+  useEffect(() => {
+    if (freeCapModal) void window.wuwei.track?.("free_cap_guide_shown", { model: freeCapModal.model, balance: freeCapModal.balance });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!freeCapModal]);
   const [payFaqOpen, setPayFaqOpen] = useState(false); // 缺币弹窗「常见问题」答疑弹窗（叠在支付弹窗之上，关闭即返回）
   const [debugCtx, setDebugCtx] = useState<null | "weekly" | "shortage" | "freecap" | "browse">(null); // 仅 dev：调试快捷键强制支付弹窗的 context，覆盖真实推断
   const shortageShownAt = useRef(0); // 余额不足弹窗展示时刻，用于算用户看了多久
@@ -3888,10 +3902,7 @@ export function App() {
     } catch {
       /* 读设置失败 → 不给改绑入口，退回充值路径 */
     }
-    setCoinShortage({ message, rebind });
-    // 关键漏斗节点：余额不足弹窗展示（用户无为币耗尽被拦下的这一刻）。此前只记了 error_shown，
-    // 没记「被提示充值/升级」这个转化节点，导致后台看不到「撞墙→是否点充值」的漏斗。
-    void window.wuwei.track?.("credits_shortage_shown", { canRebind: !!rebind, payPage: lang === "en" ? "paddle" : "alipay" });
+    setCoinShortage({ message, rebind }); // 展示埋点(credits_shortage_shown)由下方统一 effect 按「弹窗打开」发，防漏防重
     shortageShownAt.current = Date.now();
     try {
       const me = await window.wuwei.wuweiMe();
@@ -4894,16 +4905,11 @@ export function App() {
             if (bal <= 0 && !hasQuota) {
               // 免费次数用完 且 无为币=0 且 无周额度 → 切托管也没币可用 → 直接弹付费窗(freecap 文案)
               setShowAcctMenu(false);
-              setCoinShortage({ message: "freecap", balance: 0, freecap: true });
+              setCoinShortage({ message: "freecap", balance: 0, freecap: true }); // 展示埋点由统一 effect 发
               shortageShownAt.current = Date.now();
-              // ⭐埋点(补回归):这条 freecap 也是「一元/升级弹窗」，后台漏斗数的就是 credits_shortage_shown。
-              // 之前只有 refreshWuweiForShortage 发，freecap 这条付费窗路径漏了→后台弹窗数恒 0。
-              void window.wuwei.track?.("credits_shortage_shown", { reason: "freecap", payPage: lang === "en" ? "paddle" : "alipay" });
             } else {
-              // 还有币/周额度 → 引导(明天继续 / 一键切托管付费模型)
+              // 还有币/周额度 → 引导(明天继续 / 一键切托管付费模型)。展示埋点(free_cap_guide_shown)由统一 effect 发。
               setFreeCapModal({ model: meta.model, balance: bal });
-              // 引导窗单独埋点:让「碰免费顶但还有币/额度」的次数在漏斗里可见(不计入付费弹窗，语义不同)。
-              void window.wuwei.track?.("free_cap_guide_shown", { model: meta.model, balance: bal });
             }
             suppressInlineNotice = true;
           } else if (isCoinOut && loggedIn) {
