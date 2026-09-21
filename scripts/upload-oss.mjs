@@ -18,12 +18,14 @@ const BASE = "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/";
 const ALLOW = new Set([".exe", ".dmg", ".appimage", ".deb", ".zip", ".blockmap", ".yml"]);
 
 const client = new OSS({
-  region: "oss-cn-hangzhou",
+  // 传输加速全球 endpoint：桶已开「传输加速·全球」。GitHub(美)→杭州直连跨境极不稳(超时/socket hang up)，
+  // 走加速走阿里优化线路，稳且快。用 endpoint 就不要再传 region(否则被 region 覆盖回杭州直连)。
+  endpoint: "https://oss-accelerate.aliyuncs.com",
   accessKeyId: KEY_ID,
   accessKeySecret: KEY_SECRET,
   bucket: "wuwei-repo",
   secure: true,
-  timeout: 600000, // 10min/请求：GitHub(美)→杭州OSS跨境慢，默认60s会超时
+  timeout: 600000,
 });
 
 let files;
@@ -74,3 +76,36 @@ for (const f of files) {
   }
 }
 console.log(`[oss] 完成，共 ${files.length} 个文件`);
+
+// ── 清理旧版本安装包：只保留最近 KEEP 个版本，老的删掉省空间(桶已上百 GB)。latest*.yml 永不删。 ──
+const KEEP = 3;
+const cmpVer = (a, b) => { const pa = a.split(".").map(Number), pb = b.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); } return 0; };
+try {
+  const all = [];
+  let marker;
+  do {
+    const r = await client.list({ prefix: "updates/", "max-keys": 1000, marker }, {});
+    for (const o of r.objects || []) all.push(o.name);
+    marker = r.nextMarker;
+  } while (marker);
+  const byVer = {};
+  for (const name of all) {
+    const base = name.replace(/^updates\//, "");
+    if (base.toLowerCase().endsWith(".yml")) continue; // 更新清单永不删
+    const m = base.match(/wuwei-v?(\d+\.\d+\.\d+)/i); // 从 wuwei-1.6.98-setup.exe / wuwei-1.6.98.AppImage 提版本
+    if (!m) continue;
+    (byVer[m[1]] ||= []).push(name);
+  }
+  const versions = Object.keys(byVer).sort(cmpVer); // 升序
+  const oldVersions = versions.slice(0, Math.max(0, versions.length - KEEP)); // 最老的几个
+  const toDelete = oldVersions.flatMap((v) => byVer[v]);
+  if (toDelete.length) {
+    // deleteMulti 单次最多 1000 个
+    for (let i = 0; i < toDelete.length; i += 1000) await client.deleteMulti(toDelete.slice(i, i + 1000), { quiet: true });
+    console.log(`[oss] 清理旧版本 ${oldVersions.join(", ")}，删除 ${toDelete.length} 个文件（保留最近 ${KEEP} 版）`);
+  } else {
+    console.log(`[oss] 版本数 ${versions.length} ≤ ${KEEP}，无需清理`);
+  }
+} catch (e) {
+  console.warn(`[oss] 清理旧版本失败(不影响发布)：${e?.message || e}`);
+}
