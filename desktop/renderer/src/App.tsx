@@ -6637,6 +6637,7 @@ export function App() {
             api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
             api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
             api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
+            api?.scheduleList?.().then((r: any) => setSchedules(r?.schedules || []));
             close();
           };
           const pin = (kind: "employee" | "room", id: string) => {
@@ -6661,6 +6662,7 @@ export function App() {
                   <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { const emp = teamEmployees.find((x: any) => x.id === teamMenu.id); if (emp) setEditEmp(emp); close(); }} />
                   <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("employee", teamMenu.id!)} />
+                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
                   <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.removeEmployee?.(teamMenu.id); } }); }} />
                 </>)}
                 {teamMenu.kind === "room" && (<>
