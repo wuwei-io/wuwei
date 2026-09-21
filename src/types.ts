@@ -61,6 +61,9 @@ export interface ToolResult {
   // 可选：工具返回一张图给模型"看"（dataURL）。用于截图类工具（chrome_screenshot / computer_screenshot）。
   // loop 会把它和 content 拼成 tool_result 的多模态数组，provider 转成各家的 image 块。
   image?: string;
+  // 可选：只发到对话框给"人"看、不进模型上下文的图（dataURL）。用于 send_image 生图展示——
+  // 存进历史(可显示+持久)，但 provider 构造请求时跳过(displayOnly)，避免大图每轮塞进上下文(费钱/易触发模型报错)。
+  displayImage?: string;
 }
 
 export interface Tool extends ToolSpec {

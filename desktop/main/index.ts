@@ -1937,7 +1937,8 @@ const sendImageTool: Tool = {
       if (!mime) return { content: tt("只支持 png/jpg/jpeg/gif/webp。", "Only png/jpg/jpeg/gif/webp supported."), isError: true };
       const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
       const cap = String((input as any).caption || "").trim();
-      return { content: cap || tt("已把图片发到对话框(可点开看大图)。", "Image sent to the chat."), image: dataUrl };
+      // displayImage:只发到对话框给人看、不进模型上下文(避免大图每轮塞进上下文费钱/触发模型报错)。
+      return { content: cap || tt("已把图片发到对话框(可点开看大图)。", "Image sent to the chat."), displayImage: dataUrl };
     } catch (e: any) {
       return { content: tt(`读不到这张图：${String(e?.message || e).slice(0, 150)}`, `Cannot read image: ${String(e?.message || e).slice(0, 150)}`), isError: true };
     }

@@ -611,13 +611,18 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
         return { type: "image", source: { type: "base64", media_type: mediaType, data } };
       }
       // tool_result 的 content 若是多模态数组(截图类工具)，把里面的 image 块转成 Anthropic image。
+      // displayOnly 图片(send_image 只给人看的)跳过——不进模型上下文。
       if (b.type === "tool_result" && Array.isArray((b as any).content)) {
-        const inner = (b as any).content.map((c: any) =>
-          c.type === "image"
-            ? (() => { const { mediaType, data } = parseDataUrl(c.dataUrl); return { type: "image", source: { type: "base64", media_type: mediaType, data } }; })()
-            : c,
-        );
-        return { type: "tool_result", tool_use_id: (b as any).tool_use_id, content: inner, is_error: (b as any).is_error };
+        const inner = (b as any).content
+          .filter((c: any) => !(c.type === "image" && c.displayOnly))
+          .map((c: any) =>
+            c.type === "image"
+              ? (() => { const { mediaType, data } = parseDataUrl(c.dataUrl); return { type: "image", source: { type: "base64", media_type: mediaType, data } }; })()
+              : c,
+          );
+        // 过滤后只剩一个文本块 → 退回纯文本(避免空/单元素数组的边界)
+        const norm = inner.length === 1 && inner[0]?.type === "text" ? inner[0].text : inner;
+        return { type: "tool_result", tool_use_id: (b as any).tool_use_id, content: norm, is_error: (b as any).is_error };
       }
       const { cache_control, ...rest } = b as Record<string, unknown>; // 剥掉遗留断点
       void cache_control;
@@ -655,7 +660,7 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
           let content = r.content;
           if (Array.isArray(content)) {
             const txt = content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-            const hasImg = content.some((c: any) => c.type === "image");
+            const hasImg = content.some((c: any) => c.type === "image" && !c.displayOnly); // displayOnly 图不给模型、也不加占位
             content = txt + (hasImg ? "\n[附截图，当前模型不支持看图；换 Claude 可看]" : "");
           }
           out.push({ role: "tool", tool_call_id: r.tool_use_id, content });

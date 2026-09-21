@@ -505,15 +505,18 @@ export class Agent {
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
           const out = await tool.run(call.input, { ...this.ctx, signal }); // 传中断信号,停止时杀长命令
-          hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image);
+          hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image || out.displayImage);
           const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
+          // 图片块：out.image=给模型看(截图类)；out.displayImage=只给人看(标 displayOnly，provider 构造请求时跳过)。
+          const imgBlock = out.image
+            ? { type: "image", dataUrl: out.image }
+            : out.displayImage
+              ? { type: "image", dataUrl: out.displayImage, displayOnly: true }
+              : null;
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
-            // 工具带图(截图类)→ 多模态数组[文本+图片]，让模型看得到；否则纯文本直通。
-            content: out.image
-              ? [{ type: "text", text: capped }, { type: "image", dataUrl: out.image }]
-              : capped,
+            content: imgBlock ? [{ type: "text", text: capped }, imgBlock] : capped,
             is_error: out.isError,
           } as any;
         })();
