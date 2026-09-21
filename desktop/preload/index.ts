@@ -50,6 +50,8 @@ const EVENTS = [
   "evt:team-room", // 某个群有新消息 / 运行状态变了
   "evt:team-room-hint", // 群提示（如没人被点名）
   "evt:team-room-progress", // 员工干活的实时进度（思考/工具），只显示不落消息流
+  "evt:sop", // SOP 库树变了（AI write_sop / 手动增删改）→ 侧栏与 SopView 刷新
+  "evt:team-schedules", // 定时任务列表变了（AI/手动 增删改）→ 侧栏刷新
   // 用户点了停止 → 主进程摘掉该会话的自主推进，通知渲染层把「连推」切回「自动」，
   // 否则这一轮收尾后前端又自动续跑，用户永远停不下来。
   "evt:cont-off",
