@@ -52,6 +52,8 @@ export interface TeamConfig {
   maxDmLevels?: number;
   /** 定时任务总开关：false=全部暂停不触发(与单任务开关叠加)。缺省视为开启。 */
   schedulesEnabled?: boolean;
+  /** CEO 员工 id：员工用 ask_user 请示时先由 CEO 把关(拍不了才上报董事长)。缺省自动识别(职位含 CEO / 名叫小笨)。 */
+  ceoEmployeeId?: string;
 }
 
 export function loadTeamConfig(): TeamConfig {

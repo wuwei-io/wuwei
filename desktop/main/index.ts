@@ -95,7 +95,7 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
-import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES } from "./team/store.js";
+import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
@@ -1435,6 +1435,38 @@ const browserClickTool: Tool = {
 };
 const BROWSER_TOOLS: Tool[] = [browserOpenTool, browserReadTool, browserClickTool];
 
+// CEO 把关：解析当前 CEO 员工 id。优先一人公司设置里指定的，否则自动识别(职位含 CEO / 名叫小笨)。
+function resolveCeoId(): string | null {
+  const emps = loadEmployees();
+  const cfgId = loadTeamConfig().ceoEmployeeId;
+  if (cfgId && emps.some((e) => e.id === cfgId)) return cfgId;
+  const byTitle = emps.find((e) => /ceo/i.test(e.title || ""));
+  if (byTitle) return byTitle.id;
+  return emps.find((e) => e.name === "小笨")?.id || null;
+}
+
+// CEO 把关：把员工的请示同步交给 CEO 拍板。返回 {escalate, text}——escalate=true 表示 CEO 认为需董事长定。
+async function askCeoDecision(ceoId: string, askerName: string, questions: any[], signal?: AbortSignal): Promise<{ escalate: boolean; text: string }> {
+  const ceo = loadEmployees().find((e) => e.id === ceoId);
+  if (!ceo) return { escalate: true, text: "" };
+  const qtext = questions
+    .map((q: any, i: number) => `${i + 1}. ${q.question}\n   可选：${(q.options || []).map((o: any) => o.label).join(" | ")}${q.multiSelect ? "（可多选）" : ""}`)
+    .join("\n");
+  const input =
+    `你是公司 CEO。团队成员「${askerName}」在干活时遇到需要拍板的选择，按流程先请示你。\n\n` +
+    `· 你能替公司拍板 → 直接给出每题的选择(从给定选项里选)+一句简短理由。\n` +
+    `· 确实超出你的判断、必须董事长(老板)亲自定 → 只回一行：ESCALATE：<为什么需要老板>。\n\n` +
+    `需要拍板的问题：\n${qtext}`;
+  const sys = buildEmployeeSystem(ceo, sysPrompt, loadEmployeeMemory(ceo.id), "## 当前场景\n\n你在做 CEO 把关：下属把需要拍板的选择请示到你这。能定就定、定不了才上报董事长。别反问下属，直接给结论或 ESCALATE。");
+  let out = "";
+  try {
+    out = await runEmployeeTurn({ employee: ceo, sys, history: [], input, signal: signal || new AbortController().signal, excludeTools: ["ask_user", "dm_teammate"] });
+  } catch {
+    return { escalate: true, text: "" }; // CEO 跑挂了 → 直接上报董事长兜底
+  }
+  return { escalate: /(^|\n)\s*ESCALATE\s*[:：]/i.test(out), text: (out || "").trim() };
+}
+
 // ask_user：让 AI 弹出可点击的选择框(单选/多选/可多问)，暂停等用户点选后把选择回传。
 // 走「暂停-回传」范式(同权限确认)：run 返回 Promise 挂 pendingAsk，前端选完 ipc 回来 resolve。
 const askUserTool: Tool = {
@@ -1478,8 +1510,29 @@ const askUserTool: Tool = {
     required: ["questions"],
   },
   async run(input, ctx): Promise<ToolResult> {
-    const questions = Array.isArray((input as any).questions) ? (input as any).questions : [];
+    let questions = Array.isArray((input as any).questions) ? (input as any).questions : [];
     if (!questions.length) return { content: tt("ask_user 需要至少一个带 options 的问题", "ask_user needs at least one question with options"), isError: true };
+
+    // ⭐CEO 把关：员工(非 CEO)请示 → 先让 CEO(小笨)拍板；CEO 能定就直接把决定回给员工，
+    // 拿不准(回 ESCALATE)才继续弹给董事长(下面的人类弹窗)，并把 CEO 的上报理由带进弹窗。
+    const self = ctx.employeeId;
+    if (self && teamEnabled(loadSettings())) {
+      const ceoId = resolveCeoId();
+      if (ceoId && ceoId !== self) {
+        const emps = loadEmployees();
+        const ceoName = emps.find((e) => e.id === ceoId)?.name || "CEO";
+        const askerName = emps.find((e) => e.id === self)?.name || "同事";
+        const d = await askCeoDecision(ceoId, askerName, questions, ctx.signal);
+        if (d.text && !d.escalate) {
+          return { content: tt(`已请示 CEO「${ceoName}」，他替你拍板：\n${d.text}`, `Asked the CEO "${ceoName}", decision:\n${d.text}`) };
+        }
+        if (d.escalate && questions[0]) {
+          const reason = d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text;
+          questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: `【CEO ${ceoName} 请你定】${reason}\n\n${q.question}` } : q));
+        }
+      }
+    }
+
     const id = ++askSeq;
     // 绑定到「执行本工具的会话」——用 ctx.sessionId(每个 Agent 自带)，不是全局 turnSid。
     // 多会话并发时 turnSid 会被最后派发的会话覆盖，导致弹窗/通知指向错的会话。
