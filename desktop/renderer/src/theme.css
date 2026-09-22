@@ -6001,6 +6001,13 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   padding: 2px 0 8px;
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
+  /* 一人公司展开(员工多+各自定时任务/群聊/SOP树)会很高，把下面的「新对话/近7天」挤出屏幕。
+     封顶 + 内部滚动：超高就在本区内滚，下面的对话列表始终可见可达。 */
+  max-height: 55vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 /* 应用中心入口：与「新对话」同一套视觉语言(边距/圆角/字号)，靛青只在选中时出现 */
 .tool-item {
