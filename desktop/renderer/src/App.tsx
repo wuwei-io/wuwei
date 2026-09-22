@@ -2287,17 +2287,18 @@ function RoomSettingsModal({
     </div>
   );
 }
-// 一人公司设置模态：目前只有「转派链最多层数」(dm_teammate 员工互相转派)。风格复用群设置(add-st-dialog)。
-function CompanySettingsModal({ en, onClose }: { en: boolean; onClose: () => void }) {
+// 一人公司设置模态：转派链最多层数 + CEO(把关员工请示)。风格复用群设置(add-st-dialog)。
+function CompanySettingsModal({ en, employees, onClose }: { en: boolean; employees: any[]; onClose: () => void }) {
   const api = (window as any).wuwei?.team;
   const clamp = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
   const [levels, setLevels] = useState(3);
+  const [ceoId, setCeoId] = useState<string>(""); // "" = 自动识别(职位含CEO/名叫小笨)
   const [saving, setSaving] = useState(false);
-  useEffect(() => { api?.configGet?.().then((c: any) => setLevels(clamp(c?.maxDmLevels ?? 3))); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { api?.configGet?.().then((c: any) => { setLevels(clamp(c?.maxDmLevels ?? 3)); setCeoId(c?.ceoEmployeeId || ""); }); /* eslint-disable-next-line */ }, []);
   const save = async () => {
     if (saving) return;
     setSaving(true);
-    await api?.configSet?.({ maxDmLevels: levels });
+    await api?.configSet?.({ maxDmLevels: levels, ceoEmployeeId: ceoId || null });
     onClose();
   };
   return (
@@ -2325,6 +2326,16 @@ function CompanySettingsModal({ en, onClose }: { en: boolean; onClose: () => voi
           <p className="st-hint">{en
             ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
             : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}</p>
+        </div>
+        <div className="st-field">
+          <label className="st-label">{en ? "CEO (gatekeeps requests)" : "CEO（把关员工请示）"}</label>
+          <select className="tc-input tc-select" value={ceoId} onChange={(e) => setCeoId(e.target.value)}>
+            <option value="">{en ? "Auto (title contains CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
+            {(employees || []).map((m: any) => <option key={m.id} value={m.id}>{m.name}{m.title ? `（${m.title}）` : ""}</option>)}
+          </select>
+          <p className="st-hint">{en
+            ? "When a teammate uses ask_user to request a decision, the CEO decides first; only what the CEO escalates pops to you (the boss)."
+            : "员工用 ask_user 请示时，先由 CEO 拍板；只有 CEO 拿不准、上报的，才弹给你（董事长）。CEO 自己请示则直达你。"}</p>
         </div>
         <div className="btns">
           <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
@@ -9931,7 +9942,7 @@ export function App() {
           />
         );
       })()}
-      {companySettings && <CompanySettingsModal en={lang === "en"} onClose={() => setCompanySettings(false)} />}
+      {companySettings && <CompanySettingsModal en={lang === "en"} employees={teamEmployees} onClose={() => setCompanySettings(false)} />}
       {/* 右键员工「编辑」：顶层弹编辑框，覆盖在当前界面上，不切走 appView。保存后 evt:team 广播自动刷新侧栏。 */}
       {editEmp && (
         <EmployeeEditModal
