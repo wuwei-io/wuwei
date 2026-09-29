@@ -241,6 +241,13 @@ export interface WuweiApi {
     error?: string;
     message?: string;
   }>;
+  payCryptoCreate(sku: string): Promise<{
+    orderId?: string;
+    invoiceUrl?: string;
+    amountUsd?: number;
+    error?: string;
+    message?: string;
+  }>;
   payStatus(orderId: string): Promise<{ status: string; balance?: number } | null>;
   wuweiPasswordLogin(identifier: string, password: string): Promise<{ me?: WuweiMe; error?: string }>;
   wuweiRegister(email: string, code: string, password: string): Promise<{ me?: WuweiMe; error?: string }>;

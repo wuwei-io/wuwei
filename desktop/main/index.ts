@@ -134,6 +134,7 @@ import {
   wuweiCodeLogin,
   wuweiRegister,
   wuweiPayCreate,
+  wuweiPayCryptoCreate,
   wuweiPayStatus,
   reportClientLogin,
   reportClientEvent,
@@ -4778,6 +4779,22 @@ ipcMain.handle("pay:create", async (_e, sku: string, channel: string) => {
     }
     saveWuweiSession(fresh);
     r = await wuweiPayCreate(fresh.accessToken, sku, channel);
+  }
+  return r === "unauthorized" ? { error: "not_logged_in" } : r;
+});
+// 加密货币下单：建 NOWPayments 发票，返回收银台 URL。带 token，401 自动 refresh 重试。
+ipcMain.handle("pay:crypto:create", async (_e, sku: string) => {
+  const sess = await getFreshWuweiSession();
+  if (!sess) return { error: "not_logged_in" };
+  let r = await wuweiPayCryptoCreate(sess.accessToken, sku);
+  if (r === "unauthorized") {
+    const fresh = await wuweiRefresh(sess.refreshToken);
+    if (!fresh) {
+      clearWuweiSession();
+      return { error: "not_logged_in" };
+    }
+    saveWuweiSession(fresh);
+    r = await wuweiPayCryptoCreate(fresh.accessToken, sku);
   }
   return r === "unauthorized" ? { error: "not_logged_in" } : r;
 });

@@ -513,6 +513,32 @@ export async function wuweiPayCreate(
   }
 }
 
+/** 加密货币下单：只传 sku，金额按后端海外美元价定。返回 NOWPayments 收银台 URL。 */
+export async function wuweiPayCryptoCreate(
+  accessToken: string,
+  sku: string,
+): Promise<{ orderId: string; invoiceUrl: string; amountUsd: number } | "unauthorized" | { error: string; message?: string }> {
+  try {
+    const res = await fetch(`${SITE}/api/pay/crypto/create`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Device-Id": getDeviceId(),
+      },
+      body: JSON.stringify({ sku }),
+    });
+    if (res.status === 401) return "unauthorized";
+    const j = (await res.json().catch(() => null)) as ({ orderId: string; invoiceUrl: string; amountUsd: number } & { error?: string; message?: string }) | null;
+    if (!res.ok || !j) return { error: j?.error || `http_${res.status}`, message: j?.message };
+    if (j.error) return { error: j.error, message: j.message };
+    return j;
+  } catch (e) {
+    log("wuweiAuth", "payCryptoCreate 异常", String(e));
+    return { error: "network" };
+  }
+}
+
 /** 轮询订单状态（后端会主动查单兜底）。 */
 export async function wuweiPayStatus(
   accessToken: string,

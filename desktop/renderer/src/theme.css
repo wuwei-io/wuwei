@@ -155,6 +155,23 @@ body {
   gap: 6px; /* 搜索与折叠«之间留点距离，别挤一起 */
   padding: 0 10px;
 }
+/* 顶部两块切换：一人公司 / 对话列表，各自独立收起/展开。
+   复用 .icon-btn 方块样式，与右侧 search/« 一致；聚在右侧、紧挨其左边 */
+.side-seg {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.side-seg-btn svg { width: 15px; height: 15px; }
+/* 选中态：靛青边框+图标，跟 icon-btn hover 同色系，一眼看出哪块开着 */
+.side-seg-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+/* 独占满高：另一块被收起时，一人公司面板占满剩余空间并内部滚动 */
+.side-tools.full {
+  flex: 1 1 auto !important;
+  max-height: none !important;
+  min-height: 0;
+}
 .icon-btn {
   -webkit-app-region: no-drag;
   border: 1px solid var(--border-strong);

@@ -434,6 +434,14 @@ const api = {
       error?: string;
       message?: string;
     }>,
+  payCryptoCreate: (sku: string) =>
+    ipcRenderer.invoke("pay:crypto:create", sku) as Promise<{
+      orderId?: string;
+      invoiceUrl?: string;
+      amountUsd?: number;
+      error?: string;
+      message?: string;
+    }>,
   payStatus: (orderId: string) =>
     ipcRenderer.invoke("pay:status", orderId) as Promise<{ status: string; balance?: number } | null>,
   // 应用内登录（不跳浏览器）：邮箱密码 / 邮箱注册 / 手机(或邮箱)验证码 / 发验证码

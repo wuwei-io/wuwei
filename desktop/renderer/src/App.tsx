@@ -3618,12 +3618,15 @@ export function App() {
   );
   const sidebarWRef = useRef(sidebarW);
   sidebarWRef.current = sidebarW;
-  // 一人公司面板高度：可上下拖拽调整(员工多时能拉高看全，历史多时也能压低)。0=未设过，走自适应默认
+  // 一人公司面板高度：两块同时显示时可上下拖拽分割(员工多时拉高看全，历史多时压低)。0=未设过，走自适应默认
   const [toolsH, setToolsH] = useState(
     () => Number(localStorage.getItem("wuwei-tools-h")) || 0,
   );
   const toolsHRef = useRef(toolsH);
   toolsHRef.current = toolsH;
+  // 顶部图标控制两块的显隐：一人公司 / 对话列表，各自独立收起或展开(至少留一个开着)
+  const [showTeam, setShowTeam] = useState(() => localStorage.getItem("wuwei-side-show-team") !== "0");
+  const [showChats, setShowChats] = useState(() => localStorage.getItem("wuwei-side-show-chats") !== "0");
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   // 输入框草稿：每个会话【各存各的】，切会话互不影响。存 localStorage(wuwei-drafts: {sid:{text,images}})，重开/更新后恢复。
   // draftLoadedRef 保证「先加载完再回写」，避免初始空草稿把已存内容冲掉。
@@ -5222,6 +5225,21 @@ export function App() {
     document.addEventListener("mouseup", up);
   }
 
+  // 顶部图标收/展某一块：不能两块都收(至少留一个)。收起后另一块自动满高。
+  function toggleSidePanel(which: "team" | "chats") {
+    if (which === "team") {
+      const next = !showTeam;
+      if (!next && !showChats) return;
+      setShowTeam(next);
+      localStorage.setItem("wuwei-side-show-team", next ? "1" : "0");
+    } else {
+      const next = !showChats;
+      if (!next && !showTeam) return;
+      setShowChats(next);
+      localStorage.setItem("wuwei-side-show-chats", next ? "1" : "0");
+    }
+  }
+
   function toggleCollapse(v: boolean) {
     setCollapsed(v);
     localStorage.setItem("wuwei-sidebar-collapsed", v ? "1" : "0");
@@ -6471,6 +6489,35 @@ export function App() {
       {!collapsed && (
       <div className="sidebar" style={{ width: sidebarW }}>
         <div className="sidebar-top">
+          {teamEnabled && (
+            <div className="side-seg" role="tablist">
+              <button
+                className={"icon-btn side-seg-btn" + (showTeam ? " on" : "")}
+                role="tab"
+                aria-selected={showTeam}
+                title={lang === "en" ? "My Company (toggle)" : "一人公司（点击收起/展开）"}
+                onClick={() => toggleSidePanel("team")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+                  <circle cx="9.5" cy="7" r="3.2" />
+                  <path d="M17 11l2 2 3.5-3.5" />
+                </svg>
+              </button>
+              <button
+                className={"icon-btn side-seg-btn" + (showChats ? " on" : "")}
+                role="tab"
+                aria-selected={showChats}
+                title={lang === "en" ? "Chats (toggle)" : "对话列表（点击收起/展开）"}
+                onClick={() => toggleSidePanel("chats")}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19l1-4.2A7.5 7.5 0 1 1 21 11.5z" />
+                  <path d="M8.5 10.5h7M8.5 13.5h4" />
+                </svg>
+              </button>
+            </div>
+          )}
           <button className="icon-btn" title={t("side.search", "搜索所有对话内容（⌘/Ctrl+F）")} onClick={openSearch}>
             <SearchIcon />
           </button>
@@ -6481,11 +6528,11 @@ export function App() {
         {/* 多功能区：置于「新对话」之上，与下面的对话列表用一条分隔线区分开。
             目前放「应用中心」一个入口，以后要加别的全局功能入口也进这里。
             整块受 teamEnabled 控制；摘除模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它。 */}
-        {teamEnabled && (
+        {teamEnabled && showTeam && (
           <>
           <div
-            className="side-tools"
-            style={toolsH > 0 ? ({ height: toolsH, maxHeight: "none", flex: "0 0 auto" } as React.CSSProperties) : undefined}
+            className={"side-tools" + (!showChats ? " full" : "")}
+            style={showChats && toolsH > 0 ? ({ height: toolsH, maxHeight: "none", flex: "0 0 auto" } as React.CSSProperties) : undefined}
           >
             {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
                 展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
@@ -6708,7 +6755,7 @@ export function App() {
               </div>
             )}
           </div>
-          {teamExpanded && (
+          {teamExpanded && showChats && (
             <div
               className="side-tools-resizer"
               onMouseDown={startToolsResize}
@@ -6782,6 +6829,7 @@ export function App() {
             </>
           );
         })()}
+        {showChats && (<>
         <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
           {t("session.new")}
         </button>
@@ -6983,6 +7031,7 @@ export function App() {
             );
           })()}
         </div>
+        </>)}
         {ctxMenu &&
           (() => {
             const s = sessions.find((x) => x.id === ctxMenu.sid);
