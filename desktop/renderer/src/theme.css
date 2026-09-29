@@ -6009,6 +6009,31 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   flex: 0 1 auto;
   min-height: 0;
 }
+/* 一人公司面板下边缘的拖拽条：上下拖调整面板高度，双击恢复自适应 */
+.side-tools-resizer {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  height: 7px;
+  margin: -7px 0 0;
+  cursor: row-resize;
+  position: relative;
+  z-index: 2;
+}
+.side-tools-resizer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.side-tools-resizer:hover::before { opacity: 1; }
+.side-tools-resizer:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 /* 应用中心入口：与「新对话」同一套视觉语言(边距/圆角/字号)，靛青只在选中时出现 */
 .tool-item {
   -webkit-app-region: no-drag;
@@ -7104,3 +7129,8 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* 群/私聊底栏(窄于主对话)：一律不换行(换行很丑)，元素多时靠模型名等可收缩项省略号截断。不用overflow:hidden(会裁上弹菜单)。 */
 .tc-room-foot { min-width: 0; max-width: 100%; }
 .tc-room-foot .composer-foot { flex-wrap: nowrap; max-width: 100%; }
+
+/* 加密货币支付按钮（次要，给卡付不了的地区兜底）：描边风格，区别于橙色主 Paddle 按钮 */
+.trial-crypto-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; padding: 9px 18px; font-size: 13px; font-weight: 600; color: #1a8f6e; border: 1.5px solid #2bb98a; border-radius: 11px; cursor: pointer; background: rgba(43, 185, 138, 0.08); transition: background 0.12s, transform 0.12s; }
+.trial-crypto-btn:hover { background: rgba(43, 185, 138, 0.16); transform: translateY(-1px); }
+.trial-crypto-btn:active { transform: translateY(0); }

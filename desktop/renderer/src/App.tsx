@@ -1821,7 +1821,7 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
 }
 
 function TrialPayModal({
-  en, balance, rebind, opts, defaultSku, onClose, onPaid, onNeedLogin, onRebind, onPaddle, onContact, onFaq, context = "shortage",
+  en, balance, rebind, opts, defaultSku, onClose, onPaid, onNeedLogin, onRebind, onPaddle, onCrypto, onContact, onFaq, context = "shortage",
 }: {
   en: boolean;
   balance: number;
@@ -1834,6 +1834,7 @@ function TrialPayModal({
   onNeedLogin: () => void;
   onRebind?: () => void;
   onPaddle: (opt: PayPlanOpt) => void;
+  onCrypto: (opt: PayPlanOpt) => void;
   onContact: () => void;
   onFaq: () => void;
 }) {
@@ -1994,6 +1995,9 @@ function TrialPayModal({
                 <div className="trial-sub2">{isPack ? "Secure checkout via Paddle" : "Secure checkout · Cancel anytime"}</div>
                 {/* PayPal 提示：Paddle 结账页支持 PayPal 但不能手动置顶，提示用户别硬刷卡（中东信用卡常失败） */}
                 <div className="trial-pay-methods">Cards, PayPal &amp; more accepted at checkout</div>
+                {/* 加密货币支付：给卡付不了的地区(俄罗斯/中东等)兜底。走 NOWPayments 收银台(系统浏览器) */}
+                <button className="trial-crypto-btn" onClick={() => { void window.wuwei.track?.("crypto_pay_click", { sku: cur.sku, price }); onCrypto(cur); }}>Pay with Crypto (USDT / BTC…)</button>
+                <div className="trial-pay-methods">Card declined? Pay with crypto — works in Russia, Middle East &amp; worldwide</div>
               </div>
             ) : phase === "ready" && qr ? (
               <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">支付宝扫码 <b>{price}</b> · 自动到账</div></>
@@ -3614,6 +3618,12 @@ export function App() {
   );
   const sidebarWRef = useRef(sidebarW);
   sidebarWRef.current = sidebarW;
+  // 一人公司面板高度：可上下拖拽调整(员工多时能拉高看全，历史多时也能压低)。0=未设过，走自适应默认
+  const [toolsH, setToolsH] = useState(
+    () => Number(localStorage.getItem("wuwei-tools-h")) || 0,
+  );
+  const toolsHRef = useRef(toolsH);
+  toolsHRef.current = toolsH;
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   // 输入框草稿：每个会话【各存各的】，切会话互不影响。存 localStorage(wuwei-drafts: {sid:{text,images}})，重开/更新后恢复。
   // draftLoadedRef 保证「先加载完再回写」，避免初始空草稿把已存内容冲掉。
@@ -3973,7 +3983,29 @@ export function App() {
       `https://wuweiai.io/en/checkout?sku=${encodeURIComponent(enSku)}` +
       (uid ? `&uid=${encodeURIComponent(uid)}&email=${encodeURIComponent(email)}` : "");
     window.wuwei.openExternal(url);
-    // ── 结账后后台轮询：Paddle 付款在系统浏览器完成，无内嵌回调，靠轮询 wuweiMe 检测到账 → 弹成功窗 ──
+    pollPaymentArrival(clientSku);
+  }
+  // 加密货币结账：给卡付不了的地区(俄罗斯/中东等)兜底。调后端建 NOWPayments 发票 →
+  // 系统浏览器打开收银台(可付 USDT/BTC 等任意币) → 付款成功走 IPN 回调发币 → 同 Paddle 靠轮询检测到账。
+  async function startCryptoCheckout(clientSku: string) {
+    const uid = wuwei?.user.id;
+    if (!uid) { setShowLoginForm(true); return; }
+    try {
+      const resp = await window.wuwei.payCryptoCreate(clientSku);
+      const inv = resp?.invoiceUrl as string | undefined;
+      if (!inv) {
+        push({ type: "notice", text: lang === "en" ? "Crypto checkout unavailable, please try card or contact support." : "加密支付暂不可用，请改用卡支付或联系客服。" });
+        return;
+      }
+      window.wuwei.openExternal(inv);
+      pollPaymentArrival(clientSku);
+    } catch {
+      push({ type: "notice", text: lang === "en" ? "Failed to start crypto checkout, please try again." : "发起加密支付失败，请重试。" });
+    }
+  }
+  // 结账后后台轮询：付款在系统浏览器/收银台完成，无内嵌回调，靠轮询 wuweiMe 检测到账 → 弹成功窗。
+  // Paddle 和 加密支付 共用此逻辑。
+  function pollPaymentArrival(clientSku: string) {
     // 先抓基线（余额 / 会员态）；付款成功即以「新值 vs 基线」判定，成功后停轮询并弹 PayResultModal。
     const base = wuweiRef.current;
     const baseBalance = base?.coin.balance ?? 0;
@@ -5162,6 +5194,29 @@ export function App() {
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", up);
       localStorage.setItem("wuwei-sidebar-w", String(sidebarWRef.current));
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  }
+
+  // 拖动一人公司面板下边缘调高度(上下)。未设过时以当前实际渲染高度为起点，拖动即固定
+  function startToolsResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const el = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null;
+    const startH = toolsHRef.current || (el ? el.getBoundingClientRect().height : 220);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    const move = (ev: MouseEvent) => {
+      const h = Math.min(Math.round(window.innerHeight * 0.72), Math.max(72, startH + ev.clientY - startY));
+      setToolsH(h);
+    };
+    const up = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      localStorage.setItem("wuwei-tools-h", String(toolsHRef.current));
     };
     document.addEventListener("mousemove", move);
     document.addEventListener("mouseup", up);
@@ -6427,7 +6482,11 @@ export function App() {
             目前放「应用中心」一个入口，以后要加别的全局功能入口也进这里。
             整块受 teamEnabled 控制；摘除模块时删掉这个 {teamEnabled && ...} 块即可，不影响其它。 */}
         {teamEnabled && (
-          <div className="side-tools">
+          <>
+          <div
+            className="side-tools"
+            style={toolsH > 0 ? ({ height: toolsH, maxHeight: "none", flex: "0 0 auto" } as React.CSSProperties) : undefined}
+          >
             {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
                 展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
             <div className={"tool-item-row" + (appView === "store" ? " on" : "")}>
@@ -6649,6 +6708,15 @@ export function App() {
               </div>
             )}
           </div>
+          {teamExpanded && (
+            <div
+              className="side-tools-resizer"
+              onMouseDown={startToolsResize}
+              onDoubleClick={() => { setToolsH(0); localStorage.removeItem("wuwei-tools-h"); }}
+              title={lang === "en" ? "Drag to resize · double-click to reset" : "拖动调整一人公司面板高度 · 双击恢复自适应"}
+            />
+          )}
+          </>
         )}
         {/* 一人公司右键菜单：公司标题=新建/导入/建群；员工=私聊/编辑/置顶/删除；群=进入/置顶/删除 */}
         {teamMenu && (() => {
@@ -9828,6 +9896,7 @@ export function App() {
             });
           }}
           onPaddle={(opt) => { closeShortage("pay_paddle"); startEnCheckout(opt.sku); }}
+          onCrypto={(opt) => { closeShortage("pay_crypto"); startCryptoCheckout(opt.sku); }}
           onContact={() => { closeShortage("contact"); setShowSupportChat(true); }}
           onFaq={() => { void window.wuwei.track?.("credits_shortage_action", { action: "faq" }); setPayFaqOpen(true); }}
           onNeedLogin={() => {
