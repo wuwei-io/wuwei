@@ -1992,12 +1992,16 @@ function TrialPayModal({
               <div className="trial-paddle">
                 <div className="trial-paddle-price">{price}<small>{unit}</small></div>
                 <button className="trial-pay-btn" onClick={() => { void window.wuwei.track?.("paddle_pay_click", { sku: cur.sku, price }); onPaddle(cur); }}>{`Pay ${price}`}<PayArrow /></button>
-                <div className="trial-sub2">{isPack ? "Secure checkout via Paddle" : "Secure checkout · Cancel anytime"}</div>
-                {/* PayPal 提示：Paddle 结账页支持 PayPal 但不能手动置顶，提示用户别硬刷卡（中东信用卡常失败） */}
-                <div className="trial-pay-methods">Cards, PayPal &amp; more accepted at checkout</div>
+                {/* 一行说清：安全/可取消/支持卡与PayPal，替代原先两行灰字 */}
+                <div className="trial-pay-reassure">{isPack ? "Secure checkout via Paddle · Cards & PayPal" : "Secure checkout · Cancel anytime · Cards & PayPal"}</div>
+                {/* 主(卡/PayPal) 与 次(加密) 分隔 */}
+                <div className="trial-pay-or">or</div>
                 {/* 加密货币支付：给卡付不了的地区(俄罗斯/中东等)兜底。走 NOWPayments 收银台(系统浏览器) */}
-                <button className="trial-crypto-btn" onClick={() => { void window.wuwei.track?.("crypto_pay_click", { sku: cur.sku, price }); onCrypto(cur); }}>Pay with Crypto (USDT / BTC…)</button>
-                <div className="trial-pay-methods">Card declined? Pay with crypto — works in Russia, Middle East &amp; worldwide</div>
+                <button className="trial-crypto-btn" onClick={() => { void window.wuwei.track?.("crypto_pay_click", { sku: cur.sku, price }); onCrypto(cur); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
+                  Pay with Crypto
+                </button>
+                <div className="trial-crypto-note">USDT · BTC &amp; more · works when cards fail</div>
               </div>
             ) : phase === "ready" && qr ? (
               <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">支付宝扫码 <b>{price}</b> · 自动到账</div></>

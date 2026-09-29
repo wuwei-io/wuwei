@@ -4224,16 +4224,23 @@ body {
 .trial-msg.err { color: #c0392b; }
 .trial-msg button { margin-top: 2px; border: 1px solid rgba(192, 57, 43, 0.4); background: #fff; color: #c0392b; border-radius: 8px; padding: 3px 14px; cursor: pointer; font-size: 12px; }
 .trial-spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #eceff2; border-top-color: #c05f3c; animation: tspin 0.8s linear infinite; }
-.trial-paddle { text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
-.trial-paddle-price { font-size: 34px; font-weight: 800; color: #16191e; }
+.trial-paddle { text-align: center; display: flex; flex-direction: column; gap: 9px; align-items: center; width: 100%; }
+.trial-paddle-price { font-size: 34px; font-weight: 800; color: #16191e; line-height: 1.1; margin-bottom: 2px; }
 .trial-paddle-price small { font-size: 14px; color: #8a9099; font-weight: 600; }
-.trial-pay-btn { display: inline-flex; align-items: center; gap: 7px; padding: 11px 24px; font-size: 14px; font-weight: 650; color: #fff; border: none; border-radius: 12px; cursor: pointer; background: linear-gradient(135deg, #d9714a, #c05f3c); box-shadow: 0 8px 18px -6px rgba(192, 95, 60, 0.55); transition: transform 0.12s, box-shadow 0.12s; }
+.trial-pay-btn { display: flex; width: 100%; align-items: center; justify-content: center; gap: 7px; padding: 11px 24px; font-size: 14px; font-weight: 650; color: #fff; border: none; border-radius: 12px; cursor: pointer; background: linear-gradient(135deg, #d9714a, #c05f3c); box-shadow: 0 8px 18px -6px rgba(192, 95, 60, 0.55); transition: transform 0.12s, box-shadow 0.12s; }
 .trial-pay-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -6px rgba(192, 95, 60, 0.7); }
 .trial-pay-btn:active { transform: translateY(0); }
 .trial-pay-btn svg { width: 15px; height: 15px; }
 .trial-sub2 { font-size: 11.5px; color: #8a9099; }
 /* 支付方式提示（PayPal 引导）：小字灰色，与安全提示同级 */
 .trial-pay-methods { font-size: 11px; color: #a2a8b0; line-height: 1.5; }
+/* 主付款下的一行说明：安全·可取消·支持卡与PayPal，替代原两行灰字 */
+.trial-pay-reassure { font-size: 11px; color: #8a9099; line-height: 1.5; max-width: 100%; }
+/* 主(卡)与次(加密)之间的「or」细分隔线：两侧淡线夹中间小字 */
+.trial-pay-or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 1px 0; font-size: 10px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #b3b9c0; }
+.trial-pay-or::before, .trial-pay-or::after { content: ""; flex: 1; height: 1px; background: rgba(22, 25, 30, 0.09); }
+/* 加密按钮下的一行说明：短、单行、给「卡付不了」人群兜底提示 */
+.trial-crypto-note { font-size: 11px; color: #a2a8b0; line-height: 1.45; }
 /* 价格锚点条（会员 tab 底部）：柔和背景块，留足内边距不贴边 */
 .trial-anchor { margin: 2px 2px 10px; padding: 9px 14px; border-radius: 10px; background: rgba(192, 95, 60, 0.07); color: #b5623f; font-size: 12px; line-height: 1.5; text-align: center; }
 .trial-detail { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 4px 2px; }
@@ -7148,6 +7155,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-room-foot .composer-foot { flex-wrap: nowrap; max-width: 100%; }
 
 /* 加密货币支付按钮（次要，给卡付不了的地区兜底）：描边风格，区别于橙色主 Paddle 按钮 */
-.trial-crypto-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; padding: 9px 18px; font-size: 13px; font-weight: 600; color: #1a8f6e; border: 1.5px solid #2bb98a; border-radius: 11px; cursor: pointer; background: rgba(43, 185, 138, 0.08); transition: background 0.12s, transform 0.12s; }
+.trial-crypto-btn { display: flex; width: 100%; align-items: center; justify-content: center; gap: 7px; padding: 10px 18px; font-size: 13px; font-weight: 600; color: #1a8f6e; border: 1.5px solid #2bb98a; border-radius: 12px; cursor: pointer; background: rgba(43, 185, 138, 0.08); transition: background 0.12s, transform 0.12s; }
 .trial-crypto-btn:hover { background: rgba(43, 185, 138, 0.16); transform: translateY(-1px); }
 .trial-crypto-btn:active { transform: translateY(0); }
+.trial-crypto-btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
