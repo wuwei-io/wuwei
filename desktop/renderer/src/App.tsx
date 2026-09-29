@@ -6919,6 +6919,9 @@ export function App() {
           (() => {
             const s = sessions.find((x) => x.id === ctxMenu.sid);
             if (!s) return null;
+            // 员工私聊会话：分组/优先级/四象限/完成/讨论都只作用在普通历史列表，员工会话不进那个列表(见下方 s.employeeId 过滤)，
+            // 这些项点了没有任何效果，故对员工会话隐藏，只保留作用在会话本身的交接/总目标/查看历史。
+            const isEmp = !!s.employeeId;
             const close = () => {
               setCtxMenu(null);
               setGroupInputSid(null);
@@ -6998,6 +7001,8 @@ export function App() {
                     </svg>
                     <span>{lang === "en" ? "View full history…" : "查看完整历史…"}</span>
                   </button>
+                  {!isEmp && (
+                  <>
                   <div className="ctx-sep" />
                   <button
                     className="ctx-item ctx-ico ctx-done"
@@ -7100,6 +7105,8 @@ export function App() {
                       </button>
                     ))}
                   </div>
+                  </>
+                  )}
                 </div>
               </>
             );

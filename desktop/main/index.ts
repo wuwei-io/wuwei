@@ -3496,6 +3496,8 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
   currentId = newId;
   getAgent(newId);
   try { setSessionModel(newId, carryModel, carryProvider); } catch { /* ignore */ }
+  // 源会话是员工私聊 → 新会话继承 employeeId，交接后仍归在该员工名下，不会"逃逸"到普通历史列表
+  if (srcMeta?.employeeId) { try { setSessionEmployee(newId, srcMeta.employeeId); } catch { /* ignore */ } }
   backendBySid.set(newId, carryProvider);
   // 源会话带总目标 → 带给新会话，交接后接着朝同一目标自主推进(渲染端会据此自动开智能继续)
   const srcGoal = sessionGoals[srcId];
