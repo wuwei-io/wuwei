@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { loadConfig } from "../../src/config.js";
-import { makeProvider } from "../../src/agent/provider.js";
+import { makeProvider, setImageCapper } from "../../src/agent/provider.js";
 import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
@@ -2974,6 +2974,21 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
+    // 图片封顶：用 Electron nativeImage 把任一边 >maxEdge 的图等比缩小，喂给模型前统一执行，
+    // 避免 chrome_screenshot 截整页/高分屏截图命中 Claude「多图每边≤2000px」而整轮 400。
+    setImageCapper((dataUrl: string, maxEdge: number) => {
+      try {
+        const img = nativeImage.createFromDataURL(dataUrl);
+        const { width, height } = img.getSize();
+        const long = Math.max(width, height);
+        if (!long || long <= maxEdge) return dataUrl; // 没超限：原样
+        const scale = maxEdge / long;
+        const resized = img.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: "good" });
+        return "data:image/png;base64," + resized.toPNG().toString("base64");
+      } catch {
+        return dataUrl; // 解码/缩放失败就原样发，别因此卡死
+      }
+    });
     syncTeamModule(loadSettings()); // 可选模块：开了才挂，没开这行之后不留任何痕迹
     loadGoals(); // 智能继续：会话总目标(userData/session-goals.json)
     loadStopRules(); // 智能继续：自定义红线(userData/stop-rules.txt，首次给默认)

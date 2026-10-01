@@ -598,6 +598,26 @@ function parseDataUrl(d: string): { mediaType: string; data: string } {
   return m ? { mediaType: m[1], data: m[2] } : { mediaType: "image/png", data: d };
 }
 
+// 图片封顶：Claude 对「多图请求」限制每张图任一边 ≤2000px，超了整条请求 400
+// （如 chrome_screenshot 截整页、computer 高分屏截图）。统一在发给模型前把任一边 >IMG_MAX_EDGE 的图
+// 等比缩到 IMG_MAX_EDGE(1568=模型实际看的分辨率，也与客户端粘图缩放一致)。
+// 具体缩放能力由运行环境注入(desktop 用 Electron nativeImage；核心不依赖 Electron/原生库，保持可移植)；
+// 没注入就原样返回。带缓存，避免同一张图每轮请求重复解码编码。
+let _imageCapper: ((dataUrl: string, maxEdge: number) => string) | null = null;
+export function setImageCapper(fn: ((dataUrl: string, maxEdge: number) => string) | null): void { _imageCapper = fn; }
+const IMG_MAX_EDGE = 1568;
+const _capCache = new Map<string, string>();
+function capImage(dataUrl: string): string {
+  if (!_imageCapper || !dataUrl || !dataUrl.startsWith("data:image/")) return dataUrl;
+  const hit = _capCache.get(dataUrl);
+  if (hit !== undefined) return hit;
+  let out = dataUrl;
+  try { out = _imageCapper(dataUrl, IMG_MAX_EDGE) || dataUrl; } catch { /* 缩放失败就原样发，别因此整轮挂掉 */ }
+  if (_capCache.size > 300) _capCache.clear(); // 防无限增长
+  _capCache.set(dataUrl, out);
+  return out;
+}
+
 // 统一 Message[] → Anthropic 格式（text/tool_use/tool_result 直通，image 转 base64 source）
 // 铁律:每个块都复制一份新对象,绝不返回 this.messages 里的原始引用——否则 complete() 给"末块"
 // 打 cache_control 会改到历史原对象、并被持久化,几轮累积后缓存断点数超过 Anthropic 上限(4)→400。
@@ -607,7 +627,7 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
     role: m.role,
     content: m.content.map((b) => {
       if (b.type === "image") {
-        const { mediaType, data } = parseDataUrl(b.dataUrl);
+        const { mediaType, data } = parseDataUrl(capImage(b.dataUrl));
         return { type: "image", source: { type: "base64", media_type: mediaType, data } };
       }
       // tool_result 的 content 若是多模态数组(截图类工具)，把里面的 image 块转成 Anthropic image。
@@ -617,7 +637,7 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
           .filter((c: any) => !(c.type === "image" && c.displayOnly))
           .map((c: any) =>
             c.type === "image"
-              ? (() => { const { mediaType, data } = parseDataUrl(c.dataUrl); return { type: "image", source: { type: "base64", media_type: mediaType, data } }; })()
+              ? (() => { const { mediaType, data } = parseDataUrl(capImage(c.dataUrl)); return { type: "image", source: { type: "base64", media_type: mediaType, data } }; })()
               : c,
           );
         // 过滤后只剩一个文本块 → 退回纯文本(避免空/单元素数组的边界)
@@ -679,7 +699,7 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
         if (images.length && vision) {
           const parts: any[] = [];
           if (text) parts.push({ type: "text", text });
-          for (const im of images) parts.push({ type: "image_url", image_url: { url: im.dataUrl } });
+          for (const im of images) parts.push({ type: "image_url", image_url: { url: capImage(im.dataUrl) } });
           out.push({ role: "user", content: parts });
         } else if (images.length) {
           // 纯文本模型：图片转占位文本，避免 image_url 报 400 卡死历史（占位词跟随界面语言，别给英文用户塞中文）
@@ -863,7 +883,7 @@ function toResponsesInput(messages: Message[]): any[] {
         else if (b.type === "text" && b.text)
           input.push({ role: "user", content: [{ type: "input_text", text: b.text }] });
         else if (b.type === "image")
-          input.push({ role: "user", content: [{ type: "input_image", image_url: b.dataUrl }] });
+          input.push({ role: "user", content: [{ type: "input_image", image_url: capImage(b.dataUrl) }] });
       }
     }
   }
