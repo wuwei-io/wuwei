@@ -30,6 +30,7 @@ import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoo
 import {
   addEmployees,
   installApp,
+  syncBuiltinApp,
   loadApps,
   loadEmployees,
   purge,
@@ -145,7 +146,9 @@ function buildCards(): TeamAppCard[] {
   const byId = new Map(installed.map((a) => [a.id, a]));
   const cards: TeamAppCard[] = BUILTIN_APPS.map((a) => {
     const got = byId.get(a.id);
-    return { ...a, ...(got || {}), installed: !!got };
+    // ⭐内置应用：名称/简介/员工/版本永远以【目录最新定义】为准，只从安装记录取 installed/disabled/installedAt。
+    // 否则升级后目录改了(如 4 人→6 人)，卡片仍显示安装那天的旧快照(这正是「更新了还是 4 人」的根因)。
+    return { ...a, installed: !!got, disabled: got?.disabled, installedAt: got?.installedAt };
   });
   // 目录里没有、但本地装着的（将来从线上装的），也列出来，否则用户看不到也卸不掉
   for (const a of installed) if (!cards.some((c) => c.id === a.id)) cards.push({ ...a, installed: true });
@@ -168,6 +171,13 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   registered = true;
   teamSend = deps.send;
   deps.log("team", "模块已启用");
+
+  // 启动即同步内置应用：已装的内置团队若目录升级了（如 4 人→6 人），把新增员工按 id+name 去重补进来、
+  // 刷新版本号。用户已有同名员工不会重复加；已存在的不覆盖（保留改动）。这样升级后不用卸了重装也能拿到新成员。
+  for (const app of BUILTIN_APPS) {
+    const n = syncBuiltinApp(app);
+    if (n) deps.log("team", "内置应用升级同步", app.id, `员工 +${n}`);
+  }
 
   const push = () => deps.send("evt:team", snapshot());
 

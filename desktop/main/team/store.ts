@@ -222,6 +222,39 @@ export function installApp(app: TeamApp): { apps: TeamApp[]; employees: Employee
 }
 
 /**
+ * 升级内置应用：已安装的内置应用，若其安装记录版本与目录最新版本不一致，就把目录里【新增的员工】补进来，
+ * 并把安装记录的 name/desc/version/employees 刷成目录最新（卡片展示、卸载范围都据此）。
+ * 关键：补员工时按 **id 和 name 双重去重**——用户若已有同名员工（如自己手搓的「小笨」），不会再塞一个重复的；
+ * 已存在的员工绝不覆盖（保留用户对人格/模型的改动）。启动时跑一次（见 team/index.ts）。
+ * @returns 实际新增的员工数；非内置/未安装/已是最新则返回 0。
+ */
+export function syncBuiltinApp(app: TeamApp): number {
+  const apps = loadApps();
+  const stored = apps.find((a) => a.id === app.id);
+  if (!stored) return 0; // 没装过：不动（用户自己去应用中心装）
+  if (stored.version === app.version) return 0; // 已是最新
+
+  const employees = loadEmployees();
+  const haveId = new Set(employees.map((e) => e.id));
+  const haveName = new Set(employees.map((e) => e.name));
+  let added = 0;
+  for (const e of app.employees) {
+    if (haveId.has(e.id) || haveName.has(e.name)) continue; // id 或 name 撞上就跳过，绝不塞重复
+    const emp = { ...e, fromApp: app.id };
+    employees.push(emp);
+    writePersonaFiles(emp);
+    haveId.add(e.id);
+    haveName.add(e.name);
+    added++;
+  }
+  // 安装记录刷成目录最新（名称/简介/版本/员工），好让卡片显示新定义、版本号对齐、下次不再重复同步。
+  const nextApps = apps.map((a) => (a.id === app.id ? { ...a, name: app.name, desc: app.desc, version: app.version, employees: app.employees } : a));
+  saveApps(nextApps);
+  if (added) saveEmployees(employees);
+  return added;
+}
+
+/**
  * 卸载：移除应用记录，并清掉「由它带来且用户没改过名字的」员工。
  * 保守起见只删 fromApp 指向它的，用户自建员工（无 fromApp）永远保留。
  */

@@ -95,7 +95,7 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
-import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./team/store.js";
+import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
@@ -1446,6 +1446,17 @@ function resolveCeoId(): string | null {
   return emps.find((e) => e.name === "小笨")?.id || null;
 }
 
+// 把关链：员工请示(ask_user)先问谁、再问谁。顺序 = 本部门负责人(若 self 在某部门且自己不是负责人) → 公司 CEO。
+// 每一层能定就短路、定不了才往上；全都上报才弹给董事长。去重、排除 self。
+function resolveGatekeepers(selfId: string): string[] {
+  const chain: string[] = [];
+  const myDept = loadDepartments().find((d) => (d.memberIds || []).includes(selfId));
+  if (myDept?.headId && myDept.headId !== selfId) chain.push(myDept.headId); // 先找本部门负责人
+  const ceoId = resolveCeoId();
+  if (ceoId && ceoId !== selfId && !chain.includes(ceoId)) chain.push(ceoId); // 再找公司 CEO
+  return chain;
+}
+
 // CEO 把关：把员工的请示同步交给 CEO 拍板，但只给 timeoutSec 秒——到点没拍板就当「上报董事长」兜底(不干等)。
 // 返回 {escalate, text, timedOut}——escalate=true 表示该弹给董事长；timedOut=true 区分「CEO 超时没拍」与「CEO 主动上报」。
 async function askCeoDecision(
@@ -1530,34 +1541,46 @@ const askUserTool: Tool = {
     let questions = Array.isArray((input as any).questions) ? (input as any).questions : [];
     if (!questions.length) return { content: tt("ask_user 需要至少一个带 options 的问题", "ask_user needs at least one question with options"), isError: true };
 
-    // ⭐CEO 把关：员工(非 CEO)请示 → 先让 CEO(小笨)拍板；CEO 能定就直接把决定回给员工，
-    // 拿不准(回 ESCALATE)才继续弹给董事长(下面的人类弹窗)，并把 CEO 的上报理由带进弹窗。
+    // ⭐逐级把关：员工请示 → 先问本部门负责人(若有)、再问公司 CEO；哪一级能定就当场替员工拍板、不惊动上面；
+    // 一级拿不准(回 ESCALATE / 超时)就往上一级问；全都上报才弹给董事长(下面的人类弹窗)，并把最上一级的理由带进弹窗。
     const self = ctx.employeeId;
     if (self && teamEnabled(loadSettings())) {
-      const ceoId = resolveCeoId();
-      if (ceoId && ceoId !== self) {
+      const chain = resolveGatekeepers(self);
+      if (chain.length) {
         const emps = loadEmployees();
-        const ceoName = emps.find((e) => e.id === ceoId)?.name || "CEO";
         const askerName = emps.find((e) => e.id === self)?.name || "同事";
         const ceoSec = Math.min(60, Math.max(3, Math.round(loadTeamConfig().ceoDecideTimeoutSec ?? 10) || 10));
-        // 前端弹「🧑‍💼 CEO 拍板中… Ns」可见倒计时提示(绑到发起会话)，让董事长知道现在是 CEO 在定、不是卡住。
         const gateSid = ctx.sessionId || turnSid;
-        send("evt:ceo-deciding", { sid: gateSid, ceoName, askerName, sec: ceoSec });
-        let d: { escalate: boolean; text: string; timedOut: boolean };
-        try {
-          d = await askCeoDecision(ceoId, askerName, questions, ceoSec, ctx.signal);
-        } finally {
-          send("evt:ceo-deciding", { sid: gateSid, done: true });
+        const roleOf = (gkId: string, idx: number) => {
+          // 这一级把关人是「部门负责人」还是「CEO」——用于提示与弹窗措辞。
+          const myDept = loadDepartments().find((d) => (d.memberIds || []).includes(self) && d.headId === gkId);
+          return myDept ? tt(`${myDept.name}负责人`, `${myDept.name} head`) : "CEO";
+        };
+        let lastName = "";
+        let lastReason = "";
+        for (let i = 0; i < chain.length; i++) {
+          const gkId = chain[i];
+          const gkName = emps.find((e) => e.id === gkId)?.name || roleOf(gkId, i);
+          const gkRole = roleOf(gkId, i);
+          // 前端弹「🧑‍💼 X 拍板中… Ns」可见倒计时提示，让董事长知道现在是这一级在定、不是卡住。
+          send("evt:ceo-deciding", { sid: gateSid, ceoName: gkName, askerName, sec: ceoSec });
+          let d: { escalate: boolean; text: string; timedOut: boolean };
+          try {
+            d = await askCeoDecision(gkId, askerName, questions, ceoSec, ctx.signal);
+          } finally {
+            send("evt:ceo-deciding", { sid: gateSid, done: true });
+          }
+          if (d.text && !d.escalate) {
+            return { content: tt(`已请示${gkRole}「${gkName}」，他替你拍板：\n${d.text}`, `Asked ${gkRole} "${gkName}", decision:\n${d.text}`) };
+          }
+          // 这一级上报/超时 → 记下理由，继续问更上一级；是最后一级就落到董事长。
+          lastName = gkName;
+          lastReason = d.timedOut
+            ? `${gkRole}「${gkName}」${ceoSec} 秒内没拍板，请你定`
+            : (d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text || `${gkRole}「${gkName}」拿不准，请你定`);
         }
-        if (d.text && !d.escalate) {
-          return { content: tt(`已请示 CEO「${ceoName}」，他替你拍板：\n${d.text}`, `Asked the CEO "${ceoName}", decision:\n${d.text}`) };
-        }
-        if (d.escalate && questions[0]) {
-          // 超时没拍 vs CEO 主动上报，给董事长一句更贴切的理由。
-          const reason = d.timedOut
-            ? `CEO「${ceoName}」${ceoSec} 秒内没拍板，请你定`
-            : (d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text || `CEO「${ceoName}」拿不准，请你定`);
-          questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: `【CEO ${ceoName} 请你定】${reason}\n\n${q.question}` } : q));
+        if (lastReason && questions[0]) {
+          questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: `【${lastName} 请你定】${lastReason}\n\n${q.question}` } : q));
         }
       }
     }
