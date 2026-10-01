@@ -616,6 +616,11 @@ function PackIcon({ size = 20 }: { size?: number }) {
 
 // 价格显示：EN 显示美元、CN 显示人民币。仅影响展示；实收金额始终以后端按 sku 查表为准。
 const money = (en: boolean, cn: number, usd: number): string => (en ? `$${usd}` : `¥${cn}`);
+// 加密支付(NOWPayments)分档：最低额由发票「计价币」决定(美元计价有 ~$18.71 法币下限)。
+//  - ≥ FIAT_FLOOR：美元计价、不锁币 → 收银台自由选任意币(含波场USDT/BTC)
+//  - < FIAT_FLOOR：后端锁 USDT-BSC(币安链)计价 → floor ~$0.09，所有档(含$1)都能付
+// 所有档都能付，故加密按钮不再按价隐藏；仅文案按档位区分。
+const CRYPTO_FIAT_FLOOR_USD = 18.71;
 // 客户端(人民币)sku → 网页 Paddle 的美元 sku。英文用户走网页结账(系统浏览器)。
 const EN_SKU: Record<string, string> = {
   plan_trial: "plan_trial_en", // $1 · 7天 Pro 体验（海外 Paddle，待建价后可用）
@@ -1994,14 +1999,19 @@ function TrialPayModal({
                 <button className="trial-pay-btn" onClick={() => { void window.wuwei.track?.("paddle_pay_click", { sku: cur.sku, price }); onPaddle(cur); }}>{`Pay ${price}`}<PayArrow /></button>
                 {/* 一行说清：安全/可取消/支持卡与PayPal，替代原先两行灰字 */}
                 <div className="trial-pay-reassure">{isPack ? "Secure checkout via Paddle · Cards & PayPal" : "Secure checkout · Cancel anytime · Cards & PayPal"}</div>
-                {/* 主(卡/PayPal) 与 次(加密) 分隔 */}
+                {/* 加密货币支付：给卡付不了的地区(俄罗斯/中东等)兜底。走 NOWPayments 收银台(系统浏览器)。
+                    仅 ≥ CRYPTO_MIN_USD 的档显示按钮(低于门槛 NOWPayments 最低额付不了)，
+                    低价档改成一行提示，引导去 Plus 及以上，既不误导又保留可发现性。 */}
                 <div className="trial-pay-or">or</div>
-                {/* 加密货币支付：给卡付不了的地区(俄罗斯/中东等)兜底。走 NOWPayments 收银台(系统浏览器) */}
                 <button className="trial-crypto-btn" onClick={() => { void window.wuwei.track?.("crypto_pay_click", { sku: cur.sku, price }); onCrypto(cur); }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
                   Pay with Crypto
                 </button>
-                <div className="trial-crypto-note">USDT · BTC &amp; more · works when cards fail</div>
+                <div className="trial-crypto-note">
+                  {cur.priceUsd >= CRYPTO_FIAT_FLOOR_USD
+                    ? "USDT · BTC & more · works when cards fail"
+                    : "USDT & more · for small amounts pick a low-fee chain (BSC / TON)"}
+                </div>
               </div>
             ) : phase === "ready" && qr ? (
               <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">支付宝扫码 <b>{price}</b> · 自动到账</div></>
