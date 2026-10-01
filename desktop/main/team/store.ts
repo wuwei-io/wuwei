@@ -54,6 +54,8 @@ export interface TeamConfig {
   schedulesEnabled?: boolean;
   /** CEO 员工 id：员工用 ask_user 请示时先由 CEO 把关(拍不了才上报董事长)。缺省自动识别(职位含 CEO / 名叫小笨)。 */
   ceoEmployeeId?: string;
+  /** CEO 拍板倒计时(秒)：员工请示后给 CEO 这么久拍板，超时没定就上报董事长。缺省 10，范围 3~60。 */
+  ceoDecideTimeoutSec?: number;
 }
 
 export function loadTeamConfig(): TeamConfig {

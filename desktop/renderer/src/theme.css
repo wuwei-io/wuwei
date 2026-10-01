@@ -2872,6 +2872,21 @@ body {
   overflow-y: auto;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05); /* 极轻，和输入框同层次，不显得浮在其上 */
 }
+/* CEO 把关中提示：瘦身单行 pill，贴输入框上方，轻微主色描边+呼吸动画，表示「正在拍板、别急」 */
+.ask.ceo-deciding {
+  padding: 9px 14px;
+  border-color: var(--accent);
+  background: var(--bg-soft, var(--bg));
+  max-height: none;
+  overflow: visible;
+}
+.ceo-deciding-txt {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.92;
+  animation: ceo-breathe 1.6s ease-in-out infinite;
+}
+@keyframes ceo-breathe { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 /* 右上角尺寸手柄：拖动放大/缩小询问弹窗(底边锚定，向上/向右生长) */
 .ask-resize {
   position: absolute;

@@ -2295,62 +2295,88 @@ function RoomSettingsModal({
     </div>
   );
 }
-// 一人公司设置模态：转派链最多层数 + CEO(把关员工请示)。风格复用群设置(add-st-dialog)。
-function CompanySettingsModal({ en, employees, onClose }: { en: boolean; employees: any[]; onClose: () => void }) {
+// 一人公司设置面板（设置→「一人公司」独立模块）：CEO 把关 + 拍板倒计时 + 转派链层数。改动即存(team.configSet)，无需点保存。
+function CompanyTeamSettings({ lang }: { lang: Lang }) {
+  const en = lang === "en";
   const api = (window as any).wuwei?.team;
-  const clamp = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
+  const clampLv = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
+  const clampSec = (n: number) => Math.min(60, Math.max(3, Math.round(n) || 10));
+  const [employees, setEmployees] = useState<any[]>([]);
   const [levels, setLevels] = useState(3);
   const [ceoId, setCeoId] = useState<string>(""); // "" = 自动识别(职位含CEO/名叫小笨)
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { api?.configGet?.().then((c: any) => { setLevels(clamp(c?.maxDmLevels ?? 3)); setCeoId(c?.ceoEmployeeId || ""); }); /* eslint-disable-next-line */ }, []);
-  const save = async () => {
-    if (saving) return;
-    setSaving(true);
-    await api?.configSet?.({ maxDmLevels: levels, ceoEmployeeId: ceoId || null });
-    onClose();
-  };
+  const [ceoSec, setCeoSec] = useState(10);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    api?.state?.().then((s: any) => setEmployees(s?.employees || [])).catch(() => {});
+    api?.configGet?.().then((c: any) => {
+      setLevels(clampLv(c?.maxDmLevels ?? 3));
+      setCeoId(c?.ceoEmployeeId || "");
+      setCeoSec(clampSec(c?.ceoDecideTimeoutSec ?? 10));
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const flash = () => { setSaved(true); window.setTimeout(() => setSaved(false), 1500); };
+  const persist = (patch: any) => { api?.configSet?.(patch); flash(); };
+  const onLevels = (n: number) => { const v = clampLv(n); setLevels(v); persist({ maxDmLevels: v }); };
+  const onCeo = (id: string) => { setCeoId(id); persist({ ceoEmployeeId: id || null }); };
+  const onSec = (n: number) => { const v = clampSec(n); setCeoSec(v); persist({ ceoDecideTimeoutSec: v }); };
+  const ceoName = employees.find((e) => e.id === ceoId)?.name || (en ? "the CEO" : "CEO");
   return (
-    <div className="perm-overlay" onClick={onClose}>
-      <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
-        <h3>{en ? "Company settings" : "一人公司设置"}</h3>
-        <div className="st-field">
-          <label className="st-label">{en ? "Max transfer-chain levels" : "转派链最多层数"}</label>
-          <div className="rs-wake">
-            <div className="rs-stepper">
-              <button type="button" className="rs-step" disabled={levels <= 1} aria-label={en ? "Decrease" : "减少"} onClick={() => setLevels((v) => clamp(v - 1))}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14" /></svg>
-              </button>
-              <span className="rs-wake-num">{levels}</span>
-              <button type="button" className="rs-step" disabled={levels >= 5} aria-label={en ? "Increase" : "增加"} onClick={() => setLevels((v) => clamp(v + 1))}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-              </button>
-            </div>
-            <div className="rs-chips">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button type="button" key={n} className={"rs-chip" + (levels === n ? " on" : "")} onClick={() => setLevels(n)}>{n}</button>
-              ))}
-            </div>
-          </div>
-          <p className="st-hint">{en
-            ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
-            : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}</p>
-        </div>
-        <div className="st-field">
-          <label className="st-label">{en ? "CEO (gatekeeps requests)" : "CEO（把关员工请示）"}</label>
-          <select className="tc-input tc-select" value={ceoId} onChange={(e) => setCeoId(e.target.value)}>
-            <option value="">{en ? "Auto (title contains CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
-            {(employees || []).map((m: any) => <option key={m.id} value={m.id}>{m.name}{m.title ? `（${m.title}）` : ""}</option>)}
-          </select>
-          <p className="st-hint">{en
-            ? "When a teammate uses ask_user to request a decision, the CEO decides first; only what the CEO escalates pops to you (the boss)."
-            : "员工用 ask_user 请示时，先由 CEO 拍板；只有 CEO 拿不准、上报的，才弹给你（董事长）。CEO 自己请示则直达你。"}</p>
-        </div>
-        <div className="btns">
-          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
-          <button className="allow" disabled={saving} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+    <>
+      <div className="app-set-group">{en ? "CEO gatekeeping" : "CEO 把关"}</div>
+      {/* CEO 是谁 */}
+      <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO" : "CEO（上级把关人）"}</div>
+        <span style={{ flex: 1 }} />
+        <select className="tc-input tc-select" style={{ maxWidth: 240 }} value={ceoId} onChange={(e) => onCeo(e.target.value)}>
+          <option value="">{en ? "Auto (title has CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
+          {employees.map((m: any) => <option key={m.id} value={m.id}>{m.name}{m.title ? `（${m.title}）` : ""}</option>)}
+        </select>
+      </div>
+      {/* 拍板倒计时秒数 */}
+      <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO decision countdown" : "CEO 拍板倒计时"}</div>
+        <span style={{ flex: 1 }} />
+        <div className="set-field">
+          <input
+            type="number"
+            min={3}
+            max={60}
+            value={ceoSec}
+            onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); onSec(Number(v) || 10); }}
+            className="set-field-input"
+          />
+          <span className="set-field-unit">{en ? "sec" : "秒"}</span>
         </div>
       </div>
-    </div>
+      <div className="app-set-hint" style={{ marginBottom: "16px" }}>
+        {en
+          ? `When a teammate uses ask_user, ${ceoName} gets this long to decide. Decides in time → done automatically, you're not pinged. Can't decide (or times out) → it pops to you (the boss), and waits for you.`
+          : `员工用 ask_user 请示时，先给「${ceoName}」这么久拍板：能在时限内定 → 直接替员工定、不打扰你；拿不准或超时没定 → 才弹给你（董事长），并一直等你。`}
+      </div>
+      <div className="app-set-group">{en ? "Transfer chain" : "转派链"}</div>
+      <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "Max transfer-chain levels" : "转派链最多层数"}</div>
+        <span style={{ flex: 1 }} />
+        <div className="set-field">
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={levels}
+            onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); onLevels(Number(v) || 1); }}
+            className="set-field-input"
+          />
+          <span className="set-field-unit">{en ? "levels" : "层"}</span>
+        </div>
+      </div>
+      <div className="app-set-hint" style={{ marginBottom: "10px" }}>
+        {en
+          ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
+          : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}
+      </div>
+      {saved && <div className="app-set-hint" style={{ color: "var(--ok, #3fb950)" }}>{en ? "Saved" : "已保存"}</div>}
+    </>
   );
 }
 // 定时任务触发规则 → 人话(与主进程 triggerText 镜像)。
@@ -3219,6 +3245,8 @@ export function App() {
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
   const [asks, setAsks] = useState<Record<string, { id: number; questions: AskQuestion[] }>>({});
+  // CEO 把关中：员工请示后 CEO 正在拍板，按发起会话 id 存 {ceoName, askerName, until(到点时间戳)}。拍完(evt 带 done)即清。
+  const [ceoDeciding, setCeoDeciding] = useState<Record<string, { ceoName: string; askerName: string; until: number }>>({});
   // 非当前会话发起的 ask → 右上角通知(点击切过去/✕忽略/30s自动消失)
   const [askToasts, setAskToasts] = useState<{ askId: number; sid: string; title: string }[]>([]);
   const dropToast = (askId: number) => setAskToasts((t) => t.filter((x) => x.askId !== askId));
@@ -3755,7 +3783,6 @@ export function App() {
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
   const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
-  const [companySettings, setCompanySettings] = useState(false); // 一人公司设置模态(转派链最多层数)
   const [editEmp, setEditEmp] = useState<any | null>(null); // 右键员工「编辑」→ 在当前界面直接弹编辑框(不跳转到一人公司管理页)
   // 统一样式化确认弹窗(替代原生 confirm())：玄墨黑 VI、遮罩点击关、圆角卡片，复用 perm-overlay + add-st-dialog
   const [confirmDlg, setConfirmDlg] = useState<{ title?: string; message: string; danger?: boolean; okText?: string; onOk: () => void } | null>(null);
@@ -4799,9 +4826,22 @@ export function App() {
             window.wuwei.respondPermission(payload.id, "allow");
           else setPending(payload);
           break;
+        case "evt:ceo-deciding": {
+          // CEO 把关：员工请示后 CEO 正在拍板(或拍完)。拍完就清，拍完后若升级到董事长，evt:ask-user 紧随而来。
+          const csid = payload.sid || currentIdRef.current;
+          if (payload.done) {
+            setCeoDeciding((m) => { if (!(csid in m)) return m; const n = { ...m }; delete n[csid]; return n; });
+          } else {
+            const sec = Math.max(1, Number(payload.sec) || 10);
+            setCeoDeciding((m) => ({ ...m, [csid]: { ceoName: payload.ceoName || "CEO", askerName: payload.askerName || "", until: Date.now() + sec * 1000 } }));
+          }
+          break;
+        }
         case "evt:ask-user": {
           // AI 请用户选择：按发起会话 id 存。当前会话→直接弹框；别的会话→右上角通知，不打断当前对话。
           const askSid = payload.sid || currentIdRef.current;
+          // 该会话 CEO 把关结束(升级到了董事长)→ 清掉「拍板中」提示，换成选择框。
+          setCeoDeciding((m) => { if (!(askSid in m)) return m; const n = { ...m }; delete n[askSid]; return n; });
           setAsks((m) => ({ ...m, [askSid]: { id: payload.id, questions: payload.questions || [] } }));
           const isCur0 = askSid === currentIdRef.current;
           // 后台会话到点自答的公共动作(当前会话交给 AskModal 的可见倒计时)
@@ -6796,7 +6836,7 @@ export function App() {
                 {teamMenu.kind === "company" && (<>
                   <Item label={lang === "en" ? "Add teammate" : "新建/导入员工"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
                   <Item label={lang === "en" ? "New group" : "建群"} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "Settings" : "设置"} on={() => { setCompanySettings(true); close(); }} />
+                  <Item label={lang === "en" ? "Settings" : "设置"} on={() => { setSettingsTab("team"); setShowSettings(true); close(); }} />
                   <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
                 </>)}
                 {teamMenu.kind === "employee" && (<>
@@ -10071,7 +10111,6 @@ export function App() {
           />
         );
       })()}
-      {companySettings && <CompanySettingsModal en={lang === "en"} employees={teamEmployees} onClose={() => setCompanySettings(false)} />}
       {/* 右键员工「编辑」：顶层弹编辑框，覆盖在当前界面上，不切走 appView。保存后 evt:team 广播自动刷新侧栏。 */}
       {editEmp && (
         <EmployeeEditModal
@@ -10225,6 +10264,10 @@ export function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {ceoDeciding[currentId] && !asks[currentId] && (
+        <CeoDecidingPill lang={lang} anchor={composerRef} info={ceoDeciding[currentId]} />
       )}
 
       {asks[currentId] && (() => {
@@ -10831,6 +10874,37 @@ function ResumeBox({
   );
 }
 
+// CEO 把关中的可见提示：员工请示后 CEO 正在拍板，贴输入框上方显示「🧑‍💼 X 拍板中… Ns」实时倒计时。
+// 能定就直接定、不打扰董事长；超时/拿不准才紧随弹出选择框(届时本提示被清)。
+function CeoDecidingPill({ lang, anchor, info }: { lang: Lang; anchor: React.RefObject<HTMLDivElement | null>; info: { ceoName: string; askerName: string; until: number } }) {
+  const en = lang === "en";
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const tm = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(tm);
+  }, []);
+  const [box, setBox] = useState<{ left: number; width: number; bottom: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = anchor.current;
+    if (!el) return;
+    const upd = () => { const r = el.getBoundingClientRect(); setBox({ left: r.left, width: r.width, bottom: window.innerHeight - r.top + 8 }); };
+    upd();
+    window.addEventListener("resize", upd);
+    return () => window.removeEventListener("resize", upd);
+  }, [anchor]);
+  const left = Math.max(0, Math.ceil((info.until - now) / 1000));
+  const txt = left > 0
+    ? (en ? `🧑‍💼 ${info.ceoName} is deciding… ${left}s (you're only pinged if it can't)` : `🧑‍💼 ${info.ceoName} 正在拍板… ${left}s（拿不准才找你）`)
+    : (en ? `🧑‍💼 ${info.ceoName} is deciding…` : `🧑‍💼 ${info.ceoName} 正在拍板…`);
+  return (
+    <div
+      className="ask ceo-deciding"
+      style={box ? { left: box.left, width: box.width, bottom: box.bottom } : { visibility: "hidden" }}
+    >
+      <span className="ceo-deciding-txt">{txt}</span>
+    </div>
+  );
+}
 function AskModal({
   data,
   anchor,
@@ -10968,7 +11042,8 @@ function AskModal({
   // 单个单选题靠点击即交，不显示按钮；多选题/多题分步/已附截图时显示「下一步/提交」
   // 显示「提交/下一步」按钮：多选、多题、带图，或**在「其它」框手动输入了文字**(否则单选题里
   // 手打答案没有可点的提交按钮，只能按回车——很多人不知道，会以为卡住)。
-  const showPrimary = curMulti || qs.length > 1 || curImgs.length > 0 || (other[step] || "").trim().length > 0;
+  // 无选项的问题(模型只写了正文没给 options)：也要显示「提交」，否则只剩输入框、没可点按钮会让人以为卡住。
+  const showPrimary = curMulti || qs.length > 1 || curImgs.length > 0 || (other[step] || "").trim().length > 0 || !(q.options?.length);
   // 折叠态：只剩一个小条(不挡后面内容)，点「展开」还原
   if (box && collapsed) {
     return (
@@ -11054,7 +11129,7 @@ function AskModal({
           </div>
         )}
         <div className="ask-opts">
-          {q.options.map((o, oi) => {
+          {(q.options || []).map((o, oi) => {
             const on = (sel[step] || []).includes(o.label);
             return (
               <button key={oi} type="button" className={"ask-opt" + (on ? " on" : "")} onClick={() => pick(o.label, curMulti)}>
@@ -13406,7 +13481,7 @@ function SettingsModal({
   const [dragOverIdx, setDragOverIdx] = useState(-1); // 拖拽悬停到第几行(高亮)
   const dragIdxRef = useRef(-1); // 拖起始行
   const [tab, setTab] = useState<
-    "general" | "display" | "model" | "platforms" | "prompt" | "memory" | "brain" | "mcp" | "tools" | "secrets"
+    "general" | "team" | "display" | "model" | "platforms" | "prompt" | "memory" | "brain" | "mcp" | "tools" | "secrets"
   >((initialTab as any) || "model"); // 设置分块标签页(左侧菜单)
   const [maxed, setMaxed] = useState(false); // 设置弹窗最大化(脑网络等大结构需放大看)
   const [memory, setMemory] = useState(""); // 全局长期记忆
@@ -14270,6 +14345,11 @@ function SettingsModal({
           <button type="button" className={"set-tab" + (tab === "general" ? " on" : "")} onClick={() => setTab("general")}>
             {t("set.tab.general")}
           </button>
+          {teamOn && (
+            <button type="button" className={"set-tab" + (tab === "team" ? " on" : "")} onClick={() => setTab("team")}>
+              {t("set.tab.team")}
+            </button>
+          )}
           <button type="button" className={"set-tab" + (tab === "display" ? " on" : "")} onClick={() => setTab("display")}>
             {t("set.tab.display")}
           </button>
@@ -14341,6 +14421,8 @@ function SettingsModal({
           </div>
 
         <div className="set-body">
+          {/* ── 一人公司：CEO 把关 + 拍板倒计时 + 转派链(独立模块，仅模块开启时可见) ── */}
+          {tab === "team" && <CompanyTeamSettings lang={lang} />}
           {/* ── 通用：会话分组 + 上下文压缩 + 账号读取 ── */}
           {tab === "general" && (
             <>

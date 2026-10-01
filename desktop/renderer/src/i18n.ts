@@ -119,6 +119,7 @@ const DICT: Record<string, { zh: string; en: string }> = {
   "foot.tasksSuffix": { zh: "个任务运行中", en: "tasks running" },
   "set.title": { zh: "设置", en: "Settings" },
   "set.tab.general": { zh: "通用", en: "General" },
+  "set.tab.team": { zh: "一人公司", en: "Company" },
   "set.tab.display": { zh: "外观", en: "Appearance" },
   "set.tab.model": { zh: "模型", en: "Model" },
   "set.tab.platforms": { zh: "平台管理", en: "Platforms" },

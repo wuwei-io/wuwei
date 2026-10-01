@@ -1446,10 +1446,17 @@ function resolveCeoId(): string | null {
   return emps.find((e) => e.name === "小笨")?.id || null;
 }
 
-// CEO 把关：把员工的请示同步交给 CEO 拍板。返回 {escalate, text}——escalate=true 表示 CEO 认为需董事长定。
-async function askCeoDecision(ceoId: string, askerName: string, questions: any[], signal?: AbortSignal): Promise<{ escalate: boolean; text: string }> {
+// CEO 把关：把员工的请示同步交给 CEO 拍板，但只给 timeoutSec 秒——到点没拍板就当「上报董事长」兜底(不干等)。
+// 返回 {escalate, text, timedOut}——escalate=true 表示该弹给董事长；timedOut=true 区分「CEO 超时没拍」与「CEO 主动上报」。
+async function askCeoDecision(
+  ceoId: string,
+  askerName: string,
+  questions: any[],
+  timeoutSec: number,
+  signal?: AbortSignal,
+): Promise<{ escalate: boolean; text: string; timedOut: boolean }> {
   const ceo = loadEmployees().find((e) => e.id === ceoId);
-  if (!ceo) return { escalate: true, text: "" };
+  if (!ceo) return { escalate: true, text: "", timedOut: false };
   const qtext = questions
     .map((q: any, i: number) => `${i + 1}. ${q.question}\n   可选：${(q.options || []).map((o: any) => o.label).join(" | ")}${q.multiSelect ? "（可多选）" : ""}`)
     .join("\n");
@@ -1459,13 +1466,22 @@ async function askCeoDecision(ceoId: string, askerName: string, questions: any[]
     `· 确实超出你的判断、必须董事长(老板)亲自定 → 只回一行：ESCALATE：<为什么需要老板>。\n\n` +
     `需要拍板的问题：\n${qtext}`;
   const sys = buildEmployeeSystem(ceo, sysPrompt, loadEmployeeMemory(ceo.id), "## 当前场景\n\n你在做 CEO 把关：下属把需要拍板的选择请示到你这。能定就定、定不了才上报董事长。别反问下属，直接给结论或 ESCALATE。");
+  // 倒计时：到点就 abort 掉 CEO 这一轮，当「没拍板」上报董事长。父级(员工会话)被取消也一起中止。
+  const ac = new AbortController();
+  const onParentAbort = () => ac.abort();
+  if (signal) { if (signal.aborted) ac.abort(); else signal.addEventListener("abort", onParentAbort); }
+  const timer = setTimeout(() => ac.abort(), Math.max(1, timeoutSec) * 1000);
   let out = "";
   try {
-    out = await runEmployeeTurn({ employee: ceo, sys, history: [], input, signal: signal || new AbortController().signal, excludeTools: ["ask_user", "dm_teammate"] });
+    out = await runEmployeeTurn({ employee: ceo, sys, history: [], input, signal: ac.signal, excludeTools: ["ask_user", "dm_teammate"] });
   } catch {
-    return { escalate: true, text: "" }; // CEO 跑挂了 → 直接上报董事长兜底
+    // 超时被 abort / CEO 跑挂了 → 都上报董事长兜底。timedOut 用于给弹窗一句更贴切的理由。
+    return { escalate: true, text: "", timedOut: ac.signal.aborted && !(signal?.aborted) };
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", onParentAbort);
   }
-  return { escalate: /(^|\n)\s*ESCALATE\s*[:：]/i.test(out), text: (out || "").trim() };
+  return { escalate: /(^|\n)\s*ESCALATE\s*[:：]/i.test(out), text: (out || "").trim(), timedOut: false };
 }
 
 // ask_user：让 AI 弹出可点击的选择框(单选/多选/可多问)，暂停等用户点选后把选择回传。
@@ -1523,12 +1539,24 @@ const askUserTool: Tool = {
         const emps = loadEmployees();
         const ceoName = emps.find((e) => e.id === ceoId)?.name || "CEO";
         const askerName = emps.find((e) => e.id === self)?.name || "同事";
-        const d = await askCeoDecision(ceoId, askerName, questions, ctx.signal);
+        const ceoSec = Math.min(60, Math.max(3, Math.round(loadTeamConfig().ceoDecideTimeoutSec ?? 10) || 10));
+        // 前端弹「🧑‍💼 CEO 拍板中… Ns」可见倒计时提示(绑到发起会话)，让董事长知道现在是 CEO 在定、不是卡住。
+        const gateSid = ctx.sessionId || turnSid;
+        send("evt:ceo-deciding", { sid: gateSid, ceoName, askerName, sec: ceoSec });
+        let d: { escalate: boolean; text: string; timedOut: boolean };
+        try {
+          d = await askCeoDecision(ceoId, askerName, questions, ceoSec, ctx.signal);
+        } finally {
+          send("evt:ceo-deciding", { sid: gateSid, done: true });
+        }
         if (d.text && !d.escalate) {
           return { content: tt(`已请示 CEO「${ceoName}」，他替你拍板：\n${d.text}`, `Asked the CEO "${ceoName}", decision:\n${d.text}`) };
         }
         if (d.escalate && questions[0]) {
-          const reason = d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text;
+          // 超时没拍 vs CEO 主动上报，给董事长一句更贴切的理由。
+          const reason = d.timedOut
+            ? `CEO「${ceoName}」${ceoSec} 秒内没拍板，请你定`
+            : (d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text || `CEO「${ceoName}」拿不准，请你定`);
           questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: `【CEO ${ceoName} 请你定】${reason}\n\n${q.question}` } : q));
         }
       }
