@@ -48,6 +48,10 @@ import {
   addSchedule,
   updateSchedule,
   removeSchedule,
+  loadDepartments,
+  createDepartment,
+  updateDepartment,
+  removeDepartment,
 } from "./store.js";
 
 export type TeamDeps = {
@@ -148,8 +152,8 @@ function buildCards(): TeamAppCard[] {
   return cards;
 }
 
-function snapshot(): { apps: TeamAppCard[]; employees: Employee[] } {
-  return { apps: buildCards(), employees: loadEmployees() };
+function snapshot(): { apps: TeamAppCard[]; employees: Employee[]; departments: ReturnType<typeof loadDepartments> } {
+  return { apps: buildCards(), employees: loadEmployees(), departments: loadDepartments() };
 }
 
 // 保存 deps.send 引用，供 index.ts 里的 AI 工具(create/update/delete_employee)改完员工后重广播 evt:team，
@@ -172,6 +176,12 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   // 一人公司级配置(转派链最大层数等)
   ipcMain.handle("team:config:get", () => loadTeamConfig());
   ipcMain.handle("team:config:set", (_e, patch: unknown) => saveTeamConfig((patch || {}) as any));
+
+  // 部门(组织架构)：增删改查。变更后广播 evt:team 让通讯录分组即时刷新。
+  ipcMain.handle("team:dept:list", () => ({ departments: loadDepartments() }));
+  ipcMain.handle("team:dept:create", (_e, input: unknown) => { const dept = createDepartment((input || {}) as any); push(); return { ok: true, dept, ...snapshot() }; });
+  ipcMain.handle("team:dept:update", (_e, id: string, patch: unknown) => { updateDepartment(String(id || ""), (patch || {}) as any); push(); return { ok: true, ...snapshot() }; });
+  ipcMain.handle("team:dept:delete", (_e, id: string) => { removeDepartment(String(id || "")); push(); return { ok: true, ...snapshot() }; });
 
   // 定时任务：增删改查。变更后广播 evt:team-schedules 让界面即时刷新。
   const pushSchedules = () => deps.send("evt:team-schedules", { schedules: loadSchedules() });

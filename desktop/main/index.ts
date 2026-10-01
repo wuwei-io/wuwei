@@ -98,7 +98,7 @@ import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./te
 import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
-import { runDmTurn, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
+import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
 import {
@@ -1473,7 +1473,7 @@ async function askCeoDecision(
   const timer = setTimeout(() => ac.abort(), Math.max(1, timeoutSec) * 1000);
   let out = "";
   try {
-    out = await runEmployeeTurn({ employee: ceo, sys, history: [], input, signal: ac.signal, excludeTools: ["ask_user", "dm_teammate"] });
+    out = await runEmployeeTurn({ employee: ceo, sys, history: [], input, signal: ac.signal, excludeTools: ["ask_user", "dm_teammate", "assign_task"] });
   } catch {
     // 超时被 abort / CEO 跑挂了 → 都上报董事长兜底。timedOut 用于给弹窗一句更贴切的理由。
     return { escalate: true, text: "", timedOut: ac.signal.aborted && !(signal?.aborted) };
@@ -1631,9 +1631,77 @@ const dmTeammateTool: Tool = {
     // 先把发起方这条消息落进私聊并广播，让界面立刻看到「我发了什么」
     const msgs = appendDmMessage(dm.id, { speaker: { id: selfId, name: selfName, kind: "agent" }, text: message });
     send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
-    // 同步跑目标员工一轮，拿回复回给发起方。深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。
+    // 同步跑目标员工一轮拿回复回给发起方（走直连+runDmTurn 的 running 守卫，天然防「A↔B 互 dm」死锁）。
+    // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
     const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1);
     return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
+  },
+};
+
+// assign_task：给另一名员工【派活】——把一件任务交出去，不等他做完自己就接着做别的（异步·派完就走）。
+// 与 dm_teammate 的区别：dm_teammate 同步等对方这一句答复（问事/对齐/验收用）；assign_task 不等，
+// 把活排进对方的队列，做完结果落在你俩私聊里。对方在忙就排队，priority=urgent 插到他队列最前(不打断正在跑的)。
+const assignTaskTool: Tool = {
+  name: "assign_task",
+  description:
+    "给你团队里的另一名员工【派活】：把一件需要他花时间完成的任务交给他，然后你【不必等他做完】就能继续做别的事。" +
+    "与 dm_teammate 的区别——dm_teammate 是「问一句、同步等他这一句答复」（对齐/问事/验收用）；" +
+    "assign_task 是「把一件活交出去、不等」，他做完的结果会落在你俩的私聊里。" +
+    "他正忙别的活就自动排队（当前这件干完接着干你这件）；priority 填 urgent 表示急事，会插到他队列最前、优先做（但不打断他正在跑的那件）。" +
+    "name 填对方名字（须与团队成员名完全一致），task 填要他做的事（说清目标、验收标准）。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "要派活的同事名字（须与团队成员名完全一致）" },
+      task: { type: "string", description: "交给他的任务：说清要做什么、目标、验收标准" },
+      priority: { type: "string", enum: ["normal", "urgent"], description: "normal=按顺序排队（默认）；urgent=急事，插到他队列最前优先做" },
+    },
+    required: ["name", "task"],
+  },
+  async run(input, ctx): Promise<ToolResult> {
+    const selfId = ctx.employeeId;
+    if (!selfId) {
+      return { content: tt("assign_task 只能由员工使用（当前会话没有绑定员工身份）。", "assign_task can only be used by an employee (this session has no employee identity)."), isError: true };
+    }
+    const name = String((input as any).name || "").trim();
+    const task = String((input as any).task || "").trim();
+    const urgent = String((input as any).priority || "normal").trim() === "urgent";
+    if (!name || !task) {
+      return { content: tt("需要提供 name（同事名字）和 task（要派的活）。", "Both name (teammate) and task are required."), isError: true };
+    }
+
+    const all = loadEmployees();
+    const self = all.find((e) => e.id === selfId);
+    const selfName = self?.name || selfId;
+    const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
+    const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
+
+    const target = available.find((e) => e.name === name);
+    if (!target) {
+      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可派活的同事）", "(no other teammates available)");
+      return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
+    }
+
+    const dm = findOrCreateDm(selfId, target.id, [selfName, target.name]);
+    send("evt:team-rooms", { rooms: loadRooms() });
+    // 先把「派活」这条消息落进私聊，界面立刻看到。
+    const msgs = appendDmMessage(dm.id, { speaker: { id: selfId, name: selfName, kind: "agent" }, text: task });
+    send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
+
+    // 关键：异步派活——把活排进对方的员工队列就【立即返回】，不 await 他做完。
+    const busyBefore = empIsBusy(target.id);
+    const ahead = empQueueLen(target.id); // 他前面还排着几件
+    void enqueueEmpTask(target.id, async () => {
+      await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1);
+    }, { urgent }).catch(() => {});
+
+    const where = !busyBefore
+      ? tt("他现在就开始做", "starting now")
+      : urgent
+        ? tt("他在忙，已把这件作为急事插到他队列最前，手头这件一完就优先做", "they're busy; queued this as urgent at the front — they'll do it next")
+        : tt(`他在忙，已排进他的队列（前面还有 ${ahead + 1} 件），轮到就做`, `they're busy; queued (about ${ahead + 1} ahead), will do it when free`);
+    return { content: tt(`已把活派给「${target.name}」：${where}。做完他会在你俩私聊里回你，你现在可以接着忙别的。`, `Assigned to "${target.name}": ${where}. Their result will land in your DM; you can continue with other things now.`) };
   },
 };
 
@@ -2155,7 +2223,7 @@ function desktopTools(): Tool[] {
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
-    ? [dmTeammateTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
+    ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
   let tools = [...base, askUserTool, sendImageTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文

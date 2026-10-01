@@ -2302,12 +2302,13 @@ function CompanyTeamSettings({ lang }: { lang: Lang }) {
   const clampLv = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
   const clampSec = (n: number) => Math.min(60, Math.max(3, Math.round(n) || 10));
   const [employees, setEmployees] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [levels, setLevels] = useState(3);
   const [ceoId, setCeoId] = useState<string>(""); // "" = 自动识别(职位含CEO/名叫小笨)
   const [ceoSec, setCeoSec] = useState(10);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    api?.state?.().then((s: any) => setEmployees(s?.employees || [])).catch(() => {});
+    api?.state?.().then((s: any) => { setEmployees(s?.employees || []); setDepartments(s?.departments || []); }).catch(() => {});
     api?.configGet?.().then((c: any) => {
       setLevels(clampLv(c?.maxDmLevels ?? 3));
       setCeoId(c?.ceoEmployeeId || "");
@@ -2321,6 +2322,12 @@ function CompanyTeamSettings({ lang }: { lang: Lang }) {
   const onCeo = (id: string) => { setCeoId(id); persist({ ceoEmployeeId: id || null }); };
   const onSec = (n: number) => { const v = clampSec(n); setCeoSec(v); persist({ ceoDecideTimeoutSec: v }); };
   const ceoName = employees.find((e) => e.id === ceoId)?.name || (en ? "the CEO" : "CEO");
+  // 部门 CRUD：改完以后端返回的 departments 为准(含成员互斥规整)。
+  const applyDept = (r: any) => { if (r?.departments) setDepartments(r.departments); flash(); };
+  const deptCreate = () => api?.deptCreate?.({ name: en ? "New department" : "新部门", memberIds: [] }).then(applyDept).catch(() => {});
+  const deptUpdate = (id: string, patch: any) => api?.deptUpdate?.(id, patch).then(applyDept).catch(() => {});
+  const deptDelete = (id: string) => api?.deptDelete?.(id).then(applyDept).catch(() => {});
+  const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || id;
   return (
     <>
       <div className="app-set-group">{en ? "CEO gatekeeping" : "CEO 把关"}</div>
@@ -2375,6 +2382,61 @@ function CompanyTeamSettings({ lang }: { lang: Lang }) {
           ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
           : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}
       </div>
+
+      <div className="app-set-group" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span>{en ? "Departments" : "部门"}</span>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="tc-btn" style={{ fontSize: 12, padding: "3px 10px" }} onClick={deptCreate}>+ {en ? "New department" : "新建部门"}</button>
+      </div>
+      <div className="app-set-hint" style={{ marginBottom: departments.length ? 10 : 0 }}>
+        {en
+          ? "Optional org structure. Flat management is fine — only set up a department once it grows past ~2 people. Each member belongs to at most one department; the head is marked in Contacts."
+          : "组织架构，可不设——扁平管理就够用；一个部门人多了（2 人以上）再建来方便管理。一名员工最多归一个部门，负责人会在通讯录里标出。"}
+      </div>
+      {departments.map((d: any) => (
+        <div key={d.id} className="dept-card">
+          <div className="dept-card-row">
+            <input
+              className="set-field-input"
+              style={{ flex: 1, textAlign: "left" }}
+              value={d.name}
+              onChange={(e) => setDepartments((ds) => ds.map((x) => (x.id === d.id ? { ...x, name: e.target.value } : x)))}
+              onBlur={(e) => deptUpdate(d.id, { name: e.target.value.trim() || (en ? "Department" : "部门") })}
+            />
+            <button type="button" className="tc-btn-ghost danger" style={{ fontSize: 12 }} onClick={() => deptDelete(d.id)}>{en ? "Delete" : "删除"}</button>
+          </div>
+          <div className="dept-card-row">
+            <span className="dept-card-lbl">{en ? "Head" : "负责人"}</span>
+            <select className="tc-input tc-select" style={{ flex: 1 }} value={d.headId || ""} onChange={(e) => deptUpdate(d.id, { headId: e.target.value || undefined })}>
+              <option value="">{en ? "None" : "暂不设"}</option>
+              {(d.memberIds || []).map((id: string) => <option key={id} value={id}>{nameOf(id)}</option>)}
+            </select>
+          </div>
+          <div className="dept-card-lbl" style={{ marginTop: 6 }}>{en ? "Members" : "成员"}</div>
+          <div className="dept-members">
+            {employees.map((e) => {
+              const inDept = (d.memberIds || []).includes(e.id);
+              const otherDept = departments.find((x) => x.id !== d.id && (x.memberIds || []).includes(e.id));
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  className={"dept-chip" + (inDept ? " on" : "")}
+                  title={otherDept && !inDept ? (en ? `Currently in ${otherDept.name} — will move here` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
+                  onClick={() => {
+                    const next = inDept ? (d.memberIds || []).filter((m: string) => m !== e.id) : [...(d.memberIds || []), e.id];
+                    deptUpdate(d.id, { memberIds: next });
+                  }}
+                >
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
+                  {e.name}{otherDept && !inDept ? (en ? ` · ${otherDept.name}` : `·${otherDept.name}`) : ""}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
       {saved && <div className="app-set-hint" style={{ color: "var(--ok, #3fb950)" }}>{en ? "Saved" : "已保存"}</div>}
     </>
   );
@@ -3435,6 +3497,7 @@ export function App() {
   const [teamEnabled, setTeamEnabled] = useState(() => localStorage.getItem("wuwei-team-enabled") === "1");
   const [appView, setAppView] = useState<null | "store" | "rooms" | "sop">(null); // 主区显示应用中心 / 群 / SOP
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
+  const [teamDepartments, setTeamDepartments] = useState<any[]>([]); // 部门(组织架构)：通讯录按部门分组展示
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
   const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
   const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
@@ -3460,12 +3523,12 @@ export function App() {
     if (!teamEnabled) return;
     const api = (window as any).wuwei?.team;
     api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
-    api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
+    api?.state?.().then((s: any) => { if (s) { setTeamEmployees(s.employees || []); setTeamDepartments(s.departments || []); } });
     api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
     api?.scheduleList?.().then((r: any) => setSchedules(r?.schedules || []));
     const off = window.wuwei.onEvent?.((ch: string, p: any) => {
       if (ch === "evt:team-rooms") setTeamRooms(p?.rooms || []);
-      else if (ch === "evt:team" && p) setTeamEmployees(p.employees || []);
+      else if (ch === "evt:team" && p) { setTeamEmployees(p.employees || []); setTeamDepartments(p.departments || []); }
       else if (ch === "evt:sop") setSopTree(p?.tree || []);
       else if (ch === "evt:team-schedules") setSchedules(p?.schedules || []);
     });
@@ -6627,7 +6690,7 @@ export function App() {
                     ids.splice(ti < 0 ? ids.length : ti, 0, id);
                     void (window as any).wuwei?.team?.employeeReorder?.(ids);
                   };
-                  return sortedEmps.map((e: any) => {
+                  const renderEmp = (e: any) => {
                   const empSessions = sessions.filter((s) => s.employeeId === e.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
                   // 该员工参与的私聊(镜像)：同一条 dm 会在双方侧栏各显示一次，各自显示「对方」
                   const empDms = teamRooms.filter((r: any) => r.type === "dm" && (r.members || []).includes(e.id)).sort((a:any,b:any)=>(b.updatedAt||0)-(a.updatedAt||0));
@@ -6745,7 +6808,47 @@ export function App() {
                       )}
                     </div>
                   );
+                  };
+                  // 按部门分组：建了部门就分组显示(部门名 + 负责人标记)，没归属的落「未分组」；
+                  // 一个部门都没建=扁平管理，直接平铺不显示分组头(2 人以上才建议建部门)。
+                  const depts = [...teamDepartments].sort((a: any, b: any) => (a.order ?? 9999) - (b.order ?? 9999));
+                  if (!depts.length) return sortedEmps.map(renderEmp);
+                  const empById = new Map(sortedEmps.map((e: any) => [e.id, e]));
+                  const assigned = new Set<string>();
+                  const groups = depts.map((d: any) => {
+                    const mems = (d.memberIds || [])
+                      .map((id: string) => empById.get(id))
+                      .filter(Boolean)
+                      .sort((a: any, b: any) => (b.pinnedAt || 0) - (a.pinnedAt || 0) || (a.order ?? 9999) - (b.order ?? 9999));
+                    mems.forEach((m: any) => assigned.add(m.id));
+                    return { dept: d, mems };
                   });
+                  const ungrouped = sortedEmps.filter((e: any) => !assigned.has(e.id));
+                  return (
+                    <>
+                      {groups.map(({ dept, mems }: any) => (
+                        <div className="tool-dept" key={dept.id}>
+                          <div className="tool-dept-head">
+                            <span className="tool-dept-nm">{tx(dept.name)}</span>
+                            {dept.headId && empById.get(dept.headId) && (
+                              <span className="tool-dept-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head: " : "负责人 "}{tx(empById.get(dept.headId).name)}</span>
+                            )}
+                            <span className="tool-dept-cnt">{mems.length}</span>
+                          </div>
+                          {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
+                        </div>
+                      ))}
+                      {ungrouped.length > 0 && (
+                        <div className="tool-dept">
+                          <div className="tool-dept-head">
+                            <span className="tool-dept-nm tool-dept-nm-muted">{lang === "en" ? "Unassigned" : "未分组"}</span>
+                            <span className="tool-dept-cnt">{ungrouped.length}</span>
+                          </div>
+                          {ungrouped.map(renderEmp)}
+                        </div>
+                      )}
+                    </>
+                  );
                 })()}
                 {/* 群聊子板块头：独立展开/收起，后续群多了(按项目分)也清爽 */}
                 <button
@@ -6816,7 +6919,7 @@ export function App() {
           // 手动刷新：重拉员工/群/SOP（没等到自动广播时兜底，免得重启）
           const refreshTeam = () => {
             api?.rooms?.().then((r: any) => setTeamRooms(r?.rooms || []));
-            api?.state?.().then((s: any) => s && setTeamEmployees(s.employees || []));
+            api?.state?.().then((s: any) => { if (s) { setTeamEmployees(s.employees || []); setTeamDepartments(s.departments || []); } });
             api?.sopTree?.().then((r: any) => setSopTree(r?.tree || []));
             api?.scheduleList?.().then((r: any) => setSchedules(r?.schedules || []));
             close();

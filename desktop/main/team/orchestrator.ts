@@ -80,6 +80,58 @@ function busy(key: string): boolean {
   return running.has(key) || (turnQueue.get(key)?.length ?? 0) > 0;
 }
 
+/**
+ * 「员工级」任务队列：一名员工手上的所有活（来自不同私聊、人类直聊、或别人 assign_task 派来的）
+ * 都串到他自己这一条队列里**串行**跑——同一个员工不会同时开两轮（他分身乏术，也会串台）。
+ * 这是「一个员工可以交代好几件事」的底座：
+ *   · 忙时不拒收，新活排队，当前这件干完自动接下一件（不像旧 runDmTurn 那样「对方在忙」直接回绝）。
+ *   · 急事(urgent)插到队列**最前**，但**不打断**正在跑的那件——当前干完立刻接急事，再回头干其余。
+ * key=员工 id（不是私聊 id），这样同一员工跨多个私聊的活也会排到同一条队列、不并发。
+ */
+type EmpTask = { run: () => Promise<void>; urgent: boolean };
+const empBusy = new Set<string>(); // 正在跑任务的员工
+const empQueue = new Map<string, EmpTask[]>(); // 员工 id → 待处理任务（不含正在跑的那件）
+
+/** 某员工当前排队中（不含正在跑）的任务数。assign_task 用它告诉派活方「前面还有几件」。 */
+export function empQueueLen(empId: string): number {
+  return empQueue.get(empId)?.length ?? 0;
+}
+/** 某员工此刻是否正在干活（跑或有排队）。 */
+export function empIsBusy(empId: string): boolean {
+  return empBusy.has(empId) || empQueueLen(empId) > 0;
+}
+
+/**
+ * 把一件活排进某员工的串行队列。返回的 Promise 在**这件活自己**跑完时 resolve——
+ * 同步 dm_teammate 靠它「排队等到轮到并跑完」拿回复；异步 assign_task 直接不 await（派完就走）。
+ * @param urgent true=插到队列最前（但不打断正在跑的那件）。
+ */
+export function enqueueEmpTask(empId: string, task: () => Promise<void>, opts?: { urgent?: boolean }): Promise<void> {
+  const urgent = !!opts?.urgent;
+  return new Promise<void>((resolve, reject) => {
+    const item: EmpTask = { run: async () => { try { await task(); resolve(); } catch (e) { reject(e); } }, urgent };
+    if (empBusy.has(empId)) {
+      // 他正忙：排队。急事插最前（排在其它待办之前），普通排队尾。都不动正在跑的那件。
+      const q = empQueue.get(empId) || (empQueue.set(empId, []), empQueue.get(empId)!);
+      if (urgent) q.unshift(item); else q.push(item);
+      return;
+    }
+    // 空闲：立刻开跑，跑完依次消费排队期间进来的活（每次现取 shift，好让急事插队即时生效）。
+    empBusy.add(empId);
+    if (!empQueue.has(empId)) empQueue.set(empId, []);
+    void (async () => {
+      try {
+        await item.run();
+        const q = empQueue.get(empId)!;
+        while (q.length) { const next = q.shift(); if (next) await next.run(); }
+      } finally {
+        empBusy.delete(empId);
+        empQueue.delete(empId);
+      }
+    })();
+  });
+}
+
 /** 员工被唤醒后先落的「收到」应答文案。跑完才落正式回复(带 steps)。 */
 const ACK_TEXT = "收到，正在处理…";
 
@@ -349,8 +401,8 @@ export async function runDmTurn(
       history,
       input,
       signal: ac.signal,
-      // 转派链到顶才剔除 dm_teammate；未到顶允许本轮继续往下转派(小笨→小码→小美)。上限读一人公司设置。
-      excludeTools: depth >= maxDmDepth() ? ["dm_teammate"] : [],
+      // 转派链到顶才剔除 dm_teammate / assign_task；未到顶允许本轮继续往下转派(小笨→小码→小美)。上限读一人公司设置。
+      excludeTools: depth >= maxDmDepth() ? ["dm_teammate", "assign_task"] : [],
       dmDepth: depth, // 透传深度：本轮员工若再调 dm_teammate，工具据此 +1
       onProgress: (ev) => { applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
@@ -400,10 +452,12 @@ export async function runDmHumanTurn(
   //    不管忙不忙都立刻落，用户即时看到自己发的话(旧代码在此之前就 running.has→return 把整条吞了)。
   pushAndBroadcast(deps, dmId, { speaker: { id: "me", name: "我", kind: "human" }, text });
 
-  // 2. 唤醒「对方」回一句走串行队列：忙时排队、跑完自动接上，不再直接丢弃这条。
-  //    复用 runDmTurn，投影会把人类这句当 input、防递归 excludeTools 照旧生效。
-  const queued = enqueueTurn(dmId, () => runDmTurn(dmId, responderId, text, deps).then(() => undefined));
-  if (queued) {
-    deps.send("evt:team-room-hint", { roomId: dmId, code: "queued", hint: "正在处理上一条，这条已排队，稍后自动接上。" });
+  // 2. 唤醒「对方」回一句走【员工级】串行队列：他手上别的活没干完就排队、干完自动接上，不丢这条。
+  //    用员工 id 作 key（而非私聊 id），这样他在别处（别人派的活/别的私聊）忙着时，这条也会乖乖排队，
+  //    不会让同一个员工同时开两轮串台。复用 runDmTurn，投影把人类这句当 input、防递归照旧。
+  const wasBusy = empIsBusy(responderId);
+  if (wasBusy) {
+    deps.send("evt:team-room-hint", { roomId: dmId, code: "queued", hint: "对方正忙于手头的活，这条已排队，轮到就处理。" });
   }
+  void enqueueEmpTask(responderId, () => runDmTurn(dmId, responderId, text, deps).then(() => undefined)).catch(() => {});
 }

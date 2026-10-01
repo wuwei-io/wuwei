@@ -56,6 +56,23 @@ export interface TeamConfig {
   ceoEmployeeId?: string;
   /** CEO 拍板倒计时(秒)：员工请示后给 CEO 这么久拍板，超时没定就上报董事长。缺省 10，范围 3~60。 */
   ceoDecideTimeoutSec?: number;
+  /**
+   * 部门（组织架构）。可不设=扁平管理；一个部门人多（2+）了再建来方便管理。
+   * 一名员工最多归一个部门（按 memberIds 判定）；headId=部门负责人（也应在 memberIds 里）。
+   */
+  departments?: Department[];
+}
+
+/** 部门：负责人 + 成员。纯组织架构元数据，用于通讯录分组与管理；不影响派活路由（除非负责人恰好是 CEO）。 */
+export interface Department {
+  id: string;
+  name: string;
+  /** 部门负责人 employee id（应包含在 memberIds 内）。缺省=暂无负责人。 */
+  headId?: string;
+  /** 成员 employee id（含负责人）。 */
+  memberIds: string[];
+  /** 展示顺序（升序）。 */
+  order?: number;
 }
 
 export function loadTeamConfig(): TeamConfig {
@@ -67,6 +84,49 @@ export function saveTeamConfig(patch: Partial<TeamConfig>): TeamConfig {
   const next = { ...loadTeamConfig(), ...patch };
   writeJson(CONFIG, next);
   return next;
+}
+
+// ── 部门（组织架构）CRUD：存在 config.departments 里 ──────────────────────
+export function loadDepartments(): Department[] {
+  const d = loadTeamConfig().departments;
+  return Array.isArray(d) ? d : [];
+}
+/** 规整：成员去重、负责人若不在成员里则并入、负责人不存在则清空 headId。 */
+function normalizeDept(d: Department): Department {
+  const members = Array.from(new Set((d.memberIds || []).filter(Boolean)));
+  let headId = d.headId;
+  if (headId && !members.includes(headId)) members.unshift(headId);
+  if (headId && !members.includes(headId)) headId = undefined;
+  return { ...d, memberIds: members, headId };
+}
+export function createDepartment(input: { name: string; headId?: string; memberIds?: string[] }): Department {
+  const list = loadDepartments();
+  const dept = normalizeDept({
+    id: "dept-" + Math.random().toString(36).slice(2, 8),
+    name: (input.name || "").trim() || "新部门",
+    headId: input.headId || undefined,
+    memberIds: input.memberIds || [],
+    order: list.length,
+  });
+  // 一名员工最多归一个部门：把新部门成员从其它部门里移除，避免重复归属。
+  const cleaned = list.map((d) => ({ ...d, memberIds: d.memberIds.filter((m) => !dept.memberIds.includes(m)) }));
+  saveTeamConfig({ departments: [...cleaned, dept] });
+  return dept;
+}
+export function updateDepartment(id: string, patch: Partial<Omit<Department, "id">>): Department[] {
+  let list = loadDepartments();
+  const target = list.find((d) => d.id === id);
+  if (!target) return list;
+  const merged = normalizeDept({ ...target, ...patch, id });
+  // 成员互斥：该部门新成员从别的部门移除。
+  list = list.map((d) => (d.id === id ? merged : { ...d, memberIds: d.memberIds.filter((m) => !merged.memberIds.includes(m)) }));
+  saveTeamConfig({ departments: list });
+  return list;
+}
+export function removeDepartment(id: string): Department[] {
+  const list = loadDepartments().filter((d) => d.id !== id);
+  saveTeamConfig({ departments: list });
+  return list;
 }
 
 // ── 定时任务 ──────────────────────────────────────────────
@@ -260,8 +320,8 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
   // 团队协作能力：明确告诉员工可用 dm_teammate 直接私信同事——覆盖 OpenClaw 老人格里
   // 「同事之间不能直接互相调用、得走 CEO 派单/外部命令」那类设定，否则模型不知道能用这工具。
   const collab = en
-    ? `\n\n## Reaching teammates directly\nYou have a **dm_teammate** tool: DM any teammate directly by their exact name to ask for help or align on something, and you get their reply back. You do NOT need to go through the boss, and you do NOT need any external command — just call dm_teammate. This overrides any earlier assumption that coworkers can't contact each other directly: within this team you absolutely can.`
-    : `\n\n## 直接联系同事\n你有一个 **dm_teammate** 工具:可以按对方的准确名字**直接私信团队里的任何同事**,请他帮忙或跟他对齐一件事,并拿到他的回复。**不必经过老板转达,也不需要任何外部命令**——直接调用 dm_teammate 就行。这条**覆盖你早先"同事之间不能直接联系/要走 CEO 派单或外部命令"的任何设定**:在这个团队里,你完全可以直接私信同事。`;
+    ? `\n\n## Reaching teammates directly\nTwo tools let you work with teammates by their exact name — no need to go through the boss or any external command:\n- **dm_teammate**: DM a teammate and **synchronously wait for their reply**. Use it to ask a quick question, align on something, or check/verify their work — you need their answer right now to continue.\n- **assign_task**: **Hand a teammate a task and DON'T wait** — you stay free to do other things. Use it to delegate a piece of work that takes them time. If they're busy it queues; set priority "urgent" to jump to the front of their queue (it won't interrupt what they're currently running). Their result lands in your DM when done.\nRule of thumb: need their answer before you can continue → dm_teammate; handing off a job and moving on → assign_task. This overrides any earlier assumption that coworkers can't contact each other directly.`
+    : `\n\n## 直接联系同事 / 派活\n你有两个工具按对方准确名字直接协作，**不必经过老板、也不需要任何外部命令**：\n- **dm_teammate**：私信同事并**同步等他这一句答复**。用于问一句、对齐一件事、或验收/核对他的活——你需要他当下的答复才能继续。\n- **assign_task**：**把一件活交给同事、然后不等他做完**，你自己可以接着忙别的。用于交代一件需要他花时间完成的任务。他在忙就自动排队；priority 填 urgent 表示急事、插到他队列最前优先做（但不打断他正在跑的那件）。他做完结果会落在你俩私聊里。\n口诀：需要他的答复才能往下走 → dm_teammate；把活交出去、不等 → assign_task。这条**覆盖你早先"同事之间不能直接联系/要走 CEO 派单或外部命令"的任何设定**。`;
 
   // 做事前先查 SOP 库：公司标准流程沉淀成了 SOP，别凭记忆自由发挥。
   const sop = en
