@@ -99,7 +99,7 @@ import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmploy
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
-import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms } from "./team/room.js";
+import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms, loadRoomMessages } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
 import {
   searchSops as sopSearch,
@@ -3067,6 +3067,40 @@ if (!gotLock) {
         const start = Math.max(0, end - limit);
         const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i));
         return { messages: page, hasMore: start > 0, total };
+      }
+      // ── 一人公司同步 ──
+      if (method === "team.state") {
+        if (!teamEnabled(loadSettings())) return { enabled: false, employees: [], groups: [], departments: [] };
+        const sess = listSessions();
+        const employees = loadEmployees().map((e: any) => {
+          // 该员工最近的一条「你和他的对话」会话 id，供手机点进去看历史
+          const latest = sess.filter((s: any) => s.employeeId === e.id).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+          return { id: e.id, name: e.name, title: e.title || "", blurb: e.blurb || "", icon: e.icon || "", avatarData: e.avatarData || "", sessionId: latest?.id || "" };
+        });
+        const groups = loadRooms()
+          .filter((r: any) => r.type !== "dm")
+          .map((r: any) => ({ id: r.id, name: r.name, memberIds: r.members || [], lastText: r.lastText || "" }));
+        return { enabled: true, employees, groups, departments: loadDepartments() };
+      }
+      if (method === "team.room.messages") {
+        const rid = String(params?.roomId || "");
+        if (!rid) throw new Error("缺少 roomId");
+        const limit = Math.min(50, Math.max(1, Number(params?.limit) || 10));
+        const offset = Math.max(0, Number(params?.offset) || 0);
+        const all = loadRoomMessages(rid);
+        const total = all.length;
+        const end = Math.max(0, total - offset);
+        const start = Math.max(0, end - limit);
+        const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", error: !!m.error }));
+        return { messages: page, hasMore: start > 0, total };
+      }
+      if (method === "sop.tree") {
+        return { tree: sopLoadTree() };
+      }
+      if (method === "sop.read") {
+        const id = String(params?.id || "");
+        if (!id) throw new Error("缺少 id");
+        return { id, content: sopReadDoc(id) || "" };
       }
       throw new Error("不支持的请求: " + method);
     });
