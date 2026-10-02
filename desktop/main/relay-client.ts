@@ -73,6 +73,7 @@ export interface RemoteChatArgs {
   onDelta: (text: string) => void;
   onTool?: (name: string, input?: unknown) => void;
   onImage?: (dataUrl: string) => void; // 工具产出的图(截图/生图)→转给手机显示
+  onPermission?: (toolName: string, input: unknown) => Promise<"allow" | "deny">; // 危险工具→推手机审批
 }
 export type RemoteExecutor = (args: RemoteChatArgs) => Promise<{ text: string } | { error: string }>;
 let _remoteExecutor: RemoteExecutor | null = null;
@@ -101,6 +102,7 @@ async function handleRemoteReq(msg: any): Promise<void> {
   }
 }
 const remoteAborts = new Map<string, AbortController>(); // reqId → 本轮中断器（手机 abort 时掐断）
+const remotePermResolvers = new Map<string, (d: "allow" | "deny") => void>(); // permId → 手机审批结果回调
 
 async function handleRemoteChat(msg: any): Promise<void> {
   const reqId = String(msg?.reqId || "");
@@ -126,6 +128,14 @@ async function handleRemoteChat(msg: any): Promise<void> {
       onDelta: (t) => reply({ type: "delta", reqId, text: t }),
       onTool: (name, input) => reply({ type: "tool", reqId, name, input }),
       onImage: (dataUrl) => reply({ type: "image", reqId, dataUrl }),
+      // 危险工具 → 推手机审批：发 perm-req，挂起等 perm-resp；60s 没批自动拒(安全默认)。
+      onPermission: (toolName, input) =>
+        new Promise<"allow" | "deny">((resolve) => {
+          const permId = `pm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+          remotePermResolvers.set(permId, resolve);
+          reply({ type: "perm-req", reqId, permId, tool: toolName, input });
+          setTimeout(() => { if (remotePermResolvers.delete(permId)) resolve("deny"); }, 60000);
+        }),
     });
     if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
     else reply({ type: "chat-done", reqId, text: r.text });
@@ -237,6 +247,10 @@ function connect() {
       void handleRemoteReq(msg);
     } else if (msg.type === "abort") {
       remoteAborts.get(String(msg.reqId || ""))?.abort();
+    } else if (msg.type === "perm-resp") {
+      // 手机批了 → 解挂对应权限请求
+      const r = remotePermResolvers.get(String(msg.permId || ""));
+      if (r) { remotePermResolvers.delete(String(msg.permId)); r(msg.decision === "allow" ? "allow" : "deny"); }
     }
   });
 

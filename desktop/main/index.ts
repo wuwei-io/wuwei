@@ -3020,7 +3020,7 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage }) => {
+    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage, onPermission }) => {
       // model=手机端选的渠道 id(如 claude-code-subscription)。优先按渠道建本机对应 provider(Claude 订阅)，
       // 认不出/没配就回退电脑当前全局 provider，别让远程执行直接失败。
       const p = providerForChannel(model) || provider;
@@ -3036,6 +3036,8 @@ if (!gotLock) {
             onToolStart: (_id: string, name: string, input: any) => onTool?.(name, input),
             // 工具产出的图(chrome_screenshot 截图 / send_image 生图)→转给手机显示
             onToolEnd: (_id: string, _result: string, _isError: boolean, image?: string) => { if (image) onImage?.(image); },
+            // 危险工具(非只读)→推手机审批；没接审批通道则默认放行(兼容旧手机端)
+            requestPermission: onPermission ? (tool: any, input: any) => onPermission(tool.name, input) : undefined,
           } as any,
           signal,
           images && images.length ? images : undefined, // 手机端带来的图一并喂给 agent
@@ -3101,6 +3103,15 @@ if (!gotLock) {
         const id = String(params?.id || "");
         if (!id) throw new Error("缺少 id");
         return { id, content: sopReadDoc(id) || "" };
+      }
+      if (method === "tasks.running") {
+        // 本机正在跑的会话(runs Map)→给手机「进度」tab 显示真任务
+        const metas = listSessions();
+        const tasks = [...runs.keys()].map((id) => {
+          const m = metas.find((s: any) => s.id === id);
+          return { id, title: m?.title || "任务", employeeId: m?.employeeId || null, updatedAt: m?.updatedAt || 0 };
+        });
+        return { tasks };
       }
       throw new Error("不支持的请求: " + method);
     });
