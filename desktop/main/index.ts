@@ -145,6 +145,7 @@ import {
   type WuweiSession,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient } from "./relay-client.js";
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -3078,6 +3079,8 @@ function startClientTelemetry(): void {
   } catch {
     /* 遥测不能拖累启动 */
   }
+  // 手机端远程执行relay连接:仅当用户开了允许手机端远程调用本机才真正连(内部已判断,默认关=不连)
+  try { startRelayClient(); } catch { /* relay连接失败不拖累启动 */ }
 }
 
 app.on("window-all-closed", () => {
@@ -3085,6 +3088,7 @@ app.on("window-all-closed", () => {
 });
 // 退出前把异步合并写里还没落盘的会话同步刷完，别丢最后一段
 app.on("before-quit", () => {
+  try { stopRelayClient(); } catch { /* ignore */ }
   quitting = true; // 自动更新 quitAndInstall / 系统关机等触发退出时放行 close，避免卡在托盘隐藏无法退出
   // 诊断日志：退出 —— 本次会话时长，配合 app_start 看使用时长
   try {
@@ -3970,6 +3974,7 @@ ipcMain.on("settings:set-app", (_e, patch: Record<string, boolean | string>) => 
   syncBrainDocsFlag(s);
   setDiagConsent(telemetryEnabled(s)); // 「发送诊断信息」开关变了当场生效
   syncTeamModule(s); // 「AI 员工团队」开关变了当场挂载/卸载，不用重启
+  try { refreshRelayClient(); } catch { /* 手机端远程开关变了当场启停relay连接,失败不影响设置保存 */ }
   sysPrompt = buildSysPrompt(cwd, modelLabel, s.providerId);
   for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格
   refreshAgentTools();

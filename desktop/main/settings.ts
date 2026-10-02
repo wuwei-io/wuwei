@@ -201,6 +201,10 @@ export interface AppSettings {
   resumeDetect?: boolean; // 启动时检测被中断/干到一半的任务并提示恢复(默认开=undefined 视为 true)
   telemetry?: boolean; // 发送诊断信息用于改善体验(默认开=undefined 视为 true)；关掉后不再上报任何诊断日志/报错
   teamEnabled?: boolean; // 启用「AI 员工团队」可选模块(应用中心/员工/房间)。⚠️与上面几个相反：默认关，用户主动开
+  // --- 手机端远程设备执行(relay) --- 默认关,用户主动开。WS常驻连接是稀缺资源,不全员常连。
+  remoteEnabled?: boolean; // 允许手机端远程调用本机:开了才建relay常驻连接
+  remoteShareSubscription?: boolean; // 同步本机订阅版模型(Claude Code/Codex订阅)给手机:不开则上报清单剔除本地订阅
+  remoteDeviceName?: string; // 设备名(手机端显示);缺省用os.hostname
 }
 
 // 三个开关的取值：undefined 一律按「开」处理，保持历史默认行为，只让用户能主动关
@@ -226,6 +230,14 @@ export function telemetryEnabled(s: Settings | null): boolean {
 // 没开时主进程完全不碰这个模块——不注册 IPC、不读写 ~/.wuwei/team/、不占启动时间。
 export function teamEnabled(s: Settings | null): boolean {
   return s?.app?.teamEnabled === true;
+}
+// 手机端远程执行:默认关,必须显式true才算开(同teamEnabled范式)。没开时主进程完全不碰relay模块。
+export function remoteEnabled(s: Settings | null): boolean {
+  return s?.app?.remoteEnabled === true;
+}
+// 是否同步本机订阅给手机(仅在remoteEnabled时有意义):默认关,显式true才同步。
+export function remoteShareSubscription(s: Settings | null): boolean {
+  return s?.app?.remoteShareSubscription === true;
 }
 
 export function loadSettings(): Settings | null {
