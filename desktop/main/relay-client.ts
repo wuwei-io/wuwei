@@ -56,6 +56,58 @@ let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
 let stopped = true; // 默认停止；start 时置 false
 
+// ── M2：远程执行 ──
+// 手机端经 relay 发来 chat → 跑本机 agent(本机订阅)→ 流式把 delta/done/error 回传 relay。
+// 真正的 agent 跑在 index.ts（provider/tools 都在那），这里只做「从 relay 喂进去、把输出发回 relay」的适配层，
+// 执行能力由 index.ts 注入（setRemoteExecutor），relay-client 不 import 重机器、保持单一职责。
+export interface RemoteChatArgs {
+  reqId: string;
+  text: string;
+  sessionId?: string | null;
+  model?: string | null;
+  signal: AbortSignal;
+  onDelta: (text: string) => void;
+  onTool?: (name: string, input?: unknown) => void;
+}
+export type RemoteExecutor = (args: RemoteChatArgs) => Promise<{ text: string } | { error: string }>;
+let _remoteExecutor: RemoteExecutor | null = null;
+export function setRemoteExecutor(fn: RemoteExecutor | null): void {
+  _remoteExecutor = fn;
+}
+const remoteAborts = new Map<string, AbortController>(); // reqId → 本轮中断器（手机 abort 时掐断）
+
+async function handleRemoteChat(msg: any): Promise<void> {
+  const reqId = String(msg?.reqId || "");
+  if (!reqId) return;
+  const reply = (m: Record<string, unknown>) => {
+    try { ws?.send(JSON.stringify(m)); } catch { /* ws 断了就丢 */ }
+  };
+  if (!_remoteExecutor) {
+    reply({ type: "chat-error", reqId, message: "本机远程执行未就绪（请更新客户端）" });
+    return;
+  }
+  const ac = new AbortController();
+  remoteAborts.set(reqId, ac);
+  log("relay", "收到远程 chat reqId=", reqId.slice(0, 8), "→ 跑本机 agent");
+  try {
+    const r = await _remoteExecutor({
+      reqId,
+      text: String(msg.text || ""),
+      sessionId: msg.sessionId ?? null,
+      model: msg.model ?? null,
+      signal: ac.signal,
+      onDelta: (t) => reply({ type: "delta", reqId, text: t }),
+      onTool: (name, input) => reply({ type: "tool", reqId, name, input }),
+    });
+    if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
+    else reply({ type: "chat-done", reqId, text: r.text });
+  } catch (e: any) {
+    reply({ type: "chat-error", reqId, message: String(e?.message || e).slice(0, 300) });
+  } finally {
+    remoteAborts.delete(reqId);
+  }
+}
+
 function cleanup() {
   if (pingTimer) {
     clearInterval(pingTimer);
@@ -145,12 +197,16 @@ function connect() {
       return;
     }
     if (msg.type === "registered") {
-      // 上线成功：此刻起手机端 /devices 就能看到这台电脑（M1 到此为止；M2 在这里收 chat 执行请求）
+      // 上线成功：此刻起手机端 /devices 就能看到这台电脑
       log("relay", "注册成功，已上线。手机端现在应能在「执行位置」看到这台电脑。");
     } else if (msg.type === "error") {
       log("relay", "relay 返回错误:", JSON.stringify(msg).slice(0, 200));
+    } else if (msg.type === "chat") {
+      // M2：手机端经 relay 发来执行请求 → 跑本机 agent、流式回传
+      void handleRemoteChat(msg);
+    } else if (msg.type === "abort") {
+      remoteAborts.get(String(msg.reqId || ""))?.abort();
     }
-    // M2: if (msg.type === 'chat') { ...跑本机 agent，流式回传... }
   });
 
   ws.on("close", (code: number, reason: Buffer) => {

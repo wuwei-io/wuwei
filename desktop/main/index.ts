@@ -145,7 +145,7 @@ import {
   type WuweiSession,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
-import { startRelayClient, stopRelayClient, refreshRelayClient } from "./relay-client.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor } from "./relay-client.js";
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -2988,6 +2988,29 @@ if (!gotLock) {
         return "data:image/png;base64," + resized.toPNG().toString("base64");
       } catch {
         return dataUrl; // 解码/缩放失败就原样发，别因此卡死
+      }
+    });
+    // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
+    // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
+    setRemoteExecutor(async ({ text, signal, onDelta, onTool }) => {
+      const p = provider;
+      if (!p) return { error: "本机当前没有可用模型（请在电脑端左下角选一个平台/登录订阅）" };
+      try {
+        const tools = desktopTools();
+        const map = new Map(tools.map((t) => [t.name, t]));
+        const a = new Agent(p, sysPrompt, tools, { cwd, sessionId: `__remote_${Date.now().toString(36)}` }, map, agentOpts);
+        await a.send(
+          text,
+          {
+            onText: (d: string) => onDelta(d),
+            onToolStart: (_id: string, name: string, input: any) => onTool?.(name, input),
+          } as any,
+          signal,
+        );
+        const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
+        return { text: last ? msgFullText(last as any) : "" };
+      } catch (e: any) {
+        return { error: String(e?.message || e).slice(0, 300) };
       }
     });
     syncTeamModule(loadSettings()); // 可选模块：开了才挂，没开这行之后不留任何痕迹
