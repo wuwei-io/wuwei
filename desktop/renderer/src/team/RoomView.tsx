@@ -139,8 +139,10 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
 
   useEffect(() => {
     // 即时滚动(非 smooth)：smooth 动画期间的中间 onScroll 会把 stuck 误判成 false、打断后续吸底。只在吸底时滚。
+    // 依赖整个 msgs(引用)而非 msgs.length：切到「消息条数相同」的另一个房间时 length 不变、effect 不触发 →
+    // 进房间不吸底、停在顶部（用户反馈的 bug）。进房间 stuckRef 恒为 true，换成引用依赖即每次切房都吸底。
     if (stuckRef.current) endRef.current?.scrollIntoView({ block: "end" });
-  }, [msgs.length, running]);
+  }, [msgs, running]);
 
   // 进度块出现/增长(工具+1、思考流变长)也吸底——否则块冒在折叠区下方，用户得手动往下滚才看到。
   // 用即时滚动(非 smooth)：流式高频更新时 smooth 会排队卡顿。同样受 stuckRef 门控。
