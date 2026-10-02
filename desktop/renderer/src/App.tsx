@@ -616,9 +616,12 @@ function PackIcon({ size = 20 }: { size?: number }) {
 
 // 价格显示：EN 显示美元、CN 显示人民币。仅影响展示；实收金额始终以后端按 sku 查表为准。
 const money = (en: boolean, cn: number, usd: number): string => (en ? `$${usd}` : `¥${cn}`);
-// 加密支付(NOWPayments)最低档：后端用 USDT-BSC 计价，稳定可用的支付币=USDT-TRC20(最低约 $12)。
-// 故加密按钮只在 ≥$12 的档显示(低于此 NOWPayments 付不了)；便宜档不显示，由弹窗底部说明引导去 $12+ 套餐。
-const CRYPTO_MIN_USD = 12;
+// 加密支付(NOWPayments)最低档：配了 USDT-SOL + USDT-TRC20 两个 payout 钱包后，
+// 便宜链(Solana/BSC)免换汇 floor 降到 ~$2，故加密按钮在 ≥$3 的档都显示(pack_s $3.99 起)；
+// 仅 $1 trial 够不着($1<$2)，由弹窗底部说明统一讲清。
+const CRYPTO_MIN_USD = 3;
+// 文案分档：≥$13 多币自选(含 BTC/TRX)；<$13 小额档引导选低费稳定币(Solana/BSC,BTC/TRX 最低额够不着)。
+const CRYPTO_MULTICOIN_USD = 13;
 // 客户端(人民币)sku → 网页 Paddle 的美元 sku。英文用户走网页结账(系统浏览器)。
 const EN_SKU: Record<string, string> = {
   plan_trial: "plan_trial_en", // $1 · 7天 Pro 体验（海外 Paddle，待建价后可用）
@@ -2007,7 +2010,11 @@ function TrialPayModal({
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
                       Pay with Crypto
                     </button>
-                    <div className="trial-crypto-note">USDT · BTC &amp; more · works when cards fail</div>
+                    <div className="trial-crypto-note">
+                      {cur.priceUsd >= CRYPTO_MULTICOIN_USD
+                        ? "USDT · BTC & more · works when cards fail"
+                        : "Small amount? Pay with USDT on Solana / BSC"}
+                    </div>
                   </>
                 )}
               </div>
@@ -2035,7 +2042,7 @@ function TrialPayModal({
         {en && (
           <div className="trial-crypto-foot">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
-            <span>Card declined? Pay with <b>crypto</b> (USDT / BTC) — available on plans <b>$12 &amp; up</b> (Plus and larger packs).</span>
+            <span>Card declined? Pay with <b>crypto</b> (USDT / BTC) — available on <b>all plans</b> except the $1 trial. Small amounts: use Solana / BSC.</span>
           </div>
         )}
 
