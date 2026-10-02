@@ -13,6 +13,7 @@ import {
   loadSettings,
   remoteEnabled,
   remoteShareSubscription,
+  loadRateLimits,
   type Settings,
 } from "./settings.js";
 
@@ -25,6 +26,7 @@ interface Channel {
   id: string;
   label: string;
   kind: "subscription" | "api-key" | "other";
+  quota?: unknown; // 订阅额度快照(5h/7d 用量%+reset)，供手机端回显。随 channel 透传经 relay 到 /devices。
 }
 
 // 探测本机可被手机端使用的渠道。订阅类按 shareSubscription 决定是否上报。
@@ -34,13 +36,14 @@ function detectChannels(s: Settings | null): Channel[] {
   const kind = s?.kind;
   const slot = s?.creds?.[s?.providerId || ""] || {};
 
-  // Claude Code 订阅(anthropic-oauth) / Codex 订阅：属于「本地订阅」，仅 share 时上报
+  // Claude Code 订阅(anthropic-oauth) / Codex 订阅：属于「本地订阅」，仅 share 时上报。
+  // 带上本机上次的额度快照(loadRateLimits)，手机端「执行位置」直接显示 5h/7d 剩余，不用等 M3 单独通道。
   if (share) {
     if (kind === "anthropic-oauth" || s?.oauthToken || slot.oauthToken) {
-      out.push({ id: "claude-code-subscription", label: "Claude Code 订阅", kind: "subscription" });
+      out.push({ id: "claude-code-subscription", label: "Claude Code 订阅", kind: "subscription", quota: loadRateLimits("claude-oauth") });
     }
     if (kind === "codex") {
-      out.push({ id: "codex-subscription", label: "Codex 订阅", kind: "subscription" });
+      out.push({ id: "codex-subscription", label: "Codex 订阅", kind: "subscription", quota: loadRateLimits("codex") });
     }
   }
   // 非订阅渠道(API key / 兼容端点)：始终可作为"远程执行"能力上报(不涉及订阅外泄)
