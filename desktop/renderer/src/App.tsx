@@ -12083,6 +12083,7 @@ function ToolGroup({ tools }: { tools: ToolItem[] }) {
   }
   const en = getLang() === "en";
   const mainCat = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || (en ? "Actions" : "操作");
+  const imgTools = tools.filter((t) => t.image); // 组里产出图片的步骤(截图 / send_image 生图)
   return (
     <div className="tool">
       <div className="trow" onClick={() => setOpen((v) => !v)}>
@@ -12092,6 +12093,17 @@ function ToolGroup({ tools }: { tools: ToolItem[] }) {
         <span className="tspacer" />
         <span className="tcaret">{open ? "▾" : "▸"}</span>
       </div>
+      {/* 折叠态也始终内联显示组里产出的图片——图是发给用户看的内容，不该被折叠藏起来(send_image 的二维码/截图)。
+          展开态由下面每个 ToolView 自己渲染图，故这里只在折叠时补。 */}
+      {!open && imgTools.length > 0 && (
+        <div className="tgroup-imgs">
+          {imgTools.map((t, i) => (
+            <div key={i} className="tool-img" onClick={() => openImageLightbox?.(t.image!)} title={en ? "Click to view" : "点开看大图"}>
+              <img src={t.image} alt="" />
+            </div>
+          ))}
+        </div>
+      )}
       {open && (
         <div className="tgroup-items">
           {tools.map((t, i) => (
