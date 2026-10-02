@@ -4539,6 +4539,7 @@ ipcMain.handle("account:wuwei-login", async () => {
   if (!sess) return null;
   wuweiLoggedOut = false; // 重新登录 → 解除登出封锁
   saveWuweiSession(sess);
+  try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
   reportLoginOnce();
   const me = await wuweiFetchMe(sess.accessToken);
@@ -4554,6 +4555,7 @@ async function finishWuweiSignin(
   if (typeof r === "string") return { error: r };
   wuweiLoggedOut = false; // 重新登录 → 解除登出封锁
   saveWuweiSession(r);
+  try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
   reportLoginOnce();
   const me = await wuweiFetchMe(r.accessToken);
@@ -4604,6 +4606,7 @@ ipcMain.handle("account:wuwei-logout", () => {
   wuweiLoggedOut = true;      // 掐断后台刷新/推送，防"退一次又自动登回"
   refreshInflight = null;     // 丢弃进行中的续期(其回写已被 wuweiLoggedOut 拦)
   clearWuweiSession();
+  try { stopRelayClient(); } catch { /* 登出 → 断开 relay，把这台设备从旧账号名下摘掉 */ }
   loginReportedThisProc = false; // 登出 → 重置节流，下次重登会再上报一次登录
   applyProFromMe(null); // 退出 → 会员态清空 → 脑网络停用
   return true;
