@@ -4612,16 +4612,36 @@ ipcMain.handle("account:wuwei-logout", () => {
   return true;
 });
 // AI 提供商目录（脱敏）：带上当前会话 token(可选) 拉后台可配的平台顺序/显隐/模型。失败返回 null → 渲染层回退硬编码 PRESETS。
+// 模型平台目录缓存：后端在境外，网络一抖 catalog 就拉不到、模型列表变空。缓存上次成功的，拉失败用它兜底。
+const CATALOG_CACHE_FILE = join(homedir(), DATA_DIR_NAME, "cache-catalog.json");
+function saveCatalogCache(cat: unknown): void {
+  try { mkdirSync(dirname(CATALOG_CACHE_FILE), { recursive: true }); writeFileSync(CATALOG_CACHE_FILE, JSON.stringify(cat), "utf8"); } catch { /* 缓存写失败无害 */ }
+}
+function loadCatalogCache(): any[] | null {
+  try { const v = JSON.parse(readFileSync(CATALOG_CACHE_FILE, "utf8")); return Array.isArray(v) ? v : null; } catch { return null; }
+}
+function applyAnonProviders(cat: any[]): void {
+  anonProviderIds.clear();
+  anonProviderIds.add("wuwei-free");
+  for (const p of cat) if (p.anon) anonProviderIds.add(p.id);
+}
 ipcMain.handle("account:wuwei-catalog", async () => {
   const sess = await getFreshWuweiSession().catch(() => null);
   const cat = await wuweiFetchCatalog(sess?.accessToken ?? null);
   // 记下后台标为 anon(免登录)的平台，供 hasCredential/发送前注入识别；内置 wuwei-free 恒在集合里。
   if (cat) {
-    anonProviderIds.clear();
-    anonProviderIds.add("wuwei-free");
-    for (const p of cat) if (p.anon) anonProviderIds.add(p.id);
+    applyAnonProviders(cat);
+    saveCatalogCache(cat); // 成功就存一份，供下次网络抖时兜底
+    return cat;
   }
-  return cat;
+  // 拉失败(多为跨境网络抖) → 用上次缓存，模型列表不至于变空、界面不卡在空列表
+  const cached = loadCatalogCache();
+  if (cached) {
+    applyAnonProviders(cached);
+    log("wuweiAuth", "catalog 拉取失败，用磁盘缓存兜底", cached.length, "个平台");
+    return cached;
+  }
+  return null;
 });
 // 模型费用说明：从 wuwei-site 拉定价数据(公开、无需登录)。走主进程避免 CORS。
 ipcMain.handle("model-pricing:get", async () => {

@@ -459,17 +459,21 @@ export async function wuweiFetchMe(accessToken: string): Promise<WuweiMe | "unau
 
 /** 拉 AI 提供商目录（脱敏）。带上 token(可选，用于登录态+每用户显隐) + 设备指纹。失败返回 null → 客户端回退硬编码。 */
 export async function wuweiFetchCatalog(accessToken?: string | null): Promise<CatalogProviderDto[] | null> {
-  try {
-    const headers: Record<string, string> = { "X-Device-Id": getDeviceId() };
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    const res = await fetch(`${SITE}/api/catalog`, { headers });
-    if (!res.ok) return null;
-    const j = (await res.json()) as { providers?: CatalogProviderDto[] };
-    return Array.isArray(j.providers) ? j.providers : null;
-  } catch (e) {
-    log("wuweiAuth", "fetchCatalog 异常", String(e));
-    return null;
+  const headers: Record<string, string> = { "X-Device-Id": getDeviceId() };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  // 后端在境外，跨境首连常超时(fetch failed/HTTP 000)，重试一下通常就通 → 重试 3 次、各 12s 超时、退避。
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(`${SITE}/api/catalog`, { headers, signal: AbortSignal.timeout(12_000) });
+      if (!res.ok) return null; // 服务端明确拒绝(非网络抖)→ 不重试
+      const j = (await res.json()) as { providers?: CatalogProviderDto[] };
+      return Array.isArray(j.providers) ? j.providers : null;
+    } catch (e) {
+      log("wuweiAuth", `fetchCatalog 第${attempt}/3次异常`, String(e).slice(0, 80));
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 600 * attempt));
+    }
   }
+  return null; // 三次都失败(网络抖)→ 调用方用磁盘缓存兜底，见 index.ts account:wuwei-catalog
 }
 
 // ── 国内扫码支付（支付宝当面付 / 微信 Native）：下单拿二维码 + 轮询订单状态 ──
