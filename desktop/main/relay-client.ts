@@ -8,6 +8,7 @@ import WebSocket from "ws";
 import { hostname, platform } from "node:os";
 import { getDeviceId } from "../../src/device-id.js";
 import { loadWuweiSession } from "./wuwei-session.js";
+import { log } from "./logger.js";
 import {
   loadSettings,
   remoteEnabled,
@@ -91,16 +92,19 @@ function connect() {
   }
   const token = loadWuweiSession()?.accessToken || "";
   if (!token) {
-    // 未登录：无法鉴权，稍后重试
+    // 未登录：无法鉴权，稍后重试。这是「手机端看不到这台电脑」最常见的原因之一——提示要在电脑端登录无为账号。
+    log("relay", "未登录无为账号(无 access_token)，无法连 relay；请在电脑端登录后再试。稍后重连。");
     scheduleReconnect();
     return;
   }
 
   cleanup();
   const url = `${RELAY_WS}?token=${encodeURIComponent(token)}`;
+  log("relay", "连接中 →", RELAY_WS, "deviceId=", getDeviceId().slice(0, 8));
   try {
     ws = new WebSocket(url);
-  } catch {
+  } catch (e: any) {
+    log("relay", "WebSocket 构造失败:", String(e?.message || e));
     scheduleReconnect();
     return;
   }
@@ -118,8 +122,9 @@ function connect() {
     };
     try {
       ws?.send(JSON.stringify(hello));
-    } catch {
-      /* ignore */
+      log("relay", "已连上，上报 hello：设备名=", name, "渠道=", hello.channels.map((c) => c.id).join(",") || "(无)", "同步订阅=", hello.shareSubscription);
+    } catch (e: any) {
+      log("relay", "发送 hello 失败:", String(e?.message || e));
     }
     // 心跳
     if (pingTimer) clearInterval(pingTimer);
@@ -140,17 +145,22 @@ function connect() {
       return;
     }
     if (msg.type === "registered") {
-      // 上线成功（M1 到此为止；M2 在这里收 chat 执行请求）
+      // 上线成功：此刻起手机端 /devices 就能看到这台电脑（M1 到此为止；M2 在这里收 chat 执行请求）
+      log("relay", "注册成功，已上线。手机端现在应能在「执行位置」看到这台电脑。");
+    } else if (msg.type === "error") {
+      log("relay", "relay 返回错误:", JSON.stringify(msg).slice(0, 200));
     }
     // M2: if (msg.type === 'chat') { ...跑本机 agent，流式回传... }
   });
 
-  ws.on("close", () => {
+  ws.on("close", (code: number, reason: Buffer) => {
+    log("relay", "连接关闭 code=", code, "reason=", reason?.toString()?.slice(0, 120) || "", "→", Math.round(reconnectDelay / 1000), "s 后重连");
     cleanup();
     scheduleReconnect();
   });
-  ws.on("error", () => {
-    // 交给 close 处理重连
+  ws.on("error", (e: any) => {
+    // 交给 close 处理重连；先记一笔错误原因(如证书/网络/401)
+    log("relay", "连接错误:", String(e?.message || e));
   });
 }
 
@@ -161,6 +171,7 @@ export function startRelayClient() {
     stopRelayClient();
     return;
   }
+  log("relay", "启动 relay 常驻连接(远程开关=开)");
   stopped = false;
   reconnectDelay = RECONNECT_BASE_MS;
   connect();
