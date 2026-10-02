@@ -239,6 +239,21 @@ function providerForEmployee(emp: { model?: { providerId: string; model: string 
   }
 }
 
+// 远程执行(M2)：手机端选的「渠道 id」→ 本机对应平台的 provider。
+// claude-code-subscription→claude-oauth(Claude 订阅)、codex-subscription→codex。
+// 这样手机选「Claude Code 订阅」就真用这台电脑的 Claude 订阅跑，而不是电脑 UI 当前选的那个模型。
+// 认不出的渠道(api-key/其它)返回 null，调用方回退全局 provider。
+function providerForChannel(channelId: string | null | undefined): ReturnType<typeof makeProvider> | null {
+  const gs = loadSettings();
+  if (!gs || !channelId) return null;
+  const pid = channelId === "claude-code-subscription" ? "claude-oauth" : channelId === "codex-subscription" ? "codex" : null;
+  if (!pid) return null;
+  const slot = (gs.creds || {})[pid] || {};
+  const model = slot.model || gs.model || "";
+  if (!model) return null;
+  return providerForEmployee({ model: { providerId: pid, model } });
+}
+
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
@@ -2992,8 +3007,10 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    setRemoteExecutor(async ({ text, signal, onDelta, onTool }) => {
-      const p = provider;
+    setRemoteExecutor(async ({ text, model, signal, onDelta, onTool }) => {
+      // model=手机端选的渠道 id(如 claude-code-subscription)。优先按渠道建本机对应 provider(Claude 订阅)，
+      // 认不出/没配就回退电脑当前全局 provider，别让远程执行直接失败。
+      const p = providerForChannel(model) || provider;
       if (!p) return { error: "本机当前没有可用模型（请在电脑端左下角选一个平台/登录订阅）" };
       try {
         const tools = desktopTools();
