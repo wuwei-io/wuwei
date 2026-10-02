@@ -1744,8 +1744,14 @@ const assignTaskTool: Tool = {
     // 关键：异步派活——把活排进对方的员工队列就【立即返回】，不 await 他做完。
     const busyBefore = empIsBusy(target.id);
     const ahead = empQueueLen(target.id); // 他前面还排着几件
+    const assignDepth = (ctx.dmDepth ?? 0) + 1;
     void enqueueEmpTask(target.id, async () => {
-      await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1);
+      await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), assignDepth);
+      // 对方干完 → 唤醒【派活方】读结果、拍板/验收/收尾。否则结果只落在私聊里没人接，派活方永远不知道完事了。
+      // 排进派活方自己的队列(不打断他手头的活)。深度继续+1：转派链到顶后 assign_task 会被剔除，天然止住 ping-pong。
+      void enqueueEmpTask(selfId, async () => {
+        await runDmTurn(dm.id, selfId, tt(`（${target.name}已完成你派的活，结果见上。）`, `(${target.name} finished the task you assigned; see the result above.)`), teamOrchestratorDeps(), assignDepth + 1);
+      }).catch(() => {});
     }, { urgent }).catch(() => {});
 
     const where = !busyBefore

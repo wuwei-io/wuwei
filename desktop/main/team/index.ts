@@ -27,6 +27,7 @@ import { BUILTIN_APPS, findBuiltinApp } from "./catalog.js";
 import { detectSources, importFrom } from "./import.js";
 import { abortRoom, forceStopRoom, isRoomRunning, runRoomTurn, runDmHumanTurn, getRoomProgress, type RunEmployeeArgs } from "./orchestrator.js";
 import { createRoom, deleteRoom, loadRoomMessages, loadRooms, updateRoom, pinRoom, clearRoomMessages, deleteRoomMessage } from "./room.js";
+import { parseMentions } from "./projection.js";
 import {
   addEmployees,
   installApp,
@@ -304,7 +305,16 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     const room = loadRooms().find((r) => r.id === rid);
     const responder = String(dmResponderId || "");
     if (room?.type === "dm" && responder) {
-      void runDmHumanTurn(rid, responder, String(text || ""), orchDeps);
+      // 私聊里也认 @：若 @ 了本 DM 的某位成员，就唤醒他，而非默认「对方」。
+      // （如在小笨↔小美 DM 里 @小笨 → 唤醒小笨；不 @ 则维持默认对方。）修复「@某人没反应、总是对方回」。
+      let target = responder;
+      try {
+        const members = (room.members || []).map((mid) => ({ id: mid, name: findEmployee(mid)?.name || "" }));
+        const { ids } = parseMentions(String(text || ""), members);
+        const hit = ids.find((id) => (room.members || []).includes(id));
+        if (hit) target = hit;
+      } catch { /* 解析失败就用默认 responder */ }
+      void runDmHumanTurn(rid, target, String(text || ""), orchDeps);
     } else {
       void runRoomTurn(rid, String(text || ""), orchDeps);
     }
