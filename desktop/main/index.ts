@@ -3007,7 +3007,7 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    setRemoteExecutor(async ({ text, model, signal, onDelta, onTool, onImage }) => {
+    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage }) => {
       // model=手机端选的渠道 id(如 claude-code-subscription)。优先按渠道建本机对应 provider(Claude 订阅)，
       // 认不出/没配就回退电脑当前全局 provider，别让远程执行直接失败。
       const p = providerForChannel(model) || provider;
@@ -3025,6 +3025,7 @@ if (!gotLock) {
             onToolEnd: (_id: string, _result: string, _isError: boolean, image?: string) => { if (image) onImage?.(image); },
           } as any,
           signal,
+          images && images.length ? images : undefined, // 手机端带来的图一并喂给 agent
         );
         const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
         return { text: last ? msgFullText(last as any) : "" };

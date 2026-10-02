@@ -66,6 +66,7 @@ let stopped = true; // 默认停止；start 时置 false
 export interface RemoteChatArgs {
   reqId: string;
   text: string;
+  images?: string[]; // 手机端随消息发来的图(data URL)，喂给 agent
   sessionId?: string | null;
   model?: string | null;
   signal: AbortSignal;
@@ -97,6 +98,7 @@ async function handleRemoteChat(msg: any): Promise<void> {
     const r = await _remoteExecutor({
       reqId,
       text: String(msg.text || ""),
+      images: Array.isArray(msg.images) ? msg.images : [],
       sessionId: msg.sessionId ?? null,
       model: msg.model ?? null,
       signal: ac.signal,
