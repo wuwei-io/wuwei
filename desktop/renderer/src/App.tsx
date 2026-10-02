@@ -3344,6 +3344,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
   const [err, setErr] = useState<"min" | "login" | "fail" | null>(null);
   const [pay, setPay] = useState<{ address: string; amount: number; currency: string; memo: string | null } | null>(null);
   const [copied, setCopied] = useState<"addr" | "amt" | null>(null);
+  const [howto, setHowto] = useState(false); // 「怎么付」引导展开（第一次用加密的用户）
 
   useEffect(() => {
     let alive = true;
@@ -3403,6 +3404,20 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
             <div className="cpay-status"><span className="cpay-spin" />{en ? "Waiting for payment — credited automatically after confirmation (~1-2 min). Keep this window open." : "等待付款 — 到账后自动发货（约 1-2 分钟），请保持窗口打开。"}</div>
             {copied && <div className="cpay-copied">{copied === "addr" ? (en ? "Address copied ✓" : "地址已复制 ✓") : (en ? "Amount copied ✓" : "金额已复制 ✓")}</div>}
           </>
+        )}
+
+        {/* 第一次用加密的用户：怎么付引导。重点写「小额请用 Solana/BSC USDT，提币时选对应网络」——
+            这是链不匹配(俄罗斯多拿波场 USDT 但小额收不了波场)的主要化解方式。 */}
+        <button className="cpay-howto-t" onClick={() => setHowto((v) => !v)}>
+          {en ? "New to crypto? How to pay" : "第一次用加密货币？怎么付"} <span>{howto ? "▲" : "▼"}</span>
+        </button>
+        {howto && (
+          <div className="cpay-howto">
+            <div className="cpay-step"><b>1</b><span>{en ? `Get USDT on ${netLabel}. Buy it on any major exchange (Binance, OKX, Bybit…) — when withdrawing, pick the ${netLabel} network.` : `准备 ${netLabel} 链上的 USDT（任意交易所买，提币时网络选 ${netLabel}）。`}</span></div>
+            <div className="cpay-step"><b>2</b><span>{en ? "Send the exact amount shown above to the address above." : "把上面的确切金额转到上面的地址。"}</span></div>
+            <div className="cpay-step"><b>3</b><span>{en ? "Your account is credited automatically ~1-2 min after the network confirms. Keep this window open." : "网络确认后约 1-2 分钟自动到账，保持窗口打开。"}</span></div>
+            <div className="cpay-howto-tip">{en ? "💡 Small amounts: use Solana or BNB Chain (Tron needs $12+). Already hold USDT on another chain? Just withdraw it on Solana — it's a dropdown on your exchange." : "💡 小额请用 Solana 或 BNB Chain（波场最低 $12）。手里是别的链的 USDT？提币时网络改选 Solana 即可。"}</div>
+          </div>
         )}
 
         <button className="cpay-cs" onClick={onContact}>{en ? "Payment issue? Contact support" : "支付遇到问题？联系客服"}</button>
