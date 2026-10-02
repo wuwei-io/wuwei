@@ -248,6 +248,20 @@ export interface WuweiApi {
     error?: string;
     message?: string;
   }>;
+  payCryptoPayment(sku: string, chain: string): Promise<{
+    orderId?: string;
+    chain?: string;
+    network?: string;
+    amountUsd?: number;
+    paymentId?: string;
+    payAddress?: string;
+    payAmount?: number;
+    payCurrency?: string;
+    payinExtraId?: string | null;
+    expiresAt?: string | null;
+    error?: string;
+    message?: string;
+  }>;
   payStatus(orderId: string): Promise<{ status: string; balance?: number } | null>;
   wuweiPasswordLogin(identifier: string, password: string): Promise<{ me?: WuweiMe; error?: string }>;
   wuweiRegister(email: string, code: string, password: string): Promise<{ me?: WuweiMe; error?: string }>;

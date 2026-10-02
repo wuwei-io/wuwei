@@ -543,6 +543,46 @@ export async function wuweiPayCryptoCreate(
   }
 }
 
+export interface CryptoPaymentResult {
+  orderId: string;
+  chain: string; // solana / bsc / tron
+  network: string; // usdtsol / usdtbsc / usdttrc20
+  amountUsd: number;
+  paymentId: string;
+  payAddress: string;
+  payAmount: number; // 应付 USDT 数量（含手续费）
+  payCurrency: string; // 大写，如 USDTSOL
+  payinExtraId: string | null; // memo/tag
+  expiresAt: string | null;
+}
+
+/** 加密「应用内直付」：传 sku + chain，拿收款地址+应付数量，在 App 内渲染二维码。 */
+export async function wuweiPayCryptoPayment(
+  accessToken: string,
+  sku: string,
+  chain: string,
+): Promise<CryptoPaymentResult | "unauthorized" | { error: string; message?: string }> {
+  try {
+    const res = await fetch(`${SITE}/api/pay/crypto/payment`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Device-Id": getDeviceId(),
+      },
+      body: JSON.stringify({ sku, chain }),
+    });
+    if (res.status === 401) return "unauthorized";
+    const j = (await res.json().catch(() => null)) as (CryptoPaymentResult & { error?: string; message?: string }) | null;
+    if (!res.ok || !j) return { error: j?.error || `http_${res.status}`, message: j?.message };
+    if (j.error) return { error: j.error, message: j.message };
+    return j;
+  } catch (e) {
+    log("wuweiAuth", "payCryptoPayment 异常", String(e));
+    return { error: "network" };
+  }
+}
+
 /** 轮询订单状态（后端会主动查单兜底）。 */
 export async function wuweiPayStatus(
   accessToken: string,

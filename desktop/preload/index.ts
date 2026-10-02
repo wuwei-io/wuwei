@@ -447,6 +447,21 @@ const api = {
       error?: string;
       message?: string;
     }>,
+  payCryptoPayment: (sku: string, chain: string) =>
+    ipcRenderer.invoke("pay:crypto:payment", sku, chain) as Promise<{
+      orderId?: string;
+      chain?: string;
+      network?: string;
+      amountUsd?: number;
+      paymentId?: string;
+      payAddress?: string;
+      payAmount?: number;
+      payCurrency?: string;
+      payinExtraId?: string | null;
+      expiresAt?: string | null;
+      error?: string;
+      message?: string;
+    }>,
   payStatus: (orderId: string) =>
     ipcRenderer.invoke("pay:status", orderId) as Promise<{ status: string; balance?: number } | null>,
   // 应用内登录（不跳浏览器）：邮箱密码 / 邮箱注册 / 手机(或邮箱)验证码 / 发验证码

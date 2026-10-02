@@ -135,6 +135,7 @@ import {
   wuweiRegister,
   wuweiPayCreate,
   wuweiPayCryptoCreate,
+  wuweiPayCryptoPayment,
   wuweiPayStatus,
   reportClientLogin,
   reportClientEvent,
@@ -5000,6 +5001,22 @@ ipcMain.handle("pay:crypto:create", async (_e, sku: string) => {
     }
     saveWuweiSession(fresh);
     r = await wuweiPayCryptoCreate(fresh.accessToken, sku);
+  }
+  return r === "unauthorized" ? { error: "not_logged_in" } : r;
+});
+// 加密应用内直付：拿收款地址+应付数量，渲染器自渲染二维码。带 token，401 自动 refresh 重试。
+ipcMain.handle("pay:crypto:payment", async (_e, sku: string, chain: string) => {
+  const sess = await getFreshWuweiSession();
+  if (!sess) return { error: "not_logged_in" };
+  let r = await wuweiPayCryptoPayment(sess.accessToken, sku, chain);
+  if (r === "unauthorized") {
+    const fresh = await wuweiRefresh(sess.refreshToken);
+    if (!fresh) {
+      clearWuweiSession();
+      return { error: "not_logged_in" };
+    }
+    saveWuweiSession(fresh);
+    r = await wuweiPayCryptoPayment(fresh.accessToken, sku, chain);
   }
   return r === "unauthorized" ? { error: "not_logged_in" } : r;
 });

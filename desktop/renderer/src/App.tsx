@@ -3323,6 +3323,94 @@ function WuweiLoginModal({
   );
 }
 
+// 加密「应用内收款」面板：直连后端 /v1/payment 拿收款地址+应付数量，自渲染二维码，
+// 绕开 NOWPayments 托管收银台(默认币 unavailable/锁币空白)。到账靠 pollPaymentArrival 轮询。
+const CRYPTO_CHAINS: { key: string; label: string; badge?: string }[] = [
+  { key: "solana", label: "Solana", badge: "Low fee" },
+  { key: "bsc", label: "BNB Chain" },
+  { key: "tron", label: "Tron (TRC20)" },
+];
+const CopyGlyph = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
+  </svg>
+);
+function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
+  en: boolean; sku: string; planName: string; priceLabel: string;
+  onClose: () => void; onContact: () => void;
+}) {
+  const [chain, setChain] = useState("solana");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<"min" | "login" | "fail" | null>(null);
+  const [pay, setPay] = useState<{ address: string; amount: number; currency: string; memo: string | null } | null>(null);
+  const [copied, setCopied] = useState<"addr" | "amt" | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setErr(null); setPay(null);
+    void window.wuwei.payCryptoPayment(sku, chain).then((r) => {
+      if (!alive) return;
+      setLoading(false);
+      if (!r || r.error || !r.payAddress) {
+        setErr(r?.error === "below_min" ? "min" : r?.error === "not_logged_in" ? "login" : "fail");
+        return;
+      }
+      setPay({ address: r.payAddress, amount: r.payAmount ?? 0, currency: r.payCurrency ?? "USDT", memo: r.payinExtraId ?? null });
+    });
+    return () => { alive = false; };
+  }, [chain, sku]);
+
+  const copy = (text: string, which: "addr" | "amt") => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500); }).catch(() => {});
+  };
+  const netLabel = chain === "solana" ? "Solana" : chain === "bsc" ? "BNB Chain (BEP20)" : "Tron (TRC20)";
+
+  return (
+    <div className="perm-overlay pay-overlay" onClick={onClose} style={{ zIndex: 1300 }}>
+      <div className="pay-card cpay-card" onClick={(e) => e.stopPropagation()}>
+        <PayCloseX onClick={onClose} />
+        <div className="cpay-h">
+          <div className="cpay-title">{en ? "Pay with Crypto" : "加密货币支付"}</div>
+          <div className="cpay-sub">{planName} · {priceLabel}</div>
+        </div>
+        <div className="cpay-chains">
+          {CRYPTO_CHAINS.map((c) => (
+            <button key={c.key} className={"cpay-chain" + (chain === c.key ? " on" : "")} onClick={() => setChain(c.key)}>
+              {c.label}{c.badge ? <em>{en ? c.badge : "低费"}</em> : null}
+            </button>
+          ))}
+        </div>
+
+        {loading && <div className="cpay-load"><span className="cpay-spin" />{en ? "Generating address…" : "生成收款地址…"}</div>}
+        {!loading && err === "min" && <div className="cpay-msg">{en ? "This network needs a larger amount — try Solana or BNB Chain." : "该网络最低额不够，请换 Solana 或 BNB Chain。"}</div>}
+        {!loading && err === "login" && <div className="cpay-msg">{en ? "Please sign in first." : "请先登录。"}</div>}
+        {!loading && err === "fail" && <div className="cpay-msg">{en ? "Temporarily unavailable — please retry or pick another network." : "暂时不可用，请重试或换个网络。"}</div>}
+
+        {!loading && pay && (
+          <>
+            <div className="cpay-amt-row">
+              <span className="cpay-amt-l">{en ? "Send exactly" : "请转账"}</span>
+              <button className="cpay-amt" onClick={() => copy(String(pay.amount), "amt")} title={en ? "Copy amount" : "复制金额"}>
+                <b>{pay.amount}</b> USDT <CopyGlyph />
+              </button>
+              <span className="cpay-net">{en ? "on" : "到"} {netLabel}</span>
+            </div>
+            <div className="cpay-qr"><QRCodeSVG value={pay.address} size={160} level="M" marginSize={2} /></div>
+            <button className="cpay-addr" onClick={() => copy(pay.address, "addr")} title={en ? "Copy address" : "复制地址"}>
+              <span>{pay.address}</span><CopyGlyph />
+            </button>
+            {pay.memo && <div className="cpay-memo">⚠️ {en ? "Memo/Tag (required): " : "备注/Tag（必填）："}<b>{pay.memo}</b></div>}
+            <div className="cpay-status"><span className="cpay-spin" />{en ? "Waiting for payment — credited automatically after confirmation (~1-2 min). Keep this window open." : "等待付款 — 到账后自动发货（约 1-2 分钟），请保持窗口打开。"}</div>
+            {copied && <div className="cpay-copied">{copied === "addr" ? (en ? "Address copied ✓" : "地址已复制 ✓") : (en ? "Amount copied ✓" : "金额已复制 ✓")}</div>}
+          </>
+        )}
+
+        <button className="cpay-cs" onClick={onContact}>{en ? "Payment issue? Contact support" : "支付遇到问题？联系客服"}</button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
@@ -3868,6 +3956,8 @@ export function App() {
   const [planOpen, setPlanOpen] = useState(false); // ③ 升级套餐弹窗
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
+  // 加密应用内收款面板：{sku, 显示名, 价格文案}。打开即轮询到账(pollPaymentArrival)，成功时置空关闭。
+  const [cryptoPay, setCryptoPay] = useState<{ sku: string; name: string; price: string } | null>(null);
   const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
   const [editEmp, setEditEmp] = useState<any | null>(null); // 右键员工「编辑」→ 在当前界面直接弹编辑框(不跳转到一人公司管理页)
   // 统一样式化确认弹窗(替代原生 confirm())：玄墨黑 VI、遮罩点击关、圆角卡片，复用 perm-overlay + add-st-dialog
@@ -4159,7 +4249,7 @@ export function App() {
             (newWqActive && !baseWqActive);                                           // 周额度 inactive→active
           if (!ok) return;
           stop();
-          setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
+          setCoinShortage(null); setFreeCapModal(null); setCryptoPay(null); // 付款成功：关大 paywall / 免费额度 / 加密面板，再弹成功窗
           setWuwei(me);
           void runConnCheck(); // 重测连通灯：会员激活/到账后该模型即可用，灯从黄→绿，别让用户以为还有问题
           const plan = PRO_PLANS.find((p) => p.sku === clientSku);
@@ -4185,7 +4275,7 @@ export function App() {
           const newBalance = me.coin.balance;
           if (newBalance <= baseBalance) return; // 未到账继续等
           stop();
-          setCoinShortage(null); setFreeCapModal(null); // 付款成功：先关大 paywall / 免费额度弹窗，再弹成功窗
+          setCoinShortage(null); setFreeCapModal(null); setCryptoPay(null); // 付款成功：关大 paywall / 免费额度 / 加密面板，再弹成功窗
           setWuwei(me);
           void runConnCheck(); // 重测连通灯：会员激活/到账后该模型即可用，灯从黄→绿，别让用户以为还有问题
           setPayResult({ kind: "coin", added: newBalance - baseBalance, bonus: 0, balance: newBalance, order: "" });
@@ -10115,7 +10205,12 @@ export function App() {
             });
           }}
           onPaddle={(opt) => { closeShortage("pay_paddle"); startEnCheckout(opt.sku); }}
-          onCrypto={(opt) => { closeShortage("pay_crypto"); startCryptoCheckout(opt.sku); }}
+          onCrypto={(opt) => {
+            if (!wuwei?.user.id) { setShowLoginForm(true); return; }
+            closeShortage("pay_crypto");
+            setCryptoPay({ sku: opt.sku, name: lang === "en" ? opt.nameEn : opt.name, price: money(lang === "en", opt.price, opt.priceUsd) });
+            pollPaymentArrival(opt.sku); // 后台轮询到账→弹成功并关面板
+          }}
           onContact={() => { closeShortage("contact"); setShowSupportChat(true); }}
           onFaq={() => { void window.wuwei.track?.("credits_shortage_action", { action: "faq" }); setPayFaqOpen(true); }}
           onNeedLogin={() => {
@@ -10217,6 +10312,16 @@ export function App() {
             setPayResult(null);
             setCoinShortage(null);
           }}
+        />
+      )}
+      {cryptoPay && (
+        <CryptoPayModal
+          en={lang === "en"}
+          sku={cryptoPay.sku}
+          planName={cryptoPay.name}
+          priceLabel={cryptoPay.price}
+          onClose={() => setCryptoPay(null)}
+          onContact={() => { setCryptoPay(null); setShowSupportChat(true); }}
         />
       )}
       {roomSettings && (() => {
