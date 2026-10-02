@@ -93,6 +93,20 @@ async function handleRemoteReq(msg: any): Promise<void> {
   const reqId = String(msg?.reqId || "");
   if (!reqId) return;
   const reply = (m: Record<string, unknown>) => { try { ws?.send(JSON.stringify(m)); } catch { /* ignore */ } };
+  const method = String(msg.method || "");
+  // 待审批中心：直接用本地池处理，不走 index 的业务 handler。
+  if (method === "perms.list") {
+    const perms = [...pendingPerms.values()].map((p) => ({ permId: p.permId, reqId: p.reqId, tool: p.tool, input: p.input, createdAt: p.createdAt }));
+    reply({ type: "resp", reqId, data: { perms } });
+    return;
+  }
+  if (method === "perms.decide") {
+    const pid = String(msg.params?.permId || "");
+    const decision = msg.params?.decision === "allow" ? "allow" : "deny";
+    const ok = decidePendingPerm(pid, decision);
+    reply({ type: "resp", reqId, data: { ok } });
+    return;
+  }
   if (!_remoteReqHandler) { reply({ type: "resp", reqId, error: "本机不支持该请求(请更新客户端)" }); return; }
   try {
     const data = await _remoteReqHandler(String(msg.method || ""), msg.params ?? null);
@@ -102,7 +116,26 @@ async function handleRemoteReq(msg: any): Promise<void> {
   }
 }
 const remoteAborts = new Map<string, AbortController>(); // reqId → 本轮中断器（手机 abort 时掐断）
-const remotePermResolvers = new Map<string, (d: "allow" | "deny") => void>(); // permId → 手机审批结果回调
+
+// 待审批池：本机 agent 远程执行时挂起的危险操作。既支撑「对话内弹框审批」(perm-resp 按 permId 回批)，
+// 也支撑独立「审批」Tab 的全局待审批中心(perms.list 拉取 / perms.decide 回批)。任意一路批了即从池移除、解挂 agent。
+interface PendingPerm {
+  permId: string;
+  reqId: string;
+  tool: string;
+  input: unknown;
+  createdAt: number;
+  resolve: (d: "allow" | "deny") => void;
+}
+const pendingPerms = new Map<string, PendingPerm>();
+/** 回批一条待审批(对话内弹框 / 独立Tab / 超时 都走这里)：解挂 agent 并移除。返回是否命中。 */
+function decidePendingPerm(permId: string, decision: "allow" | "deny"): boolean {
+  const p = pendingPerms.get(permId);
+  if (!p) return false;
+  pendingPerms.delete(permId);
+  p.resolve(decision);
+  return true;
+}
 
 async function handleRemoteChat(msg: any): Promise<void> {
   const reqId = String(msg?.reqId || "");
@@ -128,13 +161,14 @@ async function handleRemoteChat(msg: any): Promise<void> {
       onDelta: (t) => reply({ type: "delta", reqId, text: t }),
       onTool: (name, input) => reply({ type: "tool", reqId, name, input }),
       onImage: (dataUrl) => reply({ type: "image", reqId, dataUrl }),
-      // 危险工具 → 推手机审批：发 perm-req，挂起等 perm-resp；60s 没批自动拒(安全默认)。
+      // 危险工具 → 推手机审批：入待审批池 + 给发起方推 perm-req(对话内弹框)，挂起等回批；
+      // 60s 没批自动拒(安全默认)。独立「审批」Tab 则通过 perms.list/perms.decide 读写同一个池。
       onPermission: (toolName, input) =>
         new Promise<"allow" | "deny">((resolve) => {
           const permId = `pm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-          remotePermResolvers.set(permId, resolve);
+          pendingPerms.set(permId, { permId, reqId, tool: toolName, input, createdAt: Date.now(), resolve });
           reply({ type: "perm-req", reqId, permId, tool: toolName, input });
-          setTimeout(() => { if (remotePermResolvers.delete(permId)) resolve("deny"); }, 60000);
+          setTimeout(() => { decidePendingPerm(permId, "deny"); }, 60000);
         }),
     });
     if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
@@ -248,9 +282,8 @@ function connect() {
     } else if (msg.type === "abort") {
       remoteAborts.get(String(msg.reqId || ""))?.abort();
     } else if (msg.type === "perm-resp") {
-      // 手机批了 → 解挂对应权限请求
-      const r = remotePermResolvers.get(String(msg.permId || ""));
-      if (r) { remotePermResolvers.delete(String(msg.permId)); r(msg.decision === "allow" ? "allow" : "deny"); }
+      // 手机(对话内弹框)批了 → 解挂对应权限请求
+      decidePendingPerm(String(msg.permId || ""), msg.decision === "allow" ? "allow" : "deny");
     }
   });
 
