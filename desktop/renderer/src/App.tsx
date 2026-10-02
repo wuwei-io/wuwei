@@ -2319,7 +2319,7 @@ function RoomSettingsModal({
   );
 }
 // 一人公司设置面板（设置→「一人公司」独立模块）：CEO 把关 + 拍板倒计时 + 转派链层数。改动即存(team.configSet)，无需点保存。
-function CompanyTeamSettings({ lang }: { lang: Lang }) {
+function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: boolean; onToggle: (v: boolean) => void }) {
   const en = lang === "en";
   const api = (window as any).wuwei?.team;
   const clampLv = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
@@ -2353,6 +2353,30 @@ function CompanyTeamSettings({ lang }: { lang: Lang }) {
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || id;
   return (
     <>
+      {/* 模块总开关：置于一人公司模块顶部。关闭时主进程完全不参与(不注册 IPC、不读写数据目录)；
+          开关即决定下方 CEO 把关/转派链/部门等设置与侧边栏入口是否生效。原先在「通用→可选模块」，已上移到此。 */}
+      <div className="app-set-row" style={{ cursor: "default", marginBottom: teamOn ? "16px" : "4px" }}>
+        <div className="app-set-text">
+          <div className="app-set-label">{en ? "Enable My Company" : "启用一人公司"}</div>
+          <div className="app-set-hint">
+            {en
+              ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
+              : "开启后侧边栏会多出「一人公司」，可以雇 AI 员工、分别私聊、拉进群一起干活。默认关闭，关掉后不留任何痕迹。"}
+          </div>
+        </div>
+        <input
+          type="checkbox"
+          className="app-set-toggle"
+          checked={teamOn}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+      </div>
+      {!teamOn && (
+        <div className="app-set-hint" style={{ opacity: 0.8 }}>
+          {en ? "Turn it on to configure CEO gatekeeping, transfer chain and departments." : "开启后可配置 CEO 把关、拍板倒计时、转派链与部门。"}
+        </div>
+      )}
+      {teamOn && (<>
       <div className="app-set-group">{en ? "CEO gatekeeping" : "CEO 把关"}</div>
       {/* CEO 是谁 */}
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
@@ -2459,7 +2483,7 @@ function CompanyTeamSettings({ lang }: { lang: Lang }) {
           </div>
         </div>
       ))}
-
+      </>)}
       {saved && <div className="app-set-hint" style={{ color: "var(--ok, #3fb950)" }}>{en ? "Saved" : "已保存"}</div>}
     </>
   );
@@ -14686,7 +14710,17 @@ function SettingsModal({
 
         <div className="set-body">
           {/* ── 一人公司：CEO 把关 + 拍板倒计时 + 转派链(独立模块，仅模块开启时可见) ── */}
-          {tab === "team" && <CompanyTeamSettings lang={lang} />}
+          {tab === "team" && (
+            <CompanyTeamSettings
+              lang={lang}
+              teamOn={teamOn}
+              onToggle={(v) => {
+                setTeamOn(v);
+                setAppToggle({ teamEnabled: v });
+                onTeamEnabled(v); // 通知主组件：显隐侧边栏入口、关掉时收起面板
+              }}
+            />
+          )}
           {/* ── 通用：会话分组 + 上下文压缩 + 账号读取 ── */}
           {tab === "general" && (
             <>
@@ -14955,28 +14989,7 @@ function SettingsModal({
                 />
               </div>
 
-              {/* 「AI 员工团队」可选模块总开关。关闭时主进程完全不参与：不注册 IPC、不读写数据目录。 */}
-              <div className="app-set-group">{lang === "en" ? "Optional modules" : "可选模块"}</div>
-              <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
-                <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "My Company" : "一人公司"}</div>
-                  <div className="app-set-hint">
-                    {lang === "en"
-                      ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
-                      : "开启后侧边栏会多出「一人公司」，可以雇 AI 员工、分别私聊、拉进群一起干活。默认关闭，关掉后不留任何痕迹。"}
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  className="app-set-toggle"
-                  checked={teamOn}
-                  onChange={(e) => {
-                    setTeamOn(e.target.checked);
-                    setAppToggle({ teamEnabled: e.target.checked });
-                    onTeamEnabled(e.target.checked); // 通知主组件：显隐侧边栏入口、关掉时收起面板
-                  }}
-                />
-              </div>
+              {/* 「一人公司」模块开关已移到设置→「一人公司」模块顶部（独立模块自管开关）。 */}
 
               {/* 手机端远程执行：允许手机用本机(含 Claude Code 订阅)；默认关，WS 连接按需建立 */}
               <div className="app-set-group">{lang === "en" ? "Mobile remote" : "手机端远程"}</div>
