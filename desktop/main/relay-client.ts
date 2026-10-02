@@ -71,6 +71,7 @@ export interface RemoteChatArgs {
   signal: AbortSignal;
   onDelta: (text: string) => void;
   onTool?: (name: string, input?: unknown) => void;
+  onImage?: (dataUrl: string) => void; // 工具产出的图(截图/生图)→转给手机显示
 }
 export type RemoteExecutor = (args: RemoteChatArgs) => Promise<{ text: string } | { error: string }>;
 let _remoteExecutor: RemoteExecutor | null = null;
@@ -101,6 +102,7 @@ async function handleRemoteChat(msg: any): Promise<void> {
       signal: ac.signal,
       onDelta: (t) => reply({ type: "delta", reqId, text: t }),
       onTool: (name, input) => reply({ type: "tool", reqId, name, input }),
+      onImage: (dataUrl) => reply({ type: "image", reqId, dataUrl }),
     });
     if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
     else reply({ type: "chat-done", reqId, text: r.text });
