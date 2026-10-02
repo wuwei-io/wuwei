@@ -13587,6 +13587,9 @@ function SettingsModal({
   const [claudeAutoRefresh, setClaudeAutoRefresh] = useState(true); // Claude 订阅 token 快过期自动续期
   const [telemetry, setTelemetry] = useState(true); // 发送诊断信息用于改善体验(默认开，可关)
   const [teamOn, setTeamOn] = useState(false); // 「AI 员工团队」可选模块：默认关，用户主动开(与上面几个默认开的相反)
+  const [remoteOn, setRemoteOn] = useState(false); // 允许手机端远程调用本机：默认关，用户主动开(开了才连relay、本机才在手机"在线设备"里)
+  const [remoteShareSub, setRemoteShareSub] = useState(false); // 同步本机订阅版模型给手机：默认关
+  const [remoteDeviceName, setRemoteDeviceName] = useState(""); // 设备名(手机端显示)；空=用主机名
   const setAppToggle = (patch: Record<string, boolean>) => {
     const cur = loadedRef.current || {};
     loadedRef.current = { ...cur, app: { ...(cur.app || {}), ...patch } }; // 同步本地，避免后续「保存」把开关刷回
@@ -14015,6 +14018,9 @@ function SettingsModal({
       setClaudeAutoRefresh(s.app?.claudeAutoRefresh !== false);
       setTelemetry(s.app?.telemetry !== false);
       setTeamOn(s.app?.teamEnabled === true); // 可选模块，只有显式为 true 才算开
+      setRemoteOn(s.app?.remoteEnabled === true); // 手机远程:默认关,显式true才开
+      setRemoteShareSub(s.app?.remoteShareSubscription === true);
+      setRemoteDeviceName(s.app?.remoteDeviceName || "");
       const sts: Station[] = s.customStations || [];
       setStations(sts);
       stationsRef.current = sts;
@@ -14851,6 +14857,65 @@ function SettingsModal({
                   }}
                 />
               </div>
+
+              {/* 手机端远程执行：允许手机用本机(含 Claude Code 订阅)；默认关，WS 连接按需建立 */}
+              <div className="app-set-group">{lang === "en" ? "Mobile remote" : "手机端远程"}</div>
+              <div className="app-set-row" style={{ cursor: "default", marginBottom: remoteOn ? "8px" : "16px" }}>
+                <div className="app-set-text">
+                  <div className="app-set-label">{lang === "en" ? "Allow mobile app to use this computer" : "允许手机端远程调用本机"}</div>
+                  <div className="app-set-hint">
+                    {lang === "en"
+                      ? "When on, this computer stays connected so your phone can run tasks here (using this machine, incl. its Claude Code subscription). Off by default — no connection, no trace."
+                      : "开启后本机会保持在线，手机端可选择用这台电脑执行任务（用本机，含已登录的 Claude Code 订阅）。默认关闭——不开就不连、不占资源。"}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="app-set-toggle"
+                  checked={remoteOn}
+                  onChange={(e) => {
+                    setRemoteOn(e.target.checked);
+                    setAppToggle({ remoteEnabled: e.target.checked });
+                  }}
+                />
+              </div>
+              {remoteOn && (
+                <>
+                  <div className="app-set-row" style={{ cursor: "default", marginBottom: "8px", paddingLeft: "12px" }}>
+                    <div className="app-set-text">
+                      <div className="app-set-label">{lang === "en" ? "Share this machine’s subscription models" : "同步本机订阅版模型给手机"}</div>
+                      <div className="app-set-hint">
+                        {lang === "en"
+                          ? "Let the phone use this machine’s Claude Code / Codex subscription. Off = remote run allowed but local subscription not exposed."
+                          : "让手机能用本机的 Claude Code / Codex 订阅。不开=仍可远程执行，但不把本地订阅暴露给手机。"}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="app-set-toggle"
+                      checked={remoteShareSub}
+                      onChange={(e) => {
+                        setRemoteShareSub(e.target.checked);
+                        setAppToggle({ remoteShareSubscription: e.target.checked });
+                      }}
+                    />
+                  </div>
+                  <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px", paddingLeft: "12px" }}>
+                    <div className="app-set-text">
+                      <div className="app-set-label">{lang === "en" ? "Device name (shown on phone)" : "设备名（手机端显示）"}</div>
+                    </div>
+                    <input
+                      type="text"
+                      className="set-field-input"
+                      style={{ width: "160px" }}
+                      placeholder={lang === "en" ? "e.g. My MacBook" : "如 我的MacBook"}
+                      value={remoteDeviceName}
+                      onChange={(e) => setRemoteDeviceName(e.target.value)}
+                      onBlur={() => setAppToggle({ remoteDeviceName: remoteDeviceName.trim() } as any)}
+                    />
+                  </div>
+                </>
+              )}
 
               {/* 智能继续：连推安全阀 + 自定义红线 */}
               <div className="app-set-group">{lang === "en" ? "Smart-continue" : "智能继续（连推 / 自主推进）"}</div>
