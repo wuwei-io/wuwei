@@ -6412,6 +6412,15 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .tc-roster { display: flex; flex-wrap: wrap; gap: 7px; }
 .tc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--text-dim); }
 .tc-chip svg { width: 13px; height: 13px; color: var(--accent); flex: 0 0 auto; }
+/* 名片头像照片/首字：必须显式限尺寸。tc-ava-img 是 width:100% 填满父级，chip 里没有定尺寸的包裹层，
+   于是上传的照片会按原图(256px+)铺开，把整条名片撑成巨幅——补一个 16px 圆形容器收住。 */
+.tc-chip .tc-ava-img { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.tc-chip .team-avatar-txt {
+  width: 16px; height: 16px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 9px; font-weight: 600;
+}
 
 /* 按钮 */
 .tc-btn { padding: 7px 16px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: opacity .14s; }
