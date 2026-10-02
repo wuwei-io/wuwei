@@ -79,6 +79,27 @@ let _remoteExecutor: RemoteExecutor | null = null;
 export function setRemoteExecutor(fn: RemoteExecutor | null): void {
   _remoteExecutor = fn;
 }
+
+// 通用请求处理器(不落库同步)：手机问「会话列表/历史/员工/群/SOP」→ 读本机 ~/.wuwei 数据返回。
+// 由 index.ts 注入(它持有 loadSessions/loadRooms/loadEmployees 等)。
+export type RemoteRequestHandler = (method: string, params: any) => Promise<unknown>;
+let _remoteReqHandler: RemoteRequestHandler | null = null;
+export function setRemoteRequestHandler(fn: RemoteRequestHandler | null): void {
+  _remoteReqHandler = fn;
+}
+
+async function handleRemoteReq(msg: any): Promise<void> {
+  const reqId = String(msg?.reqId || "");
+  if (!reqId) return;
+  const reply = (m: Record<string, unknown>) => { try { ws?.send(JSON.stringify(m)); } catch { /* ignore */ } };
+  if (!_remoteReqHandler) { reply({ type: "resp", reqId, error: "本机不支持该请求(请更新客户端)" }); return; }
+  try {
+    const data = await _remoteReqHandler(String(msg.method || ""), msg.params ?? null);
+    reply({ type: "resp", reqId, data });
+  } catch (e: any) {
+    reply({ type: "resp", reqId, error: String(e?.message || e).slice(0, 300) });
+  }
+}
 const remoteAborts = new Map<string, AbortController>(); // reqId → 本轮中断器（手机 abort 时掐断）
 
 async function handleRemoteChat(msg: any): Promise<void> {
@@ -211,6 +232,9 @@ function connect() {
     } else if (msg.type === "chat") {
       // M2：手机端经 relay 发来执行请求 → 跑本机 agent、流式回传
       void handleRemoteChat(msg);
+    } else if (msg.type === "req") {
+      // 通用请求(会话列表/历史/员工/群/SOP)：读本机数据返回，不落库
+      void handleRemoteReq(msg);
     } else if (msg.type === "abort") {
       remoteAborts.get(String(msg.reqId || ""))?.abort();
     }

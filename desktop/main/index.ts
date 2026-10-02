@@ -146,7 +146,7 @@ import {
   type WuweiSession,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
-import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor } from "./relay-client.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRequestHandler } from "./relay-client.js";
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -253,6 +253,18 @@ function providerForChannel(channelId: string | null | undefined): ReturnType<ty
   const model = slot.model || gs.model || "";
   if (!model) return null;
   return providerForEmployee({ model: { providerId: pid, model } });
+}
+
+// 远程同步(不落库)：把本机 Message 拍平成手机可直接渲染的 {id,role,text,image}。tool 块跳过，只取文本+首图。
+function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assistant"; text?: string; image?: string } {
+  const role: "user" | "assistant" = m?.role === "user" ? "user" : "assistant";
+  let text = "";
+  let image: string | undefined;
+  for (const b of (m?.content as any[]) || []) {
+    if (b?.type === "text") text += b.text || "";
+    else if (b?.type === "image" && !image) image = b.dataUrl;
+  }
+  return { id: `${role}-${i}`, role, text: text.trim() || undefined, image };
 }
 
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
@@ -3033,6 +3045,30 @@ if (!gotLock) {
       } catch (e: any) {
         return { error: String(e?.message || e).slice(0, 300) };
       }
+    });
+    // 通用请求处理器(不落库同步)：手机问「会话列表/某会话分页历史」→ 读本机数据返回。团队(员工/群/SOP)后续补。
+    setRemoteRequestHandler(async (method, params) => {
+      if (method === "sessions.list") {
+        // 只给普通会话(排除一人公司员工私聊，那些归 team)；按更新时间倒序
+        const list = listSessions()
+          .filter((s: any) => !s.employeeId)
+          .sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
+          .map((s: any) => ({ id: s.id, title: s.title || "新对话", updatedAt: s.updatedAt || 0 }));
+        return { sessions: list };
+      }
+      if (method === "sessions.messages") {
+        const sid = String(params?.sessionId || "");
+        if (!sid) throw new Error("缺少 sessionId");
+        const limit = Math.min(50, Math.max(1, Number(params?.limit) || 10));
+        const offset = Math.max(0, Number(params?.offset) || 0); // 从末尾往前偏移(0=最后一屏)
+        const all = loadMessages(sid);
+        const total = all.length;
+        const end = Math.max(0, total - offset);
+        const start = Math.max(0, end - limit);
+        const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i));
+        return { messages: page, hasMore: start > 0, total };
+      }
+      throw new Error("不支持的请求: " + method);
     });
     syncTeamModule(loadSettings()); // 可选模块：开了才挂，没开这行之后不留任何痕迹
     loadGoals(); // 智能继续：会话总目标(userData/session-goals.json)
