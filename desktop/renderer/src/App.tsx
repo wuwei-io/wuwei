@@ -8132,6 +8132,34 @@ export function App() {
                   dmSelfId={dmSelfId}
                   renderMd={(t) => <MarkdownView text={t} />}
                   onBack={() => setAppView("store")}
+                  renderRoomAsk={(memberIds, anchorRef) => {
+                    // 群/私聊里成员的会话 sid 是 __room_<empId>；找本群哪位成员正在 ask_user 或被 CEO 把关。
+                    const sid = memberIds.map((id) => `__room_${id}`).find((s) => asks[s] || ceoDeciding[s]);
+                    if (!sid) return null;
+                    return (
+                      <>
+                        {ceoDeciding[sid] && !asks[sid] && <CeoDecidingPill lang={lang} anchor={anchorRef} info={ceoDeciding[sid]} />}
+                        {asks[sid] && (() => {
+                          const a = asks[sid];
+                          // 群里不走「智能继续」自动倒计时(那是 per-session 的)，直接把选择框弹给用户。
+                          return (
+                            <AskModal
+                              key={a.id}
+                              t={t}
+                              lang={lang}
+                              data={a}
+                              anchor={anchorRef}
+                              autoSec={0}
+                              redlineHit={null}
+                              judging={false}
+                              onSubmit={(list, images) => { window.wuwei.answerAsk(a.id, { list, images }); clearAsk(sid); }}
+                              onCancel={() => { window.wuwei.answerAsk(a.id, { cancelled: true }); clearAsk(sid); }}
+                            />
+                          );
+                        })()}
+                      </>
+                    );
+                  }}
                   footer={(ctx) => (
                     // 群/私聊底部状态栏：复用主对话完整的 <ComposerFoot>。roomMode 隐藏 per-session 的自动/智能继续档，
                     // 平台/模型选择器切的是全局默认模型(和主对话同一套 state)，上下文统计传本群自己的估算值(ctx.contextK)。

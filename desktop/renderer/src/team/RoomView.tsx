@@ -4,7 +4,7 @@
 // 一眼看出这是一屋子人在说话，而不是单线对话。
 
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { Employee, Room, RoomMessage } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 import { useTx } from "../tx.js";
@@ -15,7 +15,9 @@ import { researchToolLabel, toolInputPreview } from "../toolLabel.js";
 // 和主对话是同一套 state/handler，切了全局默认就变。上下文统计则传本群/私聊自己的估算值(per-room)，故 footer
 // 改成 render-prop 函数：App 把 room 的 contextK 注入 <ComposerFoot roomMode contextK>。
 // dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
-type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number; running: boolean }) => ReactNode; renderMd?: (text: string) => ReactNode };
+type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number; running: boolean }) => ReactNode; renderMd?: (text: string) => ReactNode;
+  // 群/私聊里某成员(sid=__room_<empId>)发起 ask_user/CEO 把关时，由 App 渲染选择框/拍板提示，锚定到本群输入框。
+  renderRoomAsk?: (memberIds: string[], anchor: RefObject<HTMLDivElement | null>) => ReactNode };
 
 // 群/私聊没有主进程回报的精确 token 数(那是 per-session 的)，这里按消息文本长度粗估：
 // CJK 字符 ≈ 1 token/字，其余(英文/符号/空格) ≈ 0.3 token/字。只用于底栏「上下文 ~x.xk」展示，标了 ~ 表示估算。
@@ -30,7 +32,7 @@ function estimateRoomContextK(msgs: { text?: string }[]): number {
   return tokens / 1000;
 }
 
-export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd, renderRoomAsk }: Props) {
   const tx = useTx(); // 翻译显示层：翻译态下群名/员工名/发言人名临时译成英文覆盖显示(纯覆盖，不改数据)
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
   const [newCoord, setNewCoord] = useState<string>("");
   const endRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null); // 输入框容器：群内成员 ask_user 的选择框锚定到它
   const flowRef = useRef<HTMLDivElement | null>(null); // 聊天流滚动容器
   const stuckRef = useRef(true); // 聊天流是否吸底：默认吸底；用户往上滚→false 不再自动拽回，滚回底部→true 恢复
   const curRef = useRef<string | null>(null); // 给 onEvent 闭包读最新 cur(避免用捕获的旧值 / 在 setState 里套 setState 的反模式)
@@ -489,8 +492,11 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         <div ref={endRef} />
       </div>
 
+      {/* 群内某成员 ask_user / CEO 把关：选择框 + 拍板提示，锚定到本群输入框（由 App 注入渲染） */}
+      {room && renderRoomAsk?.(room.members, composerRef)}
+
       {/* 输入框：抄主对话框风格——整体一个大圆角框，发送/停止按钮内嵌右下，对齐 */}
-      <div className="tc-composer">
+      <div className="tc-composer" ref={composerRef}>
         {/* @ 补全：输入 @ 弹出成员 + 所有人。鼠标点选或键盘 ↑↓ 高亮 + Enter 选中 */}
         {mention !== null && mentionCands.length > 0 && (() => {
           const cands = mentionCands;
