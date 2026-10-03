@@ -9,6 +9,7 @@ import { hostname, platform } from "node:os";
 import { getDeviceId } from "../../src/device-id.js";
 import { loadWuweiSession } from "./wuwei-session.js";
 import { log } from "./logger.js";
+import type { Decision, DecisionResponse } from "../../src/types.js";
 import {
   loadSettings,
   remoteEnabled,
@@ -74,6 +75,9 @@ export interface RemoteChatArgs {
   onTool?: (name: string, input?: unknown) => void;
   onImage?: (dataUrl: string) => void; // 工具产出的图(截图/生图)→转给手机显示
   onPermission?: (toolName: string, input: unknown) => Promise<PermDecision>; // 危险工具→推手机审批
+  // G1：agent 调 ask_decision 遇岔路→把结构化 Decision 下发手机(DecisionSheet)→阻塞等 perm-resp 三态回批。
+  // 与 onPermission 并存不复用：判定点两套(危险工具拦截 vs 岔路决策)，回批通道一套(perm-resp 三态, permId 精确匹配)。
+  requestDecision?: (decision: Decision) => Promise<DecisionResponse>;
 }
 
 // perm-resp 三态回批（与手机端 relayChat 对齐，2026-10）：
@@ -162,6 +166,39 @@ function decidePendingPerm(permId: string, decision: PermDecision): boolean {
   return true;
 }
 
+// ── G1：岔路决策池（与 pendingPerms 并存，不复用）──
+// agent 调 ask_decision → 这里把 Decision 整条下发手机 {type:'decision', reqId, ...decision}，
+// 以 permId 为 key 挂起等回批；手机 perm-resp 三态回来按 permId 精确匹配 resolve。
+// 每个 permId 独立 pending → 并发决策互不干扰。超时/中断兜底在 G1-4 补全，这里先留 timer 位。
+interface PendingDecision {
+  permId: string;
+  reqId: string;
+  decision: Decision;
+  createdAt: number;
+  resolve: (d: DecisionResponse) => void;
+  timer?: NodeJS.Timeout;
+}
+const pendingDecisions = new Map<string, PendingDecision>();
+/** 回批一条待决策(perm-resp / 超时 / 中断 都走这里)：解挂 agent 并移除。返回是否命中。 */
+function decidePendingDecision(permId: string, resp: DecisionResponse): boolean {
+  const d = pendingDecisions.get(permId);
+  if (!d) return false;
+  if (d.timer) clearTimeout(d.timer);
+  pendingDecisions.delete(permId);
+  d.resolve(resp);
+  return true;
+}
+/** 下发 Decision 到发起方手机并阻塞等三态回批。permId 由 ask_decision 工具生成(全局唯一且每次变)。 */
+function sendDecision(reqId: string, decision: Decision, reply: (m: Record<string, unknown>) => void): Promise<DecisionResponse> {
+  return new Promise<DecisionResponse>((resolve) => {
+    const permId = String(decision.permId || "");
+    // permId 同名撞车(理论上不会)：先把旧的按 deny 解挂，避免悬挂
+    if (pendingDecisions.has(permId)) decidePendingDecision(permId, { action: "deny" });
+    pendingDecisions.set(permId, { permId, reqId, decision, createdAt: Date.now(), resolve });
+    reply({ type: "decision", reqId, ...decision });
+  });
+}
+
 async function handleRemoteChat(msg: any): Promise<void> {
   const reqId = String(msg?.reqId || "");
   if (!reqId) return;
@@ -195,6 +232,8 @@ async function handleRemoteChat(msg: any): Promise<void> {
           reply({ type: "perm-req", reqId, permId, tool: toolName, input });
           setTimeout(() => { decidePendingPerm(permId, { action: "deny" }); }, 60000);
         }),
+      // G1：ask_decision 岔路决策 → 下发 Decision、按 permId 挂起等三态回批(allow/deny/reply+value|text)
+      requestDecision: (decision) => sendDecision(reqId, decision, reply),
     });
     if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
     else reply({ type: "chat-done", reqId, text: r.text });
@@ -307,8 +346,10 @@ function connect() {
     } else if (msg.type === "abort") {
       remoteAborts.get(String(msg.reqId || ""))?.abort();
     } else if (msg.type === "perm-resp") {
-      // 手机(对话内弹框)批了 → 解挂对应权限请求(三态: allow/deny/reply)
-      decidePendingPerm(String(msg.permId || ""), parsePermDecision(msg));
+      // 手机(对话内弹框)批了 → 按 permId 精确匹配：先查岔路决策池(G1)，没命中再查危险工具权限池(三态: allow/deny/reply)
+      const pid = String(msg.permId || "");
+      const resp = parsePermDecision(msg);
+      if (!decidePendingDecision(pid, resp)) decidePendingPerm(pid, resp);
     }
   });
 

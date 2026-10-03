@@ -3204,7 +3204,7 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage, onPermission }) => {
+    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage, onPermission, requestDecision }) => {
       // model=手机端选的渠道 id(如 claude-code-subscription)。优先按渠道建本机对应 provider(Claude 订阅)，
       // 认不出/没配就回退电脑当前全局 provider，别让远程执行直接失败。
       const p = providerForChannel(model) || provider;
@@ -3212,7 +3212,9 @@ if (!gotLock) {
       try {
         const tools = desktopTools();
         const map = new Map(tools.map((t) => [t.name, t]));
-        const a = new Agent(p, sysPrompt, tools, { cwd, sessionId: `__remote_${Date.now().toString(36)}` }, map, agentOpts);
+        // G1：把 relay-client 的决策通道塞进 ToolContext，ask_decision 工具据此把 Decision 下发手机、阻塞等三态回批。
+        // 与 requestPermission(危险工具拦截)并存不复用。未注入(纯本地)时工具走"无决策通道"兜底。
+        const a = new Agent(p, sysPrompt, tools, { cwd, sessionId: `__remote_${Date.now().toString(36)}`, requestDecision }, map, agentOpts);
         await a.send(
           text,
           {
