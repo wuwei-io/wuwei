@@ -3221,7 +3221,13 @@ if (!gotLock) {
             // 工具产出的图(chrome_screenshot 截图 / send_image 生图)→转给手机显示
             onToolEnd: (_id: string, _result: string, _isError: boolean, image?: string) => { if (image) onImage?.(image); },
             // 危险工具(非只读)→推手机审批；没接审批通道则默认放行(兼容旧手机端)
-            requestPermission: onPermission ? (tool: any, input: any) => onPermission(tool.name, input) : undefined,
+            // relay 返回三态 PermDecision；本轮 agent loop 只认 allow/deny(reply 留到 G1)，故在此降维：reply→deny 兜底。
+            requestPermission: onPermission
+              ? async (tool: any, input: any) => {
+                  const d = await onPermission(tool.name, input);
+                  return d.action === "allow" ? "allow" : "deny";
+                }
+              : undefined,
           } as any,
           signal,
           images && images.length ? images : undefined, // 手机端带来的图一并喂给 agent

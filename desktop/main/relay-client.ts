@@ -73,7 +73,19 @@ export interface RemoteChatArgs {
   onDelta: (text: string) => void;
   onTool?: (name: string, input?: unknown) => void;
   onImage?: (dataUrl: string) => void; // 工具产出的图(截图/生图)→转给手机显示
-  onPermission?: (toolName: string, input: unknown) => Promise<"allow" | "deny">; // 危险工具→推手机审批
+  onPermission?: (toolName: string, input: unknown) => Promise<PermDecision>; // 危险工具→推手机审批
+}
+
+// perm-resp 三态回批（与手机端 relayChat 对齐，2026-10）：
+// - allow/deny：内建放行/拒绝（保留字）。
+// - reply：非内建统一通道，value 与 text 二选一——
+//     value=业务分支稳定 key（如 backup_first），agent 按 key 匹配分支继续跑；
+//     text=用户自己打字的自然语言答复，agent 当作用户回话喂回决策点。
+// 本轮(perm-resp 三态)：手机实发 allow/deny；reply 分支解析写全但留到 G1 Decision 下发后再联调。
+export interface PermDecision {
+  action: "allow" | "deny" | "reply";
+  value?: string;
+  text?: string;
 }
 export type RemoteExecutor = (args: RemoteChatArgs) => Promise<{ text: string } | { error: string }>;
 let _remoteExecutor: RemoteExecutor | null = null;
@@ -102,8 +114,7 @@ async function handleRemoteReq(msg: any): Promise<void> {
   }
   if (method === "perms.decide") {
     const pid = String(msg.params?.permId || "");
-    const decision = msg.params?.decision === "allow" ? "allow" : "deny";
-    const ok = decidePendingPerm(pid, decision);
+    const ok = decidePendingPerm(pid, parsePermDecision(msg.params));
     reply({ type: "resp", reqId, data: { ok } });
     return;
   }
@@ -125,11 +136,25 @@ interface PendingPerm {
   tool: string;
   input: unknown;
   createdAt: number;
-  resolve: (d: "allow" | "deny") => void;
+  resolve: (d: PermDecision) => void;
 }
 const pendingPerms = new Map<string, PendingPerm>();
+/** 把 relay 消息(perm-resp / perms.decide.params)解析成三态回批。兼容旧字段 decision。 */
+function parsePermDecision(m: any): PermDecision {
+  // 旧格式兼容：{decision:'allow'|'deny'}
+  if (m && m.action == null && m.decision != null) {
+    return { action: m.decision === "allow" ? "allow" : "deny" };
+  }
+  const action = m?.action === "allow" || m?.action === "reply" ? m.action : "deny";
+  const out: PermDecision = { action };
+  if (action === "reply") {
+    if (typeof m?.value === "string" && m.value) out.value = m.value;
+    if (typeof m?.text === "string" && m.text) out.text = m.text;
+  }
+  return out;
+}
 /** 回批一条待审批(对话内弹框 / 独立Tab / 超时 都走这里)：解挂 agent 并移除。返回是否命中。 */
-function decidePendingPerm(permId: string, decision: "allow" | "deny"): boolean {
+function decidePendingPerm(permId: string, decision: PermDecision): boolean {
   const p = pendingPerms.get(permId);
   if (!p) return false;
   pendingPerms.delete(permId);
@@ -164,11 +189,11 @@ async function handleRemoteChat(msg: any): Promise<void> {
       // 危险工具 → 推手机审批：入待审批池 + 给发起方推 perm-req(对话内弹框)，挂起等回批；
       // 60s 没批自动拒(安全默认)。独立「审批」Tab 则通过 perms.list/perms.decide 读写同一个池。
       onPermission: (toolName, input) =>
-        new Promise<"allow" | "deny">((resolve) => {
+        new Promise<PermDecision>((resolve) => {
           const permId = `pm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
           pendingPerms.set(permId, { permId, reqId, tool: toolName, input, createdAt: Date.now(), resolve });
           reply({ type: "perm-req", reqId, permId, tool: toolName, input });
-          setTimeout(() => { decidePendingPerm(permId, "deny"); }, 60000);
+          setTimeout(() => { decidePendingPerm(permId, { action: "deny" }); }, 60000);
         }),
     });
     if ("error" in r) reply({ type: "chat-error", reqId, message: r.error });
@@ -282,8 +307,8 @@ function connect() {
     } else if (msg.type === "abort") {
       remoteAborts.get(String(msg.reqId || ""))?.abort();
     } else if (msg.type === "perm-resp") {
-      // 手机(对话内弹框)批了 → 解挂对应权限请求
-      decidePendingPerm(String(msg.permId || ""), msg.decision === "allow" ? "allow" : "deny");
+      // 手机(对话内弹框)批了 → 解挂对应权限请求(三态: allow/deny/reply)
+      decidePendingPerm(String(msg.permId || ""), parsePermDecision(msg));
     }
   });
 
