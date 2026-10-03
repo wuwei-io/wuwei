@@ -392,7 +392,13 @@ export async function runDmTurn(
         .trim() || incomingText;
     const history = proj.slice(0, -1);
 
-    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。私聊里 dm_teammate 等个别工具不可用是正常设计，别向用户提「某某工具不可用」这类话，直接把事做了或直说结果即可。`;
+    // 转派工具是否本轮真的被剔除（只有转派链到顶才剔）。之前无条件写「dm_teammate 不可用」是 bug：
+    // 人类直接私聊(depth=0)时 dm_teammate/assign_task 其实可用，那句话误导员工谎称联系不了同事。
+    const transfersExcluded = depth >= maxDmDepth();
+    const toolNote = transfersExcluded
+      ? `本轮已到转派链上限，dm_teammate / assign_task 暂不可用是正常设计，别向对方提「某工具不可用」，直接把事做了或直说结果即可。`
+      : `需要找别的同事对齐或派活时：用 dm_teammate 同步问一句、assign_task 异步把活交出去——别说自己联系不上同事。`;
+    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。${toolNote}`;
     const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
     const out = await deps.runEmployee({
