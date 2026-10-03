@@ -56,6 +56,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [newCoord, setNewCoord] = useState<string>("");
   const [bigImg, setBigImg] = useState<string | null>(null); // 点图看大图
   const endRef = useRef<HTMLDivElement | null>(null);
+  const forceBottomRef = useRef(0); // 切房间后的「强制吸底窗口」(ms 时间戳)：窗内多帧反复吸底，防长会话内容异步撑高后停在半截
   const composerRef = useRef<HTMLDivElement | null>(null); // 输入框容器：群内成员 ask_user 的选择框锚定到它
   const flowRef = useRef<HTMLDivElement | null>(null); // 聊天流滚动容器
   const stuckRef = useRef(true); // 聊天流是否吸底：默认吸底；用户往上滚→false 不再自动拽回，滚回底部→true 恢复
@@ -124,6 +125,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   useEffect(() => {
     curRef.current = cur; // 同步给 onEvent 闭包
     stuckRef.current = true; // 进新房间默认吸底看最新
+    forceBottomRef.current = Date.now() + 800; // 开一个强制吸底窗口：这段时间内不管 onScroll 怎么判，都反复吸底到最新
     if (!cur) return;
     setHint("");
     setProgress({}); // 切房间先清空，再从主进程拉「该房间当前全量进度」补齐切走期间错过的增量
@@ -141,11 +143,17 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur]);
 
+  // 吸底：切房间走「强制窗口」多帧反复吸底(长会话 markdown/代码高亮/图片会异步撑高，一次吸不到底)；
+  // 平时只在用户本就贴底时吸(stuckRef)，往上翻看历史不打扰。依赖 msgs 引用而非 length：切到同条数的房间也触发。
   useEffect(() => {
-    // 即时滚动(非 smooth)：smooth 动画期间的中间 onScroll 会把 stuck 误判成 false、打断后续吸底。只在吸底时滚。
-    // 依赖整个 msgs(引用)而非 msgs.length：切到「消息条数相同」的另一个房间时 length 不变、effect 不触发 →
-    // 进房间不吸底、停在顶部（用户反馈的 bug）。进房间 stuckRef 恒为 true，换成引用依赖即每次切房都吸底。
-    if (stuckRef.current) endRef.current?.scrollIntoView({ block: "end" });
+    const toBottom = () => { const el = flowRef.current; if (el) el.scrollTop = el.scrollHeight; };
+    const forcing = () => Date.now() < forceBottomRef.current;
+    if (!forcing() && !stuckRef.current) return;
+    toBottom();
+    requestAnimationFrame(toBottom);
+    if (!forcing()) return;
+    const timers = [60, 150, 300, 500, 750].map((ms) => window.setTimeout(() => { if (forcing() || stuckRef.current) toBottom(); }, ms));
+    return () => timers.forEach((t) => window.clearTimeout(t));
   }, [msgs, running]);
 
   // 进度块出现/增长(工具+1、思考流变长)也吸底——否则块冒在折叠区下方，用户得手动往下滚才看到。
