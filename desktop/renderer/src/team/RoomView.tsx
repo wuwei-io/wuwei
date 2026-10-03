@@ -54,6 +54,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
   const [newName, setNewName] = useState("");
   const [newMembers, setNewMembers] = useState<Set<string>>(new Set());
   const [newCoord, setNewCoord] = useState<string>("");
+  const [bigImg, setBigImg] = useState<string | null>(null); // 点图看大图
   const endRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null); // 输入框容器：群内成员 ask_user 的选择框锚定到它
   const flowRef = useRef<HTMLDivElement | null>(null); // 聊天流滚动容器
@@ -380,7 +381,14 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               )}
               <span className="tc-msg-body">
                 {!mine && <span className="tc-msg-who">{tx(m.speaker.name)}</span>}
-                <span className="tc-bubble">{renderMd ? renderMd(m.text) : m.text}</span>
+                {(m.text || !(m.images && m.images.length)) && <span className="tc-bubble">{renderMd ? renderMd(m.text) : m.text}</span>}
+                {m.images && m.images.length > 0 && (
+                  <div className="tc-msg-imgs">
+                    {m.images.map((src, i) => (
+                      <img key={i} className="tc-msg-img" src={src} alt="" onClick={() => setBigImg(src)} />
+                    ))}
+                  </div>
+                )}
                 {/* 执行过程永久留存：这条员工回复当轮调了哪些工具(参数/结果)，随消息落库，可展开回看 */}
                 {!mine && m.steps && m.steps.length > 0 && (
                   <div className="tc-msg-steps">
@@ -491,6 +499,13 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (en ? "No one was called on. @ an employee, or set a standing coordinator in the group settings." : "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。") : hint === "@@queued@@" ? (en ? "Still on the previous message — this one is queued and will run right after." : "正在处理上一条，这条已排队，稍后自动接上。") : hint}</div>}
         <div ref={endRef} />
       </div>
+
+      {/* 点开看大图 */}
+      {bigImg && (
+        <div className="tc-img-viewer" onClick={() => setBigImg(null)}>
+          <img src={bigImg} alt="" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
 
       {/* 群内某成员 ask_user / CEO 把关：选择框 + 拍板提示，锚定到本群输入框（由 App 注入渲染） */}
       {room && renderRoomAsk?.(room.members, composerRef)}

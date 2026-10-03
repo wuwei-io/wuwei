@@ -33,7 +33,8 @@ export type RunEmployeeArgs = {
 export type ProgressEv =
   | { kind: "text"; delta: string }
   | { kind: "tool-start"; id: string; name: string; input?: unknown }
-  | { kind: "tool-end"; id: string; isError: boolean; result?: string };
+  | { kind: "tool-end"; id: string; isError: boolean; result?: string }
+  | { kind: "image"; dataUrl: string };
 
 export type OrchestratorDeps = {
   send: (channel: string, payload?: unknown) => void;
@@ -299,6 +300,7 @@ async function runRoomResponders(
         const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
         try {
+          const turnImages: string[] = []; // 本轮 send_image 发的图，附到该员工的最终消息
           const out = await deps.runEmployee({
             employee: emp,
             sys,
@@ -306,7 +308,7 @@ async function runRoomResponders(
             input,
             signal: ac.signal,
             // 进度只广播、不落库：界面据此显示"谁正在想什么、调了什么工具"，可展开/收起，跑完即清。
-            onProgress: (ev) => { applyProg(roomId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }); },
+            onProgress: (ev) => { if (ev.kind === "image") { turnImages.push(ev.dataUrl); return; } applyProg(roomId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId, empId: emp.id, empName: emp.name, ...ev }); },
           });
           if (ac.signal.aborted) return;
           const snap = snapshotEmp(roomId, emp.id); // 落库前取本轮执行明细(applyProg done 会清空真相源)
@@ -314,9 +316,10 @@ async function runRoomResponders(
           deps.send("evt:team-room-progress", { roomId, empId: emp.id, done: true }); // 该员工干完，界面清掉他的进度块
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
-            text: (out || "").trim() || "（没有输出）",
+            text: (out || "").trim() || (turnImages.length ? "" : "（没有输出）"),
             steps: snap.steps.length ? snap.steps : undefined, // 执行明细随消息落库，永久可展开回看
             thought: snap.thought || undefined,
+            images: turnImages.length ? turnImages : undefined,
           });
         } catch (e: any) {
           if (ac.signal.aborted) return;
@@ -401,6 +404,7 @@ export async function runDmTurn(
     const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。${toolNote}`;
     const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
+    const turnImages: string[] = []; // 本轮 send_image 发的图，附到最终消息里显示
     const out = await deps.runEmployee({
       employee: emp,
       sys,
@@ -410,14 +414,14 @@ export async function runDmTurn(
       // 转派链到顶才剔除 dm_teammate / assign_task；未到顶允许本轮继续往下转派(小笨→小码→小美)。上限读一人公司设置。
       excludeTools: depth >= maxDmDepth() ? ["dm_teammate", "assign_task"] : [],
       dmDepth: depth, // 透传深度：本轮员工若再调 dm_teammate，工具据此 +1
-      onProgress: (ev) => { applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
+      onProgress: (ev) => { if (ev.kind === "image") { turnImages.push(ev.dataUrl); return; } applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
     if (ac.signal.aborted) return "";
     const snap = snapshotEmp(dmId, emp.id); // 落库前取执行明细
     applyProg(dmId, emp.id, emp.name, { kind: "done" });
     deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
-    const text = (out || "").trim() || "（没有输出）";
-    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined });
+    const text = (out || "").trim() || (turnImages.length ? "" : "（没有输出）");
+    pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined, images: turnImages.length ? turnImages : undefined });
     return text;
   } catch (e: any) {
     if (ac.signal.aborted) return "";

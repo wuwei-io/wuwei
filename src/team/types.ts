@@ -104,6 +104,8 @@ export interface RoomMessage {
   steps?: MsgStep[];
   /** 员工这轮的思考文本（可选，随消息留存）。 */
   thought?: string;
+  /** 本轮员工用 send_image 发的图片（data URL），随消息落库、界面内联显示可点大图。 */
+  images?: string[];
 }
 
 // ───────────────────────── 定时任务（员工自运转）─────────────────────────
