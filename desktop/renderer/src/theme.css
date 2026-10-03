@@ -6994,13 +6994,15 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 
 .team-cm-mask { position: fixed; inset: 0; z-index: 200; }
 .team-cm {
-  position: fixed; z-index: 201; min-width: 150px;
+  position: fixed; z-index: 201; width: 168px;
   padding: 5px; border-radius: 10px;
   background: var(--bg); border: 1px solid var(--border);
   box-shadow: 0 12px 32px rgba(0,0,0,.24);
 }
+/* 显式 width（而非 min-width）：fixed 定位的 shrink-to-fit 容器里，width:100% 的子项在 Chromium 下
+   可能回退成「文字宽」，导致整行只有文字处可点、右侧空白无反应。父级定宽后子项 100% 必然铺满整行。 */
 .team-cm-item {
-  display: block; width: 100%; text-align: left;
+  display: block; width: 100%; box-sizing: border-box; text-align: left;
   padding: 7px 11px; border: none; border-radius: 7px;
   background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
 }
