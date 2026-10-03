@@ -6833,6 +6833,8 @@ export function App() {
                 {contactsExpanded && (() => {
                   // 排序：置顶(pinnedAt)优先，其次手动拖拽序(order)，都没有按原序。
                   const sortedEmps = [...teamEmployees].sort((a: any, b: any) => (b.pinnedAt || 0) - (a.pinnedAt || 0) || (a.order ?? 9999) - (b.order ?? 9999));
+                  // 各部门负责人 id 集合：成员行里负责人名字后面挂个灰色「负责人」标。
+                  const headIds = new Set(teamDepartments.map((d: any) => d.headId).filter(Boolean));
                   // 拖拽落下：把被拖的员工插到目标位置，重排后把新顺序落库(order=下标)。
                   const onEmpDrop = (targetId: string) => {
                     const id = empDrag; setEmpDrag(null);
@@ -6874,6 +6876,7 @@ export function App() {
                         >
                           <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
                           <span className="tool-sub-nm">{tx(e.name)}</span>
+                          {headIds.has(e.id) && <span className="tool-sub-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head" : "负责人"}</span>}
                         </button>
                         {(empSessions.length > 0 || empDms.length > 0) && (
                           <button
@@ -6971,7 +6974,12 @@ export function App() {
                     const mems = (d.memberIds || [])
                       .map((id: string) => empById.get(id))
                       .filter(Boolean)
-                      .sort((a: any, b: any) => (b.pinnedAt || 0) - (a.pinnedAt || 0) || (a.order ?? 9999) - (b.order ?? 9999));
+                      // 负责人置顶，其余按置顶/手动序。负责人名字后的「负责人」灰标在成员行里显示(见 renderEmp)。
+                      .sort((a: any, b: any) => {
+                        const ah = a.id === d.headId ? 1 : 0, bh = b.id === d.headId ? 1 : 0;
+                        if (ah !== bh) return bh - ah;
+                        return (b.pinnedAt || 0) - (a.pinnedAt || 0) || (a.order ?? 9999) - (b.order ?? 9999);
+                      });
                     mems.forEach((m: any) => assigned.add(m.id));
                     return { dept: d, mems };
                   });
@@ -6982,9 +6990,6 @@ export function App() {
                         <div className="tool-dept" key={dept.id}>
                           <div className="tool-dept-head">
                             <span className="tool-dept-nm">{tx(dept.name)}</span>
-                            {dept.headId && empById.get(dept.headId) && (
-                              <span className="tool-dept-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head: " : "负责人 "}{tx(empById.get(dept.headId).name)}</span>
-                            )}
                             <span className="tool-dept-cnt">{mems.length}</span>
                           </div>
                           {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
