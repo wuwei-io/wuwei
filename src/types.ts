@@ -45,8 +45,37 @@ export interface ToolSpec {
   readOnly: boolean;
 }
 
+// ========== Decision（ask_decision 工具产出的结构化决策）==========
+// 与手机端 wuwei-mobile 的 src/api/decision.ts 字段一字对齐（两端共用一份契约）。
+// 语义见 docs/decision-design.md。
+export interface DecisionOption {
+  label: string;
+  desc?: string;
+  value: string; // 稳定机器 key，原样回传；'allow'/'deny' 保留语义，业务分支不得占用
+  recommended?: boolean;
+  tone?: "safe" | "danger" | "neutral";
+}
+export interface Decision {
+  permId: string; // 全局唯一且每次都变
+  risk: "high" | "low";
+  title: string;
+  question: string;
+  options: DecisionOption[]; // 1~3 项
+  allowCustom: boolean;
+  timeoutSec: number | null; // null=不计时一直等；数字=倒计时
+  sourceSession?: string;
+  rawDetail?: string;
+}
+export interface DecisionResponse {
+  action: "allow" | "deny" | "reply";
+  value?: string;
+  text?: string;
+}
+
 export interface ToolContext {
   cwd: string;
+  // ask_decision 下发决策并阻塞等三态回批；上层(桌面端)注入，未注入=不可用(CLI 无交互)
+  requestDecision?: (decision: Decision) => Promise<DecisionResponse>;
   signal?: AbortSignal; // 中断信号：用户停止时传入，长命令(bash/grep)据此杀子进程
   env?: Record<string, string>; // 本地密钥注入(仅本机子进程可见，模型看不到)：bash 工具据此合并环境变量
   sessionId?: string; // 执行该工具的会话 id：ask_user 据此把选择框/通知绑到正确的会话(多会话并发时不串)

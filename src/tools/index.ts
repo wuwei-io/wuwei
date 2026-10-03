@@ -415,6 +415,125 @@ function shellQuote(s: string): string {
 }
 
 // ---- Remember（写入全局记忆，跨会话）----
+// ---- ask_decision：遇到需用户选方向的岔路时，产出结构化决策（白话问句+2~3选项），阻塞等人回批 ----
+// 与 requestPermission(危险工具拦截 allow/deny) 是两套判定点、并存；回批复用 perm-resp 三态。
+// schema 强约束 + 运行期二次校验：permId 唯一、value 非空组内唯一且不占 allow/deny、options 1~3、high 时 timeoutSec 强制 null。
+const askDecisionTool: Tool = {
+  name: "ask_decision",
+  description:
+    "当你推进到一个【需要用户来选方向】的岔路口时调用：把情况用一句白话问句 + 2~3 个结构化选项抛给用户，等他拍板后再继续。用于「有多条合理路径、该由人决定走哪条」的场景（如：要不要先备份再改表、三种实现选哪种、删不删某数据）。不要用它来替代普通确认（危险命令放行由系统另一套权限机制处理）。每个选项的 value 必须是稳定的英文机器 key（如 backup_first），你会在用户选择后原样收到它来决定分支。重要/不可逆的决策把 risk 设 high（系统会一直等用户、不计时）。",
+  readOnly: true, // 不直接改本机，只发起一次人机决策交互
+  inputSchema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "简短徽章文案，如「需要你决定」" },
+      question: { type: "string", description: "给用户看的白话问句（不是命令/代码）" },
+      risk: { type: "string", enum: ["high", "low"], description: "high=重要/不可逆(系统不计时一直等)；low=小事(可配倒计时)" },
+      options: {
+        type: "array",
+        minItems: 1,
+        maxItems: 3,
+        description: "2~3 个选项；每项 value 为稳定英文 key，勿占用 allow/deny",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string", description: "按钮文案" },
+            desc: { type: "string", description: "一行说明(可选)" },
+            value: { type: "string", description: "稳定机器 key(英文)，用户选后原样回传给你" },
+            recommended: { type: "boolean", description: "是否推荐项(高亮/超时默认)" },
+            tone: { type: "string", enum: ["safe", "danger", "neutral"] },
+          },
+          required: ["label", "value"],
+        },
+      },
+      allowCustom: { type: "boolean", description: "是否允许用户不选预设、自己打字回复你(默认 false)" },
+      timeoutSec: { type: "number", description: "low 决策可设倒计时秒数；重要决策不要设(留空=一直等)" },
+      rawDetail: { type: "string", description: "「查看具体会执行什么」的原文(可选)，用户展开才看，不解析" },
+    },
+    required: ["title", "question", "risk", "options"],
+  },
+  async run(input, ctx): Promise<ToolResult> {
+    if (!ctx.requestDecision)
+      return {
+        content: tt(
+          "当前环境不支持交互式决策（无决策通道）。请改用直接执行或文本说明。",
+          "Interactive decision is not available in this environment. Proceed directly or explain in text instead.",
+        ),
+        isError: true,
+      };
+    // ---- 运行期强校验（schema 之外的语义约束）----
+    const title = String(input.title || "").trim();
+    const question = String(input.question || "").trim();
+    const risk = input.risk === "high" ? "high" : input.risk === "low" ? "low" : null;
+    if (!title || !question)
+      return { content: tt("决策缺少 title 或 question", "Decision missing title or question"), isError: true };
+    if (!risk)
+      return { content: tt("risk 必须为 high 或 low", "risk must be 'high' or 'low'"), isError: true };
+    const rawOpts = Array.isArray(input.options) ? input.options : [];
+    if (rawOpts.length < 1 || rawOpts.length > 3)
+      return { content: tt("options 必须 1~3 项", "options must have 1 to 3 items"), isError: true };
+    const seen = new Set<string>();
+    const options: import("../types.js").DecisionOption[] = [];
+    for (const o of rawOpts) {
+      const oo = (o || {}) as Record<string, unknown>;
+      const label = String(oo.label || "").trim();
+      const value = String(oo.value || "").trim();
+      if (!label || !value)
+        return { content: tt("每个选项必须含非空 label 和 value", "Each option needs non-empty label and value"), isError: true };
+      if (value === "allow" || value === "deny")
+        return { content: tt(`选项 value 不得占用保留值 "${value}"`, `Option value must not use reserved "${value}"`), isError: true };
+      if (seen.has(value))
+        return { content: tt(`选项 value 组内重复: "${value}"`, `Duplicate option value: "${value}"`), isError: true };
+      seen.add(value);
+      const opt: import("../types.js").DecisionOption = { label, value };
+      if (oo.desc) opt.desc = String(oo.desc);
+      if (oo.recommended === true) opt.recommended = true;
+      if (oo.tone === "safe" || oo.tone === "danger" || oo.tone === "neutral") opt.tone = oo.tone;
+      options.push(opt);
+    }
+    // high 决策强制不计时；low 才允许倒计时
+    let timeoutSec: number | null = null;
+    if (risk === "low" && typeof input.timeoutSec === "number" && input.timeoutSec > 0)
+      timeoutSec = Math.round(input.timeoutSec);
+    const permId = `dec-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const decision: import("../types.js").Decision = {
+      permId,
+      risk,
+      title,
+      question,
+      options,
+      allowCustom: input.allowCustom === true,
+      timeoutSec,
+      sourceSession: ctx.sessionId,
+      rawDetail: input.rawDetail ? String(input.rawDetail) : undefined,
+    };
+    try {
+      const resp = await ctx.requestDecision(decision);
+      // 把三态回批翻成给模型的自然语言结果
+      if (resp.action === "allow")
+        return { content: tt("用户选择：同意/放行。", "User chose: allow.") };
+      if (resp.action === "deny")
+        return { content: tt("用户选择：拒绝。请停止该方向或换方案。", "User chose: deny. Stop this path or propose an alternative.") };
+      // reply：带选项 value（业务分支 key）或自定义文本
+      if (resp.value) {
+        const picked = options.find((o) => o.value === resp.value);
+        const lbl = picked ? picked.label : resp.value;
+        return { content: tt(`用户选择了选项「${lbl}」(value=${resp.value})。请据此继续。`, `User picked option "${lbl}" (value=${resp.value}). Continue accordingly.`) };
+      }
+      if (resp.text)
+        return { content: tt(`用户自定义回复：${resp.text}`, `User replied: ${resp.text}`) };
+      return { content: tt("用户已回复但内容为空。", "User responded with empty content."), isError: true };
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (/abort|stop/i.test(msg))
+        return { content: tt("决策被中断（用户停止）。", "Decision aborted (user stopped)."), isError: true };
+      if (/timeout/i.test(msg))
+        return { content: tt("决策超时，按默认处理。", "Decision timed out; handled by default."), isError: true };
+      return { content: tt(`决策通道出错: ${msg}`, `Decision channel error: ${msg}`), isError: true };
+    }
+  },
+};
+
 const rememberTool: Tool = {
   name: "remember",
   description:
@@ -903,6 +1022,7 @@ export const ALL_TOOLS: Tool[] = [
   webSearchTool,
   webFetchTool,
   rememberTool,
+  askDecisionTool,
   brainRecallTool,
   brainLearnTool,
   brainLinkTool,
