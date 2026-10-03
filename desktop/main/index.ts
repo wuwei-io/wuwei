@@ -99,7 +99,7 @@ import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmploy
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
-import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms, loadRoomMessages } from "./team/room.js";
+import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms, loadRoomMessages, createRoom, updateRoom, deleteRoom } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
 import {
   searchSops as sopSearch,
@@ -2106,6 +2106,97 @@ const manageDepartmentTool: Tool = {
   },
 };
 
+// ── 一人公司 · 群聊管理工具：AI 可自己建群/改群/删群/拉人，把相关同事拉一起并行讨论 ──
+// 与 dm_teammate(一对一)、assign_task(单人派活) 互补：多人需要同时看到同一话题并各自响应时建群。
+const manageGroupTool: Tool = {
+  name: "manage_group",
+  description:
+    "管理群聊（多人房间）：建群、改群(名/成员/协调者/唤醒数)、删群、列群。" +
+    "与 dm_teammate(一对一问一句)、assign_task(给单人派活)互补——需要多名同事同时看到同一话题、各自响应时用群。" +
+    "建好群后，在群里 @成员 发话题即可唤醒他们（@所有人唤醒全体）；没 @ 人且设了协调者则只协调者应答。" +
+    "action=create 建群(name 必填，members 成员名单必填，可带 coordinator 协调者、maxWake 每轮最多唤醒几人)；" +
+    "update 改群(按 name 定位，可改 newName/members/coordinator/maxWake)；delete 删群(按 name)；list 列出现有群。" +
+    "members/coordinator 填【员工名字】。members 是完整名单(整体替换)。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["create", "update", "delete", "list"], description: "create 建 / update 改 / delete 删 / list 列" },
+      name: { type: "string", description: "群名（create=新群名；update/delete=要操作的现有群名）" },
+      newName: { type: "string", description: "update 改名用的新群名（可选）" },
+      members: { type: "array", items: { type: "string" }, description: "群成员的员工名字完整名单（整体替换）" },
+      coordinator: { type: "string", description: "常驻协调者的员工名字（没 @ 人时由他应答；可选，须在成员内）" },
+      maxWake: { type: "number", description: "每轮最多唤醒几名成员（默认 3，防一句话惊动全员烧额度）" },
+    },
+    required: ["action"],
+  },
+  async run(input): Promise<ToolResult> {
+    const a = input as any;
+    const action = String(a.action || "").trim();
+    const emps = loadEmployees();
+    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
+    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    const groupsOf = () => loadRooms().filter((r: any) => r.type !== "dm");
+    const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
+      const ids: string[] = []; const missing: string[] = [];
+      if (Array.isArray(names)) for (const nm of names) { const id = idByName(String(nm)); if (id) ids.push(id); else if (String(nm || "").trim()) missing.push(String(nm).trim()); }
+      return { ids: [...new Set(ids)], missing };
+    };
+    const clampWake = (n: unknown) => Math.min(8, Math.max(1, Math.floor(Number(n) || 3)));
+
+    if (action === "list") {
+      const gs = groupsOf();
+      if (!gs.length) return { content: tt("目前还没有群。", "No groups yet.") };
+      const lines = gs.map((r: any) => tt(
+        `- ${r.name}：成员 ${(r.members || []).map(nameById).join("、") || "（无）"}${r.coordinator ? `；协调者 ${nameById(r.coordinator)}` : ""}（每轮最多唤醒 ${r.maxWake ?? 3}）`,
+        `- ${r.name}: members ${(r.members || []).map(nameById).join(", ") || "(none)"}${r.coordinator ? `; coordinator ${nameById(r.coordinator)}` : ""} (maxWake ${r.maxWake ?? 3})`,
+      ));
+      return { content: tt(`现有 ${gs.length} 个群：\n`, `${gs.length} group(s):\n`) + lines.join("\n") };
+    }
+
+    const name = clampStr(a.name);
+    if (!name) return { content: tt("需要 name（群名）。", "name (group) is required."), isError: true };
+
+    if (action === "create") {
+      const { ids: memberIds, missing } = resolveNames(a.members);
+      if (memberIds.length < 1) return { content: tt("建群至少要 1 名有效成员（填员工名字）。", "At least 1 valid member required."), isError: true };
+      let coordinator: string | undefined;
+      if (a.coordinator) { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tt(`没找到叫「${a.coordinator}」的员工当协调者。`, `No employee named "${a.coordinator}".`), isError: true }; if (!memberIds.includes(cid)) memberIds.push(cid); coordinator = cid; }
+      const room = createRoom(name, memberIds, coordinator);
+      if (a.maxWake != null) updateRoom(room.id, { maxWake: clampWake(a.maxWake) });
+      send("evt:team-rooms", { rooms: loadRooms() });
+      const warn = missing.length ? tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`) : "";
+      return { content: tt(`已建群「${name}」，成员 ${memberIds.map(nameById).join("、")}${coordinator ? `，协调者 ${nameById(coordinator)}` : ""}。进群 @成员 发话题即可一起讨论。${warn}`, `Created group "${name}".${warn}`) };
+    }
+
+    const target = groupsOf().find((r: any) => r.name === name);
+    if (!target) return { content: tt(`没找到叫「${name}」的群。可用 action=list 看现有群。`, `No group named "${name}". Use action=list.`), isError: true };
+
+    if (action === "delete") {
+      deleteRoom(target.id);
+      send("evt:team-rooms", { rooms: loadRooms() });
+      return { content: tt(`已删除群「${name}」。`, `Deleted group "${name}".`) };
+    }
+
+    // update
+    const patch: Record<string, unknown> = {};
+    let warn = "";
+    let members: string[] = target.members || [];
+    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true }; patch.name = nn; }
+    if (Array.isArray(a.members)) { const r = resolveNames(a.members); if (r.ids.length < 1) return { content: tt("群成员不能清空（至少 1 名有效成员）。", "Group must keep ≥1 member."), isError: true }; members = r.ids; patch.members = r.ids; if (r.missing.length) warn = tt(`（这些名字没对上、已跳过：${r.missing.join("、")}）`, ` (skipped unknown: ${r.missing.join(", ")})`); }
+    if (a.coordinator !== undefined) {
+      if (!a.coordinator) patch.coordinator = undefined;
+      else { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tt(`没找到叫「${a.coordinator}」的员工当协调者。`, `No employee named "${a.coordinator}".`), isError: true }; if (!members.includes(cid)) { members = [...members, cid]; patch.members = members; } patch.coordinator = cid; }
+    }
+    if (a.maxWake != null) patch.maxWake = clampWake(a.maxWake);
+    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段（newName/members/coordinator/maxWake）。", "Nothing to update."), isError: true };
+    updateRoom(target.id, patch as any);
+    send("evt:team-rooms", { rooms: loadRooms() });
+    const g2 = loadRooms().find((r: any) => r.id === target.id) as any;
+    return { content: tt(`已更新群「${g2?.name || name}」，成员 ${(g2?.members || []).map(nameById).join("、")}${g2?.coordinator ? `，协调者 ${nameById(g2.coordinator)}` : ""}。${warn}`, `Updated group "${g2?.name || name}".${warn}`) };
+  },
+};
+
 // ── 一人公司 · 定时任务工具（3 个）：AI 可自己给员工排/查/删定时任务 ──
 function broadcastSchedules() { send("evt:team-schedules", { schedules: loadSchedules() }); }
 // 校验+规整 AI 传来的触发规则；返回 {trigger} 或 {err}。
@@ -2368,7 +2459,7 @@ function desktopTools(): Tool[] {
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
-    ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, manageDepartmentTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
+    ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, manageDepartmentTool, manageGroupTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
   let tools = [...base, askUserTool, sendImageTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
