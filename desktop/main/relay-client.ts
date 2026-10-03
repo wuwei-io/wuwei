@@ -188,6 +188,17 @@ function decidePendingDecision(permId: string, resp: DecisionResponse): boolean 
   d.resolve(resp);
   return true;
 }
+/** G1-4 中断兜底：把某 reqId 名下所有挂起决策按 deny 解挂(reason=abort)，防 Promise 永挂+timer 泄漏。
+ *  reqId 为空=断连全清。decidePendingDecision 内部已 clearTimeout，这里统一精确解挂。 */
+function abortPendingDecisions(reqId: string | null): number {
+  let n = 0;
+  for (const [permId, d] of [...pendingDecisions.entries()]) {
+    if (reqId === null || d.reqId === reqId) {
+      if (decidePendingDecision(permId, { action: "deny", reason: "abort" })) n++;
+    }
+  }
+  return n;
+}
 /** 下发 Decision 到发起方手机并阻塞等三态回批。permId 由 ask_decision 工具生成(全局唯一且每次变)。 */
 function sendDecision(reqId: string, decision: Decision, reply: (m: Record<string, unknown>) => void): Promise<DecisionResponse> {
   return new Promise<DecisionResponse>((resolve) => {
@@ -196,6 +207,19 @@ function sendDecision(reqId: string, decision: Decision, reply: (m: Record<strin
     if (pendingDecisions.has(permId)) decidePendingDecision(permId, { action: "deny" });
     pendingDecisions.set(permId, { permId, reqId, decision, createdAt: Date.now(), resolve });
     reply({ type: "decision", reqId, ...decision });
+    // G1-4 超时兜底：仅 risk='low' 且 timeoutSec 为正数时倒计时；high 或 null/<=0 永等不设时器。
+    // 超时按 推荐项.value ?? options[0].value ?? 'deny' 自动解挂，action=allow(采纳某选项)，reason='timeout' 上报。
+    if (decision.risk === "low" && typeof decision.timeoutSec === "number" && decision.timeoutSec > 0) {
+      const fallbackValue =
+        decision.options.find((o) => o.recommended)?.value ?? decision.options[0]?.value ?? "deny";
+      const timer = setTimeout(() => {
+        log("relay", "决策超时兜底 permId=", permId.slice(0, 12), "→ value=", fallbackValue);
+        decidePendingDecision(permId, { action: "allow", value: fallbackValue, reason: "timeout" });
+      }, decision.timeoutSec * 1000);
+      const pending = pendingDecisions.get(permId);
+      if (pending) pending.timer = timer;
+      else clearTimeout(timer); // 极端竞态(已被解挂)：别留悬挂时器
+    }
   });
 }
 
@@ -258,6 +282,9 @@ function cleanup() {
     }
     ws = null;
   }
+  // G1-4：连接已断，决策回批通道没了 → 把全部挂起决策按 deny+abort 兜底解挂，防 Promise 永挂+timer 泄漏
+  const cleared = abortPendingDecisions(null);
+  if (cleared) log("relay", "cleanup 清理挂起决策 count=", cleared);
 }
 
 function scheduleReconnect() {
@@ -344,7 +371,11 @@ function connect() {
       // 通用请求(会话列表/历史/员工/群/SOP)：读本机数据返回，不落库
       void handleRemoteReq(msg);
     } else if (msg.type === "abort") {
-      remoteAborts.get(String(msg.reqId || ""))?.abort();
+      const aid = String(msg.reqId || "");
+      remoteAborts.get(aid)?.abort();
+      // G1-4：中断该轮时，把这轮名下挂起的决策按 permId 精确解挂(内部 clearTimeout)，别留悬挂 Promise
+      const cleared = abortPendingDecisions(aid);
+      if (cleared) log("relay", "abort 清理挂起决策 reqId=", aid.slice(0, 8), "count=", cleared);
     } else if (msg.type === "perm-resp") {
       // 手机(对话内弹框)批了 → 按 permId 精确匹配：先查岔路决策池(G1)，没命中再查危险工具权限池(三态: allow/deny/reply)
       const pid = String(msg.permId || "");

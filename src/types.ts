@@ -70,6 +70,7 @@ export interface DecisionResponse {
   action: "allow" | "deny" | "reply";
   value?: string;
   text?: string;
+  reason?: string; // G1-4：本机兜底时标注解挂原因，如 'timeout'(超时自动兜底) / 'abort'(中断/断连)；正常回批不填
 }
 
 export interface ToolContext {
