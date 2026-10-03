@@ -95,7 +95,7 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
-import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments } from "./team/store.js";
+import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments, createDepartment, updateDepartment, removeDepartment } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
@@ -2019,6 +2019,93 @@ const deleteEmployeeTool: Tool = {
   },
 };
 
+// ── 一人公司 · 部门（组织架构）工具：AI 可自己建部门/设负责人/编成员，通讯录即时按部门分组显示 ──
+// 注意：只改 title 字符串(如「技术部主管」)不会真的建部门——那只是文字。真正的组织层级要用本工具写部门记录。
+const manageDepartmentTool: Tool = {
+  name: "manage_department",
+  description:
+    "管理公司部门（组织架构）：建部门、设负责人、编成员、改名、删除。" +
+    "通讯录会据此按部门分组显示（部门名 + 负责人标记 + 成员）。" +
+    "重要：光用 update_employee 把某人 title 改成「X部主管」只是文字，不会真建部门——要真正形成层级，必须用本工具。" +
+    "一名员工最多归一个部门（把人编进新部门会自动从旧部门移出）。建议 2 人以上才建部门，扁平管理无需建。" +
+    "action=create 建部门（name 必填，可带 head 负责人、members 成员名单）；" +
+    "update 改部门（按 name 定位，可改 newName/head/members）；delete 删部门（按 name）；list 列出现有部门与成员。" +
+    "head/members 填【员工名字】（须与通讯录一致）。members 是完整名单（会整体替换，不是追加）。",
+  readOnly: false,
+  inputSchema: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["create", "update", "delete", "list"], description: "create 建 / update 改 / delete 删 / list 列" },
+      name: { type: "string", description: "部门名（create=新部门名；update/delete=要操作的现有部门名）" },
+      newName: { type: "string", description: "update 改名用的新部门名（可选）" },
+      head: { type: "string", description: "部门负责人的员工名字（可选；会自动并入成员）" },
+      members: { type: "array", items: { type: "string" }, description: "部门成员的员工名字完整名单（整体替换）" },
+    },
+    required: ["action"],
+  },
+  async run(input): Promise<ToolResult> {
+    const a = input as any;
+    const action = String(a.action || "").trim();
+    const emps = loadEmployees();
+    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
+    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    // 把一串名字转成 id，顺带收集没找到的名字，提示 AI 名字写错。
+    const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
+      const ids: string[] = []; const missing: string[] = [];
+      if (Array.isArray(names)) for (const nm of names) { const id = idByName(String(nm)); if (id) ids.push(id); else if (String(nm || "").trim()) missing.push(String(nm).trim()); }
+      return { ids, missing };
+    };
+
+    if (action === "list") {
+      const list = loadDepartments();
+      if (!list.length) return { content: tt("目前还没有任何部门（扁平管理）。", "No departments yet (flat structure).") };
+      const lines = list.map((d) => tt(
+        `- ${d.name}：负责人 ${d.headId ? nameById(d.headId) : "（未设）"}；成员 ${(d.memberIds || []).map(nameById).join("、") || "（无）"}`,
+        `- ${d.name}: head ${d.headId ? nameById(d.headId) : "(none)"}; members ${(d.memberIds || []).map(nameById).join(", ") || "(none)"}`,
+      ));
+      return { content: tt(`现有 ${list.length} 个部门：\n`, `${list.length} department(s):\n`) + lines.join("\n") };
+    }
+
+    const name = clampStr(a.name);
+    if (!name) return { content: tt("需要 name（部门名）。", "name (department) is required."), isError: true };
+
+    if (action === "create") {
+      if (loadDepartments().some((d) => d.name === name)) return { content: tt(`已有叫「${name}」的部门，改它请用 action=update。`, `Department "${name}" already exists; use action=update.`), isError: true };
+      const headId = a.head ? idByName(String(a.head)) : undefined;
+      if (a.head && !headId) return { content: tt(`没找到叫「${a.head}」的员工当负责人。`, `No employee named "${a.head}" for head.`), isError: true };
+      const { ids: memberIds, missing } = resolveNames(a.members);
+      const dept = createDepartment({ name, headId, memberIds });
+      broadcastTeam();
+      const warn = missing.length ? tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`) : "";
+      return { content: tt(`已建部门「${dept.name}」，负责人 ${dept.headId ? nameById(dept.headId) : "未设"}，成员 ${(dept.memberIds || []).map(nameById).join("、") || "无"}。通讯录已按部门分组。${warn}`, `Created department "${dept.name}". Contacts now grouped by department.${warn}`) };
+    }
+
+    const target = loadDepartments().find((d) => d.name === name);
+    if (!target) return { content: tt(`没找到叫「${name}」的部门。可用 action=list 看现有部门。`, `No department named "${name}". Use action=list.`), isError: true };
+
+    if (action === "delete") {
+      removeDepartment(target.id);
+      broadcastTeam();
+      return { content: tt(`已删除部门「${name}」（成员仍在，只是不再归该部门）。`, `Deleted department "${name}".`) };
+    }
+
+    // update
+    const patch: Record<string, unknown> = {};
+    let warn = "";
+    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true }; patch.name = nn; }
+    if (a.head !== undefined) {
+      if (!a.head) patch.headId = undefined;
+      else { const hid = idByName(String(a.head)); if (!hid) return { content: tt(`没找到叫「${a.head}」的员工当负责人。`, `No employee named "${a.head}" for head.`), isError: true }; patch.headId = hid; }
+    }
+    if (Array.isArray(a.members)) { const { ids, missing } = resolveNames(a.members); patch.memberIds = ids; if (missing.length) warn = tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`); }
+    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段（可传 newName/head/members）。", "Nothing to update (newName/head/members)."), isError: true };
+    updateDepartment(target.id, patch);
+    broadcastTeam();
+    const d2 = loadDepartments().find((d) => d.id === target.id);
+    return { content: tt(`已更新部门「${d2?.name || name}」，负责人 ${d2?.headId ? nameById(d2.headId) : "未设"}，成员 ${(d2?.memberIds || []).map(nameById).join("、") || "无"}。${warn}`, `Updated department "${d2?.name || name}".${warn}`) };
+  },
+};
+
 // ── 一人公司 · 定时任务工具（3 个）：AI 可自己给员工排/查/删定时任务 ──
 function broadcastSchedules() { send("evt:team-schedules", { schedules: loadSchedules() }); }
 // 校验+规整 AI 传来的触发规则；返回 {trigger} 或 {err}。
@@ -2281,7 +2368,7 @@ function desktopTools(): Tool[] {
   const en = process.env.WUWEI_LANG === "en";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
-    ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
+    ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, manageDepartmentTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
   let tools = [...base, askUserTool, sendImageTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
