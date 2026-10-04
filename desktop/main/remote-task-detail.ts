@@ -1,6 +1,8 @@
 import type { Message } from '../../src/types.js';
 import type { SessionMeta } from './sessions.js';
 import type { Room, RoomMessage } from '../../src/team/types.js';
+import type { FileArtifact } from './remote-artifacts.js';
+import type { TaskBatchSnapshot } from './team/task-reports.js';
 
 /** Read existing execution evidence; never invent planned steps or completed output files. */
 export function remoteTaskDetail(meta: SessionMeta, messages: Message[], running: boolean, employee: string) {
@@ -10,7 +12,7 @@ export function remoteTaskDetail(meta: SessionMeta, messages: Message[], running
   }
   const calls = new Map<string, { id: string; title: string; desc?: string; status: string }>();
   const logs: { id: string; time: string; text: string }[] = [];
-  const outputs: { id: string; name: string; kind: 'image'; uri: string; meta: string }[] = [];
+  const outputs: (FileArtifact | { id: string; name: string; kind: 'image'; uri: string; meta: string })[] = [];
   const images = new Set<string>();
   let failed = false, stopped = false;
   messages.slice(start).forEach((message, index) => {
@@ -25,6 +27,13 @@ export function remoteTaskDetail(meta: SessionMeta, messages: Message[], running
         const content = block.content as unknown;
         const parts = Array.isArray(content) ? content : [{ type: 'text', text: String(content || '') }];
         const text = parts.filter(b => b.type === 'text').map(b => b.text || '').join('\n');
+        if (!block.is_error && /(^| · )send_file$/.test(calls.get(block.tool_use_id)?.title || '')) {
+          try {
+            const delivered = JSON.parse(text);
+            const file = delivered.file;
+            if (delivered.delivered === true && file?.kind === 'file' && typeof file.id === 'string' && typeof file.name === 'string') outputs.push(file);
+          } catch { /* ordinary tool text */ }
+        }
         const interrupted = /^\((已停止|stopped)\)/i.test(text.trim());
         failed ||= !!block.is_error && !interrupted; stopped ||= interrupted;
         const step = calls.get(block.tool_use_id);
@@ -64,4 +73,17 @@ export function remoteRoomTaskDetail(room: Room, messages: RoomMessage[], runnin
   }
   const result = remoteTaskDetail({ id: room.id, title: room.name, updatedAt: room.updatedAt || 0 }, normalized, running, '群成员');
   return { ...result, roomId: room.id, status: !running && messages.some(m => !m.ack && m.error) ? 'error' : result.status };
+}
+
+export function remoteBatchTaskDetail(batch: TaskBatchSnapshot) {
+  const active = batch.phase === 'working' || batch.phase === 'reporting';
+  const failed = batch.phase === 'error' || batch.results.some(r => r.status === 'failed');
+  const origin = batch.scope.origin;
+  return { id: batch.scope.turnId, title: `${batch.scope.ownerName} · 员工任务与汇报`, employee: batch.scope.ownerName,
+    sessionId: origin.id, ...(origin.kind === 'room' ? { roomId: origin.id } : {}),
+    status: active ? 'running' : batch.phase === 'interrupted' ? 'unknown' : failed ? 'error' : batch.cancelled ? 'stopped' : 'done', canStop: batch.phase === 'working', updatedAt: batch.updatedAt,
+    steps: [...batch.results.map(r => ({ id: r.id, title: `${r.employeeName} · ${r.task.slice(0, 160)}`, desc: r.text.slice(0, 400),
+      status: ({ completed: 'done', failed: 'error', cancelled: 'stopped', queued: 'todo', running: 'running' } as const)[r.status] })),
+      { id: 'report', title: '负责人统一汇报', status: ({ working: 'todo', reporting: 'running', done: 'done', error: 'error', interrupted: 'unknown' } as const)[batch.phase] }],
+    logs: batch.results.filter(r => r.text).map(r => ({ id: r.id, time: '', text: `${r.employeeName}：${r.text.slice(0, 3000)}` })), outputs: [] };
 }

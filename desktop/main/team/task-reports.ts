@@ -2,34 +2,80 @@ import { randomUUID } from 'node:crypto';
 import type { TaskReportScope } from '../../../src/types.js';
 
 export type TaskOutcome = { status: 'completed' | 'failed' | 'cancelled'; text: string };
-export type TaskReceipt = TaskOutcome & { id: string; employeeName: string; task: string; roomId: string };
+export type TaskReceipt = { status: TaskOutcome['status'] | 'queued' | 'running'; text: string; id: string; employeeName: string; task: string; roomId: string };
 export type TaskReportBatch = { scope: TaskReportScope; results: TaskReceipt[] };
-type Batch = TaskReportBatch & { closed: boolean; pending: number };
+export type TaskBatchSnapshot = TaskReportBatch & { phase: 'working' | 'reporting' | 'done' | 'error' | 'interrupted'; updatedAt: number; cancelled: boolean };
+type Batch = TaskBatchSnapshot & { closed: boolean; pending: number; controller: AbortController; releaseParent?: () => void };
 
 /** Collect a turn's asynchronous work (including descendants), then wake its original conversation once. */
 export class TaskReports {
   private batches = new Map<string, Batch>();
   private delivering = new Map<string, Batch>();
+  private history = new Map<string, TaskBatchSnapshot>();
   constructor(private deps: {
     deliver: (batch: TaskReportBatch) => Promise<void>;
     onDeliveryError: (batch: TaskReportBatch, error: unknown) => void;
-  }) {}
+    restore?: TaskBatchSnapshot[];
+    save?: (snapshots: TaskBatchSnapshot[]) => void;
+  }) {
+    const restored = (deps.restore || []).filter(entry => entry?.scope?.turnId && entry.scope.ownerId && typeof entry.scope.ownerName === 'string'
+      && ['session', 'room'].includes(entry.scope.origin?.kind) && typeof entry.scope.origin?.id === 'string'
+      && ['working', 'reporting', 'done', 'error', 'interrupted'].includes(entry.phase) && Number.isFinite(entry.updatedAt)
+      && Array.isArray(entry.results) && entry.results.every(r => r && typeof r.id === 'string' && typeof r.employeeName === 'string' && typeof r.task === 'string' && typeof r.text === 'string'
+        && ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(r.status)));
+    for (const entry of restored.sort((a, b) => a.updatedAt - b.updatedAt).slice(-100)) {
+      const snapshot = structuredClone(entry);
+      if (snapshot.phase === 'working' || snapshot.phase === 'reporting') {
+        snapshot.phase = 'interrupted';
+        snapshot.results.forEach(r => { if (r.status === 'running' || r.status === 'queued') { r.status = 'cancelled'; r.text = '电脑已重启，执行中断。请查看原会话后决定是否重新安排。'; } });
+      }
+      this.history.set(entry.scope.turnId, snapshot);
+    }
+  }
+  private changed() { this.deps.save?.(this.snapshots()); }
 
-  assign(scope: TaskReportScope, task: { employeeName: string; task: string; roomId: string; run: () => Promise<TaskOutcome> }): string {
+  snapshots(activeOnly = false): TaskBatchSnapshot[] {
+    const active = [...this.batches.values(), ...this.delivering.values()];
+    return [...active, ...(activeOnly ? [] : this.history.values())].map(b => ({ scope: structuredClone(b.scope), results: structuredClone(b.results), phase: b.phase, updatedAt: b.updatedAt, cancelled: b.cancelled }));
+  }
+
+  cancel(turnId: string): boolean {
+    const batch = this.batches.get(turnId);
+    if (!batch) return false;
+    batch.cancelled = true; batch.updatedAt = Date.now(); batch.controller.abort();
+    this.changed();
+    return true;
+  }
+
+  cancelOrigin(kind: TaskReportScope['origin']['kind'], id: string): boolean {
+    let stopped = false;
+    for (const batch of this.batches.values()) if (batch.scope.origin.kind === kind && batch.scope.origin.id === id) stopped = this.cancel(batch.scope.turnId) || stopped;
+    return stopped;
+  }
+
+  assign(scope: TaskReportScope, task: { employeeName: string; task: string; roomId: string; signal?: AbortSignal; run: (signal: AbortSignal, started: () => void) => Promise<TaskOutcome> }): string {
     let batch = this.batches.get(scope.turnId);
     if (!batch) {
-      batch = { scope, results: [], closed: false, pending: 0 };
+      batch = { scope, results: [], closed: false, pending: 0, controller: new AbortController(), phase: 'working', updatedAt: Date.now(), cancelled: false };
       this.batches.set(scope.turnId, batch);
+      const cancel = () => { this.cancel(scope.turnId); };
+      task.signal?.addEventListener('abort', cancel, { once: true });
+      batch.releaseParent = () => task.signal?.removeEventListener('abort', cancel);
+      if (task.signal?.aborted) cancel();
     }
     const id = randomUUID();
     // Reserve before starting: descendants can join this batch while their parent is still running.
-    const receipt: TaskReceipt = { id, employeeName: task.employeeName, task: task.task, roomId: task.roomId, status: 'completed', text: '' };
+    const receipt: TaskReceipt = { id, employeeName: task.employeeName, task: task.task, roomId: task.roomId, status: 'queued', text: '' };
     batch.results.push(receipt); batch.pending++;
+    this.changed();
     const current = batch;
-    void Promise.resolve().then(task.run).then(
-      outcome => { Object.assign(receipt, outcome); },
-      () => { Object.assign(receipt, { status: 'failed', text: '任务执行异常，未取得完成结果。请查看员工私聊的错误记录。' }); },
-    ).finally(() => { current.pending--; this.flush(current); });
+    void Promise.resolve().then(() => {
+      current.controller.signal.throwIfAborted();
+      return task.run(current.controller.signal, () => { receipt.status = 'running'; current.updatedAt = Date.now(); this.changed(); });
+    }).then(
+      outcome => { Object.assign(receipt, current.controller.signal.aborted && outcome.status === 'completed' ? { status: 'cancelled', text: '已停止，未验收完成。' } : outcome); },
+      () => { Object.assign(receipt, { status: current.controller.signal.aborted ? 'cancelled' : 'failed', text: current.controller.signal.aborted ? '已停止任务。' : '任务执行异常，未取得完成结果。请查看员工私聊的错误记录。' }); },
+    ).finally(() => { current.pending--; current.updatedAt = Date.now(); this.changed(); this.flush(current); });
     return id;
   }
 
@@ -45,9 +91,19 @@ export class TaskReports {
   private flush(batch: Batch): void {
     if (!batch.closed || batch.pending || this.batches.get(batch.scope.turnId) !== batch) return;
     this.batches.delete(batch.scope.turnId);
+    batch.releaseParent?.();
+    batch.phase = 'reporting'; batch.updatedAt = Date.now();
     this.delivering.set(batch.scope.turnId, batch);
-    void Promise.resolve().then(() => this.deps.deliver(batch)).catch(error => this.deps.onDeliveryError(batch, error))
-      .finally(() => this.delivering.delete(batch.scope.turnId));
+    this.changed();
+    void Promise.resolve().then(() => this.deps.deliver(batch)).then(() => { batch.phase = 'done'; }, error => {
+      batch.phase = 'error'; this.deps.onDeliveryError(batch, error);
+    }).finally(() => {
+      this.delivering.delete(batch.scope.turnId); batch.updatedAt = Date.now();
+      const { controller: _controller, closed: _closed, pending: _pending, releaseParent: _releaseParent, ...snapshot } = batch;
+      this.history.set(batch.scope.turnId, snapshot);
+      while (this.history.size > 100) this.history.delete(this.history.keys().next().value!);
+      this.changed();
+    });
   }
 }
 

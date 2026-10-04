@@ -26,6 +26,28 @@ function dm(text = 'original task') {
 }
 const deps = runEmployee => ({ send() {}, log() {}, baseSys: () => '', runEmployee });
 
+test('cancelling a queued assignment removes only that job and keeps the active employee task', async () => {
+  const gate = deferred(), ac = new AbortController(); const seen = [];
+  const active = enqueueEmpTask('queued-worker', async () => { seen.push('active'); await gate.promise; });
+  const queued = enqueueEmpTask('queued-worker', async () => { seen.push('cancelled-should-never-run'); }, { signal: ac.signal });
+  const next = enqueueEmpTask('queued-worker', async () => { seen.push('next'); });
+  ac.abort(); await assert.rejects(queued, e => e.name === 'AbortError'); assert.deepEqual(seen, ['active']);
+  gate.resolve(); await Promise.all([active, next]); assert.deepEqual(seen, ['active', 'next']);
+});
+test('assignment signal aborts its actual room execution and releases the room', async () => {
+  const value = dm('stop owned task'), ac = new AbortController(); let signal;
+  const pending = runDmTurn(value.id, 'worker', 'stop owned task', deps(async args => { signal = args.signal; await new Promise(resolve => args.signal.addEventListener('abort', resolve, { once: true })); return 'not completed'; }), 0, { strict: true, explicitInput: true, signal: ac.signal });
+  await tick(); ac.abort(); await assert.rejects(pending, e => e.name === 'AbortError'); assert.equal(signal.aborted, true);
+  assert.equal(await runDmTurn(value.id, 'worker', 'next', deps(async () => 'next result'), 0, { strict: true, explicitInput: true }), 'next result');
+});
+test('cancelling a room waiter cannot abort another job holding that room', async () => {
+  const value = dm('unrelated'), gate = deferred(), ac = new AbortController(); let signal;
+  const active = runDmTurn(value.id, 'worker', 'unrelated', deps(async args => { signal = args.signal; await gate.promise; return 'unrelated result'; }), 0, { strict: true, explicitInput: true });
+  const waiting = runDmTurn(value.id, 'worker', 'cancel me', deps(async () => assert.fail()), 0, { strict: true, explicitInput: true, signal: ac.signal });
+  ac.abort(); await assert.rejects(waiting, e => e.name === 'AbortError'); assert.equal(signal.aborted, false);
+  gate.resolve(); await active;
+});
+
 test('queued assignments execute their own task instead of a later unrelated DM message', async () => {
   const value = dm();
   room.appendMessage(value.id, { speaker: { id: 'ceo', name: '小笨', kind: 'agent' }, text: 'another message added while waiting' });

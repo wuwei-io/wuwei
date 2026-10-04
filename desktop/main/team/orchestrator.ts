@@ -128,14 +128,26 @@ export function empIsBusy(empId: string): boolean {
  * 同步 dm_teammate 靠它「排队等到轮到并跑完」拿回复；异步 assign_task 直接不 await（派完就走）。
  * @param urgent true=插到队列最前（但不打断正在跑的那件）。
  */
-export function enqueueEmpTask(empId: string, task: () => Promise<void>, opts?: { urgent?: boolean }): Promise<void> {
+export function enqueueEmpTask(empId: string, task: () => Promise<void>, opts?: { urgent?: boolean; signal?: AbortSignal }): Promise<void> {
   const urgent = !!opts?.urgent;
   return new Promise<void>((resolve, reject) => {
-    const item: EmpTask = { run: async () => { try { await task(); resolve(); } catch (e) { reject(e); } }, urgent };
+    const signal = opts?.signal;
+    if (signal?.aborted) { reject(new DOMException('排队任务已停止', 'AbortError')); return; }
+    const cancelQueued = () => {
+      const q = empQueue.get(empId);
+      const index = q?.indexOf(item) ?? -1;
+      if (index >= 0) { q!.splice(index, 1); reject(new DOMException('排队任务已停止', 'AbortError')); }
+      signal?.removeEventListener('abort', cancelQueued);
+    };
+    const item: EmpTask = { run: async () => {
+      signal?.removeEventListener('abort', cancelQueued);
+      try { signal?.throwIfAborted(); await task(); resolve(); } catch (e) { reject(e); }
+    }, urgent };
     if (empBusy.has(empId)) {
       // 他正忙：排队。急事插最前（排在其它待办之前），普通排队尾。都不动正在跑的那件。
       const q = empQueue.get(empId) || (empQueue.set(empId, []), empQueue.get(empId)!);
       if (urgent) q.unshift(item); else q.push(item);
+      signal?.addEventListener('abort', cancelQueued, { once: true });
       return;
     }
     // 空闲：立刻开跑，跑完依次消费排队期间进来的活（每次现取 shift，好让急事插队即时生效）。
@@ -386,16 +398,24 @@ export async function runDmTurn(
   incomingText: string,
   deps: OrchestratorDeps,
   depth = 0,
-  options: { strict?: boolean; explicitInput?: boolean; taskReportScope?: TaskReportScope } = {},
+  options: { strict?: boolean; explicitInput?: boolean; taskReportScope?: TaskReportScope; signal?: AbortSignal } = {},
 ): Promise<string> {
   // Asynchronous assignments/report delivery can wait for the room; synchronous dm_teammate
   // retains its busy guard so A↔B synchronous calls cannot deadlock.
   while (options.strict && running.has(dmId)) {
-    await new Promise<void>(resolve => {
+    options.signal?.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
       const waiting = roomWaiters.get(dmId) ?? [];
-      waiting.push(resolve); roomWaiters.set(dmId, waiting);
+      const done = () => { options.signal?.removeEventListener('abort', abort); resolve(); };
+      const abort = () => {
+        const index = waiting.indexOf(done); if (index >= 0) waiting.splice(index, 1);
+        reject(new DOMException('任务已取消', 'AbortError'));
+      };
+      waiting.push(done); roomWaiters.set(dmId, waiting);
+      options.signal?.addEventListener('abort', abort, { once: true });
     });
   }
+  options.signal?.throwIfAborted();
   if (running.has(dmId)) {
     // 同一私聊正在跑上一轮：不并发，直接告诉发起方对方在忙，避免消息流错位
     return "（对方正在处理上一条消息，稍后再试。）";
@@ -411,6 +431,8 @@ export async function runDmTurn(
   const otherName = other?.name || otherId || "对方";
 
   const ac = new AbortController();
+  const abortOwned = () => ac.abort();
+  options.signal?.addEventListener('abort', abortOwned, { once: true });
   running.set(dmId, ac);
   deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: true });
 
@@ -470,6 +492,7 @@ export async function runDmTurn(
     if (options.strict) throw e;
     return errText;
   } finally {
+    options.signal?.removeEventListener('abort', abortOwned);
     if (running.get(dmId) === ac) {
       releaseRoom(dmId, ac);
       deps.send("evt:team-room-progress", { roomId: dmId, empId: responderId, done: true }); // abort/异常兜底清进度块

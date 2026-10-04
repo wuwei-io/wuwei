@@ -1,6 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { remoteTaskDetail, remoteRoomTaskDetail } from '../desktop/main/remote-task-detail.ts';
+import { remoteTaskDetail, remoteRoomTaskDetail, remoteBatchTaskDetail } from '../desktop/main/remote-task-detail.ts';
+
+test('exported files appear only after an actual successful send_file result', () => {
+  const file = { id: 'file-id', name: 'report.csv', kind: 'file', bytes: 3, md5: 'a'.repeat(32), origin: { kind: 'session', id: 'original' } };
+  const input = [text('user', 'export'), { role: 'assistant', content: [{ type: 'tool_use', id: 'deliver', name: 'send_file', input: {} }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'deliver', content: JSON.stringify({ delivered: true, file }) }] }, text('assistant', 'delivered')];
+  assert.deepEqual(remoteTaskDetail({ id: 'original' }, input, false, 'worker').outputs, [file]);
+  input[2].content[0].is_error = true;
+  assert.equal(remoteTaskDetail({ id: 'original' }, input, false, 'worker').outputs.length, 0);
+  assert.equal(remoteTaskDetail({ id: 'original' }, [text('user', 'export'), text('assistant', '/tmp/report.csv')], false, 'worker').outputs.length, 0);
+});
+
+test('batch details preserve original conversation and actual receipt/report phases', () => {
+  const batch = { scope: { turnId: 'batch', ownerId: 'ceo', ownerName: '小笨', origin: { kind: 'room', id: 'original-room' } }, phase: 'working', updatedAt: 3, cancelled: false,
+    results: [{ id: 'job', employeeName: '小码', task: 'fix', status: 'queued', text: '', roomId: 'worker-room' }] };
+  const queued = remoteBatchTaskDetail(batch);
+  assert.equal(queued.roomId, 'original-room'); assert.equal(queued.steps[0].status, 'todo'); assert.equal(queued.status, 'running'); assert.equal(queued.canStop, true);
+  batch.phase = 'reporting'; batch.results[0].status = 'completed'; batch.results[0].text = 'checks passed';
+  const reporting = remoteBatchTaskDetail(batch);
+  assert.equal(reporting.status, 'running'); assert.equal(reporting.canStop, false); assert.equal(reporting.steps.at(-1).status, 'running');
+  batch.phase = 'interrupted'; assert.equal(remoteBatchTaskDetail(batch).status, 'unknown');
+  batch.phase = 'done'; batch.cancelled = true; assert.equal(remoteBatchTaskDetail(batch).status, 'stopped');
+  batch.phase = 'error'; assert.equal(remoteBatchTaskDetail(batch).status, 'error');
+});
 const text = (role, text) => ({ role, content: [{ type: 'text', text }] });
 const call = id => ({ role: 'assistant', content: [{ type: 'tool_use', id, name: 'screenshot', input: {} }] });
 test('task details use only the last user turn, preserve actual errors and deduplicate returned images', () => {

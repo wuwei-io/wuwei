@@ -7,6 +7,40 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const scope = id => ({ turnId: id, origin: { kind: 'session', id: 'original-ceo-chat' }, ownerId: 'ceo', ownerName: '小笨', depth: 0 });
 const task = (employeeName, run) => ({ employeeName, task: `修复${employeeName}负责的模块`, roomId: `dm-${employeeName}`, run });
 
+test('background batch stays visible after root turn, and cancellation reaches only that batch', async () => {
+  const reports = new TaskReports({ deliver: async () => {}, onDeliveryError: assert.fail });
+  const slow = deferred(), other = deferred(); let firstSignal, otherSignal;
+  reports.assign(scope('tracked'), task('小码', async (signal, started) => { firstSignal = signal; started(); await slow.promise; signal.throwIfAborted(); return { status: 'completed', text: 'should not complete' }; }));
+  reports.assign({ ...scope('other'), origin: { kind: 'session', id: 'other-chat' } }, task('小数', async (signal, started) => { otherSignal = signal; started(); await other.promise; return { status: 'completed', text: 'other completed' }; }));
+  reports.closeTurn('tracked'); reports.closeTurn('other'); await tick();
+  assert.equal(reports.snapshots(true)[0].results[0].status, 'running');
+  assert.equal(reports.cancelOrigin('session', 'original-ceo-chat'), true);
+  assert.equal(firstSignal.aborted, true); assert.equal(otherSignal.aborted, false);
+  slow.resolve(); other.resolve(); await tick(); await tick();
+  const rows = reports.snapshots(); assert.equal(rows.find(b => b.scope.turnId === 'tracked').results[0].status, 'cancelled');
+  assert.equal(rows.find(b => b.scope.turnId === 'other').results[0].status, 'completed');
+});
+test('journal restoration marks unfinished work interrupted without rerunning or fabricating a report', () => {
+  const restored = { scope: scope('restart'), results: [{ id: 'job', status: 'queued', employeeName: '小码', roomId: 'dm', task: 'fix', text: '' }], phase: 'working', cancelled: false, updatedAt: 1 };
+  const reports = new TaskReports({ restore: [restored], deliver: assert.fail, onDeliveryError: assert.fail });
+  assert.equal(reports.snapshots(true).length, 0); assert.equal(reports.snapshots()[0].phase, 'interrupted');
+  assert.equal(reports.snapshots()[0].results[0].status, 'cancelled'); assert.equal(restored.phase, 'working');
+});
+
+test('restart retains newest active work even when the journal has 100 older finished batches', () => {
+  const entry = id => ({ scope: scope(id), results: [], phase: 'done', cancelled: false, updatedAt: 1 });
+  const active = { ...entry('latest'), phase: 'working', updatedAt: 1000 };
+  const reports = new TaskReports({ restore: [active, ...Array.from({ length: 100 }, (_, i) => entry(String(i))), { phase: 'working' }], deliver: assert.fail, onDeliveryError: assert.fail });
+  assert.equal(reports.snapshots().length, 100);
+  assert.equal(reports.snapshots().find(b => b.scope.turnId === 'latest').phase, 'interrupted');
+});
+test('received worker results remain active until the owner has actually finished reporting', async () => {
+  const delivery = deferred(); const reports = new TaskReports({ deliver: () => delivery.promise, onDeliveryError: assert.fail });
+  reports.assign(scope('reporting'), task('小码', async () => ({ status: 'completed', text: 'evidence' }))); reports.closeTurn('reporting'); await tick();
+  assert.equal(reports.snapshots(true)[0].phase, 'reporting'); delivery.resolve(); await tick();
+  assert.equal(reports.snapshots(true).length, 0); assert.equal(reports.snapshots()[0].phase, 'done');
+});
+
 test('two asynchronous assignments are collected and sent once to the original CEO conversation', async () => {
   const delivered = []; const slow = deferred(); const reports = new TaskReports({ deliver: async b => { delivered.push(b); }, onDeliveryError: assert.fail });
   const root = scope('turn-a');

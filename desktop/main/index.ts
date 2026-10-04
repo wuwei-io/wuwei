@@ -24,10 +24,10 @@ import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
-import type { Tool, ToolResult, ToolContext, TaskReportScope } from "../../src/types.js";
+import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits } from "../../src/types.js";
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
-import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 
 // 全局记忆：读/写 ~/.wuwei/memory.md
@@ -148,12 +148,16 @@ import {
   setDiagConsent,
   reportExternalUsage,
   type WuweiSession,
+  type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels } from "./relay-client.js";
 import { runRemoteSessionTurn, waitForRemoteResult } from './remote-sessions.js';
+import { remoteHistoryBounds } from './remote-history.js';
 import { runRemoteRoomTurn } from './remote-rooms.js';
-import { remoteTaskDetail, remoteRoomTaskDetail } from './remote-task-detail.js';
+import { remoteTaskDetail, remoteRoomTaskDetail, remoteBatchTaskDetail } from './remote-task-detail.js';
+import { RemoteArtifacts } from './remote-artifacts.js';
+const remoteArtifacts = new RemoteArtifacts(join(homedir(), DATA_DIR_NAME, 'remote-artifacts'));
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -336,7 +340,18 @@ const conversationReports = new ConversationReports({
     await startTurn(sid, text);
   },
 });
+const taskReportJournal = join(homedir(), DATA_DIR_NAME, 'team', 'task-reports.json');
+function loadTaskReportJournal() { try { const data = JSON.parse(readFileSync(taskReportJournal, 'utf8')); return Array.isArray(data) ? data : []; } catch { return []; } }
 const taskReports = new TaskReports({
+  restore: loadTaskReportJournal(),
+  save: batches => {
+    try {
+      mkdirSync(dirname(taskReportJournal), { recursive: true });
+      const safe = batches.map(batch => ({ ...batch, results: batch.results.map(result => ({ ...result, task: secrets.redact(result.task).text, text: secrets.redact(result.text).text })) }));
+      writeFileSync(`${taskReportJournal}.tmp`, JSON.stringify(safe));
+      renameSync(`${taskReportJournal}.tmp`, taskReportJournal);
+    } catch (error) { log('team', '任务进度保存失败', secrets.redact(String(error)).text); }
+  },
   deliver: async batch => {
     const text = secrets.redact(taskReportPrompt(batch)).text;
     if (batch.scope.origin.kind === 'session') {
@@ -560,7 +575,7 @@ const CONSOLE: Record<string, { login: string; api: string; sniff?: RegExp }> = 
 // 把 GetUsages 返回体解析成统一的 rateLimits(5小时=primary / 周=secondary)
 // 结构：{usages:[{detail:{limit,used,remaining,resetTime}, limits:[{detail,window:{duration,timeUnit}}]}]}
 function parseKimiUsage(j: any): {
-  rateLimits?: ReturnType<typeof loadRateLimits>;
+  rateLimits?: RateLimits;
   ok: boolean;
 } {
   try {
@@ -586,7 +601,7 @@ function parseKimiUsage(j: any): {
       (u0.limits || [])
         .map((l: any) => ({ l, m: mins(l.window) }))
         .sort((a: any, b: any) => Math.abs(a.m - 300) - Math.abs(b.m - 300))[0]?.l || null;
-    const rl: any = {
+    const rl: RateLimits = {
       primaryUsedPercent: fiveH ? pct(fiveH.detail) : undefined,
       primaryWindowMinutes: 300,
       primaryResetAfterSeconds: fiveH ? resetSecs(fiveH.detail?.resetTime) : undefined,
@@ -604,7 +619,7 @@ function parseKimiUsage(j: any): {
 // 主进程静默拉 Kimi Code 额度：分区 cookie + 已存 webToken(Bearer) POST GetUsages
 // token 存在 creds["kimi-sub"].webToken；同域 cookie 一般已够，Bearer 作兜底
 async function kimiUsage(): Promise<
-  { rateLimits?: ReturnType<typeof loadRateLimits>; expired?: boolean } | null
+  { rateLimits?: RateLimits; expired?: boolean } | null
 > {
   const cfg = CONSOLE["kimi-sub"];
   try {
@@ -1818,18 +1833,19 @@ const assignTaskTool: Tool = {
       ownerId: selfId, ownerName: selfName, depth: ctx.dmDepth ?? 0,
     };
     const taskId = taskReports.assign(scope, {
-      employeeName: target.name, task, roomId: dm.id,
-      run: async () => {
+      employeeName: target.name, task, roomId: dm.id, signal: ctx.signal,
+      run: async (signal, started) => {
         let outcome: { status: 'completed' | 'failed' | 'cancelled'; text: string } = { status: 'failed', text: '未取得任务结果。' };
         await enqueueEmpTask(target.id, async () => {
+          signal.throwIfAborted(); started();
           try {
             const text = await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(ctx), assignDepth,
-              { strict: true, explicitInput: true, taskReportScope: scope });
+              { strict: true, explicitInput: true, taskReportScope: scope, signal });
             outcome = { status: text.trim() && text !== '（没有输出）' ? 'completed' : 'failed', text: text || '员工没有返回文字结果，请检查私聊中的产物。' };
           } catch (error: any) {
             outcome = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', text: secrets.redact(String(error?.message || '任务执行异常。')).text };
           }
-        }, { urgent });
+        }, { urgent, signal });
         return outcome;
       },
     });
@@ -2411,6 +2427,21 @@ const sendImageTool: Tool = {
   },
 };
 
+const sendFileTool: Tool = {
+  name: 'send_file', readOnly: false,
+  description: '把已完成的文件交付给用户，手机可从任务产出下载并用系统应用预览或保存。只支持当前工作目录或无为 output 目录内不超过 32 MiB 的普通文件。path 为实际文件路径，不要把仅计划生成的文件当作已交付。',
+  inputSchema: { type: 'object', properties: { path: { type: 'string', description: '实际文件路径' } }, required: ['path'] },
+  async run(input, ctx) {
+    const origin = ctx.taskReportScope?.origin || ctx.reportOrigin || (ctx.sessionId ? { kind: 'session' as const, id: ctx.sessionId } : undefined);
+    if (!origin || !ctx.turnId) return { content: '缺少交付会话，未发送文件。', isError: true };
+    try {
+      ctx.signal?.throwIfAborted();
+      const file = remoteArtifacts.publish(String(input.path || ''), [ctx.cwd, join(homedir(), DATA_DIR_NAME, 'output')], origin, ctx.taskReportScope?.turnId || ctx.turnId);
+      return { content: JSON.stringify({ delivered: true, file }) };
+    } catch (error) { return { content: String((error as Error).message || '文件交付失败'), isError: true }; }
+  },
+};
+
 // 密钥安全包装：入参占位符→真实值回填、bash 注入密钥环境变量、工具结果→脱敏后再回给模型。
 // 闭环:模型能用密钥(env/占位符)但读不回明文(输出被脱敏)，想 echo 偷取也会被拦。
 function deepRehydrate(input: Record<string, unknown>): Record<string, unknown> {
@@ -2541,7 +2572,7 @@ function desktopTools(): Tool[] {
   const teamTools = teamEnabled(loadSettings())
     ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, manageDepartmentTool, manageGroupTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
     : [];
-  let tools = [...base, askUserTool, sendImageTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
+  let tools = [...base, askUserTool, sendImageTool, sendFileTool, ...teamTools, ...BROWSER_TOOLS, ...mcpTools()];
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
   return tools.map(wrapSecret);
 }
@@ -2620,7 +2651,7 @@ function getAgent(id: string): Agent | null {
     const employeeId = empBound ? meta!.employeeId! : undefined;
     a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile, employeeId }, empToolMap, agentOpts);
     a.setMessages(loadMessages(id));
-    if (meta?.usage) a.setUsage(meta.usage); // 恢复该会话的用量
+    if (meta?.usage) a.setUsage({ ...EMPTY_USAGE, ...meta.usage }); // 兼容未保存缓存/步数的旧会话
     agents.set(id, a);
     // 登记该会话此刻绑定的后端：优先它自己存过的平台(切回老会话时用回它自己的)，否则用当前全局平台。
     backendBySid.set(id, meta?.providerId || curProviderId());
@@ -3373,15 +3404,11 @@ if (!gotLock) {
       if (method === "sessions.messages") {
         const sid = String(params?.sessionId || "");
         if (!sid) throw new Error("缺少 sessionId");
-        const limit = Math.min(50, Math.max(1, Number(params?.limit) || 10));
-        const offset = Math.max(0, Number(params?.offset) || 0); // 从末尾往前偏移(0=最后一屏)
         const all = agents.get(sid)?.getDisplayMessages() || loadMessages(sid);
-        const total = all.length;
-        const end = Math.max(0, total - offset);
-        const start = Math.max(0, end - limit);
+        const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
         const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i)).filter(m => m.text || m.image);
         const meta = listSessions().find(s => s.id === sid);
-        return { messages: page, hasMore: start > 0, total, nextOffset: total - start,
+        return { messages: page, hasMore, total, nextOffset,
           meta: meta ? { title: meta.title, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined, employeeId: meta.employeeId } : undefined };
       }
       // ── 一人公司同步 ──
@@ -3401,14 +3428,10 @@ if (!gotLock) {
       if (method === "team.room.messages") {
         const rid = String(params?.roomId || "");
         if (!rid) throw new Error("缺少 roomId");
-        const limit = Math.min(50, Math.max(1, Number(params?.limit) || 10));
-        const offset = Math.max(0, Number(params?.offset) || 0);
         const all = loadRoomMessages(rid);
-        const total = all.length;
-        const end = Math.max(0, total - offset);
-        const start = Math.max(0, end - limit);
+        const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
         const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", images: m.images, error: !!m.error }));
-        return { messages: page, hasMore: start > 0, total };
+        return { messages: page, hasMore, total, nextOffset };
       }
       if (method === "sop.tree") {
         return { tree: sopLoadTree() };
@@ -3426,21 +3449,34 @@ if (!gotLock) {
           return { id, title: m?.title || "任务", employeeId: m?.employeeId || null, updatedAt: m?.updatedAt || 0 };
         });
         const groups = loadRooms().filter(room => room.type !== 'dm' && isRoomRunning(room.id)).map(room => ({ id: room.id, title: room.name, kind: 'room', employeeId: null, updatedAt: room.updatedAt || 0 }));
-        return { tasks: [...tasks, ...groups] };
+        const batches = taskReports.snapshots(true).map(batch => ({ id: batch.scope.turnId, title: `${batch.scope.ownerName} · 员工任务与汇报`, kind: 'batch', employeeId: batch.scope.ownerId, updatedAt: batch.updatedAt }));
+        return { tasks: [...tasks, ...groups, ...batches] };
       }
+      if (method === 'tasks.history') return { tasks: taskReports.snapshots().filter(b => !['working', 'reporting'].includes(b.phase)).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30).map(b => ({ id: b.scope.turnId, title: `${b.scope.ownerName} · 员工任务与汇报`, kind: 'batch', employeeId: b.scope.ownerId, updatedAt: b.updatedAt, status: remoteBatchTaskDetail(b).status })) };
       if (method === 'tasks.detail' || method === 'tasks.stop' || method === 'sessions.usage') {
         const id = String(params?.sessionId || params?.id || '');
+        if (params?.kind === 'batch' && method !== 'sessions.usage') {
+          const batch = taskReports.snapshots().find(b => b.scope.turnId === id);
+          if (!batch) throw new Error('该任务批次不属于这台电脑，或记录已过期');
+          if (method === 'tasks.stop') {
+            if (batch.phase === 'reporting') throw new Error('员工结果已收齐，正在等待负责人汇报；请查看原会话。');
+            const stopped = taskReports.cancel(id);
+            return { stopped, running: taskReports.snapshots(true).some(b => b.scope.turnId === id) };
+          }
+          return { ...remoteBatchTaskDetail(batch), outputs: remoteArtifacts.listTurn(id) };
+        }
         if (params?.kind === 'room' && method !== 'sessions.usage') {
           const room = loadRooms().find(r => r.id === id && r.type !== 'dm');
           if (!room) throw new Error('该群聊不属于这台电脑，或已删除');
-          if (method === 'tasks.stop') { const wasRunning = isRoomRunning(id); abortRoom(id); return { stopped: wasRunning, running: isRoomRunning(id) }; }
+          if (method === 'tasks.stop') { const wasRunning = isRoomRunning(id); const cancelled = taskReports.cancelOrigin('room', id); abortRoom(id); return { stopped: wasRunning || cancelled, running: isRoomRunning(id) || taskReports.hasPendingOrigin('room', id) }; }
           return remoteRoomTaskDetail(room, loadRoomMessages(id), isRoomRunning(id));
         }
         const meta = listSessions().find(s => s.id === id);
         if (!meta) throw new Error('该任务不属于这台电脑，或已删除');
         const agent = agents.get(id);
         if (method === 'tasks.stop') {
-          if (!runs.has(id)) return { stopped: false, running: false };
+          const cancelled = taskReports.cancelOrigin('session', id);
+          if (!runs.has(id)) return { stopped: cancelled, running: taskReports.hasPendingOrigin('session', id) };
           contSessions.delete(id); send('evt:cont-off', { sid: id });
           runs.get(id)?.abort();
           return { stopped: true, running: true }; // abort requested; next poll confirms actual completion
@@ -3455,6 +3491,12 @@ if (!gotLock) {
         }
         return remoteTaskDetail(meta, agent?.getDisplayMessages() || loadMessages(id), runs.has(id),
           meta.employeeId ? loadEmployees().find(e => e.id === meta.employeeId)?.name || '员工' : 'AI');
+      }
+      if (method === 'artifacts.read') {
+        const origin = params?.origin;
+        if (!origin || !['session', 'room'].includes(origin.kind) || typeof origin.id !== 'string') throw new Error('缺少文件所属会话');
+        if (origin.kind === 'session' ? !listSessions().some(s => s.id === origin.id) : !loadRooms().some(r => r.id === origin.id)) throw new Error('文件所属会话已不存在');
+        return remoteArtifacts.read(String(params?.id || ''), origin, params?.offset, params?.length);
       }
       throw new Error("不支持的请求: " + method);
     });
@@ -5198,7 +5240,7 @@ function setupUpdater(): void {
     try {
       const site = process.env.WUWEI_SITE_URL || "https://wuweiai.io";
       const res = await fetch(`${site}/api/client-config`);
-      if (res.ok) { const j = await res.json(); const s = Number(j?.updateCheckSec); if (Number.isFinite(s) && s >= 30 && s <= 3600) sec = Math.floor(s); }
+      if (res.ok) { const j = await res.json(); const s = Number(j && typeof j === 'object' && 'updateCheckSec' in j ? j.updateCheckSec : undefined); if (Number.isFinite(s) && s >= 30 && s <= 3600) sec = Math.floor(s); }
     } catch { /* 拉不到用默认 60s */ }
     log("updater", `更新轮询间隔 ${sec}s`);
     setInterval(() => { void checkAndPrepareUpdate(); }, sec * 1000);
