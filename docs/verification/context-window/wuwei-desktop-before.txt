@@ -1,0 +1,35 @@
+desktop/main/index.ts(578,33): error TS2339: Property 'primaryUsedPercent' does not exist on type '{}'.
+desktop/main/index.ts(578,80): error TS2339: Property 'secondaryUsedPercent' does not exist on type '{}'.
+desktop/main/index.ts(795,71): error TS2339: Property 'primaryUsedPercent' does not exist on type '{}'.
+desktop/main/index.ts(795,110): error TS2339: Property 'secondaryUsedPercent' does not exist on type '{}'.
+desktop/main/index.ts(1123,25): error TS2339: Property 'lang' does not exist on type 'AppSettings'.
+desktop/main/index.ts(1123,57): error TS2339: Property 'lang' does not exist on type 'AppSettings'.
+desktop/main/index.ts(2543,33): error TS2345: Argument of type '{ totalInput: number; totalOutput: number; lastInput: number; }' is not assignable to parameter of type 'SessionUsage'.
+  Type '{ totalInput: number; totalOutput: number; lastInput: number; }' is missing the following properties from type 'SessionUsage': totalCacheHit, totalCacheMiss, totalSteps
+desktop/main/index.ts(3524,29): error TS2304: Cannot find name 'WuweiMe'.
+desktop/main/index.ts(5428,9): error TS2353: Object literal may only specify known properties, and 'onRateLimits' does not exist in type 'ProviderStreamHandlers'.
+desktop/main/settings.ts(274,13): error TS2339: Property 'lang' does not exist on type 'AppSettings'.
+desktop/main/settings.ts(274,44): error TS2339: Property 'lang' does not exist on type 'AppSettings'.
+desktop/renderer/src/App.tsx(1377,36): error TS2339: Property 'getMessages' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(1384,22): error TS2339: Property 'markMessagesRead' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(1384,60): error TS7006: Parameter 'rr' implicitly has an 'any' type.
+desktop/renderer/src/App.tsx(4887,13): error TS2339: Property 'downloaded' does not exist on type '{ available: boolean; version?: string | undefined; notes?: string | undefined; error?: string | undefined; }'.
+desktop/renderer/src/App.tsx(4906,37): error TS2339: Property 'getMessages' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(4906,57): error TS7006: Parameter 'r' implicitly has an 'any' type.
+desktop/renderer/src/App.tsx(6088,18): error TS2339: Property 'setAskToast' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(8372,79): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(8380,79): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(9599,79): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(9906,75): error TS2554: Expected 1 arguments, but got 3.
+desktop/renderer/src/App.tsx(9906,141): error TS2554: Expected 1 arguments, but got 3.
+desktop/renderer/src/App.tsx(14052,26): error TS2339: Property 'systemPrompt' does not exist on type 'CredSlot'.
+desktop/renderer/src/App.tsx(14445,7): error TS2353: Object literal may only specify known properties, and 'systemPrompt' does not exist in type 'CredSlot'.
+desktop/renderer/src/App.tsx(15243,66): error TS2322: Type '(id?: string | undefined) => void' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+  Types of parameters 'id' and 'event' are incompatible.
+    Type 'MouseEvent<HTMLButtonElement, MouseEvent>' is not assignable to type 'string'.
+desktop/renderer/src/i18n.ts(508,3): error TS1117: An object literal cannot have multiple properties with the same name.
+npm notice
+npm notice New major version of npm available! 11.13.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

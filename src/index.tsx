@@ -68,7 +68,7 @@ if (cfg.provider === "anthropic" && cfg.authMode === "api-key" && !cfg.apiKey) {
 
 const cwd = process.cwd();
 const agent = new Agent(makeProvider(cfg), systemPrompt(cwd), ALL_TOOLS, { cwd }, TOOL_MAP, {
-  compactThreshold: cfg.compactThreshold,
+  compactThreshold: process.env.MINICC_COMPACT_THRESHOLD ? cfg.compactThreshold : undefined,
   keepRecent: cfg.keepRecentTurns,
 });
 

@@ -4945,6 +4945,11 @@ export function App() {
       // 结构性事件(工具/完成/切换…)前先把累积的流式文本落定，保证顺序不乱
       if (ch !== "evt:assistant-delta" && pendingDeltaRef.current) flushDelta(true); // 段落边界整段吐
       switch (ch) {
+        case "evt:context-window":
+          if (payload.sid && payload.sid !== currentIdRef.current) break;
+          setServerCtxMax(0);
+          setMeta((prev) => ({ ...prev, ctxWindow: payload.contextWindow }));
+          break;
         case "evt:ready":
           setMeta(payload);
           setServerCtxMax(0); // 换了模型/平台，上一条链路学到的上限不再适用
@@ -4984,6 +4989,8 @@ export function App() {
           break;
         case "evt:session-loaded": {
           setCurrentId(payload.id);
+          setServerCtxMax(0);
+          if (payload.contextWindow) setMeta((prev) => ({ ...prev, ctxWindow: payload.contextWindow }));
           setAppView(null); // 切会话/新建对话 → 退出一人公司面板，露出对话界面
           setAgiView(null); // 数字婴儿面板同理
           // 搜索结果点进来的：目标不是底部而是命中那条 → 别吸底，交给下面的跳转 effect
@@ -5203,7 +5210,8 @@ export function App() {
           void window.wuwei.track?.("error_shown", { friendly: friendly.slice(0, 100) }, rawMsg.slice(0, 2000));
           // 服务端报了真实上限就记下来，占用条改按它算(比客户端按模型名猜准)
           const realLimit = parseServerCtxLimit(rawMsg);
-          if (realLimit > 0) setServerCtxMax(realLimit);
+          // Agent 主进程已学习并同步预算；报错本身不再单独改 UI 窗口。
+          void realLimit;
           // 按场景分流（用 ref 取最新登录态，避免空依赖闭包里 wuwei 冻结在未登录）：
           //  A. 免费模型今天次数用完 (free_daily_cap_reached / daily_cap_reached / free_quota_exhausted)
           //     · 已登录：不是没币，是免费次数用完 → 明确文案(明天恢复 / 可切其他托管模型)，绝不弹「无为币用完」升级窗

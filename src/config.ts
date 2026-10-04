@@ -8,6 +8,7 @@
 //      真机验证：model 必须用主线名(如 gpt-5.5)，gpt-5*-codex 后缀在订阅通道被拒。
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { resolveContextWindow, compactThresholdFor } from "./context-window.js";
 
 export type AuthMode = "api-key" | "oauth";
 
@@ -42,7 +43,7 @@ function contextWindowFor(model: string): number {
   if (/deepseek-v4/.test(m)) return 1_000_000; // V4 Pro/Flash 均 1M
   if (/minimax-m3/.test(m)) return 1_000_000;
   if (/minimax/.test(m)) return 200_000;
-  if (/gpt-5/.test(m)) return 1_000_000; // GPT-5.x 模型窗口 ~1M(Codex 通道会在 loadConfig 里封到 400k)
+  if (/gpt-5/.test(m)) return 1_000_000; // 旧 GPT-5 推断；Codex 另按缓存解析
   if (/gpt-4\.1|\bo3\b|\bo4/.test(m)) return 400_000;
   if (/qwen3?[.-]?(max|7)|qwen-max|qwen-plus/.test(m)) return 256_000;
   if (/doubao/.test(m)) return 256_000;
@@ -114,9 +115,8 @@ export function loadConfig(): Config {
   const apiKey =
     provider === "anthropic" ? pick("ANTHROPIC_API_KEY") : pick("MINICC_API_KEY", "not-needed");
 
-  let ctxWindow = Number(pick("MINICC_CONTEXT_WINDOW")) || contextWindowFor(model);
-  // Codex 订阅通道对 gpt-5.x 封顶 400k(OpenAI Codex 自身限制，模型本身支持 1M 需走 API key)
-  if (provider === "codex" && ctxWindow > 400_000) ctxWindow = 400_000;
+  const ctxWindow = resolveContextWindow(provider, model, contextWindowFor(model), pick("MINICC_CONTEXT_WINDOW"));
+  // Codex 按缓存默认窗口/精确型号兜底解析，不开启实验长上下文。
   // 这里曾对 Claude 订阅(OAuth)通道封顶 200k，理由是"1M 是 API key 通道的能力，订阅端给不到"。
   // 2026-09-14 用 Max 20x 订阅 + claude-opus-4-8 实测推翻：
   //   · 故意发 130 万 token → 服务端回 "prompt is too long: 1300056 tokens > 1000000 maximum"
@@ -154,9 +154,7 @@ export function loadConfig(): Config {
     ),
     contextWindow: ctxWindow,
     // 阈值默认=窗口的 80%(留 20% 余量再压缩)；env 可显式覆盖
-    compactThreshold: pick("MINICC_COMPACT_THRESHOLD")
-      ? Number(pick("MINICC_COMPACT_THRESHOLD"))
-      : Math.floor(ctxWindow * 0.8),
+    compactThreshold: compactThresholdFor(ctxWindow, pick("MINICC_COMPACT_THRESHOLD")),
     keepRecentTurns: Number(pick("MINICC_KEEP_RECENT", "12")),
   };
 }

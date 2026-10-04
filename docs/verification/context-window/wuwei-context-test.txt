@@ -1,0 +1,16 @@
+✔ gpt-6.1-sol: API/Codex/cache missing/bad JSON/explicit bounds (0.7171ms)
+✔ gpt-6-astra: API/Codex/cache missing/bad JSON/explicit bounds (0.1139ms)
+✔ gpt-6-sol: API/Codex/cache missing/bad JSON/explicit bounds (0.0865ms)
+✔ gpt-6-luna: API/Codex/cache missing/bad JSON/explicit bounds (0.0747ms)
+✔ cache file IO, unknown slug, malformed rows and invalid bounds (6.1702ms)
+✔ Agent model switching, isolated budgets and explicit compact thresholds (0.9823ms)
+✔ actual Agent error hook synchronizes budget before overflow retry/failure (0.9876ms)
+✔ loadConfig -> makeProvider -> Agent uses same budget as desktop config (0.6508ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 229.2577

@@ -891,6 +891,9 @@ function toResponsesInput(messages: Message[]): any[] {
 }
 
 export function makeProvider(cfg: Config): Provider {
-  if (cfg.provider === "codex") return new CodexProvider(cfg);
-  return cfg.provider === "openai" ? new OpenAIProvider(cfg) : new AnthropicProvider(cfg);
+  const p: Provider = cfg.provider === "codex" ? new CodexProvider(cfg)
+    : cfg.provider === "openai" ? new OpenAIProvider(cfg) : new AnthropicProvider(cfg);
+  p.contextWindow = cfg.contextWindow;
+  p.compactThreshold = cfg.compactThreshold;
+  return p;
 }

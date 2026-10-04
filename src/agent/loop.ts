@@ -1,3 +1,4 @@
+import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
 // Agent 主循环：Claude Code 的心脏。
 //   组装消息 → 请求模型 → 若要调工具则执行并回灌 → 循环 → 直到模型给最终文字。
 // P2：累计 token 用量 + 上下文过长时自动压缩（把旧历史总结成一段，保留最近若干条）。
@@ -67,6 +68,7 @@ export interface RoundUsage {
 export type UsageReport = SessionUsage & { round?: RoundUsage };
 
 export interface AgentHooks {
+  onContextWindow?(window: number): void;
   onText?(delta: string): void;
   requestPermission?(tool: Tool, input: Record<string, unknown>): Promise<PermissionDecision>;
   onToolStart?(id: string, name: string, input: Record<string, unknown>): void;
@@ -166,6 +168,8 @@ export class Agent {
     totalCacheMiss: 0,
     totalSteps: 0,
   };
+  private contextWindow = 0;
+  private explicitCompactThreshold: number | undefined;
   private compactThreshold: number;
   private compactMsgThreshold: number;
   private keepRecent: number;
@@ -182,7 +186,11 @@ export class Agent {
     private toolMap: Map<string, Tool>,
     opts: AgentOptions = {},
   ) {
-    this.compactThreshold = opts.compactThreshold ?? 60000;
+    this.contextWindow = provider.contextWindow ?? 0;
+    this.explicitCompactThreshold = opts.compactThreshold;
+    this.compactThreshold = this.contextWindow && opts.compactThreshold !== undefined
+      ? compactThresholdFor(this.contextWindow, opts.compactThreshold)
+      : opts.compactThreshold ?? provider.compactThreshold ?? 60000;
     this.compactMsgThreshold = opts.compactMsgThreshold ?? 0;
     this.keepRecent = opts.keepRecent ?? 6;
   }
@@ -281,6 +289,10 @@ export class Agent {
   // 运行时切换模型后端（用户在设置里改 provider/model）
   setProvider(p: Provider): void {
     this.provider = p;
+    this.contextWindow = p.contextWindow ?? 0;
+    this.compactThreshold = this.contextWindow
+      ? compactThresholdFor(this.contextWindow, this.explicitCompactThreshold)
+      : this.explicitCompactThreshold ?? p.compactThreshold ?? 60000;
   }
 
   setSystem(s: string): void {
@@ -295,9 +307,27 @@ export class Agent {
 
   // 运行时调整压缩参数(设置里改"保留最近N条"/阈值时热更)
   setCompactOpts(opts: { compactThreshold?: number; compactMsgThreshold?: number; keepRecent?: number }): void {
-    if (typeof opts.compactThreshold === "number") this.compactThreshold = opts.compactThreshold;
+    if ("compactThreshold" in opts) {
+      this.explicitCompactThreshold = opts.compactThreshold;
+      this.compactThreshold = this.contextWindow
+        ? compactThresholdFor(this.contextWindow, opts.compactThreshold)
+        : opts.compactThreshold ?? this.provider.compactThreshold ?? 60000;
+    }
     if (typeof opts.compactMsgThreshold === "number") this.compactMsgThreshold = opts.compactMsgThreshold;
     if (typeof opts.keepRecent === "number" && opts.keepRecent > 0) this.keepRecent = opts.keepRecent;
+  }
+
+  getContextBudget(): { contextWindow: number; compactThreshold: number } {
+    return { contextWindow: this.contextWindow, compactThreshold: this.compactThreshold };
+  }
+
+  // Learn only a lower confirmed server bound; errors must never silently enable long context.
+  learnContextLimit(raw: string): boolean {
+    const limit = parseServerContextLimit(raw);
+    if (!limit || (this.contextWindow > 0 && limit >= this.contextWindow)) return false;
+    this.contextWindow = limit;
+    this.compactThreshold = compactThresholdFor(limit, this.explicitCompactThreshold);
+    return true;
   }
 
   getUsage(): SessionUsage {
@@ -360,6 +390,9 @@ export class Agent {
           break;
         } catch (e) {
           if (signal?.aborted) throw e; // 用户主动停止 → 不重试
+          if (this.learnContextLimit(String((e as { message?: string })?.message || e))) {
+            hooks.onContextWindow?.(this.contextWindow);
+          }
           // 上下文超限：模型明确拒收(历史太长)→ 当场硬清理历史再重试(精确命中，不靠 lastInput 启发式)。最多 3 次防死循环。
           if (isContextOverflow(e) && ctxTrims < 3 && this.hardTrim(hooks)) {
             ctxTrims++;

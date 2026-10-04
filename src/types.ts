@@ -137,6 +137,8 @@ export interface ProviderResult {
 
 export interface Provider {
   name: string;
+  contextWindow?: number;
+  compactThreshold?: number;
   complete(
     system: string,
     messages: Message[],

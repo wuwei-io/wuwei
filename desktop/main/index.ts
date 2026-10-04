@@ -172,7 +172,7 @@ let quitting = false;
 // provider/系统提示全局共享；每个会话一个 Agent（各自 messages）
 let provider: ReturnType<typeof makeProvider> | null = null;
 let sysPrompt = "";
-let agentOpts = { compactThreshold: 60000, compactMsgThreshold: 0, keepRecent: 6 };
+let agentOpts: { compactThreshold?: number; compactMsgThreshold: number; keepRecent: number } = { compactMsgThreshold: 0, keepRecent: 6 };
 let backendLabel = "";
 let modelLabel = "";
 let ctxWindow = 1_000_000; // 当前模型上下文窗口(占用条用真实值)
@@ -1183,7 +1183,7 @@ function initProvider() {
   ctxWindow = cfg.contextWindow;
   sysPrompt = buildSysPrompt(cwd, modelLabel, st?.providerId);
   agentOpts = {
-    compactThreshold: st?.compactThreshold && st.compactThreshold > 0 ? st.compactThreshold : cfg.compactThreshold,
+    compactThreshold: st?.compactThreshold && st.compactThreshold > 0 ? st.compactThreshold : process.env.MINICC_COMPACT_THRESHOLD ? cfg.compactThreshold : undefined,
     compactMsgThreshold: st?.compactMsgThreshold && st.compactMsgThreshold > 0 ? st.compactMsgThreshold : 0,
     keepRecent: st?.keepRecent && st.keepRecent > 0 ? st.keepRecent : cfg.keepRecentTurns,
   };
@@ -1216,11 +1216,11 @@ function applySettings(sIn: Settings, forceSid?: string) {
   // 原来只在启动时算一次 → 启动时用 200k 的模型、中途切到 1M 的，阈值还卡在旧的 16 万，
   // 长会话十几万 token 就被压掉。用户显式填过的阈值/条数优先，不被自动值覆盖。
   agentOpts = {
-    compactThreshold: s?.compactThreshold && s.compactThreshold > 0 ? s.compactThreshold : cfg.compactThreshold,
+    compactThreshold: s?.compactThreshold && s.compactThreshold > 0 ? s.compactThreshold : process.env.MINICC_COMPACT_THRESHOLD ? cfg.compactThreshold : undefined,
     compactMsgThreshold: s?.compactMsgThreshold && s.compactMsgThreshold > 0 ? s.compactMsgThreshold : 0,
     keepRecent: s?.keepRecent && s.keepRecent > 0 ? s.keepRecent : cfg.keepRecentTurns,
   };
-  for (const a of agents.values()) a.setCompactOpts(agentOpts); // 只改阈值，不动正在跑的请求
+  // 自动阈值属于各会话自己的 provider；只更新本次切换目标，避免跨会话污染。
   // 判定本次是否只是"同平台同模型的凭证刷新"(token/key 变了、模型没变)。这种情况下连正在跑的会话也
   // 必须换上带新 token 的 provider——否则 token 过期被清空后重新授权,那个正在重试的会话永远拿不到新
   // token,会一直报"未授权"(且"总结交接"也在该会话里跑→同样失败)。真正切模型/平台时不在此列。
@@ -1236,6 +1236,7 @@ function applySettings(sIn: Settings, forceSid?: string) {
   for (const [sid, a] of agents) {
     if (sid === target) {
       a.setProvider(provider);
+      a.setCompactOpts(agentOpts);
       a.setSystem(sysForSession(sid)); // 热更该会话系统提示；绑员工则保留人格（问模型也答对）
       backendBySid.set(sid, newPid); // 目标会话的后端随之更新
       continue;
@@ -3555,6 +3556,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   await ensureFreshClaudeOAuth(); // Claude 订阅 OAuth 快过期则先静默续期，避免本轮请求 401
   await ensureHostedProviderReady(useId); // 无为托管平台：只给这个即将开跑的会话注入新鲜无为 token 为网关 key
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
+  send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
   agent.setSystem(sysOverride ?? sysForSession(useId)); // 每轮重置也走会话身份，绑员工则保人格（身份 bug 根因修复）
   const ac = new AbortController();
   runs.set(useId, ac);
@@ -3570,6 +3572,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     const runP = agent.send(
       text,
       {
+        onContextWindow: (contextWindow) => send("evt:context-window", { sid: useId, contextWindow }),
         onText: (delta) => {
           send("evt:assistant-delta", { sid: useId, delta });
           streamDrafts.set(useId, (streamDrafts.get(useId) || "") + delta); // 累积半截
@@ -3994,7 +3997,7 @@ ipcMain.on("session:switch", (_e, id: string) => {
   // (含 kind/apiKey/oauthToken/baseUrl——CredSlot 不存 kind，主进程切不干净会 invalid_token)
   const bmeta = listSessions().find((x) => x.id === id);
   // getDisplayMessages：带上还没并入历史的注入消息，否则切回正在跑的会话时「刚发的那条」会不见
-  send("evt:session-loaded", { id, messages: a ? a.getDisplayMessages() : [], boundModel: bmeta?.model, boundProviderId: bmeta?.providerId });
+  send("evt:session-loaded", { id, messages: a ? a.getDisplayMessages() : [], boundModel: bmeta?.model, boundProviderId: bmeta?.providerId, contextWindow: a?.getContextBudget().contextWindow });
   sendUsageFor(id);
   void emitAccount();
 });
