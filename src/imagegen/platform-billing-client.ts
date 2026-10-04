@@ -7,6 +7,7 @@ export interface Sku {
   sku_id: string; price_version: string; authorization_ceiling: number; model: string; size: string; quality: string;
   coins_per_image: number; max_prompt_bytes: number; max_count: number;
 }
+export interface ImageQuote { sku_id: string; price_version: string; estimated_coins: number; authorization_ceiling: number }
 export interface CreatedOrder {
   order_id: string; status: string; reserved_coins: number; unit_price_coins: number;
 }
@@ -42,7 +43,7 @@ export class PlatformBillingClient {
   private guard() {
     if (this.source !== 'platform') throw new BillingError('SOURCE_ISOLATED', '订阅/BYOK 不调用平台计费，也不自动降级');
   }
-  private async request(path: string, method = 'GET', body?: OrderInput, key?: string): Promise<unknown> {
+  private async request(path: string, method = 'GET', body?: OrderInput | Omit<OrderInput, 'authorized_budget'>, key?: string): Promise<unknown> {
     this.guard();
     const token = await this.token();
     if (!token.trim()) throw new BillingError('AUTH_REQUIRED', '请先登录');
@@ -70,14 +71,24 @@ export class PlatformBillingClient {
   // Draft does not define a catalog envelope; return raw JSON rather than inventing one.
   catalog(): Promise<unknown> { return this.request('/api/images/catalog'); }
 
-  prepare(input: OrderInput, sku: Sku): OrderAttempt {
+  async quote(input: Omit<OrderInput,'authorized_budget'>): Promise<ImageQuote> {
+    const result = await this.request('/api/images/quote','POST',input) as ImageQuote;
+    if (!result || result.sku_id !== input.sku_id || result.price_version !== input.price_version.toLowerCase() ||
+      !Number.isSafeInteger(result.estimated_coins) || result.estimated_coins < 1 ||
+      !Number.isSafeInteger(result.authorization_ceiling) || result.authorization_ceiling < result.estimated_coins) {
+      throw new BillingError('INVALID_QUOTE','预计费用响应无效，请重新确认');
+    }
+    return Object.freeze(result);
+  }
+  prepare(input: OrderInput, sku: Sku, quote?: ImageQuote): OrderAttempt {
     this.guard();
     if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).length !== 5 || Object.keys(input).some(k => !['sku_id', 'price_version', 'prompt', 'count', 'authorized_budget'].includes(k)) ||
       typeof input.sku_id !== 'string' || !/^[a-z0-9_-]{1,80}$/.test(input.sku_id) ||
       typeof input.price_version !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.price_version) ||
       input.sku_id !== sku.sku_id || input.price_version.toLowerCase() !== sku.price_version.toLowerCase() ||
-      !Number.isSafeInteger(input.authorized_budget) || !Number.isSafeInteger(sku.authorization_ceiling) || sku.authorization_ceiling < 1 || input.authorized_budget < sku.authorization_ceiling || typeof input.prompt !== 'string' || !input.prompt.trim() ||
+      !Number.isSafeInteger(input.authorized_budget) || !Number.isSafeInteger(sku.authorization_ceiling) || sku.authorization_ceiling < 1 || input.authorized_budget > sku.authorization_ceiling || input.authorized_budget < (quote?.estimated_coins ?? sku.authorization_ceiling) ||
+      (quote !== undefined && (quote.sku_id !== input.sku_id || quote.price_version !== input.price_version.toLowerCase() || quote.authorization_ceiling !== sku.authorization_ceiling || !Number.isSafeInteger(quote.estimated_coins) || quote.estimated_coins < 1)) || typeof input.prompt !== 'string' || !input.prompt.trim() ||
       !Number.isFinite(sku.coins_per_image) || sku.coins_per_image <= 0 ||
       (sku as Sku & { enabled?: boolean }).enabled === false ||
       !Number.isInteger(sku.max_count) || sku.max_count < 1 ||
@@ -121,6 +132,11 @@ export class PlatformBillingClient {
       attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT'].includes(error.code) ? 'ready' : 'unknown';
       throw error;
     }
+  }
+  async settle(orderId: string): Promise<unknown> {
+    this.guard();
+    if (!/^[0-9a-f-]{36}$/i.test(orderId)) throw new BillingError('INVALID_INPUT','无效订单编号');
+    return this.request(`/api/images/orders/${encodeURIComponent(orderId)}/settle`,'POST');
   }
   async image(orderId: string): Promise<Uint8Array> {
     this.guard();

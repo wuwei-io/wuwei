@@ -145,3 +145,17 @@ test('explicit budget and catalog version guard; authenticated image download is
  for(const source of ['subscription','byok']) await assert.rejects(m.client(source).image(id),{code:'SOURCE_ISOLATED'});
  assert.equal(m.calls.length,1);
 });
+
+test('server quote allows exact-estimate authorization and settlement-only retry', async t=>{
+ const {authorized_budget,...query}=input;
+ const quote={sku_id:input.sku_id,price_version:input.price_version,estimated_coins:8,authorization_ceiling:120};
+ const m=await mock(t,(req,res)=>json(res,200,req.url.endsWith('/quote')?quote:{status:'settled'}));
+ const c=m.client();assert.deepEqual(await c.quote(query),quote);
+ assert.equal(c.prepare({...input,authorized_budget:8},sku,quote).input.authorized_budget,8);
+ assert.throws(()=>c.prepare({...input,authorized_budget:7},sku,quote),{code:'INVALID_INPUT'});
+ assert.throws(()=>c.prepare({...input,authorized_budget:121},sku,quote),{code:'INVALID_INPUT'});
+ await c.settle(input.price_version);
+ assert.equal(m.calls[1].path,`/api/images/orders/${input.price_version}/settle`);
+ assert.equal(m.calls.filter(x=>x.path==='/api/images/orders').length,0);
+ for(const source of ['byok','subscription']) {await assert.rejects(m.client(source).quote(query),{code:'SOURCE_ISOLATED'});await assert.rejects(m.client(source).settle(input.price_version),{code:'SOURCE_ISOLATED'});}
+});
