@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 // c8ab600 draft adapter only. No registration, provider fallback or automatic retries.
 export type BillingSource = 'platform' | 'subscription' | 'byok';
-export interface OrderInput { sku_id: string; prompt: string; count: number }
+export interface OrderInput { sku_id: string; price_version: string; prompt: string; count: 1 }
 export interface Sku {
   sku_id: string; model: string; size: string; quality: string;
   coins_per_image: number; max_prompt_bytes: number; max_count: number;
@@ -23,7 +23,7 @@ export class BillingError extends Error {
 export interface OrderAttempt {
   readonly key: string;
   readonly input: Readonly<OrderInput>;
-  state: 'ready' | 'sending' | 'submitted' | 'unknown';
+  state: 'ready' | 'sending' | 'submitted' | 'unknown' | 'confirmation_required';
   orderId?: string;
 }
 
@@ -60,6 +60,7 @@ export class PlatformBillingClient {
     catch { throw new BillingError('UNKNOWN', '响应无法解析；禁止自动重新下单', response.status); }
     if (!response.ok) {
       if (response.status === 402) throw new BillingError('INSUFFICIENT_BALANCE', '额度与无为币不足，请充值', 402);
+      if (data?.code === 'PRICE_CHANGED') throw new BillingError('PRICE_CHANGED', '价格已变更，请刷新目录并重新确认；禁止自动重发或按新价格扣费', response.status);
       if (response.status === 409) throw new BillingError(data?.code === 'PRICE_UNAVAILABLE' ? 'PRICE_UNAVAILABLE' : 'IDEMPOTENCY_CONFLICT', '价格不可用或幂等请求冲突，请核对后处理', 409);
       if (response.status === 422) throw new BillingError('INVALID_INPUT', '输入超限或参数无效，请修改后重新确认', 422);
       throw new BillingError(response.status >= 500 ? 'UNKNOWN' : 'HTTP_ERROR', '平台请求失败，不自动重试', response.status);
@@ -71,7 +72,10 @@ export class PlatformBillingClient {
 
   prepare(input: OrderInput, sku: Sku): OrderAttempt {
     this.guard();
-    if (Object.keys(input).some(k => !['sku_id', 'prompt', 'count'].includes(k)) ||
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).length !== 4 || Object.keys(input).some(k => !['sku_id', 'price_version', 'prompt', 'count'].includes(k)) ||
+      typeof input.sku_id !== 'string' || !/^[a-z0-9_-]{1,80}$/.test(input.sku_id) ||
+      typeof input.price_version !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.price_version) ||
       input.sku_id !== sku.sku_id || typeof input.prompt !== 'string' || !input.prompt.trim() ||
       !Number.isFinite(sku.coins_per_image) || sku.coins_per_image <= 0 ||
       (sku as Sku & { enabled?: boolean }).enabled === false ||
@@ -80,7 +84,10 @@ export class PlatformBillingClient {
       input.count !== 1 || Buffer.byteLength(input.prompt, 'utf8') > Math.min(1000, sku.max_prompt_bytes)) {
       throw new BillingError('INVALID_INPUT', 'SKU 不可用或参数超限（首期仅文字、单张）');
     }
-    const attempt: OrderAttempt = { key: randomUUID(), input: Object.freeze({ ...input }), state: 'ready' };
+    // Catalog envelope/version field is not yet specified: caller supplies the explicitly confirmed UUID.
+    const attempt: OrderAttempt = { key: randomUUID(), input: Object.freeze({
+      sku_id: input.sku_id, price_version: input.price_version.toLowerCase(), prompt: input.prompt, count: 1,
+    }), state: 'ready' };
     Object.defineProperty(attempt, 'key', { writable: false });
     Object.defineProperty(attempt, 'input', { writable: false });
     this.attempts.add(attempt);
@@ -88,6 +95,9 @@ export class PlatformBillingClient {
   }
   async create(attempt: OrderAttempt): Promise<CreatedOrder> {
     this.guard();
+    if (this.attempts.has(attempt) && attempt.state === 'confirmation_required') {
+      throw new BillingError('PRICE_CHANGED', '请刷新目录并重新确认价格；原请求不得重发');
+    }
     if (!this.attempts.has(attempt) || attempt.state !== 'ready') {
       throw new BillingError('QUERY_ONLY', '已提交或结果不明，只能查询原订单；不得重新下单');
     }
@@ -102,6 +112,10 @@ export class PlatformBillingClient {
       attempt.state = data.status === 'unknown' ? 'unknown' : 'submitted';
       return data;
     } catch (error) {
+      if (error instanceof BillingError && error.code === 'PRICE_CHANGED') {
+        attempt.state = 'confirmation_required';
+        throw error;
+      }
       // Only explicit pre-dispatch rejection can be manually retried with the SAME key.
       attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT'].includes(error.code) ? 'ready' : 'unknown';
       throw error;

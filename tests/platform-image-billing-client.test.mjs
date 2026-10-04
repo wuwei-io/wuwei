@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { PlatformBillingClient } from '../src/imagegen/platform-billing-client.ts';
 
 const sku = { sku_id: 'approved-mock', model: 'gpt-image-1', size: '1024x1024', quality: 'low', coins_per_image: 10, max_prompt_bytes: 1000, max_count: 1 };
-const input = { sku_id: sku.sku_id, prompt: '一只猫', count: 1 };
+const input = { sku_id: sku.sku_id, price_version: 'abcdef12-3456-7890-abcd-1234567890ab', prompt: '一只猫', count: 1 };
 const accepted = { order_id: 'mock-order', status: 'reserved', reserved_coins: 10, unit_price_coins: 10 };
 async function mock(t, handler) {
   const calls = [];
@@ -31,6 +31,10 @@ test('catalog/create/query: Bearer, exact body, stable key and no duplicate POST
   for (const call of m.calls) assert.equal(call.headers.authorization, 'Bearer mock-token');
   assert.deepEqual(m.calls[1].body, input);
   assert.equal(m.calls[1].headers['idempotency-key'], key);
+  assert.match(key, /^[A-Za-z0-9_-]{16,128}$/);
+  assert.deepEqual(Object.keys(m.calls[1].body).sort(), ['count', 'price_version', 'prompt', 'sku_id']);
+  assert.equal(m.calls[0].headers['idempotency-key'], undefined);
+  assert.equal(m.calls[2].headers['idempotency-key'], undefined);
   assert.equal(m.calls[2].path, '/api/images/orders/mock-order');
 });
 
@@ -43,6 +47,43 @@ for (const [status, code, expected] of [[402, 'INSUFFICIENT_BALANCE', 'INSUFFICI
     assert.equal(m.calls[0].headers['idempotency-key'], m.calls[1].headers['idempotency-key']);
   });
 }
+
+test('contract: required UUID version, strict four fields, normalized version and UTF8 boundary', async t => {
+  const m = await mock(t, (req, res) => json(res, 202, accepted));
+  const c = m.client();
+  for (const field of ['sku_id', 'price_version', 'prompt', 'count']) {
+    const bad = { ...input }; delete bad[field];
+    assert.throws(() => c.prepare(bad, sku), { code: 'INVALID_INPUT' });
+  }
+  for (const version of [null, undefined, '', 123, 'not-a-uuid', input.price_version + 'x']) {
+    assert.throws(() => c.prepare({ ...input, price_version: version }, sku), { code: 'INVALID_INPUT' });
+  }
+  for (const bad of [null, [], { ...input, 'Idempotency-Key': 'abcdefghijklmnop' },
+    { ...input, idempotency_key: 'abcdefghijklmnop' }, { ...input, sku_id: 'INVALID' }]) {
+    assert.throws(() => c.prepare(bad, sku), { code: 'INVALID_INPUT' });
+  }
+  for (const price of [undefined, null, 0, -1, NaN]) {
+    assert.throws(() => c.prepare(input, { ...sku, coins_per_image: price }), { code: 'INVALID_INPUT' });
+  }
+  assert.equal(m.calls.length, 0);
+  const a = c.prepare({ ...input, price_version: input.price_version.toUpperCase(), prompt: '猫'.repeat(333) + 'a' }, sku);
+  await c.create(a);
+  assert.equal(m.calls[0].body.price_version, input.price_version);
+  assert.equal(Buffer.byteLength(m.calls[0].body.prompt, 'utf8'), 1000);
+  assert.throws(() => c.prepare({ ...input, prompt: '猫'.repeat(333) + 'ab' }, sku), { code: 'INVALID_INPUT' });
+});
+
+test('PRICE_CHANGED requires refreshed explicit confirmation: original attempt never resubmits', async t => {
+  const m = await mock(t, (req, res) => json(res, 409, { code: 'PRICE_CHANGED' }));
+  const c = m.client(), a = c.prepare(input, sku), key = a.key;
+  await assert.rejects(c.create(a), e => e.code === 'PRICE_CHANGED' && e.status === 409 && e.message.includes('重新确认'));
+  assert.equal(a.state, 'confirmation_required');
+  await assert.rejects(c.create(a), { code: 'PRICE_CHANGED' });
+  assert.equal(a.key, key);
+  assert.deepEqual(a.input, input);
+  assert.equal(m.calls.length, 1); // no auto catalog fetch, price replacement or new POST
+  assert.deepEqual(m.calls[0].body, input);
+});
 
 for (const mode of ['disconnect', 'server-error', 'bad-json', 'unknown']) {
   test(`${mode}: never automatically retry/create again`, async t => {
