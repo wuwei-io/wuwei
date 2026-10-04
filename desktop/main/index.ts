@@ -23,7 +23,7 @@ import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
-import type { Tool, ToolResult } from "../../src/types.js";
+import type { Tool, ToolResult, TaskReportScope } from "../../src/types.js";
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
@@ -99,6 +99,7 @@ import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmploy
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
 import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
+import { TaskReports, ConversationReports, taskReportPrompt } from './team/task-reports.js';
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms, loadRoomMessages, createRoom, updateRoom, deleteRoom } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
 import {
@@ -270,7 +271,7 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth }: RunEmployeeArgs): Promise<string> => {
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope }: RunEmployeeArgs): Promise<string> => {
   const p = providerForEmployee(employee) || provider;
   if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
   const all = desktopTools();
@@ -278,10 +279,11 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
   const map = new Map(tools.map((t) => [t.name, t]));
   // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
-  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth }, map, agentOpts);
+  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope }, map, agentOpts);
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
+    onTurnEnd: (turnId: string) => taskReports.closeTurn(turnId),
     onText: (delta: string) => onProgress?.({ kind: "text", delta }),
     onToolStart: (id: string, name: string, input: any) => onProgress?.({ kind: "tool-start", id, name, input }),
     onToolEnd: (id: string, r: string, isError: boolean, image?: string) => { onProgress?.({ kind: "tool-end", id, isError, result: typeof r === "string" ? r.slice(0, 2000) : undefined }); if (image) onProgress?.({ kind: "image", dataUrl: image }); },
@@ -301,6 +303,43 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
 function teamOrchestratorDeps(): OrchestratorDeps {
   return { send, log, runEmployee: runEmployeeTurn, baseSys: () => sysPrompt };
 }
+
+const conversationReports = new ConversationReports({
+  isBusy: sid => runs.has(sid),
+  deliver: async (sid, text) => {
+    if (!listSessions().some(s => s.id === sid)) throw new Error('最初派活的会话已不存在。');
+    if (!getAgent(sid)) throw new Error('派活会话暂无可用模型，任务结果无法自动汇报。');
+    await startTurn(sid, text);
+  },
+});
+const taskReports = new TaskReports({
+  deliver: async batch => {
+    const text = secrets.redact(taskReportPrompt(batch)).text;
+    if (batch.scope.origin.kind === 'session') {
+      await conversationReports.enqueue(batch.scope.origin.id, text);
+    } else {
+      // 回到最初派活的房间，由派活者验收；不会只停留在他与员工的另一条 DM。
+      const roomId = batch.scope.origin.id;
+      if (!loadRooms().some(r => r.id === roomId)) throw new Error('派活房间已不存在，任务结果无法自动汇报。');
+      const messages = appendDmMessage(roomId, { speaker: { id: 'task-report', name: '任务结果', kind: 'agent' }, text });
+      send('evt:team-room', { roomId, messages, running: true });
+      await enqueueEmpTask(batch.scope.ownerId, async () => {
+        await runDmTurn(roomId, batch.scope.ownerId, text, teamOrchestratorDeps(), batch.scope.depth,
+          { strict: true, explicitInput: true });
+      });
+    }
+  },
+  onDeliveryError: (batch, error) => {
+    log('team', '任务汇报失败', batch.scope.turnId, secrets.redact(String(error)).text);
+    const text = secrets.redact(taskReportPrompt(batch)).text;
+    if (batch.scope.origin.kind === 'session') {
+      // 保留收到的员工资料；模型暂不可用时也不把汇报静默丢弃。
+      const a = agents.get(batch.scope.origin.id);
+      if (a) { a.setMessages([...a.getMessages(), { role: 'user', content: [{ type: 'text', text }], ts: Date.now() }]); persist(batch.scope.origin.id); }
+      send('evt:error', { sid: batch.scope.origin.id, message: '员工结果已返回，但自动汇报未完成。请在原会话继续验收。' });
+    } else send('evt:team-room-hint', { roomId: batch.scope.origin.id, code: 'task-report-error', hint: '员工结果已返回，但负责人汇报失败，请继续验收。' });
+  },
+});
 
 function syncTeamModule(s: Settings | null) {
   if (teamEnabled(s))
@@ -1686,7 +1725,8 @@ const dmTeammateTool: Tool = {
     send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
     // 同步跑目标员工一轮拿回复回给发起方（走直连+runDmTurn 的 running 守卫，天然防「A↔B 互 dm」死锁）。
     // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
-    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1);
+    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1,
+      { taskReportScope: ctx.taskReportScope });
     return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
   },
 };
@@ -1699,7 +1739,7 @@ const assignTaskTool: Tool = {
   description:
     "给你团队里的另一名员工【派活】：把一件需要他花时间完成的任务交给他，然后你【不必等他做完】就能继续做别的事。" +
     "与 dm_teammate 的区别——dm_teammate 是「问一句、同步等他这一句答复」（对齐/问事/验收用）；" +
-    "assign_task 是「把一件活交出去、不等」，他做完的结果会落在你俩的私聊里。" +
+    "assign_task 是「把一件活交出去、不等」，员工原始结果留在私聊，同一轮派出的任务及转派任务收齐后会自动送回当前会话唤醒你。你必须验收结果并统一向用户汇报，失败/取消也要说明。" +
     "他正忙别的活就自动排队（当前这件干完接着干你这件）；priority 填 urgent 表示急事，会插到他队列最前、优先做（但不打断他正在跑的那件）。" +
     "name 填对方名字（须与团队成员名完全一致），task 填要他做的事（说清目标、验收标准）。",
   readOnly: false,
@@ -1722,6 +1762,9 @@ const assignTaskTool: Tool = {
     const urgent = String((input as any).priority || "normal").trim() === "urgent";
     if (!name || !task) {
       return { content: tt("需要提供 name（同事名字）和 task（要派的活）。", "Both name (teammate) and task are required."), isError: true };
+    }
+    if (!ctx.taskReportScope && (!ctx.turnId || (!ctx.reportOrigin && !ctx.sessionId))) {
+      return { content: '当前任务缺少可回传的会话，未派发。请在员工会话中重新交代。', isError: true };
     }
 
     const all = loadEmployees();
@@ -1746,21 +1789,33 @@ const assignTaskTool: Tool = {
     const busyBefore = empIsBusy(target.id);
     const ahead = empQueueLen(target.id); // 他前面还排着几件
     const assignDepth = (ctx.dmDepth ?? 0) + 1;
-    void enqueueEmpTask(target.id, async () => {
-      await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), assignDepth);
-      // 对方干完 → 唤醒【派活方】读结果、拍板/验收/收尾。否则结果只落在私聊里没人接，派活方永远不知道完事了。
-      // 排进派活方自己的队列(不打断他手头的活)。深度继续+1：转派链到顶后 assign_task 会被剔除，天然止住 ping-pong。
-      void enqueueEmpTask(selfId, async () => {
-        await runDmTurn(dm.id, selfId, tt(`（${target.name}已完成你派的活，结果见上。）`, `(${target.name} finished the task you assigned; see the result above.)`), teamOrchestratorDeps(), assignDepth + 1);
-      }).catch(() => {});
-    }, { urgent }).catch(() => {});
+    const scope: TaskReportScope = ctx.taskReportScope ?? {
+      turnId: ctx.turnId!, origin: ctx.reportOrigin ?? { kind: 'session', id: ctx.sessionId! },
+      ownerId: selfId, ownerName: selfName, depth: ctx.dmDepth ?? 0,
+    };
+    const taskId = taskReports.assign(scope, {
+      employeeName: target.name, task, roomId: dm.id,
+      run: async () => {
+        let outcome: { status: 'completed' | 'failed' | 'cancelled'; text: string } = { status: 'failed', text: '未取得任务结果。' };
+        await enqueueEmpTask(target.id, async () => {
+          try {
+            const text = await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), assignDepth,
+              { strict: true, explicitInput: true, taskReportScope: scope });
+            outcome = { status: text.trim() && text !== '（没有输出）' ? 'completed' : 'failed', text: text || '员工没有返回文字结果，请检查私聊中的产物。' };
+          } catch (error: any) {
+            outcome = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', text: secrets.redact(String(error?.message || '任务执行异常。')).text };
+          }
+        }, { urgent });
+        return outcome;
+      },
+    });
 
     const where = !busyBefore
       ? tt("他现在就开始做", "starting now")
       : urgent
         ? tt("他在忙，已把这件作为急事插到他队列最前，手头这件一完就优先做", "they're busy; queued this as urgent at the front — they'll do it next")
         : tt(`他在忙，已排进他的队列（前面还有 ${ahead + 1} 件），轮到就做`, `they're busy; queued (about ${ahead + 1} ahead), will do it when free`);
-    return { content: tt(`已把活派给「${target.name}」：${where}。做完他会在你俩私聊里回你，你现在可以接着忙别的。`, `Assigned to "${target.name}": ${where}. Their result will land in your DM; you can continue with other things now.`) };
+    return { content: tt(`已把活派给「${target.name}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${target.name}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
   },
 };
 
@@ -3553,8 +3608,6 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     send("evt:error", { sid: useId, message: tt("上一条还在处理中（可能卡住了）。请点输入框旁的「停止」结束后再重发。", "The previous message is still running (it may be stuck). Click Stop next to the input, then resend.") });
     return;
   }
-  await ensureFreshClaudeOAuth(); // Claude 订阅 OAuth 快过期则先静默续期，避免本轮请求 401
-  await ensureHostedProviderReady(useId); // 无为托管平台：只给这个即将开跑的会话注入新鲜无为 token 为网关 key
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
   send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
   agent.setSystem(sysOverride ?? sysForSession(useId)); // 每轮重置也走会话身份，绑员工则保人格（身份 bug 根因修复）
@@ -3569,9 +3622,13 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   const hb = setInterval(() => { if (toolDepth > 0 && runs.get(useId) === ac) send("evt:heartbeat", { sid: useId }); }, 25000);
   const turnT0 = Date.now(); // 本轮耗时起点（诊断日志 api_call.ms 用）
   try {
+    // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
+    await ensureFreshClaudeOAuth();
+    await ensureHostedProviderReady(useId);
     const runP = agent.send(
       text,
       {
+        onTurnEnd: (turnId) => taskReports.closeTurn(turnId),
         onContextWindow: (contextWindow) => send("evt:context-window", { sid: useId, contextWindow }),
         onText: (delta) => {
           send("evt:assistant-delta", { sid: useId, delta });
@@ -3688,6 +3745,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     draftSaveAt.delete(useId);
     persist(useId); // 该会话跑完落盘
     if (!runs.has(useId)) setSessionRunning(useId, false); // 无残留活跃轮→清运行标记(须在 persist 后,它会保留旧标记)
+    conversationReports.drain(useId); // 用户这轮结束后接上员工汇报，不受当前聚焦/智能继续开关影响
     void emitAccount(); // 刷新余额/本会话已消耗(DeepSeek 等)
     // 调研轮：解析契约草稿回填弹窗，不触发智能继续接话(等用户在弹窗里审阅确认)。
     // ⚠ 流式竞态：finally 触发时最后一条 assistant 消息可能还没完全落定(读到半截 json)。
@@ -3705,7 +3763,8 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
         setTimeout(() => attempt(n - 1), 1500);
       };
       attempt(40); // 立刻 + 最多 40 次重试(~60s)：长回复流式落定慢，持续轮询直到完整 json 出现
-    } else if ((useId === currentId || contSessions.has(useId)) && !ac.signal.aborted) {
+    } else if ((useId === currentId || contSessions.has(useId)) && !ac.signal.aborted &&
+      !taskReports.hasPendingOrigin('session', useId) && !conversationReports.hasPending(useId)) {
       // 当前会话，或开着智能继续的后台会话，跑完都算下一步建议(后台会话切走也能自己接着推进)
       void suggestNextAction(useId);
     }

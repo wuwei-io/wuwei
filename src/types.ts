@@ -39,6 +39,7 @@ export interface Message {
 export interface ToolSpec {
   name: string;
   description: string;
+  requiresImageGeneration?: boolean; // 仅向提供订阅生图能力的会话后端暴露
   // JSON Schema（Anthropic tools 的 input_schema 格式）
   inputSchema: Record<string, unknown>;
   // 只读工具可并行；有状态工具（Write/Edit/Bash）需串行确认
@@ -73,8 +74,20 @@ export interface DecisionResponse {
   reason?: string; // G1-4：本机兜底时标注解挂原因，如 'timeout'(超时自动兜底) / 'abort'(中断/断连)；正常回批不填
 }
 
+export interface TaskReportScope {
+  turnId: string;
+  origin: { kind: 'session' | 'room'; id: string };
+  ownerId: string;
+  ownerName: string;
+  depth: number;
+}
+
 export interface ToolContext {
   cwd: string;
+  turnId?: string;
+  reportOrigin?: TaskReportScope['origin'];
+  taskReportScope?: TaskReportScope; // 子任务沿用根批次，结果统一回到最初的派活会话
+  generateImage?: Provider['generateImage']; // 绑定本轮实际 provider；不读全局账号设置
   // ask_decision 下发决策并阻塞等三态回批；上层(桌面端)注入，未注入=不可用(CLI 无交互)
   requestDecision?: (decision: Decision) => Promise<DecisionResponse>;
   signal?: AbortSignal; // 中断信号：用户停止时传入，长命令(bash/grep)据此杀子进程
@@ -137,6 +150,8 @@ export interface ProviderResult {
 
 export interface Provider {
   name: string;
+  generateImage?: (options: Omit<import('./imagegen/subscription.mjs').SubscriptionImageOptions,
+    'accessToken' | 'accountId' | 'responsesEndpoint'>) => Promise<import('./imagegen/subscription.mjs').SubscriptionImageResult>;
   contextWindow?: number;
   compactThreshold?: number;
   complete(

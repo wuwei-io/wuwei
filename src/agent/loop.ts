@@ -1,4 +1,5 @@
 import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
+import { randomUUID } from 'node:crypto';
 // Agent 主循环：Claude Code 的心脏。
 //   组装消息 → 请求模型 → 若要调工具则执行并回灌 → 循环 → 直到模型给最终文字。
 // P2：累计 token 用量 + 上下文过长时自动压缩（把旧历史总结成一段，保留最近若干条）。
@@ -68,6 +69,7 @@ export interface RoundUsage {
 export type UsageReport = SessionUsage & { round?: RoundUsage };
 
 export interface AgentHooks {
+  onTurnEnd?(turnId: string): void;
   onContextWindow?(window: number): void;
   onText?(delta: string): void;
   requestPermission?(tool: Tool, input: Record<string, unknown>): Promise<PermissionDecision>;
@@ -345,10 +347,19 @@ export class Agent {
   }
 
   async send(
+    userInput: string, hooks: AgentHooks, signal?: AbortSignal, images?: string[],
+  ): Promise<void> {
+    const turnId = randomUUID();
+    try { await this.sendTurn(userInput, hooks, signal, images, turnId); }
+    finally { hooks.onTurnEnd?.(turnId); }
+  }
+
+  private async sendTurn(
     userInput: string,
     hooks: AgentHooks,
     signal?: AbortSignal,
     images?: string[],
+    turnId?: string,
   ): Promise<void> {
     const userContent: ContentBlock[] = [];
     if (userInput) userContent.push({ type: "text", text: userInput });
@@ -378,11 +389,14 @@ export class Agent {
       await this.maybeCompact(hooks);
 
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
+      const stepProvider = this.provider;
+      const stepTools = this.tools.filter(t => !t.requiresImageGeneration || !!stepProvider.generateImage);
+      const stepToolMap = new Map(stepTools.map(t => [t.name, this.toolMap.get(t.name) ?? t]));
       let result: Awaited<ReturnType<typeof this.provider.complete>>;
       let ctxTrims = 0; // 上下文超限时的硬清理次数(防死循环)
       for (let attempt = 0; ; attempt++) {
         try {
-          result = await this.provider.complete(this.system, this.messages, this.tools, {
+          result = await stepProvider.complete(this.system, this.messages, stepTools, {
             onText: hooks.onText,
             onRecover: hooks.onRecover,
             signal,
@@ -501,8 +515,8 @@ export class Agent {
       const parallelJobs: Promise<void>[] = [];
       for (let idx = 0; idx < toolUses.length; idx++) {
         const call = toolUses[idx];
-        const tool = this.toolMap.get(call.name);
-        if (!tool) {
+        const tool = stepToolMap.get(call.name);
+        if (!tool || (tool.requiresImageGeneration && !stepProvider.generateImage)) {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
@@ -537,7 +551,8 @@ export class Agent {
 
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
-          const out = await tool.run(call.input, { ...this.ctx, signal }); // 传中断信号,停止时杀长命令
+          const out = await tool.run(call.input, { ...this.ctx, signal, turnId,
+            generateImage: stepProvider.generateImage?.bind(stepProvider) }); // 按本轮后端绑定，切换/并发不串账号
           hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image || out.displayImage);
           const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
           // 图片块：out.image=给模型看(截图类)；out.displayImage=只给人看(标 displayOnly，provider 构造请求时跳过)。

@@ -5,12 +5,14 @@
 // 工具集、凭证刷新那套逻辑都在主进程，这里不重复实现，也不 import 内核的 Agent。
 
 import type { Employee, Room, RoomMessage, MsgStep } from "../../../src/team/types.js";
-import type { Message } from "../../../src/types.js";
+import type { Message, TaskReportScope } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
 import { loadEmployees, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./store.js";
 
 export type RunEmployeeArgs = {
+  reportOrigin?: TaskReportScope['origin'];
+  taskReportScope?: TaskReportScope;
   employee: Employee;
   /** 基础系统提示词 + 员工人格，已拼好 */
   sys: string;
@@ -47,6 +49,14 @@ export type OrchestratorDeps = {
 
 /** 正在跑的群轮次，用于「停止」 */
 const running = new Map<string, AbortController>();
+const roomWaiters = new Map<string, Array<() => void>>();
+function releaseRoom(roomId: string, controller?: AbortController) {
+  if (controller && running.get(roomId) !== controller) return;
+  running.delete(roomId);
+  const waiting = roomWaiters.get(roomId);
+  roomWaiters.delete(roomId);
+  waiting?.forEach(resolve => resolve());
+}
 
 /**
  * 同一房间/私聊的「人类发言」串行队列：忙时排到队尾、当前轮跑完自动接上，
@@ -192,7 +202,7 @@ export function abortRoom(roomId: string) {
  */
 export function forceStopRoom(roomId: string) {
   running.get(roomId)?.abort();
-  running.delete(roomId);
+  releaseRoom(roomId);
   const q = turnQueue.get(roomId);
   if (q) q.length = 0; // 「停止」= 连排队中的后续轮次也一起清掉，别停完当前又自动接着跑
 }
@@ -302,6 +312,7 @@ async function runRoomResponders(
         try {
           const turnImages: string[] = []; // 本轮 send_image 发的图，附到该员工的最终消息
           const out = await deps.runEmployee({
+            reportOrigin: { kind: 'room', id: roomId },
             employee: emp,
             sys,
             history,
@@ -333,7 +344,7 @@ async function runRoomResponders(
       }),
     );
   } finally {
-    running.delete(roomId);
+    releaseRoom(roomId, ac);
     // 兜底清掉本轮所有员工的进度块——正常收尾各员工已各自发过 done(幂等，清不存在的 key 无害)，
     // 但被 abort / 异常中途退出时 done 不会发，不清就会残留一个「正在干活…」永远转、看着像卡死。
     for (const empId of responders) deps.send("evt:team-room-progress", { roomId, empId, done: true });
@@ -360,15 +371,24 @@ export async function runDmTurn(
   incomingText: string,
   deps: OrchestratorDeps,
   depth = 0,
+  options: { strict?: boolean; explicitInput?: boolean; taskReportScope?: TaskReportScope } = {},
 ): Promise<string> {
+  // Asynchronous assignments/report delivery can wait for the room; synchronous dm_teammate
+  // retains its busy guard so A↔B synchronous calls cannot deadlock.
+  while (options.strict && running.has(dmId)) {
+    await new Promise<void>(resolve => {
+      const waiting = roomWaiters.get(dmId) ?? [];
+      waiting.push(resolve); roomWaiters.set(dmId, waiting);
+    });
+  }
   if (running.has(dmId)) {
     // 同一私聊正在跑上一轮：不并发，直接告诉发起方对方在忙，避免消息流错位
     return "（对方正在处理上一条消息，稍后再试。）";
   }
   const room = loadRooms().find((r) => r.id === dmId);
-  if (!room) return "";
+  if (!room) { if (options.strict) throw new Error('任务私聊已不存在。'); return ""; }
   const emp = loadEmployees().find((e) => e.id === responderId);
-  if (!emp) return "";
+  if (!emp) { if (options.strict) throw new Error('任务员工已不存在。'); return ""; }
 
   // 私聊里「另一位」= 发起方，用于场景提示词里点名「你在和 X 私聊」
   const otherId = (room.members || []).find((id) => id !== responderId);
@@ -385,15 +405,15 @@ export async function runDmTurn(
   try {
     const base = deps.baseSys();
     const proj = projectFor(responderId, loadRoomMessages(dmId));
-    if (!proj.length) return "";
+    if (!proj.length && !options.explicitInput) return "";
     // 投影最后一条恒为 user（收信方视角别人的话），取它当本轮 input，其余当历史
     const lastMsg = proj[proj.length - 1];
-    const input =
+    const input = options.explicitInput ? incomingText :
       lastMsg.content
         .map((b: any) => (b?.type === "text" ? b.text : ""))
         .join("")
         .trim() || incomingText;
-    const history = proj.slice(0, -1);
+    const history = options.explicitInput ? proj : proj.slice(0, -1);
 
     // 转派工具是否本轮真的被剔除（只有转派链到顶才剔）。之前无条件写「dm_teammate 不可用」是 bug：
     // 人类直接私聊(depth=0)时 dm_teammate/assign_task 其实可用，那句话误导员工谎称联系不了同事。
@@ -401,11 +421,15 @@ export async function runDmTurn(
     const toolNote = transfersExcluded
       ? `本轮已到转派链上限，dm_teammate / assign_task 暂不可用是正常设计，别向对方提「某工具不可用」，直接把事做了或直说结果即可。`
       : `需要找别的同事对齐或派活时：用 dm_teammate 同步问一句、assign_task 异步把活交出去——别说自己联系不上同事。`;
-    const scene = `## 当前场景\n\n你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。只说你自己要说的，别替对方回答，也别复述已有内容。${toolNote}`;
+    const sceneIntro = room.type === 'dm'
+      ? `你在和「${otherName}」的一对一私聊里。对方刚给你发了消息，请直接回复对方。`
+      : `你在群聊「${room.name}」里，请响应当前输入并向群里的用户汇报。`;
+    const scene = `## 当前场景\n\n${sceneIntro}只说你自己要说的，别替对方回答，也别复述已有内容。${toolNote}`;
     const sys = buildEmployeeSystem(emp, base, loadEmployeeMemory(emp.id), scene);
 
     const turnImages: string[] = []; // 本轮 send_image 发的图，附到最终消息里显示
     const out = await deps.runEmployee({
+      reportOrigin: { kind: 'room', id: dmId }, taskReportScope: options.taskReportScope,
       employee: emp,
       sys,
       history,
@@ -416,24 +440,27 @@ export async function runDmTurn(
       dmDepth: depth, // 透传深度：本轮员工若再调 dm_teammate，工具据此 +1
       onProgress: (ev) => { if (ev.kind === "image") { turnImages.push(ev.dataUrl); return; } applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
-    if (ac.signal.aborted) return "";
+    if (ac.signal.aborted) { if (options.strict) throw new DOMException('任务已取消。', 'AbortError'); return ""; }
     const snap = snapshotEmp(dmId, emp.id); // 落库前取执行明细
     applyProg(dmId, emp.id, emp.name, { kind: "done" });
     deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
     const text = (out || "").trim() || (turnImages.length ? "" : "（没有输出）");
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined, images: turnImages.length ? turnImages : undefined });
-    return text;
+    return text || (turnImages.length ? `已交付${turnImages.length}张图片，见员工私聊中的产物。` : '');
   } catch (e: any) {
-    if (ac.signal.aborted) return "";
+    if (ac.signal.aborted) { if (options.strict) throw new DOMException('任务已取消。', 'AbortError'); return ""; }
     deps.log("team", "私聊出错", emp.name, String(e?.message || e).slice(0, 200));
     const errText = `出错了：${String(e?.message || e).slice(0, 300)}`;
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: errText, error: true });
+    if (options.strict) throw e;
     return errText;
   } finally {
-    running.delete(dmId);
-    deps.send("evt:team-room-progress", { roomId: dmId, empId: responderId, done: true }); // abort/异常兜底清进度块
-    clearRoomProgress(dmId); // 本轮结束，清进度真相源
-    deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: busy(dmId) }); // 还有排队轮则灯不灭
+    if (running.get(dmId) === ac) {
+      releaseRoom(dmId, ac);
+      deps.send("evt:team-room-progress", { roomId: dmId, empId: responderId, done: true }); // abort/异常兜底清进度块
+      clearRoomProgress(dmId); // 本轮结束，清进度真相源
+      deps.send("evt:team-room", { roomId: dmId, messages: loadRoomMessages(dmId), running: busy(dmId) }); // 还有排队轮则灯不灭
+    }
   }
 }
 

@@ -3,6 +3,7 @@
 // - OpenAIProvider：任意 OpenAI 兼容 /chat/completions（本地 vLLM 等），做消息与工具的双向转换
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
+import { generateSubscriptionImage } from "../imagegen/subscription.mjs";
 import type { Config } from "../config.js";
 import type {
   ContentBlock,
@@ -724,6 +725,11 @@ class CodexProvider implements Provider {
   // 重发的上下文才能命中 prompt 缓存(便宜)。之前每请求 randomUUID → 每步换后端、缓存全冷 → 输入按新增算、消耗飞快。
   private readonly sessionId = randomUUID();
   constructor(private cfg: Config) {}
+
+  generateImage: NonNullable<Provider['generateImage']> = (options) => generateSubscriptionImage({
+    ...options, accessToken: this.cfg.codexToken, accountId: this.cfg.codexAccountId,
+    responsesEndpoint: this.cfg.codexEndpoint,
+  });
 
   async complete(
     system: string,

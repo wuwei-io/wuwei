@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import type { Tool, ToolContext, ToolResult } from "../types.js";
 import { CHROME_TOOLS } from "./browser.js";
 import { COMPUTER_TOOLS } from "./computer.js";
+import { codexImageTool } from "./codex-imagegen.js";
 import * as brain from "../brain/index.js";
 
 // 全局记忆文件：跨会话持久，注入到每次对话的系统提示词
@@ -1012,6 +1013,7 @@ const brainReadDocTool: Tool = {
 };
 
 export const ALL_TOOLS: Tool[] = [
+  codexImageTool,
   readTool,
   writeTool,
   editTool,
