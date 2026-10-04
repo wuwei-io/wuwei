@@ -93,6 +93,7 @@ export interface ToolContext {
   turnId?: string;
   reportOrigin?: TaskReportScope['origin'];
   taskReportScope?: TaskReportScope; // 子任务沿用根批次，结果统一回到最初的派活会话
+  platformImage?: (input: Record<string,unknown>,ctx: ToolContext) => Promise<ToolResult>;
   generateImage?: Provider['generateImage']; // 绑定本轮实际 provider；不读全局账号设置
   // ask_decision 下发决策并阻塞等三态回批；上层(桌面端)注入，未注入=不可用(CLI 无交互)
   requestDecision?: (decision: Decision) => Promise<DecisionResponse>;
@@ -156,6 +157,7 @@ export interface ProviderResult {
 
 export interface Provider {
   name: string;
+  platformImage?: (input: Record<string,unknown>,ctx: ToolContext) => Promise<ToolResult>;
   generateImage?: (options: Omit<import('./imagegen/subscription.mjs').SubscriptionImageOptions,
     'accessToken' | 'accountId' | 'responsesEndpoint'>) => Promise<import('./imagegen/subscription.mjs').SubscriptionImageResult>;
   contextWindow?: number;

@@ -394,6 +394,7 @@ export class Agent {
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
       const stepProvider = this.provider;
       const stepTools = this.tools.filter(t => (!t.requiresImageGeneration || !!stepProvider.generateImage)
+        && (t.name !== 'platform_imagegen' || !!stepProvider.platformImage)
         && (t.name !== 'ask_decision' || !!(hooks.requestDecision || this.ctx.requestDecision))
         && (t.name !== 'ask_user' || !(hooks.remoteExecution || this.ctx.remoteExecution)));
       const stepToolMap = new Map(stepTools.map(t => [t.name, this.toolMap.get(t.name) ?? t]));
@@ -521,7 +522,7 @@ export class Agent {
       for (let idx = 0; idx < toolUses.length; idx++) {
         const call = toolUses[idx];
         const tool = stepToolMap.get(call.name);
-        if (!tool || (tool.requiresImageGeneration && !stepProvider.generateImage)) {
+        if (!tool || (tool.name==='platform_imagegen' && !stepProvider.platformImage) || (tool.requiresImageGeneration && !stepProvider.generateImage)) {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
@@ -559,6 +560,7 @@ export class Agent {
           const out = await tool.run(call.input, { ...this.ctx, signal, turnId,
             remoteExecution: hooks.remoteExecution || this.ctx.remoteExecution,
             requestDecision: hooks.requestDecision || this.ctx.requestDecision,
+            platformImage: stepProvider.platformImage,
             generateImage: stepProvider.generateImage?.bind(stepProvider) }); // 按本轮后端绑定，切换/并发不串账号
           let displayImage = out.displayImage;
           if (displayImage && !out.image) {

@@ -1,3 +1,4 @@
+import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
 // Provider 实现：把统一的 Message/Tool 语义翻译到具体后端。
 // - AnthropicProvider：原生 Anthropic Messages API（流式）
 // - OpenAIProvider：任意 OpenAI 兼容 /chat/completions（本地 vLLM 等），做消息与工具的双向转换
@@ -913,6 +914,10 @@ function toResponsesInput(messages: Message[]): any[] {
 export function makeProvider(cfg: Config): Provider {
   const p: Provider = cfg.provider === "codex" ? new CodexProvider(cfg)
     : cfg.provider === "openai" ? new OpenAIProvider(cfg) : new AnthropicProvider(cfg);
+  // Strict known hosted endpoints only: never use a BYOK credential as website token.
+  if(cfg.provider==='openai' && cfg.apiKey && cfg.baseUrl && ['https://wuweiai.io/api/gateway','https://gw.wuweiai.io/api/gateway'].includes(cfg.baseUrl.replace(/\/$/,''))) {
+    p.platformImage=createPlatformImageSession('https://wuweiai.io',cfg.apiKey);
+  }
   p.contextWindow = cfg.contextWindow;
   p.compactThreshold = cfg.compactThreshold;
   return p;

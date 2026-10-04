@@ -1,0 +1,45 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
+import {homedir} from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {PlatformBillingClient,type Sku} from './platform-billing-client.js';
+import type {ToolContext,ToolResult} from '../types.js';
+
+// Bound to the actual hosted provider credentials, never global settings or subscription/BYOK.
+export function createPlatformImageSession(base: string,token: string,recoveryRoot=join(homedir(),'.wuwei','image-orders')) {
+ const client=new PlatformBillingClient(base,()=>token,'platform',180000);
+ return async(input:Record<string,unknown>,ctx:ToolContext):Promise<ToolResult>=>{
+  try {
+   if(input.action==='catalog') return {content:JSON.stringify(await client.catalog())};
+   const root=resolve(ctx.cwd,'.wuwei','output');
+   if(typeof input.order_id==='string') {
+    const detail=await client.order(input.order_id);
+    if(detail.status!=='settled') return {content:JSON.stringify(detail)};
+    const bytes=await client.image(input.order_id);await mkdir(root,{recursive:true});
+    const path=join(root,`image-${input.order_id}-${randomUUID()}.png`);await writeFile(path,bytes,{flag:'wx'});
+    return {content:JSON.stringify({order_id:input.order_id,path,charged_coins:detail.charged_coins,displayed:true}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
+   }
+   if(typeof input.prompt!=='string' || typeof input.sku_id!=='string' || !ctx.requestDecision) throw new Error('生图需要用户确认预计费用；当前会话不支持确认');
+   const catalog=await client.catalog();if(!Array.isArray(catalog)) throw new Error('图片目录无效');
+   const sku=catalog.find((s:Sku)=>s.sku_id===input.sku_id) as Sku|undefined;
+   if(!sku) return {content:JSON.stringify({code:'SKU_UNAVAILABLE',catalog}),isError:true};
+   const query={sku_id:sku.sku_id,price_version:sku.price_version,prompt:input.prompt,count:1 as const};
+   const quote=await client.quote(query);
+   const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:'生图费用确认',question:`预计预占 ${quote.estimated_coins} 币。最终按官方实费结算，最多授权 ${quote.authorization_ceiling} 币；不足时暂停原图结算，不重新生图。是否继续？`,options:[{label:'确认生成',value:'generate_image',tone:'safe'},{label:'取消',value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
+   if(decision.value!=='generate_image') return {content:'已取消生图，未下单。'};
+   const attempt=client.prepare({...query,authorized_budget:quote.authorization_ceiling},sku,quote);
+   // Durable handle BEFORE POST. Never automatically recreate after timeout/process restart.
+   await mkdir(recoveryRoot,{recursive:true,mode:0o700});
+   const receipt=join(recoveryRoot,attempt.key+'.json');
+   await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:'sending'}),{flag:'wx',mode:0o600});
+   try {
+    const order=await client.create(attempt);
+    await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:attempt.state,order_id:order.order_id}),{mode:0o600});
+    if(order.status!=='settled') return {content:JSON.stringify({...order,recovery_file:receipt,message:'只查询或结算原订单；不重新生图'})};
+    const detail=await client.order(order.order_id),bytes=await client.image(order.order_id);
+    await mkdir(root,{recursive:true});const path=join(root,`image-${order.order_id}.png`);await writeFile(path,bytes,{flag:'wx'});
+    return {content:JSON.stringify({order_id:order.order_id,path,charged_coins:detail.charged_coins,displayed:true}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
+   } catch(error) {await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:attempt.state,order_id:attempt.orderId}),{mode:0o600});throw error;}
+  } catch(error) {return {content:JSON.stringify({code:'IMAGE_ORDER_ERROR',message:error instanceof Error?error.message:'生图失败，不自动重试'}),isError:true};}
+ };
+}

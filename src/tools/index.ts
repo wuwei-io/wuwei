@@ -1,3 +1,4 @@
+import {platformImageTool} from './platform-imagegen.js';
 // 工具集：每个工具 = JSON Schema（给模型）+ 本地执行函数。
 // P1 版：Read / Write / Edit / Bash / Glob / Grep —— 覆盖"读代码、改文件、跑命令、搜索"。
 import { promises as fs, existsSync } from "node:fs";
@@ -1015,6 +1016,7 @@ const brainReadDocTool: Tool = {
 };
 
 export const ALL_TOOLS: Tool[] = [
+  platformImageTool,
   codexImageTool,
   readTool,
   writeTool,
