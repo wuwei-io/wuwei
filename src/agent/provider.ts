@@ -341,15 +341,15 @@ class OpenAIProvider implements Provider {
     // 谁也想不到是客户端把图丢了（claude 就这么漏了很久，直连正常、走托管就瞎）。
     // 黑名单漏一个的代价只是「报一次 400」，看得见、补一条就好。
     // 何况现在新模型默认都是多模态，纯文本才是少数派，名单该维护少数派。
-    // 已知纯文本（按各家官方文档核实过，2026-08）：
+    // 已知纯文本（DeepSeek 按 2026-10 官方 Vision / Models & Pricing 核实）：
     //  · 智谱 GLM-4/GLM-5 非 v 版 —— 官方明确写「输入/输出模态：文本」；GLM-4v/4.6v 才是视觉版
-    //  · DeepSeek 全系 —— 官方特性列表(Json Output/Tool Calls/FIM…)没有视觉，V3/R1 一贯纯文本；
-    //    若哪天出了 deepseek-vl 之类，含 vl 会自动放行
+    //  · DeepSeek 旧 Chat/Reasoner、V3/R1 和 V4 Pro 为纯文本。
+    //    V4.1 Flash 原生支持视觉：deepseek-flash 及 V4 Flash 的兼容别名不能被整厂商拦掉。
     //  · Moonshot 老的 moonshot-v1-*k（Kimi K2.6 起支持图片，K3 官方写明「1M 上下文与视觉理解」，故不列入）
     // ⚠️这些模型收到图片不一定报错——GLM-5.2 实测是「收下然后没反应」，比报 400 更难排查，
     //    所以宁可保守列进来，也别让用户对着空白等半天。
     const NON_VISION =
-      /deepseek(?!.*vl)|moonshot-v1-\d+k$|glm-[45](?!.*v)|qwen-?(max|plus|turbo)|embedding|\bbge\b/i;
+      /deepseek-(?:chat|reasoner|v3(?:[.-]\d+)*|r1|v4-pro)(?:$|[-/:])|moonshot-v1-\d+k$|glm-[45](?!.*v)|qwen-?(max|plus|turbo)|embedding|\bbge\b/i;
     const vision =
       this.cfg.vision === true
         ? true // 强制开：自建端点模型名不含 vl 但其实支持
@@ -675,40 +675,42 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
     } else {
       // user：可能是纯文本、图片，或若干 tool_result
       const toolResults = m.content.filter((b) => b.type === "tool_result");
+      const toolImageParts: any[] = [];
       if (toolResults.length) {
         for (const r of toolResults as any[]) {
-          // 多模态数组(截图工具)→ OpenAI 的 tool role 不吃图，降级：取文本 + 一句"[截图]"占位。
+          // Chat Completions 的图片放在 user 消息。先发完全部 tool 响应，
+          // 再补携带截图的 user 消息，保持并行 tool_calls / tool 响应顺序合法。
           let content = r.content;
           if (Array.isArray(content)) {
             const txt = content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-            const hasImg = content.some((c: any) => c.type === "image" && !c.displayOnly); // displayOnly 图不给模型、也不加占位
-            content = txt + (hasImg ? "\n[附截图，当前模型不支持看图；换 Claude 可看]" : "");
+            const images = content.filter((c: any) => c.type === "image" && !c.displayOnly);
+            content = txt;
+            if (images.length && vision) {
+              toolImageParts.push({ type: "text", text: tt(
+                `[工具 ${r.tool_use_id} 返回的图片]`, `[Images returned by tool ${r.tool_use_id}]`,
+              ) });
+              for (const im of images) toolImageParts.push({ type: "image_url", image_url: { url: capImage(im.dataUrl) } });
+            } else if (images.length) {
+              content += tt("\n[附截图，当前模型不支持看图]", "\n[Screenshot attached; this model does not support images]");
+            }
           }
           out.push({ role: "tool", tool_call_id: r.tool_use_id, content });
         }
-        const text = m.content
-          .filter((b) => b.type === "text")
-          .map((b: any) => b.text)
-          .join("");
-        if (text) out.push({ role: "user", content: text });
-      } else {
-        const images = m.content.filter((b) => b.type === "image") as any[];
-        const text = m.content
-          .filter((b) => b.type === "text")
-          .map((b: any) => b.text)
-          .join("");
-        if (images.length && vision) {
-          const parts: any[] = [];
-          if (text) parts.push({ type: "text", text });
-          for (const im of images) parts.push({ type: "image_url", image_url: { url: capImage(im.dataUrl) } });
-          out.push({ role: "user", content: parts });
-        } else if (images.length) {
-          // 纯文本模型：图片转占位文本，避免 image_url 报 400 卡死历史（占位词跟随界面语言，别给英文用户塞中文）
-          const note = images.map(() => tt("[图片]", "[Image]")).join(" ");
-          out.push({ role: "user", content: text ? `${text}\n${note}` : note });
-        } else {
-          out.push({ role: "user", content: text });
-        }
+      }
+      // 普通附件和与工具结果同条注入的附件使用同一条转换链路，避免漏图。
+      const images = m.content.filter((b) => b.type === "image") as any[];
+      const text = m.content.filter((b) => b.type === "text").map((b: any) => b.text).join("");
+      if (toolImageParts.length || (images.length && vision)) {
+        const parts: any[] = [...toolImageParts];
+        if (text) parts.push({ type: "text", text });
+        for (const im of images) parts.push({ type: "image_url", image_url: { url: capImage(im.dataUrl) } });
+        out.push({ role: "user", content: parts });
+      } else if (images.length) {
+        // 纯文本模型：图片转占位文本，避免 image_url 报 400 卡死历史。
+        const note = images.map(() => tt("[图片]", "[Image]")).join(" ");
+        out.push({ role: "user", content: text ? `${text}\n${note}` : note });
+      } else if (text || !toolResults.length) {
+        out.push({ role: "user", content: text });
       }
     }
   }

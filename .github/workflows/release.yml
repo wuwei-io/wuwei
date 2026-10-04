@@ -28,10 +28,10 @@ jobs:
       - name: Install deps
         run: npm install --legacy-peer-deps
 
-      - name: Validate subscription images and asynchronous task reports
+      - name: Validate images, model vision and asynchronous task reports
         run: |
           npm run typecheck
-          node --import tsx --test tests/subscription-imagegen.test.mjs tests/subscription-image-routing.test.mjs tests/team-task-reports.test.mjs tests/team-assignment-execution.test.mjs
+          node --import tsx --test tests/subscription-imagegen.test.mjs tests/subscription-image-routing.test.mjs tests/deepseek-vision.test.mjs tests/team-task-reports.test.mjs tests/team-assignment-execution.test.mjs
 
       - name: Build renderer/main
         run: npm run desktop:build
