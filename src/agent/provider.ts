@@ -867,6 +867,19 @@ class CodexProvider implements Provider {
   }
 }
 
+// 工具的内部 text/image 块不能原样发给 Responses（会 400）。
+// 生图的 displayOnly 图片只给用户看；过滤后纯文本用字符串回传，截图则使用协议的 input_* 块。
+function toResponsesToolOutput(content: unknown): string | any[] {
+  if (!Array.isArray(content)) return typeof content === "string" ? content : String(content ?? "");
+  const parts: any[] = [];
+  for (const block of content) {
+    if (block?.type === "text") parts.push({ type: "input_text", text: block.text });
+    else if (block?.type === "image" && !block.displayOnly)
+      parts.push({ type: "input_image", image_url: capImage(block.dataUrl) });
+  }
+  return parts.every((part) => part.type === "input_text") ? parts.map((part) => part.text).join("") : parts;
+}
+
 // 统一 Message[] → Responses input[]（tool_use→function_call，tool_result→function_call_output）
 function toResponsesInput(messages: Message[]): any[] {
   const input: any[] = [];
@@ -887,7 +900,7 @@ function toResponsesInput(messages: Message[]): any[] {
       // user：文本 / 图片 / 工具结果
       for (const b of m.content) {
         if (b.type === "tool_result")
-          input.push({ type: "function_call_output", call_id: b.tool_use_id, output: b.content });
+          input.push({ type: "function_call_output", call_id: b.tool_use_id, output: toResponsesToolOutput(b.content) });
         else if (b.type === "text" && b.text)
           input.push({ role: "user", content: [{ type: "input_text", text: b.text }] });
         else if (b.type === "image")
