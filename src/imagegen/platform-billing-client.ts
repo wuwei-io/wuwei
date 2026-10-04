@@ -12,7 +12,7 @@ export interface CreatedOrder {
   order_id: string; status: string; reserved_coins: number; unit_price_coins: number;
 }
 export interface OrderDetail {
-  order_id: string; status: string; delivered_count: number; charged_coins: number;
+  order_id: string; status: string; delivered_count: number; charged_coins: number; actual_coins?: number | null;
   released_coins: number; images: { asset_id: string; url: string; expires_at: string | null }[];
   error_code: string | null;
 }
@@ -43,7 +43,7 @@ export class PlatformBillingClient {
   private guard() {
     if (this.source !== 'platform') throw new BillingError('SOURCE_ISOLATED', '订阅/BYOK 不调用平台计费，也不自动降级');
   }
-  private async request(path: string, method = 'GET', body?: OrderInput | Omit<OrderInput, 'authorized_budget'>, key?: string): Promise<unknown> {
+  private async request(path: string, method = 'GET', body?: OrderInput | Omit<OrderInput, 'authorized_budget'> | {authorized_budget:number}, key?: string): Promise<unknown> {
     this.guard();
     const token = await this.token();
     if (!token.trim()) throw new BillingError('AUTH_REQUIRED', '请先登录');
@@ -132,6 +132,17 @@ export class PlatformBillingClient {
       attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT'].includes(error.code) ? 'ready' : 'unknown';
       throw error;
     }
+  }
+  async lookup(key: string): Promise<CreatedOrder> {
+    if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new BillingError('INVALID_INPUT','无效恢复凭据');
+    const result=await this.request('/api/images/orders','GET',undefined,key) as CreatedOrder;
+    if (!result || !/^[0-9a-f-]{36}$/i.test(result.order_id) || typeof result.status!=='string') throw new BillingError('UNKNOWN','原订单查询结果无效，不得重新生成');
+    return result;
+  }
+  async reauthorize(orderId: string,budget: number): Promise<unknown> {
+    this.guard();
+    if (!/^[0-9a-f-]{36}$/i.test(orderId) || !Number.isSafeInteger(budget) || budget<1) throw new BillingError('INVALID_INPUT','无效原订单授权');
+    return this.request(`/api/images/orders/${encodeURIComponent(orderId)}/reauthorize`,'POST',{authorized_budget:budget});
   }
   async settle(orderId: string): Promise<unknown> {
     this.guard();
