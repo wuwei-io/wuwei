@@ -5,12 +5,17 @@
 // 工具集、凭证刷新那套逻辑都在主进程，这里不重复实现，也不 import 内核的 Agent。
 
 import type { Employee, Room, RoomMessage, MsgStep } from "../../../src/team/types.js";
-import type { Message, TaskReportScope } from "../../../src/types.js";
+import type { Message, TaskReportScope, ToolContext, Provider } from "../../../src/types.js";
 import { pickResponders, projectFor } from "./projection.js";
 import { appendMessage, loadRoomMessages, loadRooms } from "./room.js";
 import { loadEmployees, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig } from "./store.js";
 
 export type RunEmployeeArgs = {
+  remoteExecution?: ToolContext['remoteExecution'];
+  requestDecision?: ToolContext['requestDecision'];
+  onPermission?: (name: string, input: unknown) => Promise<'allow' | 'deny'>;
+  images?: string[];
+  providerOverride?: Provider;
   reportOrigin?: TaskReportScope['origin'];
   taskReportScope?: TaskReportScope;
   employee: Employee;
@@ -63,27 +68,33 @@ function releaseRoom(roomId: string, controller?: AbortController) {
  * 而不是像旧代码 `running.has(key) → return` 那样把第二条消息直接吞掉——
  * 那正是「同一员工第二次唤醒没反应」的根因(第二条被并发锁挡下、根本没跑、也没任何反馈)。
  */
-const turnQueue = new Map<string, Array<() => Promise<void>>>();
+type QueuedTurn = (() => Promise<void>) & { cancel: () => void };
+const turnQueue = new Map<string, QueuedTurn[]>();
 
 /**
  * 把一轮执行排进 key 的串行队列。
  * @returns true=当前已有轮次在跑、这条被排队；false=队列空、立即开跑。
  */
-function enqueueTurn(key: string, task: () => Promise<void>): boolean {
+function enqueueTurn(key: string, task: () => Promise<void>): { queued: boolean; completion: Promise<void> } {
+  let complete!: () => void;
+  let fail!: (error: unknown) => void;
+  const completion = new Promise<void>((resolve, reject) => { complete = resolve; fail = reject; });
+  const execute = Object.assign(async () => { try { await task(); complete(); } catch (error) { fail(error); } },
+    { cancel: () => fail(new Error('排队任务已停止')) });
   const existing = turnQueue.get(key);
-  if (existing) { existing.push(task); return true; } // 忙：排队尾
-  const q: Array<() => Promise<void>> = [];
+  if (existing) { existing.push(execute); return { queued: true, completion }; } // 忙：排队尾
+  const q: QueuedTurn[] = [];
   turnQueue.set(key, q);
   void (async () => {
     try {
-      await task();
+      await execute();
       // 依次消费排队期间新进来的轮次；每轮都能看到前一轮已落库的结果(snapshot 在各 task 内部现取)
       while (q.length) { const next = q.shift(); if (next) await next(); }
     } finally {
       turnQueue.delete(key);
     }
   })();
-  return false;
+  return { queued: false, completion };
 }
 
 /** 该房间/私聊是否有轮次在跑或排队中——底栏运行灯据此稳定亮起，别在两轮之间闪灭。 */
@@ -204,7 +215,7 @@ export function forceStopRoom(roomId: string) {
   running.get(roomId)?.abort();
   releaseRoom(roomId);
   const q = turnQueue.get(roomId);
-  if (q) q.length = 0; // 「停止」= 连排队中的后续轮次也一起清掉，别停完当前又自动接着跑
+  if (q) { q.forEach(turn => turn.cancel()); q.length = 0; }
 }
 
 export function isRoomRunning(roomId: string): boolean {
@@ -228,11 +239,11 @@ function pushAndBroadcast(
  * 互相看不到对方本轮的回复。这是刻意的——串行会让后发言的人被先发言的带偏，
  * 而且慢得多。要让他们互相接话，用户再发一句（或 @ 对方）即可，下一轮就能看到。
  */
-export async function runRoomTurn(roomId: string, userText: string, deps: OrchestratorDeps): Promise<void> {
+export async function runRoomTurn(roomId: string, userText: string, deps: OrchestratorDeps, options: { images?: string[] } = {}): Promise<void> {
   const room = loadRooms().find((r) => r.id === roomId);
   if (!room) return;
   const text = (userText || "").trim();
-  if (!text) return;
+  if (!text && !options.images?.length) return;
 
   const all = loadEmployees();
   const members = room.members
@@ -250,6 +261,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     speaker: { id: "me", name: "我", kind: "human" },
     text,
     mentions: responders,
+    images: options.images,
   });
 
   if (!responders.length) {
@@ -263,10 +275,12 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
   }
 
   // 2. 执行轮走串行队列：当前轮在跑就排队、跑完自动接上(而非丢弃这条)。
-  const queued = enqueueTurn(roomId, () => runRoomResponders(roomId, room, members, responders, deps));
-  if (queued) {
+  const snapshot = loadRoomMessages(roomId);
+  const queued = enqueueTurn(roomId, () => runRoomResponders(roomId, room, members, responders, deps, snapshot));
+  if (queued.queued) {
     deps.send("evt:team-room-hint", { roomId, code: "queued", hint: "正在处理上一条，这条已排队，稍后自动接上。" });
   }
+  await queued.completion;
 }
 
 /** 跑一轮群响应：唤醒 responders 里的每名员工(先各回一条「收到」，再并行干活、落正式回复)。 */
@@ -276,6 +290,7 @@ async function runRoomResponders(
   members: Employee[],
   responders: string[],
   deps: OrchestratorDeps,
+  inputSnapshot: RoomMessage[],
 ): Promise<void> {
   const ac = new AbortController();
   running.set(roomId, ac);
@@ -289,7 +304,7 @@ async function runRoomResponders(
       if (emp) pushAndBroadcast(deps, roomId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: ACK_TEXT, ack: true });
     }
     // 快照：本轮所有员工都基于「到此为止(含刚落的收到)」的历史，互不影响。收到消息投影时会被跳过。
-    const snapshot = loadRoomMessages(roomId);
+    const snapshot = inputSnapshot;
 
     await Promise.all(
       responders.map(async (empId) => {

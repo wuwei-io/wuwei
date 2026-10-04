@@ -69,6 +69,8 @@ export interface RoundUsage {
 export type UsageReport = SessionUsage & { round?: RoundUsage };
 
 export interface AgentHooks {
+  remoteExecution?: ToolContext['remoteExecution'];
+  requestDecision?: ToolContext['requestDecision'];
   onTurnEnd?(turnId: string): void;
   onContextWindow?(window: number): void;
   onText?(delta: string): void;
@@ -391,7 +393,9 @@ export class Agent {
 
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
       const stepProvider = this.provider;
-      const stepTools = this.tools.filter(t => !t.requiresImageGeneration || !!stepProvider.generateImage);
+      const stepTools = this.tools.filter(t => (!t.requiresImageGeneration || !!stepProvider.generateImage)
+        && (t.name !== 'ask_decision' || !!(hooks.requestDecision || this.ctx.requestDecision))
+        && (t.name !== 'ask_user' || !(hooks.remoteExecution || this.ctx.remoteExecution)));
       const stepToolMap = new Map(stepTools.map(t => [t.name, this.toolMap.get(t.name) ?? t]));
       let result: Awaited<ReturnType<typeof this.provider.complete>>;
       let ctxTrims = 0; // 上下文超限时的硬清理次数(防死循环)
@@ -553,6 +557,8 @@ export class Agent {
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
           const out = await tool.run(call.input, { ...this.ctx, signal, turnId,
+            remoteExecution: hooks.remoteExecution || this.ctx.remoteExecution,
+            requestDecision: hooks.requestDecision || this.ctx.requestDecision,
             generateImage: stepProvider.generateImage?.bind(stepProvider) }); // 按本轮后端绑定，切换/并发不串账号
           let displayImage = out.displayImage;
           if (displayImage && !out.image) {

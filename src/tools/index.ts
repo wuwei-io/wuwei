@@ -429,10 +429,11 @@ const askDecisionTool: Tool = {
     properties: {
       title: { type: "string", description: "简短徽章文案，如「需要你决定」" },
       question: { type: "string", description: "给用户看的白话问句（不是命令/代码）" },
+      context: { type: "string", description: "当前任务背景和不同选择的影响，用白话说明（可选）" },
       risk: { type: "string", enum: ["high", "low"], description: "high=重要/不可逆(系统不计时一直等)；low=小事(可配倒计时)" },
       options: {
         type: "array",
-        minItems: 1,
+        minItems: 2,
         maxItems: 3,
         description: "2~3 个选项；每项 value 为稳定英文 key，勿占用 allow/deny",
         items: {
@@ -471,8 +472,8 @@ const askDecisionTool: Tool = {
     if (!risk)
       return { content: tt("risk 必须为 high 或 low", "risk must be 'high' or 'low'"), isError: true };
     const rawOpts = Array.isArray(input.options) ? input.options : [];
-    if (rawOpts.length < 1 || rawOpts.length > 3)
-      return { content: tt("options 必须 1~3 项", "options must have 1 to 3 items"), isError: true };
+    if (rawOpts.length < 2 || rawOpts.length > 3)
+      return { content: tt("options 必须 2~3 项", "options must have 2 to 3 items"), isError: true };
     const seen = new Set<string>();
     const options: import("../types.js").DecisionOption[] = [];
     for (const o of rawOpts) {
@@ -502,6 +503,7 @@ const askDecisionTool: Tool = {
       risk,
       title,
       question,
+      context: input.context ? String(input.context) : undefined,
       options,
       allowCustom: input.allowCustom === true,
       timeoutSec,

@@ -24,7 +24,7 @@ import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
-import type { Tool, ToolResult, TaskReportScope } from "../../src/types.js";
+import type { Tool, ToolResult, ToolContext, TaskReportScope } from "../../src/types.js";
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
@@ -91,6 +91,8 @@ import {
   claudeAutoRefreshEnabled,
   telemetryEnabled,
   teamEnabled,
+  remoteShareSubscription,
+  remoteEnabled,
   type Settings,
   type SessionBal,
 } from "./settings.js";
@@ -99,7 +101,7 @@ import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./te
 import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments, createDepartment, updateDepartment, removeDepartment } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
-import { runDmTurn, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
+import { runDmTurn, runRoomTurn, abortRoom, isRoomRunning, enqueueEmpTask, empQueueLen, empIsBusy, type RunEmployeeArgs, type OrchestratorDeps } from "./team/orchestrator.js";
 import { TaskReports, ConversationReports, taskReportPrompt } from './team/task-reports.js';
 import { findOrCreateDm, appendMessage as appendDmMessage, loadRooms, loadRoomMessages, createRoom, updateRoom, deleteRoom } from "./team/room.js";
 // 「一人公司 SOP 库」可选模块：挂在 team 总开关下（teamEnabled 为真才注册工具/通道）。
@@ -148,7 +150,9 @@ import {
   type WuweiSession,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
-import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRequestHandler } from "./relay-client.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels } from "./relay-client.js";
+import { runRemoteSessionTurn } from './remote-sessions.js';
+import { runRemoteRoomTurn } from './remote-rooms.js';
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -252,19 +256,21 @@ function providerForChannel(channelId: string | null | undefined): ReturnType<ty
   const pid = channelId === "claude-code-subscription" ? "claude-oauth" : channelId === "codex-subscription" ? "codex" : null;
   if (!pid) return null;
   const slot = (gs.creds || {})[pid] || {};
-  const model = slot.model || gs.model || "";
+  const model = slot.model || (gs.providerId === pid ? gs.model : "") || "";
   if (!model) return null;
   return providerForEmployee({ model: { providerId: pid, model } });
 }
 
 // 远程同步(不落库)：把本机 Message 拍平成手机可直接渲染的 {id,role,text,image}。tool 块跳过，只取文本+首图。
 function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assistant"; text?: string; image?: string } {
-  const role: "user" | "assistant" = m?.role === "user" ? "user" : "assistant";
+  const role: "user" | "assistant" = m?.role === "user" && !m?.content?.some((b: any) => b?.type === 'tool_result') ? "user" : "assistant";
   let text = "";
   let image: string | undefined;
   for (const b of (m?.content as any[]) || []) {
     if (b?.type === "text") text += b.text || "";
     else if (b?.type === "image" && !image) image = b.dataUrl;
+    else if (b?.type === "tool_result" && Array.isArray(b.content) && !image)
+      image = b.content.find((part: any) => part?.type === 'image')?.dataUrl;
   }
   return { id: `${role}-${i}`, role, text: text.trim() || undefined, image };
 }
@@ -272,18 +278,27 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope }: RunEmployeeArgs): Promise<string> => {
-  const p = providerForEmployee(employee) || provider;
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, remoteExecution }: RunEmployeeArgs): Promise<string> => {
+  if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
+  if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
+      ['claude-oauth', 'codex'].includes(employee.model?.providerId || curProviderId()))
+    throw new Error('本机未同步该员工使用的订阅渠道');
+  const employeeProvider = providerOverride || providerForEmployee(employee);
+  if (remoteExecution && employee.model && !employeeProvider) throw new Error('该员工配置的模型未就绪');
+  const p = employeeProvider || provider;
   if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
   const all = desktopTools();
   let tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
   if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
   const map = new Map(tools.map((t) => [t.name, t]));
   // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
-  const a = new Agent(p, sys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope }, map, agentOpts);
+  const remoteSys = remoteExecution ? sys + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。' : sys;
+  const a = new Agent(p, remoteSys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope,
+    remoteExecution, requestDecision: requestDecision || remoteExecution?.requestDecision }, map, agentOpts);
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
+    requestPermission: onPermission || remoteExecution?.requestPermission ? async (tool: any, args: any) => (onPermission || remoteExecution!.requestPermission!)(tool.name, args) : undefined,
     onTurnEnd: (turnId: string) => taskReports.closeTurn(turnId),
     onText: (delta: string) => onProgress?.({ kind: "text", delta }),
     onToolStart: (id: string, name: string, input: any) => onProgress?.({ kind: "tool-start", id, name, input }),
@@ -295,14 +310,14 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
       try { saveRateLimits(pid, rl as any); } catch { /* 存不下不影响本轮 */ }
       send("evt:ratelimits", rl);
     },
-  } as any, signal);
+  } as any, signal, images);
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
 };
 
 // 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
-function teamOrchestratorDeps(): OrchestratorDeps {
-  return { send, log, runEmployee: runEmployeeTurn, baseSys: () => sysPrompt };
+function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
+  return { send, log, runEmployee: args => runEmployeeTurn({ ...args, remoteExecution: ctx?.remoteExecution }), baseSys: () => sysPrompt };
 }
 
 const conversationReports = new ConversationReports({
@@ -1726,7 +1741,7 @@ const dmTeammateTool: Tool = {
     send("evt:team-room", { roomId: dm.id, messages: msgs, running: true });
     // 同步跑目标员工一轮拿回复回给发起方（走直连+runDmTurn 的 running 守卫，天然防「A↔B 互 dm」死锁）。
     // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
-    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(), (ctx.dmDepth ?? 0) + 1,
+    const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(ctx), (ctx.dmDepth ?? 0) + 1,
       { taskReportScope: ctx.taskReportScope });
     return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
   },
@@ -1800,7 +1815,7 @@ const assignTaskTool: Tool = {
         let outcome: { status: 'completed' | 'failed' | 'cancelled'; text: string } = { status: 'failed', text: '未取得任务结果。' };
         await enqueueEmpTask(target.id, async () => {
           try {
-            const text = await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(), assignDepth,
+            const text = await runDmTurn(dm.id, target.id, task, teamOrchestratorDeps(ctx), assignDepth,
               { strict: true, explicitInput: true, taskReportScope: scope });
             outcome = { status: text.trim() && text !== '（没有输出）' ? 'completed' : 'failed', text: text || '员工没有返回文字结果，请检查私聊中的产物。' };
           } catch (error: any) {
@@ -2538,7 +2553,7 @@ function refreshAgentTools() {
 // 复用唯一真实变换 applyEnvFromSettings→loadConfig(同步、无 await 间隙)：临时把 env 换成该会话的身份构建，
 // 构建完立刻还原全局 env→全局 provider/显示保持跟聚焦会话一致。会话没存身份(全新/老会话)→回退全局种子。
 // 这样每个会话的 agent 从出生就绑「它自己的模型」，全局怎么漂都带不动别的会话——从根上杜绝串会话。
-function providerForSession(id: string): ReturnType<typeof makeProvider> | null {
+function providerForSession(id: string, strict = false): ReturnType<typeof makeProvider> | null {
   const gs = loadSettings();
   try {
     const meta = listSessions().find((x) => x.id === id);
@@ -2560,7 +2575,7 @@ function providerForSession(id: string): ReturnType<typeof makeProvider> | null 
       applyEnvFromSettings(gs); // 还原全局 env(与 initProvider/applySettings 后一致)
     }
   } catch {
-    return provider;
+    return strict ? null : provider;
   }
 }
 
@@ -3255,41 +3270,87 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    setRemoteExecutor(async ({ text, images, model, signal, onDelta, onTool, onImage, onPermission, requestDecision }) => {
-      // model=手机端选的渠道 id(如 claude-code-subscription)。优先按渠道建本机对应 provider(Claude 订阅)，
-      // 认不出/没配就回退电脑当前全局 provider，别让远程执行直接失败。
-      const p = providerForChannel(model) || provider;
-      if (!p) return { error: "本机当前没有可用模型（请在电脑端左下角选一个平台/登录订阅）" };
-      try {
-        const tools = desktopTools();
-        const map = new Map(tools.map((t) => [t.name, t]));
-        // G1：把 relay-client 的决策通道塞进 ToolContext，ask_decision 工具据此把 Decision 下发手机、阻塞等三态回批。
-        // 与 requestPermission(危险工具拦截)并存不复用。未注入(纯本地)时工具走"无决策通道"兜底。
-        const a = new Agent(p, sysPrompt, tools, { cwd, sessionId: `__remote_${Date.now().toString(36)}`, requestDecision }, map, agentOpts);
-        await a.send(
-          text,
-          {
-            onText: (d: string) => onDelta(d),
-            onToolStart: (_id: string, name: string, input: any) => onTool?.(name, input),
-            // 工具产出的图(chrome_screenshot 截图 / send_image 生图)→转给手机显示
-            onToolEnd: (_id: string, _result: string, _isError: boolean, image?: string) => { if (image) onImage?.(image); },
-            // 危险工具(非只读)→推手机审批；没接审批通道则默认放行(兼容旧手机端)
-            // relay 返回三态 PermDecision；本轮 agent loop 只认 allow/deny(reply 留到 G1)，故在此降维：reply→deny 兜底。
-            requestPermission: onPermission
-              ? async (tool: any, input: any) => {
-                  const d = await onPermission(tool.name, input);
-                  return d.action === "allow" ? "allow" : "deny";
-                }
-              : undefined,
-          } as any,
-          signal,
-          images && images.length ? images : undefined, // 手机端带来的图一并喂给 agent
-        );
-        const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
-        return { text: last ? msgFullText(last as any) : "" };
-      } catch (e: any) {
-        return { error: String(e?.message || e).slice(0, 300) };
-      }
+    const remoteProvider = (channel: string | null | undefined, existingId?: string | null) => {
+      const settings = loadSettings();
+      const meta = existingId ? listSessions().find(session => session.id === existingId) : undefined;
+      if (!remoteShareSubscription(settings) && (!channel && ['claude-oauth', 'codex'].includes(meta?.providerId || settings?.providerId || '')))
+        throw new Error('本机未开启同步订阅，请在电脑设置中主动开启或选择非订阅渠道');
+      if (channel && !detectChannels(settings).some(item => item.id === channel)) throw new Error('该渠道不属于这台电脑当前共享的渠道');
+      const selected = channel === 'api-key' ? provider : channel ? providerForChannel(channel) : providerForSession(existingId || '', true);
+      if (!selected) throw new Error('所选渠道未就绪，请检查电脑端模型配置');
+      return selected;
+    };
+    setRemoteExecutor(async args => {
+      let remoteSid = '';
+      await ensureFreshClaudeOAuth();
+      const selected = remoteProvider(args.model, args.sessionId);
+      const remoteSettings = loadSettings();
+      const selectedBinding = args.model === 'claude-code-subscription' ? 'claude-oauth' : args.model === 'codex-subscription' ? 'codex' : args.model === 'api-key' ? remoteSettings?.providerId : undefined;
+      const permission = args.onPermission ? async (name: string, input: unknown): Promise<'allow' | 'deny'> => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined;
+      const toolNames = new Map<string, string>();
+      const result = await runRemoteSessionTurn({
+        sessionId: args.sessionId, text: secrets.redact(args.text).text, images: args.images, signal: args.signal,
+        onSession: id => args.onSession?.(id),
+        hooks: {
+          requestDecision: args.requestDecision,
+          remoteExecution: { shareSubscription: remoteShareSubscription(remoteSettings), requestDecision: args.requestDecision, requestPermission: permission },
+          onUsage: usage => { if (remoteSid === currentId) send('evt:usage', usage); },
+          onTurnEnd: turnId => taskReports.closeTurn(turnId),
+          onText: delta => { args.onDelta(delta); send('evt:assistant-delta', { sid: remoteSid, delta }); },
+          onToolStart: (id, name, input) => { toolNames.set(id, name); args.onTool?.(name, input); send('evt:tool-start', { sid: remoteSid, id, name, input }); },
+          onToolEnd: (id, result, isError, image) => { args.onToolEnd?.(toolNames.get(id) || '', result, isError); toolNames.delete(id); send('evt:tool-end', { sid: remoteSid, id, result, isError, image }); if (image) args.onImage?.(image); },
+          requestPermission: args.onPermission ? async (tool, input) => (await args.onPermission!(tool.name, input)).action === 'allow' ? 'allow' : 'deny' : undefined,
+          onRateLimits: limits => { saveRateLimits(selectedBinding || backendBySid.get(remoteSid) || curProviderId(), limits); send('evt:ratelimits', limits); },
+          onContextWindow: contextWindow => send('evt:context-window', { sid: remoteSid, contextWindow }),
+          onCompactArchive: messages => archiveMessages(remoteSid, messages),
+        },
+      }, {
+        running: runs, exists: id => listSessions().some(session => session.id === id),
+        prepare: async id => {
+          remoteSid = id;
+          if (selectedBinding) {
+            const settings = loadSettings();
+            const slot = settings?.creds?.[selectedBinding] || {};
+            setSessionBinding(id, { providerId: selectedBinding, kind: selectedBinding === 'codex' ? 'codex' : selectedBinding === 'claude-oauth' ? 'anthropic-oauth' : settings!.kind,
+              model: slot.model || (settings?.providerId === selectedBinding ? settings.model : undefined), baseUrl: slot.baseUrl });
+            backendBySid.set(id, selectedBinding);
+          }
+          if (args.employeeId && !args.sessionId) {
+            if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
+            const employee = loadEmployees().find(item => item.id === args.employeeId);
+            if (!employee) throw new Error('所选员工不属于这台电脑');
+            setSessionEmployee(id, employee.id, employee.name);
+          }
+          const agent = getAgent(id);
+          if (!agent) throw new Error('本机当前没有可用模型');
+          agent.setProvider(selected); agent.setSystem(sysForSession(id) + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。');
+          await ensureHostedProviderReady(id);
+          return agent;
+        },
+        persist: id => { persistQuiet(id); },
+        changed: (id, agent) => {
+          emitTasks(); send('evt:sessions', listSessions());
+          if (id === currentId) send('evt:session-loaded', { id, messages: agent.getMessages() });
+        },
+      });
+      persist(result.sessionId); send('evt:done', { sid: result.sessionId });
+      conversationReports.drain(result.sessionId);
+      return result;
+    });
+    setRemoteRoomExecutor(async args => {
+      if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
+      const selected = args.model ? remoteProvider(args.model) : undefined;
+      await runRemoteRoomTurn(args, {
+        ...teamOrchestratorDeps(),
+        room: id => loadRooms().find(room => room.id === id), history: loadRoomMessages,
+        running: isRoomRunning, run: runRoomTurn, abort: abortRoom,
+        runEmployee: employeeArgs => {
+          const providerId = employeeArgs.employee.model?.providerId || loadSettings()?.providerId;
+          if (!selected && !remoteShareSubscription(loadSettings()) && ['claude-oauth', 'codex'].includes(providerId || ''))
+            throw new Error('本机未同步该员工使用的订阅渠道');
+          return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, remoteExecution: { shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
+        },
+      });
     });
     // 通用请求处理器(不落库同步)：手机问「会话列表/某会话分页历史」→ 读本机数据返回。团队(员工/群/SOP)后续补。
     setRemoteRequestHandler(async (method, params) => {
@@ -3310,8 +3371,10 @@ if (!gotLock) {
         const total = all.length;
         const end = Math.max(0, total - offset);
         const start = Math.max(0, end - limit);
-        const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i));
-        return { messages: page, hasMore: start > 0, total };
+        const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i)).filter(m => m.text || m.image);
+        const meta = listSessions().find(s => s.id === sid);
+        return { messages: page, hasMore: start > 0, total, nextOffset: total - start,
+          meta: meta ? { title: meta.title, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined, employeeId: meta.employeeId } : undefined };
       }
       // ── 一人公司同步 ──
       if (method === "team.state") {
@@ -3336,7 +3399,7 @@ if (!gotLock) {
         const total = all.length;
         const end = Math.max(0, total - offset);
         const start = Math.max(0, end - limit);
-        const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", error: !!m.error }));
+        const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", images: m.images, error: !!m.error }));
         return { messages: page, hasMore: start > 0, total };
       }
       if (method === "sop.tree") {

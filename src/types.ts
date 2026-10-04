@@ -61,7 +61,8 @@ export interface Decision {
   risk: "high" | "low";
   title: string;
   question: string;
-  options: DecisionOption[]; // 1~3 项
+  context?: string;
+  options: DecisionOption[]; // 2~3 项
   allowCustom: boolean;
   timeoutSec: number | null; // null=不计时一直等；数字=倒计时
   sourceSession?: string;
@@ -83,6 +84,11 @@ export interface TaskReportScope {
 }
 
 export interface ToolContext {
+  remoteExecution?: {
+    shareSubscription: boolean;
+    requestDecision?: ToolContext['requestDecision'];
+    requestPermission?: (name: string, input: unknown) => Promise<'allow' | 'deny'>;
+  };
   cwd: string;
   turnId?: string;
   reportOrigin?: TaskReportScope['origin'];
