@@ -4,7 +4,7 @@ import type { Tool } from '../types.js';
 
 export const codexImageTool: Tool = {
   name: 'codex_imagegen',
-  description: 'Codex订阅会话生成或编辑图片的默认工具。直接调用订阅图片服务（gpt-image-2），消耗当前会话账号的Codex额度。无需安装Codex/ChatGPT或API key。需要生图时优先调用此工具，无需写脚本。支持参考图和透明背景，返回PNG并展示。失败不自动重试。',
+  description: 'Codex订阅会话生成或编辑图片的默认工具。直接调用订阅图片服务（gpt-image-2），消耗当前会话账号的Codex额度。无需安装Codex/ChatGPT或API key。需要生图时优先调用此工具，无需写脚本。支持参考图和透明背景，成功后自动在对话框展示PNG。返回displayed:true表示已展示，不要再调用send_image重复发送。失败不自动重试。',
   requiresImageGeneration: true,
   readOnly: false,
   inputSchema: {
@@ -31,7 +31,7 @@ export const codexImageTool: Tool = {
         transparentBackground: input.transparent_background as boolean | undefined,
         timeoutMs: input.timeout_ms as number | undefined, signal: ctx.signal,
       });
-      return { content: JSON.stringify(result), displayImage: `data:image/png;base64,${(await readFile(result.path)).toString('base64')}` };
+      return { content: JSON.stringify({ ...result, displayed: true }), displayImage: `data:image/png;base64,${(await readFile(result.path)).toString('base64')}` };
     } catch (error: any) {
       return { content: JSON.stringify({ ok: false, code: error.code || 'INVALID_INPUT', message: error.message, details: error.details }), isError: true };
     }

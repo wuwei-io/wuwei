@@ -369,6 +369,7 @@ export class Agent {
     this.messages.push({ role: "user", content: userContent, ts: Date.now() });
     this.round = { input: 0, output: 0, cacheHit: 0, cacheMiss: 0, steps: 0, lastInput: 0 }; // 本轮清零重记
     this.softStop = false; // 新一轮开始，清掉上一轮可能残留的软停止标志
+    const displayedImages = new Set<string>(); // 本回合展示图去重；下一回合用户仍可要求重发。
 
     while (true) {
       if (signal?.aborted) return; // 已被用户硬中断(abort)
@@ -553,13 +554,18 @@ export class Agent {
           hooks.onToolStart?.(call.id, call.name, call.input);
           const out = await tool.run(call.input, { ...this.ctx, signal, turnId,
             generateImage: stepProvider.generateImage?.bind(stepProvider) }); // 按本轮后端绑定，切换/并发不串账号
-          hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image || out.displayImage);
+          let displayImage = out.displayImage;
+          if (displayImage && !out.image) {
+            if (displayedImages.has(displayImage)) displayImage = undefined;
+            else displayedImages.add(displayImage);
+          }
+          hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image || displayImage);
           const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)
           // 图片块：out.image=给模型看(截图类)；out.displayImage=只给人看(标 displayOnly，provider 构造请求时跳过)。
           const imgBlock = out.image
             ? { type: "image", dataUrl: out.image }
-            : out.displayImage
-              ? { type: "image", dataUrl: out.displayImage, displayOnly: true }
+            : displayImage
+              ? { type: "image", dataUrl: displayImage, displayOnly: true }
               : null;
           resultsBlocks[idx] = {
             type: "tool_result",

@@ -91,6 +91,6 @@ test('the real image tool displays its PNG, then the Agent completes without gen
   assert.equal(generated, 1);
   assert.equal(requests.length, 2);
   assert.deepEqual(displayed, [image]);
-  assert.deepEqual(JSON.parse(outputOf(requests[1])), { ok: true, path });
+  assert.deepEqual(JSON.parse(outputOf(requests[1])), { ok: true, path, displayed: true });
   assert.equal(agent.messages.at(-1).content[0].text, 'image saved');
 });

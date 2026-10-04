@@ -3,6 +3,7 @@ import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
 import { researchToolLabel } from "./toolLabel.js";
+import { dedupeDisplayedToolImages } from "./imageResults.js";
 import { BRAND_LOGOS } from "./brandLogos.js";
 import { BrandLogo } from "./modelLogos.js";
 import { WECHAT_CS_QR } from "./wechatCsQr.js";
@@ -233,7 +234,7 @@ function messagesToItems(messages: any[]): Item[] {
       }
     }
   }
-  return items;
+  return dedupeDisplayedToolImages(items);
 }
 
 // —— 搜索命中高亮 ——
@@ -12310,7 +12311,7 @@ function ToolGroup({ tools }: { tools: ToolItem[] }) {
 type RenderBlock = { kind: "item"; item: Item } | { kind: "tools"; tools: ToolItem[] };
 function groupBlocks(items: Item[]): RenderBlock[] {
   const blocks: RenderBlock[] = [];
-  for (const it of items) {
+  for (const it of dedupeDisplayedToolImages(items)) {
     if (it.type === "tool") {
       const last = blocks[blocks.length - 1];
       if (last && last.kind === "tools") last.tools.push(it);

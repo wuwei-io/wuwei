@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { loadConfig } from "../../src/config.js";
 import { makeProvider, setImageCapper } from "../../src/agent/provider.js";
+import { prepareModelImage } from "../../src/image-preparation.js";
 import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
@@ -2354,11 +2355,11 @@ const deleteScheduleTool: Tool = {
 };
 
 // 发图工具：把本地图片(如生图工具产出的文件)发进对话框，内联显示+可点开预览。
-// 走 ToolResult.image → tool_result 多模态：模型也看得到、历史合法(图片只能在 user/tool_result，不能在 assistant)。
+// 走 ToolResult.displayImage，只给用户展示；已经自动展示的生成图无需重复发送。
 const sendImageTool: Tool = {
   name: "send_image",
   description:
-    "把一张本地图片发到当前对话框里内联显示、可点开看大图(例如你用生图/下载工具存到本地的图)。path=图片绝对路径；caption=可选说明。支持 png/jpg/jpeg/gif/webp，单张≤8MB。生成图片后用它发出来，别只给路径。",
+    "把尚未展示的本地图片发到当前对话框里内联显示、可点开看大图。path=图片绝对路径；caption=可选说明。支持 png/jpg/jpeg/gif/webp，单张≤8MB。codex_imagegen成功时已自动展示图片(displayed:true)，不要再调用本工具重复发送。其它工具只返回文件路径、尚未展示时才用本工具发图。",
   readOnly: true,
   inputSchema: {
     type: "object",
@@ -3243,17 +3244,11 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
-    // 图片封顶：用 Electron nativeImage 把任一边 >maxEdge 的图等比缩小，喂给模型前统一执行，
-    // 避免 chrome_screenshot 截整页/高分屏截图命中 Claude「多图每边≤2000px」而整轮 400。
+    // 所有模型请求统一压缩发送副本：限制长边和编码字节，包含历史附件、截图和手机上传。
+    // 小图保持原样；大图优先 PNG，必要时 JPEG/继续缩小，原始展示图不受影响。
     setImageCapper((dataUrl: string, maxEdge: number) => {
       try {
-        const img = nativeImage.createFromDataURL(dataUrl);
-        const { width, height } = img.getSize();
-        const long = Math.max(width, height);
-        if (!long || long <= maxEdge) return dataUrl; // 没超限：原样
-        const scale = maxEdge / long;
-        const resized = img.resize({ width: Math.round(width * scale), height: Math.round(height * scale), quality: "good" });
-        return "data:image/png;base64," + resized.toPNG().toString("base64");
+        return prepareModelImage(dataUrl, maxEdge, (url) => nativeImage.createFromDataURL(url));
       } catch {
         return dataUrl; // 解码/缩放失败就原样发，别因此卡死
       }

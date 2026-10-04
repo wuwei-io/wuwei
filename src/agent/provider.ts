@@ -599,13 +599,12 @@ function parseDataUrl(d: string): { mediaType: string; data: string } {
   return m ? { mediaType: m[1], data: m[2] } : { mediaType: "image/png", data: d };
 }
 
-// 图片封顶：Claude 对「多图请求」限制每张图任一边 ≤2000px，超了整条请求 400
-// （如 chrome_screenshot 截整页、computer 高分屏截图）。统一在发给模型前把任一边 >IMG_MAX_EDGE 的图
-// 等比缩到 IMG_MAX_EDGE(1568=模型实际看的分辨率，也与客户端粘图缩放一致)。
+// 图片封顶：发送副本同时限制长边和字节，避免高清 PNG/base64 触发网关 413。
+// 用户上传、截图和历史图片都经过此处；不修改原始消息里的图片。
 // 具体缩放能力由运行环境注入(desktop 用 Electron nativeImage；核心不依赖 Electron/原生库，保持可移植)；
 // 没注入就原样返回。带缓存，避免同一张图每轮请求重复解码编码。
 let _imageCapper: ((dataUrl: string, maxEdge: number) => string) | null = null;
-export function setImageCapper(fn: ((dataUrl: string, maxEdge: number) => string) | null): void { _imageCapper = fn; }
+export function setImageCapper(fn: ((dataUrl: string, maxEdge: number) => string) | null): void { _imageCapper = fn; _capCache.clear(); }
 const IMG_MAX_EDGE = 1568;
 const _capCache = new Map<string, string>();
 function capImage(dataUrl: string): string {
@@ -614,7 +613,7 @@ function capImage(dataUrl: string): string {
   if (hit !== undefined) return hit;
   let out = dataUrl;
   try { out = _imageCapper(dataUrl, IMG_MAX_EDGE) || dataUrl; } catch { /* 缩放失败就原样发，别因此整轮挂掉 */ }
-  if (_capCache.size > 300) _capCache.clear(); // 防无限增长
+  if (_capCache.size >= 32) _capCache.clear(); // 高清原图也作为缓存键，避免长期保留数百张大图。
   _capCache.set(dataUrl, out);
   return out;
 }
