@@ -85,6 +85,7 @@ export interface TaskReportScope {
 
 export interface ToolContext {
   remoteExecution?: {
+    signal?: AbortSignal; // stopping the remote parent also stops active/queued descendants
     shareSubscription: boolean;
     requestDecision?: ToolContext['requestDecision'];
     requestPermission?: (name: string, input: unknown) => Promise<'allow' | 'deny'>;

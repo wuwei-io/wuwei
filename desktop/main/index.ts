@@ -153,6 +153,7 @@ import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-s
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels } from "./relay-client.js";
 import { runRemoteSessionTurn } from './remote-sessions.js';
 import { runRemoteRoomTurn } from './remote-rooms.js';
+import { remoteTaskDetail, remoteRoomTaskDetail } from './remote-task-detail.js';
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
 import { getDeviceId } from "../../src/device-id.js";
 import { log, LOG_FILE } from "./logger.js";
@@ -279,6 +280,8 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
 const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, remoteExecution }: RunEmployeeArgs): Promise<string> => {
+  const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
+  executionSignal.throwIfAborted();
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
   if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
       ['claude-oauth', 'codex'].includes(employee.model?.providerId || curProviderId()))
@@ -310,7 +313,8 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
       try { saveRateLimits(pid, rl as any); } catch { /* 存不下不影响本轮 */ }
       send("evt:ratelimits", rl);
     },
-  } as any, signal, images);
+  } as any, executionSignal, images);
+  executionSignal.throwIfAborted();
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
 };
@@ -3293,7 +3297,7 @@ if (!gotLock) {
         onSession: id => args.onSession?.(id),
         hooks: {
           requestDecision: args.requestDecision,
-          remoteExecution: { shareSubscription: remoteShareSubscription(remoteSettings), requestDecision: args.requestDecision, requestPermission: permission },
+          remoteExecution: { signal: args.signal, shareSubscription: remoteShareSubscription(remoteSettings), requestDecision: args.requestDecision, requestPermission: permission },
           onUsage: usage => { if (remoteSid === currentId) send('evt:usage', usage); },
           onTurnEnd: turnId => taskReports.closeTurn(turnId),
           onText: delta => { args.onDelta(delta); send('evt:assistant-delta', { sid: remoteSid, delta }); },
@@ -3348,7 +3352,7 @@ if (!gotLock) {
           const providerId = employeeArgs.employee.model?.providerId || loadSettings()?.providerId;
           if (!selected && !remoteShareSubscription(loadSettings()) && ['claude-oauth', 'codex'].includes(providerId || ''))
             throw new Error('本机未同步该员工使用的订阅渠道');
-          return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, remoteExecution: { shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
+          return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, remoteExecution: { signal: args.signal, shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
         },
       });
     });
@@ -3367,7 +3371,7 @@ if (!gotLock) {
         if (!sid) throw new Error("缺少 sessionId");
         const limit = Math.min(50, Math.max(1, Number(params?.limit) || 10));
         const offset = Math.max(0, Number(params?.offset) || 0); // 从末尾往前偏移(0=最后一屏)
-        const all = loadMessages(sid);
+        const all = agents.get(sid)?.getDisplayMessages() || loadMessages(sid);
         const total = all.length;
         const end = Math.max(0, total - offset);
         const start = Math.max(0, end - limit);
@@ -3417,7 +3421,36 @@ if (!gotLock) {
           const m = metas.find((s: any) => s.id === id);
           return { id, title: m?.title || "任务", employeeId: m?.employeeId || null, updatedAt: m?.updatedAt || 0 };
         });
-        return { tasks };
+        const groups = loadRooms().filter(room => room.type !== 'dm' && isRoomRunning(room.id)).map(room => ({ id: room.id, title: room.name, kind: 'room', employeeId: null, updatedAt: room.updatedAt || 0 }));
+        return { tasks: [...tasks, ...groups] };
+      }
+      if (method === 'tasks.detail' || method === 'tasks.stop' || method === 'sessions.usage') {
+        const id = String(params?.sessionId || params?.id || '');
+        if (params?.kind === 'room' && method !== 'sessions.usage') {
+          const room = loadRooms().find(r => r.id === id && r.type !== 'dm');
+          if (!room) throw new Error('该群聊不属于这台电脑，或已删除');
+          if (method === 'tasks.stop') { const wasRunning = isRoomRunning(id); abortRoom(id); return { stopped: wasRunning, running: isRoomRunning(id) }; }
+          return remoteRoomTaskDetail(room, loadRoomMessages(id), isRoomRunning(id));
+        }
+        const meta = listSessions().find(s => s.id === id);
+        if (!meta) throw new Error('该任务不属于这台电脑，或已删除');
+        const agent = agents.get(id);
+        if (method === 'tasks.stop') {
+          if (!runs.has(id)) return { stopped: false, running: false };
+          contSessions.delete(id); send('evt:cont-off', { sid: id });
+          runs.get(id)?.abort();
+          return { stopped: true, running: true }; // abort requested; next poll confirms actual completion
+        }
+        if (method === 'sessions.usage') {
+          const providerId = meta.providerId || backendBySid.get(id) || curProviderId();
+          const subscription = ['claude-oauth', 'codex'].includes(providerId);
+          if (subscription && !remoteShareSubscription(loadSettings())) throw new Error('本机未同步该订阅渠道');
+          const used = agent?.getUsage() || meta.usage;
+          return { kind: subscription ? 'subscription' : 'api-key', quota: subscription ? loadRateLimits(providerId) : null,
+            context: { usedTokens: used && used.lastInput > 0 ? used.lastInput : null, maxTokens: agent?.getContextBudget().contextWindow || null } };
+        }
+        return remoteTaskDetail(meta, agent?.getDisplayMessages() || loadMessages(id), runs.has(id),
+          meta.employeeId ? loadEmployees().find(e => e.id === meta.employeeId)?.name || '员工' : 'AI');
       }
       throw new Error("不支持的请求: " + method);
     });
