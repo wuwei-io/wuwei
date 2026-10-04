@@ -151,7 +151,7 @@ import {
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels } from "./relay-client.js";
-import { runRemoteSessionTurn } from './remote-sessions.js';
+import { runRemoteSessionTurn, waitForRemoteResult } from './remote-sessions.js';
 import { runRemoteRoomTurn } from './remote-rooms.js';
 import { remoteTaskDetail, remoteRoomTaskDetail } from './remote-task-detail.js';
 import { loadRemember, upsertRemember, clearRememberedPassword } from "./wuwei-remember.js";
@@ -282,6 +282,9 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, remoteExecution }: RunEmployeeArgs): Promise<string> => {
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
+  const decide = requestDecision || remoteExecution?.requestDecision;
+  const decisionHook: ToolContext['requestDecision'] = decide ? decision => waitForRemoteResult(decide(decision), executionSignal) : undefined;
+  const permit = onPermission || remoteExecution?.requestPermission;
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
   if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
       ['claude-oauth', 'codex'].includes(employee.model?.providerId || curProviderId()))
@@ -297,11 +300,12 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
   const remoteSys = remoteExecution ? sys + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。' : sys;
   const a = new Agent(p, remoteSys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope,
-    remoteExecution, requestDecision: requestDecision || remoteExecution?.requestDecision }, map, agentOpts);
+    remoteExecution: remoteExecution ? { ...remoteExecution, signal: executionSignal } : undefined,
+    requestDecision: decisionHook }, map, agentOpts);
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
-    requestPermission: onPermission || remoteExecution?.requestPermission ? async (tool: any, args: any) => (onPermission || remoteExecution!.requestPermission!)(tool.name, args) : undefined,
+    requestPermission: permit ? async (tool: any, args: any) => waitForRemoteResult(permit(tool.name, args), executionSignal) : undefined,
     onTurnEnd: (turnId: string) => taskReports.closeTurn(turnId),
     onText: (delta: string) => onProgress?.({ kind: "text", delta }),
     onToolStart: (id: string, name: string, input: any) => onProgress?.({ kind: "tool-start", id, name, input }),

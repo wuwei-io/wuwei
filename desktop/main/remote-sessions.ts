@@ -17,6 +17,15 @@ interface SessionDependencies {
   changed: (id: string, agent: Agent) => void;
 }
 
+export function waitForRemoteResult<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error('已停止'));
+    signal.addEventListener('abort', abort, { once: true });
+    pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    if (signal.aborted) abort();
+  });
+}
+
 /** Use the desktop's actual Agent and running lock, so phone messages share history and stop behavior. */
 export async function runRemoteSessionTurn(turn: SessionTurn, deps: SessionDependencies) {
   const id = turn.sessionId || randomUUID();
@@ -32,7 +41,16 @@ export async function runRemoteSessionTurn(turn: SessionTurn, deps: SessionDepen
     agent = await deps.prepare(id);
     if (controller.signal.aborted) throw new Error('已停止');
     turn.onSession(id);
-    const hooks = { ...turn.hooks, onStep: () => { turn.hooks.onStep?.(); deps.persist(id); } };
+    const requestDecision: AgentHooks['requestDecision'] = turn.hooks.requestDecision
+      ? decision => waitForRemoteResult(turn.hooks.requestDecision!(decision), controller.signal) : undefined;
+    const remote = turn.hooks.remoteExecution;
+    const hooks: AgentHooks = { ...turn.hooks, requestDecision,
+      requestPermission: turn.hooks.requestPermission ? (tool, input) => waitForRemoteResult(turn.hooks.requestPermission!(tool, input), controller.signal) : undefined,
+      ...(remote ? { remoteExecution: { ...remote, signal: controller.signal,
+        requestDecision: requestDecision || (remote.requestDecision ? decision => waitForRemoteResult(remote.requestDecision!(decision), controller.signal) : undefined),
+        requestPermission: remote.requestPermission ? (name, input) => waitForRemoteResult(remote.requestPermission!(name, input), controller.signal) : undefined,
+      } } : {}),
+      onStep: () => { turn.hooks.onStep?.(); deps.persist(id); } };
     const execution = agent.send(turn.text, hooks, controller.signal, turn.images);
     deps.persist(id); // User input is already in Agent history, even if the model hasn't answered yet.
     deps.changed(id, agent);

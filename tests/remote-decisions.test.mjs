@@ -65,3 +65,21 @@ test('ask_decision is hidden without a real responder and rejects a one-option f
   const agent = new Agent(provider, '', [tool], { cwd: '.' }, new Map([[tool.name, tool]]), { compactThreshold: 0 });
   await agent.send('test', {});
 });
+
+test('stopping via the shared task controller releases a pending decision and cancels inherited work', { timeout: 1000 }, async () => {
+  const running = new Map();
+  const transport = new AbortController();
+  let inheritedSignal, asked = false;
+  const tool = { name: 'hold_child', description: 'fixture', inputSchema: { type: 'object' }, readOnly: true,
+    run: async (_input, ctx) => { inheritedSignal = ctx.remoteExecution.signal; return { content: JSON.stringify(await ctx.requestDecision(decision())) }; } };
+  const provider = { name: 'fixture', complete: async () => ({ content: [{ type: 'tool_use', id: 'hold', name: 'hold_child', input: {} }], stopReason: 'tool_use' }) };
+  const agent = new Agent(provider, '', [tool], { cwd: '.' }, new Map([[tool.name, tool]]), { compactThreshold: 0 });
+  const result = runRemoteSessionTurn({ sessionId: 'original', text: '先等待决定', signal: transport.signal, onSession: () => {},
+    hooks: { remoteExecution: { shareSubscription: false }, requestDecision: () => { asked = true; return new Promise(() => {}); } } },
+    { running, exists: () => true, prepare: () => agent, persist: () => {}, changed: () => {} });
+  const rejected = assert.rejects(result, /已停止/);
+  await tick(); assert.equal(asked, true);
+  running.get('original').abort();
+  await rejected;
+  assert.equal(inheritedSignal.aborted, true); assert.equal(transport.signal.aborted, false); assert.equal(running.size, 0);
+});
