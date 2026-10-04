@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 // c8ab600 draft adapter only. No registration, provider fallback or automatic retries.
 export type BillingSource = 'platform' | 'subscription' | 'byok';
-export interface OrderInput { sku_id: string; price_version: string; prompt: string; count: 1 }
+export interface OrderInput { sku_id: string; price_version: string; prompt: string; count: 1; authorized_budget: number }
 export interface Sku {
-  sku_id: string; model: string; size: string; quality: string;
+  sku_id: string; price_version: string; authorization_ceiling: number; model: string; size: string; quality: string;
   coins_per_image: number; max_prompt_bytes: number; max_count: number;
 }
 export interface CreatedOrder {
@@ -12,7 +12,7 @@ export interface CreatedOrder {
 }
 export interface OrderDetail {
   order_id: string; status: string; delivered_count: number; charged_coins: number;
-  released_coins: number; images: { asset_id: string; url: string; expires_at: string }[];
+  released_coins: number; images: { asset_id: string; url: string; expires_at: string | null }[];
   error_code: string | null;
 }
 export class BillingError extends Error {
@@ -73,10 +73,11 @@ export class PlatformBillingClient {
   prepare(input: OrderInput, sku: Sku): OrderAttempt {
     this.guard();
     if (!input || typeof input !== 'object' || Array.isArray(input) ||
-      Object.keys(input).length !== 4 || Object.keys(input).some(k => !['sku_id', 'price_version', 'prompt', 'count'].includes(k)) ||
+      Object.keys(input).length !== 5 || Object.keys(input).some(k => !['sku_id', 'price_version', 'prompt', 'count', 'authorized_budget'].includes(k)) ||
       typeof input.sku_id !== 'string' || !/^[a-z0-9_-]{1,80}$/.test(input.sku_id) ||
       typeof input.price_version !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.price_version) ||
-      input.sku_id !== sku.sku_id || typeof input.prompt !== 'string' || !input.prompt.trim() ||
+      input.sku_id !== sku.sku_id || input.price_version.toLowerCase() !== sku.price_version.toLowerCase() ||
+      !Number.isSafeInteger(input.authorized_budget) || !Number.isSafeInteger(sku.authorization_ceiling) || sku.authorization_ceiling < 1 || input.authorized_budget < sku.authorization_ceiling || typeof input.prompt !== 'string' || !input.prompt.trim() ||
       !Number.isFinite(sku.coins_per_image) || sku.coins_per_image <= 0 ||
       (sku as Sku & { enabled?: boolean }).enabled === false ||
       !Number.isInteger(sku.max_count) || sku.max_count < 1 ||
@@ -86,7 +87,7 @@ export class PlatformBillingClient {
     }
     // Catalog envelope/version field is not yet specified: caller supplies the explicitly confirmed UUID.
     const attempt: OrderAttempt = { key: randomUUID(), input: Object.freeze({
-      sku_id: input.sku_id, price_version: input.price_version.toLowerCase(), prompt: input.prompt, count: 1,
+      sku_id: input.sku_id, price_version: input.price_version.toLowerCase(), prompt: input.prompt, count: 1, authorized_budget: input.authorized_budget,
     }), state: 'ready' };
     Object.defineProperty(attempt, 'key', { writable: false });
     Object.defineProperty(attempt, 'input', { writable: false });
@@ -120,6 +121,27 @@ export class PlatformBillingClient {
       attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT'].includes(error.code) ? 'ready' : 'unknown';
       throw error;
     }
+  }
+  async image(orderId: string): Promise<Uint8Array> {
+    this.guard();
+    if (!/^[0-9a-f-]{36}$/i.test(orderId)) throw new BillingError('INVALID_INPUT', '无效订单编号');
+    const token = await this.token();
+    if (!token.trim()) throw new BillingError('AUTH_REQUIRED', '请先登录');
+    const response = await fetch(`${this.base}/api/images/orders/${encodeURIComponent(orderId)}/asset`, {
+      headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!response.ok || response.headers.get('content-type') !== 'image/png') throw new BillingError('DELIVERY_UNAVAILABLE', '图片尚不可下载或无权访问', response.status);
+    const reader = response.body?.getReader();
+    if (!reader) throw new BillingError('DELIVERY_UNAVAILABLE', '图片响应为空');
+    const chunks: Uint8Array[] = []; let size = 0;
+    try {
+      for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length;
+        if (size > 12 * 1024 * 1024) throw new BillingError('DELIVERY_UNAVAILABLE', '图片响应超限'); chunks.push(part.value); }
+    } finally { await reader.cancel(); }
+    const bytes = new Uint8Array(size); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    if (!size) throw new BillingError('DELIVERY_UNAVAILABLE', '图片响应为空');
+    return bytes;
   }
   async order(id: string): Promise<OrderDetail> {
     if (!id.trim()) throw new BillingError('INVALID_INPUT', '缺少原订单编号；需人工核查，不能重新下单');

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { PlatformBillingClient } from '../src/imagegen/platform-billing-client.ts';
 
-const sku = { sku_id: 'approved-mock', model: 'gpt-image-1', size: '1024x1024', quality: 'low', coins_per_image: 10, max_prompt_bytes: 1000, max_count: 1 };
-const input = { sku_id: sku.sku_id, price_version: 'abcdef12-3456-7890-abcd-1234567890ab', prompt: '一只猫', count: 1 };
+const sku = { sku_id: 'approved-mock', price_version: 'abcdef12-3456-7890-abcd-1234567890ab', authorization_ceiling: 120, model: 'gpt-image-1', size: '1024x1024', quality: 'low', coins_per_image: 10, max_prompt_bytes: 1000, max_count: 1 };
+const input = { sku_id: sku.sku_id, price_version: 'abcdef12-3456-7890-abcd-1234567890ab', prompt: '一只猫', count: 1, authorized_budget: 120 };
 const accepted = { order_id: 'mock-order', status: 'reserved', reserved_coins: 10, unit_price_coins: 10 };
 async function mock(t, handler) {
   const calls = [];
@@ -32,7 +32,7 @@ test('catalog/create/query: Bearer, exact body, stable key and no duplicate POST
   assert.deepEqual(m.calls[1].body, input);
   assert.equal(m.calls[1].headers['idempotency-key'], key);
   assert.match(key, /^[A-Za-z0-9_-]{16,128}$/);
-  assert.deepEqual(Object.keys(m.calls[1].body).sort(), ['count', 'price_version', 'prompt', 'sku_id']);
+  assert.deepEqual(Object.keys(m.calls[1].body).sort(), ['authorized_budget', 'count', 'price_version', 'prompt', 'sku_id']);
   assert.equal(m.calls[0].headers['idempotency-key'], undefined);
   assert.equal(m.calls[2].headers['idempotency-key'], undefined);
   assert.equal(m.calls[2].path, '/api/images/orders/mock-order');
@@ -48,10 +48,10 @@ for (const [status, code, expected] of [[402, 'INSUFFICIENT_BALANCE', 'INSUFFICI
   });
 }
 
-test('contract: required UUID version, strict four fields, normalized version and UTF8 boundary', async t => {
+test('contract: required UUID version, strict five fields, normalized version and UTF8 boundary', async t => {
   const m = await mock(t, (req, res) => json(res, 202, accepted));
   const c = m.client();
-  for (const field of ['sku_id', 'price_version', 'prompt', 'count']) {
+  for (const field of ['sku_id', 'price_version', 'prompt', 'count', 'authorized_budget']) {
     const bad = { ...input }; delete bad[field];
     assert.throws(() => c.prepare(bad, sku), { code: 'INVALID_INPUT' });
   }
@@ -132,4 +132,16 @@ test('concurrent submit blocked; empty catalog kept raw (no invented SKUs)', asy
   const a = c.prepare(input, sku); const first = c.create(a);
   await assert.rejects(c.create(a), { code: 'QUERY_ONLY' }); await first;
   assert.equal(m.calls.filter(x => x.method === 'POST').length, 1);
+});
+
+test('explicit budget and catalog version guard; authenticated image download is source isolated', async t => {
+ const id='abcdef12-3456-7890-abcd-1234567890ab';
+ const m=await mock(t,(req,res)=>{res.writeHead(200,{'Content-Type':'image/png'});res.end(Buffer.from([137,80,78,71]));});
+ const c=m.client();
+ for(const budget of [undefined,0,119,120.5,Number.MAX_SAFE_INTEGER+1]) assert.throws(()=>c.prepare({...input,authorized_budget:budget},sku),{code:'INVALID_INPUT'});
+ assert.throws(()=>c.prepare(input,{...sku,price_version:'12345678-1234-1234-1234-123456789012'}),{code:'INVALID_INPUT'});
+ assert.deepEqual(await c.image(id),new Uint8Array([137,80,78,71]));
+ assert.equal(m.calls[0].path,`/api/images/orders/${id}/asset`);assert.equal(m.calls[0].headers.authorization,'Bearer mock-token');
+ for(const source of ['subscription','byok']) await assert.rejects(m.client(source).image(id),{code:'SOURCE_ISOLATED'});
+ assert.equal(m.calls.length,1);
 });
