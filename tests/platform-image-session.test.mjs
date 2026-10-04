@@ -24,5 +24,6 @@ test('actual tool session quotes/confirms before POST, writes recovery and displ
  let confirms=0;const ctx={cwd:root,requestDecision:async d=>{confirms++;assert.ok(d.question.includes('预占 8'));assert.equal(calls.filter(c=>c.path==='/api/images/orders').length,0);return {action:'reply',value:'generate_image'};}};
  const result=await run({sku_id:sku.sku_id,prompt:'cat'},ctx);assert.equal(result.isError,undefined);assert.ok(result.displayImage);assert.equal(confirms,1);
  assert.equal(calls.find(c=>c.path==='/api/images/orders').body.authorized_budget,120);
+ const recovered=await run({action:'settle',order_id:id},{cwd:root,requestDecision:async()=>({action:'reply',value:'settle_image'})});assert.ok(recovered.displayImage);assert.equal(calls.filter(c=>c.path.endsWith('/settle')).length,1);assert.equal(calls.filter(c=>c.path==='/api/images/orders').length,1);
  const cancelled=await run({sku_id:sku.sku_id,prompt:'cat'},{cwd:root,requestDecision:async()=>({action:'deny'})});assert.ok(cancelled.content.includes('取消'));assert.equal(calls.filter(c=>c.path==='/api/images/orders').length,1);
 });

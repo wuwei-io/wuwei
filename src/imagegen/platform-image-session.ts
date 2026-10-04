@@ -13,6 +13,12 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    if(input.action==='catalog') return {content:JSON.stringify(await client.catalog())};
    const root=resolve(ctx.cwd,'.wuwei','output');
    if(typeof input.order_id==='string') {
+    if(input.action==='settle') {
+     if(!ctx.requestDecision) throw new Error('恢复结算需要用户确认');
+     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:'原图结算确认',question:'只结算原订单，按已确认授权补扣所需额度或无为币，不重新生图。是否继续？',options:[{label:'确认原图结算',value:'settle_image',tone:'safe'},{label:'取消',value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
+     if(decision.value!=='settle_image') return {content:'已取消结算，原图保留。'};
+     await client.settle(input.order_id);
+    }
     const detail=await client.order(input.order_id);
     if(detail.status!=='settled') return {content:JSON.stringify(detail)};
     const bytes=await client.image(input.order_id);await mkdir(root,{recursive:true});
