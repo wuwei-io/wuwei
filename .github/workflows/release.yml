@@ -31,7 +31,7 @@ jobs:
       - name: Validate images, model vision and asynchronous task reports
         run: |
           npm run typecheck
-          node --import tsx --test tests/*.test.mjs tests/context-window.test.ts
+          node scripts/test-release.mjs
 
       - name: Build renderer/main
         run: npm run desktop:build
