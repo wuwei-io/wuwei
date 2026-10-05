@@ -5,6 +5,7 @@ import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, ses
 //    之后 sessions/settings/brain 等模块初始化时才能按正确版本(wuwei/minicc/test)选数据目录。
 import { EDITION, IS_MINICC, IS_TEST, APP_NAME, APP_ID, DATA_DIR_NAME, appDisplayName } from "./edition.js";
 import electronUpdater from "electron-updater";
+import { createUpdatePolicy, DEFAULT_UPDATE_INTERVAL_MS, updateIntervalMs, jitterUpdateInterval } from "./update-policy.js";
 const safeStorageOk = () => {
   try {
     return safeStorage.isEncryptionAvailable();
@@ -5200,12 +5201,16 @@ ipcMain.handle("app:version", () => app.getVersion());
 // 未打包(dev)或无更新源时 checkForUpdates 会抛错，一律吞掉，不影响使用。
 const { autoUpdater } = electronUpdater;
 let updaterWired = false;
+let updatePollInterval = DEFAULT_UPDATE_INTERVAL_MS;
 function setupUpdater(): void {
   if (updaterWired) return;
   updaterWired = true;
   // 测试版不接自动更新：否则会去正式版更新源下载并把自己覆盖，失去「独立测试」意义。
   if (IS_TEST) { log("updater", "测试版跳过自动更新"); return; }
-  autoUpdater.autoDownload = true; // 发现新版即后台下载
+  autoUpdater.autoDownload = false; // 策略统一控制下载，避免检查自动开启重复下载
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.disableDifferentialDownload = false; // 保留 SDK 的差分下载和校验缓存
+  autoUpdater.logger = { info: (...args) => log("updater", ...args), warn: (...args) => log("updater", ...args), error: (...args) => log("updater", ...args) };
   autoUpdater.autoInstallOnAppQuit = false; // 不擅自在退出时装，由用户点「升级」触发
   autoUpdater.on("update-available", (info) => {
     send("evt:update-available", { version: info.version, notes: typeof info.releaseNotes === "string" ? info.releaseNotes : "" });
@@ -5221,6 +5226,7 @@ function setupUpdater(): void {
     });
   });
   autoUpdater.on("update-downloaded", (info) => {
+    downloadedUpdatePath = info.downloadedFile;
     log("updater", "update-downloaded 事件", info.version);
     send("evt:update-downloaded", { version: info.version, notes: typeof info.releaseNotes === "string" ? info.releaseNotes : "" });
     void trackClientLog("info", "update", { version: app.getVersion(), accessToken: loadWuweiSession()?.accessToken ?? null, message: `新版 v${info.version} 已下载就绪`, meta: { phase: "downloaded", newVersion: info.version } }).catch(() => {});
@@ -5230,86 +5236,42 @@ function setupUpdater(): void {
     log("updater", "更新出错", msg);
     void trackClientLog("error", "update", { message: `更新出错: ${msg}`, meta: { phase: "updater-event" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
   });
-  cleanOldUpdaterCache(); // 清理旧版本下载残留，只保留最新一个安装包（用户反馈旧缓存囤积）
-  // 启动后尽快查一次（2.5s 让窗口先渲染，随即检测→发现新版立刻推「下载中」给界面）
-  setTimeout(() => { void checkAndPrepareUpdate(); }, 2500);
-  // 轮询间隔后台可配：拉 /api/client-config 的 updateCheckSec（默认 60s，范围 30..3600），拉不到用默认。
-  // 只拉一次配置(启动时)，改配置下次启动生效；拉的只是几 KB，开销极小。
+  // 不手工删除 pending：SDK 的 update-info.json、安装包与差分基底必须保持完整。
+  if (!app.isPackaged) return;
+
   void (async () => {
-    let sec = 60;
     try {
       const site = process.env.WUWEI_SITE_URL || "https://wuweiai.io";
-      const res = await fetch(`${site}/api/client-config`);
-      if (res.ok) { const j = await res.json(); const s = Number(j && typeof j === 'object' && 'updateCheckSec' in j ? j.updateCheckSec : undefined); if (Number.isFinite(s) && s >= 30 && s <= 3600) sec = Math.floor(s); }
-    } catch { /* 拉不到用默认 60s */ }
-    log("updater", `更新轮询间隔 ${sec}s`);
-    setInterval(() => { void checkAndPrepareUpdate(); }, sec * 1000);
+      const res = await fetch(`${site}/api/client-config`, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) updatePollInterval = updateIntervalMs((await res.json())?.updateCheckSec);
+    } catch { /* 默认两小时；旧后台的 60s 配置会被安全下限覆盖 */ }
   })();
-  // 窗口重新获得焦点时也查一次（用户切回来=大概率停留过一阵，趁机检测；60s 内不重复）
-  let lastFocusCheck = 0;
-  app.on("browser-window-focus", () => {
-    const now = Date.now();
-    if (now - lastFocusCheck < 60_000) return;
-    lastFocusCheck = now;
-    void checkAndPrepareUpdate();
-  });
+  let timer: ReturnType<typeof setTimeout>;
+  let stopped = false;
+  const poll = async () => {
+    try { await checkAndPrepareUpdate(); }
+    finally { if (!stopped) timer = setTimeout(poll, jitterUpdateInterval(updatePollInterval)); }
+  };
+  timer = setTimeout(poll, 15_000 + Math.random() * 45_000);
+  app.once("before-quit", () => { stopped = true; clearTimeout(timer); });
+  // 聚焦也经过同一冷却和并发门禁，不再每分钟额外访问 OSS。
+  app.on("browser-window-focus", () => { void checkAndPrepareUpdate(); });
 }
 
-// 清理 electron-updater 下载缓存：只保留最新(改动时间最新)的一个安装包，删掉旧版本残留。
-// 缓存目录 = %LOCALAPPDATA%/wuwei-updater/pending（updaterCacheDirName=wuwei-updater，见 app-update.yml）。
-function cleanOldUpdaterCache(): void {
-  try {
-    const base = process.env.LOCALAPPDATA || join(app.getPath("home"), "AppData", "Local");
-    const dir = join(base, "wuwei-updater", "pending");
-    if (!existsSync(dir)) return;
-    const files = readdirSync(dir)
-      .filter((f) => /\.(exe|dmg|zip|AppImage|deb|blockmap)$/i.test(f))
-      .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t);
-    for (const { f } of files.slice(1)) { try { unlinkSync(join(dir, f)); } catch { /* 单个删失败忽略 */ } }
-    if (files.length > 1) log("updater", `清理旧更新缓存 ${files.length - 1} 个，保留最新`);
-  } catch { /* 清理失败不影响更新 */ }
+let downloadedUpdatePath: string | undefined;
+const updatePolicy = createUpdatePolicy(autoUpdater, {
+  intervalMs: () => updatePollInterval,
+  readyExists: () => !!downloadedUpdatePath && existsSync(downloadedUpdatePath),
+  onReady: (state) => send("evt:update-downloaded", { version: state.version, notes: state.notes }),
+});
+async function checkAndPrepareUpdate(manual = false) {
+  if (IS_TEST || !app.isPackaged) return { available: false };
+  const result = await updatePolicy.check(manual);
+  if (result.error) log("updater", "检查/下载失败", result.error);
+  return result;
 }
-
-// 检查更新 + 等待下载完成（已缓存则立即完成）后主动推「就绪」。返回 {available, downloaded, version, notes}。
-// 关键：不再单纯依赖 update-downloaded 事件——缓存已存在时它可能不重新触发，导致界面永远等不到「升级重启」。
-async function checkAndPrepareUpdate(): Promise<{ available: boolean; downloaded?: boolean; version?: string; notes?: string; error?: string }> {
-  try {
-    const r = await autoUpdater.checkForUpdates();
-    const info = r?.updateInfo;
-    if (!info) return { available: false };
-    const available = info.version !== app.getVersion();
-    const notes = typeof info.releaseNotes === "string" ? info.releaseNotes : "";
-    if (!available) return { available: false, version: info.version };
-    log("updater", "发现新版", info.version);
-    // 关键修复：安装包已缓存时 checkForUpdates 不返回 downloadPromise，之前会漏推「就绪」→ 界面永远等不到。
-    // 统一 await：新下用 r.downloadPromise；已缓存用 downloadUpdate()(秒 resolve 返回已缓存文件路径)。都保证推 evt:update-downloaded。
-    try {
-      const dl = r.downloadPromise ?? autoUpdater.downloadUpdate();
-      const files = await dl;
-      const ok = files == null || (Array.isArray(files) ? files.length > 0 : true); // downloadPromise 无返回值也算成功
-      if (ok) {
-        log("updater", "下载完成/已缓存就绪", info.version);
-        send("evt:update-downloaded", { version: info.version, notes });
-        return { available: true, downloaded: true, version: info.version, notes };
-      }
-      return { available: true, downloaded: false, version: info.version, notes };
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      log("updater", "下载失败", msg);
-      void trackClientLog("error", "update", { message: `下载失败: ${msg}`, meta: { phase: "download", version: info.version }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
-      return { available: true, downloaded: false, version: info.version, notes };
-    }
-  } catch (e: any) {
-    const msg = String(e?.message || e);
-    // 检查更新报错上报后台，供「查看日志」排查（离线/DNS/源 404 等）
-    void trackClientLog("error", "update", { message: `检查更新失败: ${msg}`, meta: { phase: "check" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
-    return { available: false, error: msg };
-  }
-}
-
-// 手动检查更新：会等待下载完成再返回（downloaded=true 时界面直接弹「升级重启」）。dev/无源 → available:false + error。
-ipcMain.handle("updater:check", async () => checkAndPrepareUpdate());
+// 手动检查绕过常规周期，但复用并发任务、就绪包，遵守下载失败冷却。
+ipcMain.handle("updater:check", async () => checkAndPrepareUpdate(true));
 // 立即安装已下载的更新并重启
 ipcMain.on("updater:install", () => {
   try { autoUpdater.quitAndInstall(); } catch (e: any) { log("updater", "安装失败", String(e?.message || e)); }

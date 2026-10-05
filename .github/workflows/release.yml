@@ -31,7 +31,7 @@ jobs:
       - name: Validate images, model vision and asynchronous task reports
         run: |
           npm run typecheck
-          node --import tsx --test tests/subscription-imagegen.test.mjs tests/subscription-image-routing.test.mjs tests/deepseek-vision.test.mjs tests/codex-tool-output.test.mjs tests/image-preparation.test.mjs tests/image-display.test.mjs tests/team-task-reports.test.mjs tests/team-assignment-execution.test.mjs
+          node --import tsx --test tests/*.test.mjs tests/context-window.test.ts
 
       - name: Build renderer/main
         run: npm run desktop:build
@@ -103,6 +103,19 @@ jobs:
           AZURE_TS_PROFILE: ${{ secrets.AZURE_TS_PROFILE }}
           AZURE_PUBLISHER_NAME: ${{ secrets.AZURE_PUBLISHER_NAME }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Upload verified artifacts and manifests to production R2
+        run: |
+          python -m pip install boto3==1.40.0 PyYAML==6.0.2
+          python scripts/upload-r2.py
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      # R2 成功后继续双写 OSS，兼容旧客户端；迁移期保留旧文件用于回滚。
       # 上传安装包 + latest*.yml 到阿里云 OSS（自动更新源 + 官网下载源）。
       # 凭证走仓库 secrets；未配置则脚本内跳过，不影响 GitHub Release。
       - name: Upload to Aliyun OSS
