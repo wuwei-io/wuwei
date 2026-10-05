@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --ignore-scripts --legacy-peer-deps
+      - run: npm install ali-oss@6 js-yaml@4 --no-save --ignore-scripts --legacy-peer-deps
       - name: Create short-lived object-specific upload authorization
         run: node scripts/prepare-oss-repair.mjs
         env:
