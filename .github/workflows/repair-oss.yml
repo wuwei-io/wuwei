@@ -1,0 +1,24 @@
+name: Repair OSS mirror from verified R2
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --ignore-scripts --legacy-peer-deps
+      - name: Create short-lived object-specific upload authorization
+        run: node scripts/prepare-oss-repair.mjs
+        env:
+          OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oss-repair-authorization
+          path: repair-private.json
+          retention-days: 1
