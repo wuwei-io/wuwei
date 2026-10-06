@@ -28,8 +28,13 @@ jobs:
           cfg.endpoint = 'https://oss-cn-hangzhou.aliyuncs.com'
           client = oss.Client(cfg)
           desired = os.environ['ACCELERATE_ENABLED'] == 'true'
-          before = client.get_bucket_transfer_acceleration(oss.GetBucketTransferAccelerationRequest(bucket='wuwei-repo'))
-          prior = str(before.transfer_acceleration_configuration.enabled).lower() == 'true'
+          try:
+              before = client.get_bucket_transfer_acceleration(oss.GetBucketTransferAccelerationRequest(bucket='wuwei-repo'))
+              prior = str(before.transfer_acceleration_configuration.enabled).lower() == 'true'
+          except oss.exceptions.OperationError as error:
+              if 'NoSuchTransferAccelerationConfiguration' not in str(error):
+                  raise
+              prior = False
           if prior != desired:
               client.put_bucket_transfer_acceleration(oss.PutBucketTransferAccelerationRequest(bucket='wuwei-repo', transfer_acceleration_configuration=oss.TransferAccelerationConfiguration(enabled=desired)))
           after = client.get_bucket_transfer_acceleration(oss.GetBucketTransferAccelerationRequest(bucket='wuwei-repo'))
