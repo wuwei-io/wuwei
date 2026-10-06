@@ -6,7 +6,7 @@ on:
         description: 'Verified release tag whose OSS files are complete'
         required: true
 permissions:
-  contents: read
+  contents: write # Required to retrieve the private draft release artifacts.
 jobs:
   compatibility:
     runs-on: ubuntu-latest
