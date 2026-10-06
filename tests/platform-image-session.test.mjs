@@ -29,3 +29,20 @@ test('actual tool session quotes/confirms before POST, writes recovery and displ
  const reauthorized=await run({action:'reauthorize',order_id:id},{cwd:root,requestDecision:async d=>{assert.ok(d.question.includes('9 币'));return {action:'reply',value:'reauthorize_image'};}});assert.ok(reauthorized.displayImage);assert.deepEqual(calls.find(c=>c.path.endsWith('/reauthorize')).body,{authorized_budget:9});
  const cancelled=await run({sku_id:sku.sku_id,prompt:'cat'},{cwd:root,requestDecision:async()=>({action:'deny'})});assert.ok(cancelled.content.includes('取消'));assert.equal(calls.filter(c=>c.path==='/api/images/orders'&&c.body).length,1);
 });
+
+test('empty image catalog reports service unavailability before confirmation or order creation',async t=>{
+ const requests=[];let confirms=0;
+ const previousFetch=globalThis.fetch;
+ globalThis.fetch=async(url,options)=>{requests.push({url,method:options.method});return Response.json([]);};
+ t.after(()=>{globalThis.fetch=previousFetch;});
+ const run=create('https://wuweiai.io','mock-token');
+ const ctx={cwd:tmpdir(),requestDecision:async()=>{confirms++;return {value:'generate_image'};}};
+ for(const input of [{action:'catalog'},{action:'generate',sku_id:'invented',prompt:'cat'}]){
+  const result=await run(input,ctx);
+  assert.equal(result.isError,true);
+  assert.equal(JSON.parse(result.content).code,'IMAGE_CATALOG_EMPTY');
+ }
+ assert.equal(confirms,0);
+ assert.equal(requests.length,2);
+ assert.ok(requests.every(request=>request.url.endsWith('/api/images/catalog') && request.method==='GET'));
+});
