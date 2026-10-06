@@ -381,7 +381,7 @@ export class Agent {
       this.messages.push({role:'assistant',content:[{type:'text',text:reply}],ts:Date.now()});
       hooks.onText?.(reply);
       hooks.onStep?.();
-      hooks.onAssistantDone?.();
+      if (!signal?.aborted) hooks.onAssistantDone?.();
     } finally { hooks.onTurnEnd?.(turnId); }
   }
 

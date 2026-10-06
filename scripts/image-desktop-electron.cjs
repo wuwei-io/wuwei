@@ -11,7 +11,7 @@ async function test(){
  const js=code=>win.webContents.executeJavaScript(code,true);
  async function wait(code,max=150000){const end=Date.now()+max;while(Date.now()<end){if(await js(code))return;await delay(200);}throw Error('UI timeout: '+code+'; '+await js('JSON.stringify(window.imageEvents)'));}
  await wait('!!window.wuwei?.bootstrap');
- await js(`window.imageEvents=[];window.wuwei.onEvent((channel,p)=>{if(['evt:decision-request','evt:decision-resolved','evt:tool-start','evt:tool-end','evt:done','evt:error','evt:permission-request'].includes(channel))window.imageEvents.push({channel,...p,image:p.image?true:undefined});});void 0;`);
+ await js(`window.imageEvents=[];window.wuwei.onEvent((channel,p)=>{if(['evt:decision-request','evt:decision-resolved','evt:tool-start','evt:tool-end','evt:done','evt:stopped','evt:error','evt:permission-request'].includes(channel))window.imageEvents.push({channel,...p,image:p.image?true:undefined});});window.dispatchEvent(new Event('focus'));void 0;`);
  const sid=(await js('window.wuwei.bootstrap()')).currentId;
  const send=message=>js(`window.wuwei.send(${JSON.stringify(sid)},${JSON.stringify(message)})`);
  const catalog=await js('window.wuwei.imageCatalog()');
