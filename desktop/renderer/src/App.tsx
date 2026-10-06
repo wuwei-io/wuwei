@@ -5977,6 +5977,10 @@ export function App() {
     }
     setSuggestion(""); // 发送后清掉旧的下一步建议(回复完会重新生成)
     const imgs = pendingImages;
+    if (imageMode && imgs.length) {
+      push({type:"notice",text:lang === "en" ? "These presets currently generate from text. Remove the attachments before generating; image editing is not available yet." : "这些预设目前支持文生图。请移除附件后生成，参考图编辑暂未开放。"});
+      return;
+    }
     const inject = busy; // 跑动中→注入到当前回合
     // 铁律:发送绝不能依赖密钥扫描。扫描失败/无该接口都要照常发,主进程还会兜底脱敏。
     const go = () => {

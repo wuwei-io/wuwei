@@ -3788,6 +3788,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
     await ensureHostedProviderReady(useId);
+    if (selectedImageSku && images?.length) throw new Error(tt('当前生图预设仅支持文字描述，未提交参考图或扣费。','These image presets accept text only. No reference image or paid order was submitted.'));
     const runP = (selectedImageSku
       ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal)
       : agent.send.bind(agent))(
