@@ -19,4 +19,5 @@ const run=spawnSync(path.join(repo,'node_modules/electron/dist/electron.exe'),[p
 // App logs contain no credentials, but do not persist private environment/config.
 console.log((run.stdout||'')+(run.stderr||'')+'\nEXIT='+run.status);
 fs.writeFileSync(path.join(dir,'auth.json'),'{}');
+fs.writeFileSync(path.join(dir,'config.json'),'{}');
 if(run.status!==0)process.exit(1);

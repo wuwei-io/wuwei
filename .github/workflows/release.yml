@@ -29,6 +29,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -116,9 +119,12 @@ jobs:
       # 凭证走仓库 secrets；上传成功后再发布 GitHub Release。
       - name: Upload to Aliyun OSS
         run: |
-          npm i ali-oss@6 --no-save --no-audit --no-fund
+          node -e "const fs=require('fs'),cp=require('child_process'); for(const p of ['scripts/upload-oss.mjs','scripts/lib/oss-release-upload.mjs','tests/oss-release-upload.test.mjs']) { fs.mkdirSync(require('path').dirname(p),{recursive:true}); fs.writeFileSync(p,cp.execFileSync('git',['show',process.env.RELEASE_WORKFLOW_SHA+':'+p])); }"
+          node --test tests/oss-release-upload.test.mjs
+          npm i ali-oss@6 --no-save --no-audit --no-fund --legacy-peer-deps --ignore-scripts
           node scripts/upload-oss.mjs
         env:
+          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
           OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
 
