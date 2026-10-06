@@ -1,0 +1,14 @@
+TEMP_ROOT=C:\Users\ADMINI~1\AppData\Local\Temp\wuwei-team-ui-hL2jt4
+
+{"probe":true,"home":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\wuwei-team-ui-hL2jt4\\userprofile","userData":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\wuwei-team-ui-hL2jt4\\electron-userData","applicationMainImported":false}
+PASS six English employee cards
+PASS fixture sidebar and selector labels/IDs (not full App sidebar)
+PASS English team pack description and roster
+PASS English actual edit modal
+PASS unchanged Save preserves canonical name and persona
+PASS edited Save persists custom value with stable ID
+PASS English/Chinese resolver aliases and renamed alias rejection (no model tool invocation)
+PASS Chinese switch preserves custom name
+PASS language switch with open editor preserves custom draft
+
+EXIT=0
