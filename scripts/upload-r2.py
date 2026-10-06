@@ -2,7 +2,7 @@
 Upload immutable artifacts, validate manifest SHA512, then publish manifests.
 No retention deletion: preserve rollback/differential bases.
 """
-import os, pathlib, hashlib, base64, mimetypes
+import os, pathlib, hashlib, base64, mimetypes, sys
 import boto3, yaml
 from botocore.config import Config
 root=pathlib.Path('release')
@@ -25,6 +25,20 @@ for manifest in manifests:
             for chunk in iter(lambda:f.read(1024*1024),b''): h.update(chunk)
         if base64.b64encode(h.digest()).decode()!=item['sha512']: raise RuntimeError('SHA512 mismatch '+name)
         if local.stat().st_size!=item['size']: raise RuntimeError('Size mismatch '+name)
+if '--oss-manifests-only' in sys.argv:
+    # Old clients still fetch a tiny R2 manifest; all binaries and blockmaps come from OSS.
+    oss='https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/'
+    for manifest in manifests:
+        data=yaml.safe_load(manifest.read_text(encoding='utf-8'))
+        for item in data['files']: item['url']=oss+item['url']
+        if data.get('path'): data['path']=oss+data['path']
+        for package in data.get('packages',{}).values():
+            if package.get('path'): package['path']=oss+package['path']
+        body=yaml.safe_dump(data,sort_keys=False).encode('utf-8')
+        s3.put_object(Bucket=bucket,Key=manifest.name,Body=body,ContentType='text/yaml',CacheControl='no-store, max-age=0')
+        if s3.get_object(Bucket=bucket,Key=manifest.name)['Body'].read()!=body: raise RuntimeError('Compatibility manifest verification failed '+manifest.name)
+        print('[compatibility] OSS download URLs published:',manifest.name,flush=True)
+    sys.exit(0)
 for p in [p for p in files if p not in manifests]+manifests:
     manifest=p in manifests
     cache='no-store, max-age=0' if manifest else 'public, max-age=31536000, immutable'

@@ -1,6 +1,6 @@
 // CI 发布：把 release/ 下的安装包 + electron-updater 清单(latest*.yml) 传到阿里云 OSS。
 // 供 electron-updater 自动更新 + 官网下载读取（bucket=wuwei-repo, public-read, 路径 updates/）。
-// 凭证仅从环境变量读（GitHub Actions secrets），绝不硬编码。缺凭证则跳过(不挡发布)。
+// 凭证仅从环境变量读（GitHub Actions secrets），绝不硬编码。缺凭证时停止发布。
 import OSS from "ali-oss";
 import { readdirSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
@@ -8,7 +8,7 @@ import { join, extname } from "node:path";
 const KEY_ID = process.env.OSS_KEY_ID;
 const KEY_SECRET = process.env.OSS_KEY_SECRET;
 if (!KEY_ID || !KEY_SECRET) {
-  console.error("[oss] 缺少 OSS_KEY_ID/SECRET，迁移期必须双写，终止发布");
+  console.error("[oss] 缺少 OSS_KEY_ID/SECRET，无法上传正式下载源，终止发布");
   process.exit(1);
 }
 

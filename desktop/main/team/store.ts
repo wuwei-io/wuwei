@@ -1,4 +1,6 @@
 import { localizeEmployee, employeeRoster } from "../../../src/team/default-localization.js";
+import { DEFAULT_TEAM_ID } from "../../../src/team/default-localization.js";
+import { defaultDepartments } from "../../../src/team/default-departments.js";
 // AI 员工团队 · 数据层
 //
 // 全部数据收在 ~/.wuwei/team/ 子目录下，删掉整个目录 = 卸载干净，不在数据根目录留痕迹。
@@ -58,7 +60,7 @@ export interface TeamConfig {
   /** CEO 拍板倒计时(秒)：员工请示后给 CEO 这么久拍板，超时没定就上报董事长。缺省 10，范围 3~60。 */
   ceoDecideTimeoutSec?: number;
   /**
-   * 部门（组织架构）。可不设=扁平管理；一个部门人多（2+）了再建来方便管理。
+   * 部门（组织架构）。默认团队首次安装初始化四个部门；已有部门和显式清空保留。
    * 一名员工最多归一个部门（按 memberIds 判定）；headId=部门负责人（也应在 memberIds 里）。
    */
   departments?: Department[];
@@ -219,7 +221,15 @@ export function installApp(app: TeamApp): { apps: TeamApp[]; employees: Employee
 
   saveApps(apps);
   saveEmployees(employees);
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(employees);
   return { apps, employees };
+}
+
+function ensureDefaultDepartments(employees: Employee[]) {
+  // Missing configuration means first initialization; [] means the user deliberately cleared it.
+  if (loadTeamConfig().departments !== undefined) return;
+  const departments = defaultDepartments(employees);
+  if (departments) saveTeamConfig({ departments });
 }
 
 /**
@@ -233,6 +243,7 @@ export function syncBuiltinApp(app: TeamApp): number {
   const apps = loadApps();
   const stored = apps.find((a) => a.id === app.id);
   if (!stored) return 0; // 没装过：不动（用户自己去应用中心装）
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(loadEmployees());
   if (stored.version === app.version) return 0; // 已是最新
 
   const employees = loadEmployees();
@@ -252,6 +263,7 @@ export function syncBuiltinApp(app: TeamApp): number {
   const nextApps = apps.map((a) => (a.id === app.id ? { ...a, name: app.name, desc: app.desc, version: app.version, employees: app.employees } : a));
   saveApps(nextApps);
   if (added) saveEmployees(employees);
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(employees);
   return added;
 }
 

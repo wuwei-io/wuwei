@@ -57,5 +57,5 @@ npmRebuild: false
 # electron-updater 从这里读 latest.yml 比对版本、下载安装包。
 publish:
   provider: generic
-  url: https://download.wuweiai.io/
+  url: https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/
   channel: latest

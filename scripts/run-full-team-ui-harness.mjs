@@ -1,0 +1,20 @@
+// Actual application main, preload, renderer and IPC, isolated from the user's profile.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+const repo=process.cwd();
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'wuwei-full-ui-acceptance-'));
+const profile=path.join(root,'profile');
+for(const p of ['profile','appdata','localappdata'])fs.mkdirSync(path.join(root,p));
+const dir=path.join(profile,'.wuwei-test'),team=path.join(dir,'team');fs.mkdirSync(team,{recursive:true});
+const employees=JSON.parse(fs.readFileSync(path.join(repo,'desktop/main/team/catalog-company.json'),'utf8')).map(e=>({...e,fromApp:'wuwei-team-basic'}));
+fs.writeFileSync(path.join(dir,'config.json'),JSON.stringify({kind:'openai',providerId:'wuwei-free',model:'glm-4.7-flash',baseUrl:'https://gw.wuweiai.io/api/gateway/v1',app:{lang:'en',teamEnabled:true,telemetry:false,brainEnabled:false,claudeAutoRefresh:false,resumeDetect:false,remoteEnabled:false}}));
+fs.writeFileSync(path.join(team,'employees.json'),JSON.stringify(employees));
+fs.writeFileSync(path.join(team,'apps.json'),JSON.stringify([{id:'wuwei-team-basic',name:'无为一人公司',desc:'一套开箱即用的 AI 团队：CEO 小笨统管全局，文案小文 / 代码小码 / 数据小数 / 设计小美 / 移动端小移各司其职。装上即可分别私聊，员工请示先由 CEO 把关。每人自带头像、职责边界与系统提示词。',version:'2.0.0',employees,installedAt:Date.now()}]));
+const evidence=path.join(repo,'docs/verification/image-team-20261006/ui');fs.mkdirSync(evidence,{recursive:true});
+const env={...process.env,USERPROFILE:profile,APPDATA:path.join(root,'appdata'),LOCALAPPDATA:path.join(root,'localappdata'),WUWEI_EDITION:'test',FULL_UI_ROOT:root,FULL_UI_REPO:repo,FULL_UI_EVIDENCE:evidence};
+for(const k of Object.keys(env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CODEX_HOME|CLAUDE_CONFIG|MINICC_|ANTHROPIC_|EXPO_TOKEN|WUWEI_SITE_URL|WUWEI_DATA_DIR_NAME|ELECTRON_RUN_AS_NODE|ELECTRON_RENDERER_URL/i.test(k))delete env[k];
+const r=spawnSync(path.join(repo,'node_modules/electron/dist/electron.exe'),[path.join(repo,'scripts/full-team-ui-electron.cjs')],{cwd:repo,env,encoding:'utf8',timeout:120000,windowsHide:true});
+const log=(r.stdout||'')+(r.stderr||'');fs.writeFileSync(path.join(evidence,'full-app-interaction.txt'),log);console.log(log);
+if(r.status!==0)process.exit(1);

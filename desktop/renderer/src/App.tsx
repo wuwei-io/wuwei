@@ -1,4 +1,6 @@
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
+import { departmentLabel } from "../../../src/team/default-departments.js";
+import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
@@ -2439,19 +2441,13 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
       </div>
       <div className="app-set-hint" style={{ marginBottom: departments.length ? 10 : 0 }}>
         {en
-          ? "Optional org structure. Flat management is fine — only set up a department once it grows past ~2 people. Each member belongs to at most one department; the head is marked in Contacts."
-          : "组织架构，可不设——扁平管理就够用；一个部门人多了（2 人以上）再建来方便管理。一名员工最多归一个部门，负责人会在通讯录里标出。"}
+          ? "Each teammate belongs to one department. Heads are marked in Contacts."
+          : "一名员工归属一个部门，负责人显示在通讯录中。"}
       </div>
       {departments.map((d: any) => (
         <div key={d.id} className="dept-card">
           <div className="dept-card-row">
-            <input
-              className="set-field-input"
-              style={{ flex: 1, textAlign: "left" }}
-              value={d.name}
-              onChange={(e) => setDepartments((ds) => ds.map((x) => (x.id === d.id ? { ...x, name: e.target.value } : x)))}
-              onBlur={(e) => deptUpdate(d.id, { name: e.target.value.trim() || (en ? "Department" : "部门") })}
-            />
+            <DepartmentNameInput department={d} language={en ? "en" : "zh"} onSave={name => deptUpdate(d.id, { name })} />
             <button type="button" className="tc-btn-ghost danger" style={{ fontSize: 12 }} onClick={() => deptDelete(d.id)}>{en ? "Delete" : "删除"}</button>
           </div>
           <div className="dept-card-row">
@@ -2471,14 +2467,14 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
                   key={e.id}
                   type="button"
                   className={"dept-chip" + (inDept ? " on" : "")}
-                  title={otherDept && !inDept ? (en ? `Currently in ${otherDept.name} — will move here` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
+                  title={otherDept && !inDept ? (en ? `Move from ${departmentLabel(otherDept, "en")}` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
                   onClick={() => {
                     const next = inDept ? (d.memberIds || []).filter((m: string) => m !== e.id) : [...(d.memberIds || []), e.id];
                     deptUpdate(d.id, { memberIds: next });
                   }}
                 >
                   <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")}  /></span>
-                  {employeeLabel(e, en ? "en" : "zh")}{otherDept && !inDept ? (en ? ` · ${otherDept.name}` : `·${otherDept.name}`) : ""}
+                  {employeeLabel(e, en ? "en" : "zh")}{otherDept && !inDept ? ` · ${departmentLabel(otherDept, en ? "en" : "zh")}` : ""}
                 </button>
               );
             })}
@@ -6999,7 +6995,7 @@ export function App() {
                       {groups.map(({ dept, mems }: any) => (
                         <div className="tool-dept" key={dept.id}>
                           <div className="tool-dept-head">
-                            <span className="tool-dept-nm">{dept.name}</span>
+                            <span className="tool-dept-nm">{departmentLabel(dept, lang)}</span>
                             <span className="tool-dept-cnt">{mems.length}</span>
                           </div>
                           {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
@@ -7045,7 +7041,7 @@ export function App() {
                   </button>
                 ))}
                 {groupsExpanded && teamRooms.filter((r:any)=>r.type!=="dm").length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "No groups yet — right-click 「My Company」 to create one." : "还没有群 · 右键「一人公司」建群"}</div>
+                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add a group." : "右键新建群聊"}</div>
                 )}
                 {/* SOP 库子板块头：公司标准流程文档库（树形，可展开/折叠、右键管理、拖拽） */}
                 <button
@@ -7059,7 +7055,7 @@ export function App() {
                 </button>
                 {sopExpanded && renderSopTree(undefined, 0)}
                 {sopExpanded && sopTree.length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "No SOPs yet — right-click 「SOPs」 to add." : "还没有 SOP · 右键「SOP库」新建"}</div>
+                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add an SOP." : "右键新建 SOP"}</div>
                 )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
                   <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
@@ -8475,6 +8471,8 @@ export function App() {
                 );
               }
               if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "My Company" : "一人公司"}</span></>;
+              if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "Groups" : "群聊"}</span></>;
+              if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "SOPs" : "SOP"}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
               const isDefault = !st || st === "新对话" || st === "New chat";
               return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (lang === "en" ? "Wuwei" : "无为") : st}</span></>;

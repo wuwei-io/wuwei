@@ -54,8 +54,8 @@ export function withImageToolInstructions(system: string, tools: readonly { name
   }
   if (names.has('platform_imagegen')) {
     notes.push(en
-      ? 'For image generation, call platform_imagegen with action="catalog" first, choose an available sku_id, then call action="generate" with sku_id and prompt. A hosted text model can use this separate image service. The tool presents the fee confirmation before creating an order; let the user approve it. Free text chat does not make image generation free. Query or settle an existing order after an interruption; never automatically create a replacement order.'
-      : '用户要求生图时，先直接调用 platform_imagegen（action="catalog"）获取目录，选择可用 sku_id，再调用 action="generate" 并传入 sku_id 和 prompt。托管文字模型可以通过此独立图片服务生图。工具会在下单前弹出费用确认，由用户批准；免费文字聊天不代表生图免费。中断后查询或结算原订单，不自动重新下单。');
+      ? 'For image generation, call platform_imagegen with action="catalog" first, choose an available sku_id, then call action="generate" with sku_id and prompt. A hosted text model can use this separate image service. Calling generate opens the tool’s fee confirmation; no order or charge occurs until the user approves it. Do not ask for separate confirmation in prose or stop after listing the catalog. Free text chat does not make image generation free. Query or settle an existing order after an interruption; never automatically create a replacement order.'
+      : '用户要求生图时，先直接调用 platform_imagegen（action="catalog"）获取目录，选择可用 sku_id，再调用 action="generate" 并传入 sku_id 和 prompt。托管文字模型可以通过此独立图片服务生图。调用 generate 会先弹出工具自带的费用确认，用户批准后才下单扣费；无需另用文字询问，也不要只列出目录就停下。免费文字聊天不代表生图免费。中断后查询或结算原订单，不自动重新下单。');
   }
   if (!notes.length) return system;
   if (names.has('platform_imagegen')) {

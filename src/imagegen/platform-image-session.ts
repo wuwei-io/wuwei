@@ -4,13 +4,14 @@ import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {PlatformBillingClient,type Sku} from './platform-billing-client.js';
 import type {ToolContext,ToolResult} from '../types.js';
+const tt=(zh:string,en:string)=>process.env.WUWEI_LANG==='en'?en:zh;
 
 function emptyImageCatalog(): ToolResult {
- return {content:JSON.stringify({code:'IMAGE_CATALOG_EMPTY',message:'平台暂未提供可用的生图规格，当前无法生成图片。需要服务端启用生图服务及有效规格；更换图片描述无效，不要猜测 SKU 或反复查询目录。'}),isError:true};
+ return {content:JSON.stringify({code:'IMAGE_CATALOG_EMPTY',message:tt('平台暂未提供可用的生图规格，当前无法生成图片。需要服务端启用生图服务及有效规格；更换图片描述无效，不要猜测 SKU 或反复查询目录。','Image generation is currently unavailable. The server must enable the service and image specifications. Do not guess SKUs or repeatedly query the catalog.')}),isError:true};
 }
 
 // Bound to the actual hosted provider credentials, never global settings or subscription/BYOK.
-export function createPlatformImageSession(base: string,token: string,recoveryRoot=join(homedir(),'.wuwei','image-orders')) {
+export function createPlatformImageSession(base: string,token: string,recoveryRoot=join(homedir(),process.env.WUWEI_DATA_DIR_NAME || '.wuwei','image-orders')) {
  const client=new PlatformBillingClient(base,()=>token,'platform',180000);
  return async(input:Record<string,unknown>,ctx:ToolContext):Promise<ToolResult>=>{
   try {
@@ -21,19 +22,19 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    const root=resolve(ctx.cwd,'.wuwei','output');
    if(typeof input.recovery_key==='string') {
     const recovered=await client.lookup(input.recovery_key);
-    return {content:JSON.stringify({...recovered,message:'已找回原订单；用 order_id 查询或确认结算，不重新生图'})};
+    return {content:JSON.stringify({...recovered,message:tt('已找回原订单；用 order_id 查询或确认结算，不重新生图','Original order recovered. Query or settle this order; do not generate again.')})};
    }
    if(typeof input.order_id==='string') {
     if(input.action==='reauthorize') {
      const original=await client.order(input.order_id),amount=original.actual_coins;
      if(!ctx.requestDecision || !Number.isSafeInteger(amount) || !amount || amount<1) throw new Error('原订单缺少已验证费用，不能重新授权');
-     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:'原图实费重新授权',question:`原图已生成，完整官方实费为 ${amount} 币。是否授权按此金额结算原订单？不重新生图，余额不足则保留原图。`,options:[{label:`授权结算 ${amount} 币`,value:'reauthorize_image',tone:'safe'},{label:'取消',value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
+     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:tt('原图实费重新授权','Authorize original image cost'),question:tt(`原图已生成，完整官方实费为 ${amount} 币。是否授权按此金额结算原订单？不重新生图，余额不足则保留原图。`,`The image is ready. Its verified cost is ${amount} coins. Authorize settlement of this original order? The image is kept if your balance is insufficient.`),options:[{label:tt(`授权结算 ${amount} 币`,`Authorize ${amount} coins`),value:'reauthorize_image',tone:'safe'},{label:tt('取消','Cancel'),value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
      if(decision.value!=='reauthorize_image') return {content:'已取消重新授权，原图保留。'};
      await client.reauthorize(input.order_id,amount);
     }
     if(input.action==='settle') {
      if(!ctx.requestDecision) throw new Error('恢复结算需要用户确认');
-     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:'原图结算确认',question:'只结算原订单，按已确认授权补扣所需额度或无为币，不重新生图。是否继续？',options:[{label:'确认原图结算',value:'settle_image',tone:'safe'},{label:'取消',value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
+     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:tt('原图结算确认','Settle original image'),question:tt('只结算原订单，按已确认授权补扣所需额度或无为币，不重新生图。是否继续？','Settle the original order using your approved allowance or coins, without generating again. Continue?'),options:[{label:tt('确认原图结算','Confirm settlement'),value:'settle_image',tone:'safe'},{label:tt('取消','Cancel'),value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
      if(decision.value!=='settle_image') return {content:'已取消结算，原图保留。'};
      await client.settle(input.order_id);
     }
@@ -50,8 +51,8 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    if(!sku) return {content:JSON.stringify({code:'SKU_UNAVAILABLE',catalog}),isError:true};
    const query={sku_id:sku.sku_id,price_version:sku.price_version,prompt:input.prompt,count:1 as const};
    const quote=await client.quote(query);
-   const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:'生图费用确认',question:`预计预占 ${quote.estimated_coins} 币。最终按官方实费结算，最多授权 ${quote.authorization_ceiling} 币；不足时暂停原图结算，不重新生图。是否继续？`,options:[{label:'确认生成',value:'generate_image',tone:'safe'},{label:'取消',value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
-   if(decision.value!=='generate_image') return {content:'已取消生图，未下单。'};
+   const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:tt('生图费用确认','Image cost confirmation'),question:tt(`预计预占 ${quote.estimated_coins} 币。最终按官方实费结算，最多授权 ${quote.authorization_ceiling} 币；不足时暂停原图结算，不重新生图。是否继续？`,`Estimated hold: ${quote.estimated_coins} coins. Final billing uses the official cost, up to ${quote.authorization_ceiling} authorized coins. Settlement pauses if funds are insufficient; the image is kept. Continue?`),options:[{label:tt('确认生成','Generate image'),value:'generate_image',tone:'safe'},{label:tt('取消','Cancel'),value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
+   if(decision.value!=='generate_image') return {content:tt('已取消生图，未下单。','Image generation cancelled. No order was placed.')};
    const attempt=client.prepare({...query,authorized_budget:quote.authorization_ceiling},sku,quote);
    // Durable handle BEFORE POST. Never automatically recreate after timeout/process restart.
    await mkdir(recoveryRoot,{recursive:true,mode:0o700});

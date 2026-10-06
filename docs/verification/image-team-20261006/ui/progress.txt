@@ -1,0 +1,23 @@
+PASS actual application window loaded
+PASS actual English sidebar has six localized teammates
+PASS actual four English departments, no test department or unassigned people
+PASS actual application window loaded
+PASS actual English sidebar has six localized teammates
+PASS actual four English departments, no test department or unassigned people
+PASS group list title follows page after opening CEO chat
+PASS actual English team pack
+PASS actual English teammate edit dialog
+PASS actual edited Save persists custom name with stable ID
+PASS actual English department edit controls
+PASS actual switch back shows four Chinese departments
+PASS actual Chinese sidebar preserves custom teammate edits
+PASS actual application window loaded
+PASS actual English sidebar has six localized teammates
+PASS actual four English departments, no test department or unassigned people
+PASS group list title follows page after opening CEO chat
+PASS actual English team pack
+PASS actual English teammate edit dialog
+PASS actual edited Save persists custom name with stable ID
+PASS actual English department edit controls
+PASS actual switch back shows four Chinese departments
+PASS actual Chinese sidebar preserves custom teammate edits

@@ -36,6 +36,10 @@ jobs:
       - name: Build renderer/main
         run: npm run desktop:build
 
+      - name: Verify actual bilingual company UI and persistence
+        if: matrix.os == 'windows-latest'
+        run: node scripts/run-full-team-ui-harness.mjs
+
       # 用 electron-builder.wuwei.yml：含 generic OSS publish 配置 → 会生成 latest*.yml 更新清单
       # （--publish never 只是不让 electron-builder 自己上传；清单仍写入 release/，由下方 OSS 步骤上传）
       - name: Package Linux (AppImage/deb)
@@ -103,21 +107,8 @@ jobs:
           AZURE_TS_PROFILE: ${{ secrets.AZURE_TS_PROFILE }}
           AZURE_PUBLISHER_NAME: ${{ secrets.AZURE_PUBLISHER_NAME }}
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Upload verified artifacts and manifests to production R2
-        run: |
-          python -m pip install boto3==1.40.0 PyYAML==6.0.2
-          python scripts/upload-r2.py
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-
-      # R2 成功后继续双写 OSS，兼容旧客户端；迁移期保留旧文件用于回滚。
       # 上传安装包 + latest*.yml 到阿里云 OSS（自动更新源 + 官网下载源）。
-      # 凭证走仓库 secrets；未配置则脚本内跳过，不影响 GitHub Release。
+      # 凭证走仓库 secrets；上传成功后再发布 GitHub Release。
       - name: Upload to Aliyun OSS
         run: |
           npm i ali-oss@6 --no-save --no-audit --no-fund
@@ -125,6 +116,19 @@ jobs:
         env:
           OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+      # Old releases point at R2. Only publish small compatibility manifests there.
+      # The installer, binaries and blockmaps are downloaded from OSS.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Point old clients to OSS downloads
+        run: |
+          python -m pip install boto3 pyyaml
+          python scripts/upload-r2.py --oss-manifests-only
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Publish to Release
         uses: softprops/action-gh-release@v2
