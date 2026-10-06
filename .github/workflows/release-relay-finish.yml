@@ -25,6 +25,11 @@ jobs:
         env:
           RELEASE_WORKFLOW_SHA: ${{ github.sha }}
           RELEASE_TAG: ${{ inputs.tag }}
+      - name: Retrieve staged artifacts for original SHA512 checks
+        run: gh release download "$RELEASE_TAG" --dir release --pattern 'wuwei-*' --pattern 'wuwei_*'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

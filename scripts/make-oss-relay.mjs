@@ -12,6 +12,7 @@ const files = [];
 for (const name of fs.readdirSync('release')) {
   if (!fs.statSync(path.join('release', name)).isFile()) continue;
   if (!/\.(exe|dmg|AppImage|deb|zip|blockmap|yml)$/i.test(name)) continue;
+  if (name.endsWith('.yml') && !/^latest(?:-mac|-linux)?\.yml$/.test(name)) continue;
   if (!/^latest(?:-mac|-linux)?\.yml$/.test(name) && !name.includes(version)) throw new Error('Unexpected artifact version');
   const md5 = createHash('md5'), sha512 = createHash('sha512');
   for await (const chunk of fs.createReadStream(path.join('release', name))) { md5.update(chunk); sha512.update(chunk); }
