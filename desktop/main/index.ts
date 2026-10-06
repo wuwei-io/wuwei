@@ -27,6 +27,8 @@ import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMP
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits } from "../../src/types.js";
+import { RemoteDecisions } from './remote-decisions.js';
+import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
@@ -209,6 +211,13 @@ const pendingAsk = new Map<number, (answers: any) => void>();
 const pendingAskSid = new Map<number, string>();
 let askSeq = 0;
 let turnSid = "";
+// Paid tools wait for a human choice, outside ask_user's CEO and auto-answer paths.
+const desktopDecisions = new RemoteDecisions();
+function requestDesktopDecision(sid: string, signal: AbortSignal): NonNullable<ToolContext['requestDecision']> {
+  return decision => desktopDecisions.request(sid, { ...decision, timeoutSec: null, allowCustom: false },
+    { sessionId: sid }, false, signal, event => send(
+      event.type === 'decision' ? 'evt:decision-request' : 'evt:decision-resolved', event));
+}
 // 崩溃恢复：本进程是否已做过一次「残留 running→interrupted」检测(在首个 bootstrap 请求里同步做，避免时序竞争)
 let interruptDetected = false;
 // 多任务：每个会话各自的中断控制器；keys = 正在运行的会话集(用于任务计数)
@@ -289,7 +298,8 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
   const decide = requestDecision || remoteExecution?.requestDecision;
-  const decisionHook: ToolContext['requestDecision'] = decide ? decision => waitForRemoteResult(decide(decision), executionSignal) : undefined;
+  const decisionHook: ToolContext['requestDecision'] = decide ? decision => waitForRemoteResult(decide(decision), executionSignal)
+    : requestDesktopDecision(`__room_${employee.id}`, executionSignal);
   const permit = onPermission || remoteExecution?.requestPermission;
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
   if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
@@ -2403,7 +2413,7 @@ const deleteScheduleTool: Tool = {
 const sendImageTool: Tool = {
   name: "send_image",
   description:
-    "把尚未展示的本地图片发到当前对话框里内联显示、可点开看大图。path=图片绝对路径；caption=可选说明。支持 png/jpg/jpeg/gif/webp，单张≤8MB。codex_imagegen成功时已自动展示图片(displayed:true)，不要再调用本工具重复发送。其它工具只返回文件路径、尚未展示时才用本工具发图。",
+    "把尚未展示的本地图片发到当前对话框里。path=绝对路径，caption=可选说明，单张≤8MB。platform_imagegen 和 codex_imagegen 返回 displayed:true 时图片已展示，直接回复用户，不要调用 send_image。只有尚未展示的图片才用此工具。Send a local image only when it has not been displayed. When platform_imagegen or codex_imagegen returns displayed:true, the image is already visible: reply to the user without calling send_image.",
   readOnly: true,
   inputSchema: {
     type: "object",
@@ -3761,7 +3771,9 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   }
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
   send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
-  agent.setSystem(sysOverride ?? sysForSession(useId)); // 每轮重置也走会话身份，绑员工则保人格（身份 bug 根因修复）
+  const imageSettings = loadSettings();
+  const selectedImageSku = imageSettings?.imageMode && !sysOverride ? imageSettings.imageSku : undefined;
+  agent.setSystem((sysOverride ?? sysForSession(useId)) + (selectedImageSku ? tt(`\n用户已选择生图模式，规格为 ${selectedImageSku}。本轮描述用于生成图片，直接调用 platform_imagegen；由工具确认费用。已展示图片不再调用 send_image。`, `\nThe user selected image mode with SKU ${selectedImageSku}. Treat this turn's description as an image request and call platform_imagegen. Let the tool confirm the fee. Do not call send_image after displayed:true.`) : ""));
   const ac = new AbortController();
   runs.set(useId, ac);
   emitTasks();
@@ -3776,9 +3788,12 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
     await ensureHostedProviderReady(useId);
-    const runP = agent.send(
+    const runP = (selectedImageSku
+      ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal)
+      : agent.send.bind(agent))(
       text,
       {
+        preferredImageSku: selectedImageSku,
         onTurnEnd: (turnId) => taskReports.closeTurn(turnId),
         onContextWindow: (contextWindow) => send("evt:context-window", { sid: useId, contextWindow }),
         onText: (delta) => {
@@ -3796,6 +3811,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
         },
         onToolStart: (id, name, input) => { toolDepth++; send("evt:tool-start", { sid: useId, id, name, input }); },
         onToolEnd: (id, result, isError, image) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError, image }); },
+        requestDecision: requestDesktopDecision(useId, ac.signal),
         requestPermission: (tool, input) =>
           new Promise((resolve) => {
             const id = ++permSeq;
@@ -3915,7 +3931,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
       };
       attempt(40); // 立刻 + 最多 40 次重试(~60s)：长回复流式落定慢，持续轮询直到完整 json 出现
     } else if ((useId === currentId || contSessions.has(useId)) && !ac.signal.aborted &&
-      !taskReports.hasPendingOrigin('session', useId) && !conversationReports.hasPending(useId)) {
+      !selectedImageSku && !taskReports.hasPendingOrigin('session', useId) && !conversationReports.hasPending(useId)) {
       // 当前会话，或开着智能继续的后台会话，跑完都算下一步建议(后台会话切走也能自己接着推进)
       void suggestNextAction(useId);
     }
@@ -3970,7 +3986,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
-  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && pendingPerm.size === 0 && pendingAsk.size === 0) {
+  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && pendingPerm.size === 0 && pendingAsk.size === 0 && desktopDecisions.list().length === 0) {
     agent.requestSoftStop();
     log("softStop", id.slice(0, 8), "温和收尾中(再点一次强制停止)");
     return;
@@ -3998,6 +4014,10 @@ ipcMain.on("perm:respond", (_e, id: number, decision: "allow" | "deny") => {
     r(decision);
     pendingPerm.delete(id);
   }
+});
+
+ipcMain.on('decision:respond', (_e, permId: string, response: unknown) => {
+  desktopDecisions.decide(permId, response);
 });
 
 ipcMain.on("ask:answer", (_e, id: number, answers: any) => {
@@ -5155,6 +5175,12 @@ function applyAnonProviders(cat: any[]): void {
   anonProviderIds.add("wuwei-free");
   for (const p of cat) if (p.anon) anonProviderIds.add(p.id);
 }
+ipcMain.handle("account:image-catalog", async () => {
+  const sess = await getFreshWuweiSession().catch(() => null);
+  if (!sess?.accessToken) return [];
+  const result = await new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform').catalog();
+  return Array.isArray(result) ? result : [];
+});
 ipcMain.handle("account:wuwei-catalog", async () => {
   const sess = await getFreshWuweiSession().catch(() => null);
   const cat = await wuweiFetchCatalog(sess?.accessToken ?? null);

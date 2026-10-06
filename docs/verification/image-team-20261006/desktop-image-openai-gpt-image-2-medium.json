@@ -1,0 +1,12 @@
+{
+  "sku": "openai-gpt-image-2-medium",
+  "order_id": "be3c19f9-cf95-41e3-9268-d871bcad7eff",
+  "charged_coins": 36,
+  "width": 1024,
+  "height": 1024,
+  "desktop_human_confirmation": true,
+  "desktop_cancel_no_order": true,
+  "paid_attempts": 1,
+  "inline_image_loaded": true,
+  "redundant_send_image": false
+}

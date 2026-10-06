@@ -132,6 +132,7 @@ export interface WuweiApi {
   setCompact(p: { threshold?: number; msgThreshold?: number }): void;
   setAppSettings(patch: Record<string, boolean | string>): void;
   answerAsk(id: number, answers: unknown): void;
+  respondDecision(permId: string, response: unknown): void;
   codexResetCredits(): Promise<{ ok: boolean; availableCount?: number; credits?: any[]; error?: string }>;
   codexConsumeReset(creditId: string): Promise<{ ok: boolean; error?: string }>;
   setBrainPrompt(text: string | null): void;
@@ -218,6 +219,7 @@ export interface WuweiApi {
   wuweiLogin(): Promise<WuweiMe | null>;
   wuweiMe(): Promise<WuweiMe | null>;
   wuweiCatalog(): Promise<CatalogProviderDto[] | null>;
+  imageCatalog(): Promise<{sku_id:string;label?:string;model:string;coins_per_image:number}[]>;
   modelPricing(): Promise<ModelPricingData | null>;
   wuweiLogout(): Promise<boolean>;
   wuweiDeviceId(): Promise<string>;

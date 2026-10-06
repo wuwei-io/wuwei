@@ -157,6 +157,8 @@ export interface Settings {
   kind: ProviderKind;
   providerId?: string; // UI 预设平台标识(codex/claude-oauth/anthropic/openai/deepseek/qwen/doubao/minimax/custom)
   model?: string;
+  imageMode?: boolean; // Image picker uses the hosted text agent to call the paid image tool.
+  imageSku?: string; // Reviewed image SKU; never sent as a text model ID.
   // 下面三个是「当前生效平台」的凭证(loadConfig 据此构造环境变量)；随平台切换镜像自 creds[providerId]
   apiKey?: string; // anthropic-apikey / openai
   baseUrl?: string; // openai 兼容端点

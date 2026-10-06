@@ -1,6 +1,8 @@
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
 import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
+import { ToolDecisionModal } from './components/ToolDecisionModal.js';
+import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
@@ -2330,6 +2332,7 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
   const clampSec = (n: number) => Math.min(60, Math.max(3, Math.round(n) || 10));
   const [employees, setEmployees] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [addingDept, setAddingDept] = useState<string | null>(null);
   const [levels, setLevels] = useState(3);
   const [ceoId, setCeoId] = useState<string>(""); // "" = 自动识别(职位含CEO/名叫小笨)
   const [ceoSec, setCeoSec] = useState(10);
@@ -2457,9 +2460,12 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
               {(d.memberIds || []).map((id: string) => <option key={id} value={id}>{nameOf(id)}</option>)}
             </select>
           </div>
-          <div className="dept-card-lbl" style={{ marginTop: 6 }}>{en ? "Members" : "成员"}</div>
+          <div className="dept-card-row" style={{ marginTop: 6 }}>
+            <span className="dept-card-lbl">{en ? "Members" : "成员"}</span>
+            <button type="button" className="tc-btn-ghost" onClick={() => setAddingDept(addingDept === d.id ? null : d.id)}>{addingDept === d.id ? (en ? "Done" : "完成") : (en ? "+ Add member" : "+ 添加成员")}</button>
+          </div>
           <div className="dept-members">
-            {employees.map((e) => {
+            {employees.filter(e => (d.memberIds || []).includes(e.id)).map((e) => {
               const inDept = (d.memberIds || []).includes(e.id);
               const otherDept = departments.find((x) => x.id !== d.id && (x.memberIds || []).includes(e.id));
               return (
@@ -2474,11 +2480,25 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
                   }}
                 >
                   <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")}  /></span>
-                  {employeeLabel(e, en ? "en" : "zh")}{otherDept && !inDept ? ` · ${departmentLabel(otherDept, en ? "en" : "zh")}` : ""}
+                  {employeeLabel(e, en ? "en" : "zh")} <span aria-label={en ? "Remove member" : "移除成员"}>×</span>
                 </button>
               );
             })}
           </div>
+          {!(d.memberIds || []).length && <div className="app-set-hint">{en ? "No members" : "暂无成员"}</div>}
+          {addingDept === d.id && <div className="dept-add-members" style={{ marginTop: 8 }}>
+            <div className="app-set-hint">{en ? "Choose a teammate. Members of another department will be moved here." : "选择员工。已在其他部门的员工会移到本部门。"}</div>
+            <div className="dept-members">
+              {employees.filter(e => !(d.memberIds || []).includes(e.id)).map(e => {
+                const from = departments.find(x => (x.memberIds || []).includes(e.id));
+                return <button key={e.id} type="button" className="dept-chip" onClick={() => { deptUpdate(d.id, { memberIds: [...(d.memberIds || []), e.id] }); setAddingDept(null); }}>
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")} /></span>
+                  {employeeLabel(e, en ? "en" : "zh")}{from ? ` · ${departmentLabel(from, en ? "en" : "zh")}` : ""}
+                </button>;
+              })}
+              {employees.every(e => (d.memberIds || []).includes(e.id)) && <span className="app-set-hint">{en ? "All teammates added" : "已加入所有员工"}</span>}
+            </div>
+          </div>}
         </div>
       ))}
       </>)}
@@ -3455,6 +3475,7 @@ export function App() {
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
   const [asks, setAsks] = useState<Record<string, { id: number; questions: AskQuestion[] }>>({});
+  const [toolDecisions, setToolDecisions] = useState<Record<string, Decision>>({});
   // CEO 把关中：员工请示后 CEO 正在拍板，按发起会话 id 存 {ceoName, askerName, until(到点时间戳)}。拍完(evt 带 done)即清。
   const [ceoDeciding, setCeoDeciding] = useState<Record<string, { ceoName: string; askerName: string; until: number }>>({});
   // 非当前会话发起的 ask → 右上角通知(点击切过去/✕忽略/30s自动消失)
@@ -3842,6 +3863,19 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("model"); // 统一设置页的初始/当前左侧菜单项
   const [curProviderId, setCurProviderId] = useState("");
+  const [imageMode, setImageMode] = useState(false);
+  const [imageSku, setImageSku] = useState("");
+  const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;coins_per_image:number}[]>([]);
+  const imagePreset: Preset = {id:"wuwei-image",label:"无为托管 · 生图模型",labelEn:"Wuwei hosted · Image models",kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageCatalog.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
+  const displayProviderId = imageMode ? imagePreset.id : curProviderId;
+  const displayModel = imageMode ? imageSku : meta.model;
+  const imageLabel = (id:string) => {
+    const row=imageCatalog.find(s=>s.sku_id===id);
+    if (row?.model === "gpt-image-2") return "GPT Image 2";
+    if (row?.model === "gpt-image-1") return `GPT Image 1 · ${id.endsWith("-low") ? (lang === "en" ? "Low" : "低画质") : (lang === "en" ? "Medium" : "中画质")}`;
+    return row?.label || row?.model || id;
+  };
+  const refreshImageCatalog = async () => {try {const rows=await window.wuwei.imageCatalog();setImageCatalog(rows);}catch {setImageCatalog([]);}};
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({}); // 各平台实时拉到的模型
   const [showAllModels, setShowAllModels] = useState(false); // 切换模型下拉：false=常用(预设旗舰) true=全部(含实时拉取)
   const [showModelPricing, setShowModelPricing] = useState(false); // 模型费用说明弹窗
@@ -4459,6 +4493,8 @@ export function App() {
       // 首启兜底：从未选过平台(providerId 为空)时默认落到「免费体验(wuwei-free, anon 免登录)」，
       // 让全新未登录用户下载后第一条消息就能直接聊、不撞登录墙(头号转化真凶)。已登录/已选过平台者 providerId 非空不受影响。
       setCurProviderId(r?.settings?.providerId || "wuwei-free");
+      setImageMode(!!r?.settings?.imageMode);
+      setImageSku(r?.settings?.imageSku || "");
       // 首启兜底不能只改 UI：若从未选过平台(providerId 空)，把 wuwei-free 的完整配置(kind=openai/网关 baseUrl)
       // 真正落盘。否则界面显示免费、settings.kind 却停在默认(anthropic) → 免费模型被当 anthropic 发、报"无法解析鉴权"。
       if (!r?.settings?.providerId) {
@@ -4497,6 +4533,7 @@ export function App() {
   useEffect(() => {
     window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => setCatalog(null));
   }, [wuwei?.user?.id]);
+  useEffect(() => { void refreshImageCatalog(); }, [wuwei?.user?.id]);
 
   // 内置平台 + 用户自定义供应商：先应用用户的删除/改名/改端点覆盖，再按托管登录+后台可见性过滤，
   // 最后按用户自定义顺序排、隐藏项不进切换菜单
@@ -4532,8 +4569,8 @@ export function App() {
     catalogOrder,
   );
   // 未登录：免费体验(anon)恒置顶(稳定排序，其余相对序不变)——访客第一眼就是免费体验，也是唯一可用项。
-  const providerList = wuwei ? providerListRaw : [...providerListRaw].sort((a, b) => (b.anon ? 1 : 0) - (a.anon ? 1 : 0));
-  const curPreset = providerList.find((p) => p.id === curProviderId);
+  const providerList = [...providerListRaw.filter(p=>p.id==="wuwei-free"), imagePreset, ...providerListRaw.filter(p=>p.id!=="wuwei-free")];
+  const curPreset = imageMode ? imagePreset : providerList.find((p) => p.id === curProviderId);
   // 动态实时模型(从平台 /models 拉)并入预设，去重；预设在前(保证旗舰置顶)，实时补充新模型；
   // 再并入当前生效的模型(meta.model)——自建端点等没有预设列表时，配好的模型也能在快切里看到/切换。
   const quickModels = [
@@ -4545,11 +4582,18 @@ export function App() {
   ];
   // 切换模型下拉展示：常用=预设旗舰(+当前选中项)，全部=预设+实时拉取全量
   const commonModels = curPreset?.models ?? [];
-  const shownModels = showAllModels
+  const shownModels = imageMode ? imagePreset.models : showAllModels
     ? quickModels
     : [...new Set([...commonModels, ...(meta.model && !commonModels.includes(meta.model) ? [meta.model] : [])])];
-  const hasMoreModels = quickModels.length > commonModels.length;
+  const hasMoreModels = !imageMode && quickModels.length > commonModels.length;
   async function quickModel(m: string) {
+    if (imageMode) {
+      if (!wuwei) { setShowModelMenu(false); setShowLoginIntro(true); return; }
+      if (!imageCatalog.some(s=>s.sku_id===m)) return;
+      const r=await window.wuwei.getSettings();
+      window.wuwei.setSettings({...r.settings,imageMode:true,imageSku:m});
+      setImageSku(m);setShowModelMenu(false);return;
+    }
     // 访客门禁：未登录时仅「免费体验(anon)」平台可切它自己的免费模型；其它一律引导登录
     if (!wuwei && !curPreset?.anon) {
       setShowModelMenu(false);
@@ -4731,7 +4775,8 @@ export function App() {
   async function applyBoundModel(providerId?: string, model?: string) {
     if (!providerId && !model) return;
     const r = await window.wuwei.getSettings();
-    const cur = r?.settings || {};
+    const cur = { ...(r?.settings || {}), imageMode: false };
+    if (r?.settings?.imageMode) { setImageMode(false); window.wuwei.setSettings(cur); }
     // 已经就是它 → 不重复切(避免 setSettings 抖动)
     if ((!providerId || cur.providerId === providerId) && (!model || cur.model === model)) return;
     if (providerId && cur.providerId !== providerId) {
@@ -4779,11 +4824,21 @@ export function App() {
     }
     const r = await window.wuwei.getSettings();
     const cur = r?.settings || {};
+    if (p.id === "wuwei-image") {
+      const rows=await window.wuwei.imageCatalog().catch(()=>[]);
+      setImageCatalog(rows);
+      if (!rows.length) { push({type:"notice",text:lang==="en"?"Image models are temporarily unavailable. Try again later.":"生图模型暂不可用，请稍后再试。"});setShowProviderMenu(false);return; }
+      const sku=rows.find(s=>s.sku_id===imageSku)?.sku_id || rows.find(s=>s.sku_id==="openai-gpt-image-2-medium")?.sku_id || rows[0].sku_id;
+      window.wuwei.setSettings({...cur,kind:"openai",providerId:"wuwei-free",baseUrl:WUWEI_GATEWAY_BASE,model:"glm-4.7-flash",apiKey:undefined,oauthToken:undefined,imageMode:true,imageSku:sku});
+      setCurProviderId("wuwei-free");setImageMode(true);setImageSku(sku);setShowProviderMenu(false);return;
+    }
+    setImageMode(false);
     const slot = (cur.creds || {})[p.id] || {};
     window.wuwei.setSettings({
       ...cur,
       kind: p.kind,
       providerId: p.id,
+      imageMode: false,
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
       baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
@@ -5057,6 +5112,12 @@ export function App() {
           }
           break;
         }
+        case 'evt:decision-request':
+          setToolDecisions(previous => ({ ...previous, [payload.permId]: payload }));
+          break;
+        case 'evt:decision-resolved':
+          setToolDecisions(previous => { const next = { ...previous }; delete next[payload.permId]; return next; });
+          break;
         case "evt:ask-user": {
           // AI 请用户选择：按发起会话 id 存。当前会话→直接弹框；别的会话→右上角通知，不打断当前对话。
           const askSid = payload.sid || currentIdRef.current;
@@ -6446,17 +6507,17 @@ export function App() {
               <span className="mq-mid">·</span>
               <button
                 className="mq-btn mq-mod"
-                title={meta.model}
+                title={imageMode ? imageLabel(imageSku) : meta.model}
                 onClick={(e) => {
                   // 访客门禁：未登录且当前不是免费体验 → 点模型也引导登录
                   if (!wuwei && !curPreset?.anon) { setShowLoginIntro(true); return; }
                   // 打开切换器时重新拉一次后台目录：后台上新/下架模型(如豆包上线、牛来下架)即时可见，不用重启
-                  if (!showModelMenu) { window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
+                  if (!showModelMenu) { if(imageMode) void refreshImageCatalog(); window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
                   openMqMenu(e);
                   setShowModelMenu((v) => !v);
                 }}
               >
-                <span className="mq-txt">{MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
+                <span className="mq-txt">{imageMode ? imageLabel(imageSku) : MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
                 <span className="mq-caret">▾</span>
               </button>
               {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
@@ -6513,11 +6574,11 @@ export function App() {
                     {providerList.map((p) => (
                       <button
                         key={p.id}
-                        className={"mq-item" + (p.id === curProviderId ? " on" : "")}
+                        className={"mq-item" + (p.id === displayProviderId ? " on" : "")}
                         onClick={() => quickProvider(p)}
                       >
                         <span>{pLabel(p, lang)}</span>
-                        {p.id === curProviderId && <span className="mq-check">✓</span>}
+                        {p.id === displayProviderId && <span className="mq-check">✓</span>}
                       </button>
                     ))}
                     <div className="mq-sep" />
@@ -6547,7 +6608,7 @@ export function App() {
                         {t("mq.switchModel", "切换模型")} · {curPreset ? pLabel(curPreset, lang) : meta.backend}
                       </span>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
+                        onClick={(e) => { e.stopPropagation(); if (imageMode) { push({type:"notice",text:lang === "en" ? "Image prices are estimates. The tool confirms the hold and maximum authorized fee before each generation; final billing uses the verified official cost." : "生图价格为预估。每次生成前会确认预占金额和授权上限，最终按核实的官方实费结算。"});return; } setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
                         title={lang === "en" ? "Model pricing" : "模型费用说明"}
                         style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 5, border: "none", cursor: "pointer", background: "transparent", color: "inherit", opacity: 0.65, fontSize: 11 }}
                       >
@@ -6583,19 +6644,22 @@ export function App() {
                         </span>
                       )}
                     </div>
+                    {imageMode && <div className="mq-head">{lang === "en" ? "Fee confirmed before generation" : "生成前确认费用"}</div>}
                     {shownModels.length === 0 && <div className="mq-empty">{lang === "en" ? "No preset models — add one in Settings" : "无预设模型，去设置里填"}</div>}
                     {shownModels.map((m) => {
                       const gated = !wuwei && loginReqModelIds.has(m); // 未登录 + 需登录模型 → 灰置引导
                       return (
                       <button
                         key={m}
-                        className={"mq-item" + (m === meta.model ? " on" : "")}
+                        data-image-sku={imageMode ? m : undefined}
+                        className={"mq-item" + (m === displayModel ? " on" : "")}
                         style={gated ? { opacity: 0.5 } : undefined}
                         title={gated ? (lang === "en" ? "Sign in to use free" : "登录后可免费使用") : undefined}
                         onClick={() => { if (gated) { setShowModelMenu(false); setShowLoginIntro(true); return; } quickModel(m); }}
                       >
                         <span>
-                          {MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
+                          {imageMode ? imageLabel(m) : MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
+                          {imageMode && <span style={{marginLeft:8,fontSize:11,opacity:0.65}}>≈{imageCatalog.find(s=>s.sku_id===m)?.coins_per_image} {lang === "en" ? "coins" : "无为币"}</span>}
                           {gated && (
                             <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
                               {lang === "en" ? "Sign in" : "登录可用"}
@@ -6627,7 +6691,7 @@ export function App() {
                             </span>
                           )}
                         </span>
-                        {m === meta.model && <span className="mq-check">✓</span>}
+                        {m === displayModel && <span className="mq-check">✓</span>}
                       </button>
                       );
                     })}
@@ -10581,6 +10645,9 @@ export function App() {
         <CeoDecidingPill lang={lang} anchor={composerRef} info={ceoDeciding[currentId]} />
       )}
 
+      {Object.values(toolDecisions)[0] && <ToolDecisionModal
+        key={Object.values(toolDecisions)[0].permId} decision={Object.values(toolDecisions)[0]}
+        onRespond={response => window.wuwei.respondDecision(Object.values(toolDecisions)[0].permId, response)} />}
       {asks[currentId] && (() => {
         const a = asks[currentId];
         const cont = modeOf(currentId) === "cont";

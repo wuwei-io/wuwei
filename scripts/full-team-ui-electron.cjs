@@ -69,6 +69,20 @@ async function testApp(){
   await js(`document.querySelector('.dept-card-row input').focus();document.querySelector('.dept-card-row input').blur()`);await delay(150);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments,departments);
   console.log('PASS unchanged English department blur preserves canonical names, heads and members');
+  check(await js(`JSON.stringify([...document.querySelectorAll('.dept-card')].map(c=>c.querySelectorAll('.dept-members .dept-chip').length))===JSON.stringify([1,1,2,2])`),'department cards show only assigned members');
+  await js(`document.querySelector('.dept-card .dept-card-row:nth-of-type(3) button').click()`);
+  await wait(`!!document.querySelector('.dept-add-members')`);
+  await js(`[...document.querySelectorAll('.dept-add-members .dept-chip')].find(b=>b.textContent.includes('Dana')).click()`);
+  await wait(`document.querySelector('.dept-card .dept-members').textContent.includes('Dana')`);
+  check(!JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments[3].memberIds.includes('wj-data'),'adding moves a teammate out of the previous department');
+  await js(`[...document.querySelector('.dept-card .dept-members').querySelectorAll('button')].find(b=>b.textContent.includes('Dana')).click()`);
+  await wait(`!document.querySelector('.dept-card .dept-members').textContent.includes('Dana')`);
+  await js(`document.querySelectorAll('.dept-card')[3].querySelector('.dept-card-row:nth-of-type(3) button').click()`);
+  await wait(`!!document.querySelector('.dept-add-members')`);
+  await js(`[...document.querySelectorAll('.dept-add-members .dept-chip')].find(b=>b.textContent.includes('Dana')).click()`);
+  await wait(`document.querySelectorAll('.dept-card')[3].querySelector('.dept-members').textContent.includes('Dana')`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments,departments);
+  console.log('PASS actual department Add, move, Remove and restore through React and IPC');
   await shot('full-english-department-settings');
   // First settings tab is General. Use the actual language buttons rather than changing fixture data.
   await click('.set-tabs button');await wait(`[...document.querySelectorAll('.theme-opt')].some(b=>b.textContent==='中文')`);

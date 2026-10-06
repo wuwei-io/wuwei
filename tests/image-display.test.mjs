@@ -6,7 +6,7 @@ import { dedupeDisplayedToolImages } from '../desktop/renderer/src/imageResults.
 test('saved and streaming tool lists show a generated image once per user turn', () => {
   const items = [
     { type: 'user', images: ['a'] },
-    { type: 'tool', name: 'codex_imagegen', image: 'a' },
+    { type: 'tool', name: 'platform_imagegen', image: 'a' },
     { type: 'assistant', text: 'saved' },
     { type: 'tool', name: 'send_image', image: 'a' },
     { type: 'tool', name: 'send_image', image: 'b' },

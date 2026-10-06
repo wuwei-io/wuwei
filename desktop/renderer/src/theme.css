@@ -3000,6 +3000,9 @@ body {
 }
 .ask-title { font-weight: 600; font-size: 14px; }
 .ask-multi { font-size: 11px; color: var(--text-2, #999); }
+.tool-decision-mask { z-index: 10000; }
+.tool-decision { max-width: 520px; }
+.tool-decision p { line-height: 1.6; white-space: pre-wrap; }
 .ask-opts { display: flex; flex-direction: column; gap: 6px; }
 .ask-opt {
   display: flex; flex-direction: column; gap: 2px; text-align: left;

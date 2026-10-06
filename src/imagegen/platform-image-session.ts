@@ -15,6 +15,23 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
  const client=new PlatformBillingClient(base,()=>token,'platform',180000);
  return async(input:Record<string,unknown>,ctx:ToolContext):Promise<ToolResult>=>{
   try {
+   ctx.signal?.throwIfAborted();
+   const deliver=async(orderId:string,root:string):Promise<ToolResult>=>{
+    let detail=await client.order(orderId);
+    // Settlement only uses this order's already approved budget. The server
+    // rejects any excess; a new authorization still requires the human dialog.
+    if(detail.status==='unknown') {
+     ctx.signal?.throwIfAborted();
+     try {await client.settle(orderId);detail=await client.order(orderId);} catch(error) {
+      return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tt('原订单尚未完成结算，图片未展示。不能声称生成成功；保留原订单，不重新生图。','The original order has not settled and no image was displayed. Do not claim success or generate again.'),reason:error instanceof Error?error.message:'Settlement pending'}),isError:true};
+     }
+    }
+    if(detail.status!=='settled') return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tt('图片尚未交付，不能声称生成成功。只处理此原订单，不重新生图。','No image has been delivered. Do not claim success. Recover this original order only; never generate again.')}),isError:true};
+    ctx.signal?.throwIfAborted();
+    const bytes=await client.image(orderId);await mkdir(root,{recursive:true});
+    const path=join(root,`image-${orderId}-${randomUUID()}.png`);await writeFile(path,bytes,{flag:'wx'});
+    return {content:JSON.stringify({order_id:orderId,path,charged_coins:detail.charged_coins,displayed:true}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
+   };
    if(input.action==='catalog') {
     const catalog=await client.catalog();
     return Array.isArray(catalog) && catalog.length===0 ? emptyImageCatalog() : {content:JSON.stringify(catalog)};
@@ -22,7 +39,7 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    const root=resolve(ctx.cwd,'.wuwei','output');
    if(typeof input.recovery_key==='string') {
     const recovered=await client.lookup(input.recovery_key);
-    return {content:JSON.stringify({...recovered,message:tt('已找回原订单；用 order_id 查询或确认结算，不重新生图','Original order recovered. Query or settle this order; do not generate again.')})};
+    return await deliver(recovered.order_id,root);
    }
    if(typeof input.order_id==='string') {
     if(input.action==='reauthorize') {
@@ -33,16 +50,10 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
      await client.reauthorize(input.order_id,amount);
     }
     if(input.action==='settle') {
-     if(!ctx.requestDecision) throw new Error('恢复结算需要用户确认');
-     const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:tt('原图结算确认','Settle original image'),question:tt('只结算原订单，按已确认授权补扣所需额度或无为币，不重新生图。是否继续？','Settle the original order using your approved allowance or coins, without generating again. Continue?'),options:[{label:tt('确认原图结算','Confirm settlement'),value:'settle_image',tone:'safe'},{label:tt('取消','Cancel'),value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
-     if(decision.value!=='settle_image') return {content:'已取消结算，原图保留。'};
+     ctx.signal?.throwIfAborted();
      await client.settle(input.order_id);
     }
-    const detail=await client.order(input.order_id);
-    if(detail.status!=='settled') return {content:JSON.stringify(detail)};
-    const bytes=await client.image(input.order_id);await mkdir(root,{recursive:true});
-    const path=join(root,`image-${input.order_id}-${randomUUID()}.png`);await writeFile(path,bytes,{flag:'wx'});
-    return {content:JSON.stringify({order_id:input.order_id,path,charged_coins:detail.charged_coins,displayed:true}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
+    return await deliver(input.order_id,root);
    }
    if(typeof input.prompt!=='string' || typeof input.sku_id!=='string' || !ctx.requestDecision) throw new Error('生图需要用户确认预计费用；当前会话不支持确认');
    const catalog=await client.catalog();if(!Array.isArray(catalog)) throw new Error('图片目录无效');
@@ -53,6 +64,7 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    const quote=await client.quote(query);
    const decision=await ctx.requestDecision({permId:randomUUID(),risk:'high',title:tt('生图费用确认','Image cost confirmation'),question:tt(`预计预占 ${quote.estimated_coins} 币。最终按官方实费结算，最多授权 ${quote.authorization_ceiling} 币；不足时暂停原图结算，不重新生图。是否继续？`,`Estimated hold: ${quote.estimated_coins} coins. Final billing uses the official cost, up to ${quote.authorization_ceiling} authorized coins. Settlement pauses if funds are insufficient; the image is kept. Continue?`),options:[{label:tt('确认生成','Generate image'),value:'generate_image',tone:'safe'},{label:tt('取消','Cancel'),value:'cancel_image',tone:'neutral'}],allowCustom:false,timeoutSec:null});
    if(decision.value!=='generate_image') return {content:tt('已取消生图，未下单。','Image generation cancelled. No order was placed.')};
+   ctx.signal?.throwIfAborted();
    const attempt=client.prepare({...query,authorized_budget:quote.authorization_ceiling},sku,quote);
    // Durable handle BEFORE POST. Never automatically recreate after timeout/process restart.
    await mkdir(recoveryRoot,{recursive:true,mode:0o700});
@@ -61,10 +73,7 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    try {
     const order=await client.create(attempt);
     await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:attempt.state,order_id:order.order_id}),{mode:0o600});
-    if(order.status!=='settled') return {content:JSON.stringify({...order,recovery_file:receipt,message:'只查询或结算原订单；不重新生图'})};
-    const detail=await client.order(order.order_id),bytes=await client.image(order.order_id);
-    await mkdir(root,{recursive:true});const path=join(root,`image-${order.order_id}.png`);await writeFile(path,bytes,{flag:'wx'});
-    return {content:JSON.stringify({order_id:order.order_id,path,charged_coins:detail.charged_coins,displayed:true}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
+    return await deliver(order.order_id,root);
    } catch(error) {await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:attempt.state,order_id:attempt.orderId}),{mode:0o600});return {content:JSON.stringify({code:'IMAGE_ORDER_ERROR',message:error instanceof Error?error.message:'生图结果不明，不重新下单',recovery_key:attempt.key,recovery_file:receipt,order_id:attempt.orderId}),isError:true};}
   } catch(error) {return {content:JSON.stringify({code:'IMAGE_ORDER_ERROR',message:error instanceof Error?error.message:'生图失败，不自动重试'}),isError:true};}
  };

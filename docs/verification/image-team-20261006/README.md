@@ -7,7 +7,7 @@ New installations of the complete default company initialize CEO办公室, 技�
 ## Client verification
 
 - `npm run typecheck`: passed.
-- `node scripts/test-release.mjs`: 140 tests passed, zero failures/skips.
+- `node scripts/test-release.mjs`: 145 tests passed, zero failures/skips.
 - `npm run desktop:build`: passed.
 - `node scripts/run-full-team-ui-harness.mjs`: passed with actual application main, preload, renderer, team IPC and persisted fixture files, in a separate temporary profile. See `ui/full-app-interaction.txt` and the DOM snapshots. Covers six English teammates, four departments, team pack, edit dialog, unchanged save, custom save, department blur, CEO-chat to Groups navigation, Chinese switch and preserved member references. These are full-application DOM interaction checks, not native pointer/screenshot acceptance.
 - `node scripts/run-full-team-ui-harness.mjs --fresh-profile`: passed. With no settings file at all, the actual persisted backend becomes `wuwei-free`, OpenAI-compatible, GLM-4.7-Flash and the hosted gateway URL. This covers the null-config edge case rather than merely checking the selected UI label. See `ui/fresh-profile.txt`.
@@ -35,4 +35,21 @@ The user-facing debug build runs `electron-vite dev`, can access the live catalo
 
 The initial v1.7.41 hosted Windows CI could not start the full Electron desktop harness. The portable suite and the full application tests on the local desktop passed. The release workflow keeps portable checks on all hosted runners and supports finishing a selected platform independently. v1.7.42 also fixes missing-config initialization and is the final version for this rollout.
 
-Production acceptance cleanup closed both synthetic accounts, removed their credentials and reset unused fixture balances to zero with an audited administrative operation. The generated orders and settlement evidence are retained.
+The initial backend acceptance cleanup closed its two synthetic accounts, removed their credentials and reset unused fixture balances to zero with an audited administrative operation. The generated orders and settlement evidence are retained.
+
+## Final desktop image and picker verification
+
+The real desktop fee hook now goes through main/preload/React/IPC. It is independent of ask_user and CEO decisions, has no auto-approve timeout, and responds to Generate, Cancel and Stop. The earlier Node-injected hook test was insufficient to verify this desktop path.
+
+The platform list keeps Free trial first and provides Wuwei hosted · Image models. Its SKU menu comes from the authenticated enabled image catalog. In explicit image mode the selected SKU goes straight to the built-in image tool, preserving normal conversation history and bypassing an unnecessary text-model request. Chat model IDs and image SKU IDs remain separate. Normal AI-directed image requests still use tool availability instructions. New generation is bound to the user's selected SKU; recovery preserves the original order.
+
+Actual desktop paid acceptance (separate synthetic profile, actual React control and IPC):
+
+| Model | Original order | Measured charge | Verified image |
+| --- | --- | ---: | --- |
+| GPT Image 2 medium | be3c19f9-cf95-41e3-9268-d871bcad7eff | 36 | 1024×1024 PNG |
+| Nano Banana 2 | 11118156-7668-4d64-983f-796a21878f7c | 46 | 1024×1024 PNG |
+
+Both cancelled once without creating an order, then approved one generation, settled the original order and loaded an inline image. Neither executed send_image afterward. Independent server verification replayed the original key and settlement without generation: one image-spend row, original credential bound, unauthorized and other-user access denied. Pending/unknown results cannot produce a success reply; recovery attempts settlement of the original order only. Previously displayed file paths are skipped before send_image execution within the same turn, while an explicit resend in a later user turn remains permitted.
+
+The full company UI harness also verifies assigned-member-only department cards, Add, movement from another department, Remove, and restoration of original IDs/heads/members. The desktop TypeScript check still reports the same 16 pre-existing errors; the root type check, portable suite, production build and full application interaction checks pass. Google login's reuse of the original Chrome profile has been implemented, but completion of the user's personal Google authorization remains unconfirmed.
