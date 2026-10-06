@@ -149,3 +149,12 @@ export const TEAM_TOOL_EN: Record<string, string> = {
   list_schedules: "List scheduled tasks, optionally filtering by teammate reference.",
   delete_schedule: "Delete a scheduled task by its stable task ID.",
 };
+
+export type LocalizedEmployeeField = "name" | "title" | "blurb" | "persona";
+/** Display draft never becomes storage implicitly. An unchanged localized value restores
+ * the original field; only a genuinely different input becomes custom content. */
+export function editLocalizedEmployeeField(original: Employee, draft: Employee,
+  field: LocalizedEmployeeField, value: string, language: TeamLanguage): Employee {
+  const displayedOriginal = localizeEmployee(original, language)[field] || "";
+  return { ...draft, [field]: value === displayedOriginal ? original[field] : value };
+}

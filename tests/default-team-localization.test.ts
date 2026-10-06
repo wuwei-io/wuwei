@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { localizeEmployee, localizeTeamApp, resolveEmployee, employeeMentionTargets, employeeRoster, TEAM_TOOL_EN } from '../src/team/default-localization.js';
+import { editLocalizedEmployeeField, localizeEmployee, localizeTeamApp, resolveEmployee, employeeMentionTargets, employeeRoster, TEAM_TOOL_EN } from '../src/team/default-localization.js';
 import { BUILTIN_APPS } from '../desktop/main/team/catalog.js';
 import { parseMentions } from '../desktop/main/team/projection.js';
 const app = BUILTIN_APPS[0];
@@ -79,4 +79,35 @@ test('existing installed persona files switch at assembly only; custom identity 
     assert.equal(readFileSync(identity, 'utf8'), 'User customized identity');
     assert.match(store.buildEmployeeSystem(emp, '当前工作目录: test', ''), new RegExp(emp.name));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('English settings drafts preserve canonical values on unchanged save and real edits stay custom', () => {
+  for (const original of installed) {
+    let draft = { ...original };
+    for (const field of ['name', 'title', 'blurb', 'persona'] as const) {
+      draft = editLocalizedEmployeeField(original, draft, field, localizeEmployee(original, 'en')[field] || '', 'en');
+    }
+    assert.deepEqual(draft, original);
+    assert.deepEqual(localizeEmployee(draft, 'zh'), original);
+    assert.equal(resolveEmployee([draft], localizeEmployee(original, 'en').name)?.id, original.id);
+    const custom = editLocalizedEmployeeField(original, draft, 'name', 'My custom teammate', 'en');
+    assert.equal(localizeEmployee(custom, 'zh').name, 'My custom teammate');
+    assert.equal(localizeEmployee(custom, 'en').name, 'My custom teammate');
+    assert.equal(custom.id, original.id);
+    const department = { headId: original.id, memberIds: [original.id] };
+    assert.equal(department.memberIds[0], custom.id);
+    assert.equal(resolveEmployee([custom], custom.id)?.id, department.headId);
+    const persona = editLocalizedEmployeeField(original, draft, 'persona', 'My custom duties', 'en');
+    assert.equal(localizeEmployee(persona, 'zh').persona, 'My custom duties');
+    assert.equal(localizeEmployee(persona, 'en').persona, 'My custom duties');
+  }
+});
+test('settings render translated drafts and do not persist display objects', () => {
+  const source = readFileSync(new URL('../desktop/renderer/src/team/AppStore.tsx', import.meta.url), 'utf8');
+  for (const field of ['name', 'title', 'blurb', 'persona']) {
+    assert.ok(source.includes('value={display.' + field));
+    assert.ok(source.includes('editLocalizedEmployeeField(employee, edit, "' + field + '"'));
+  }
+  assert.ok(source.includes('name: saveText("name")'));
+  assert.ok(source.includes('persona: saveText("persona")'));
 });

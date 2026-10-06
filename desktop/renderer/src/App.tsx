@@ -2385,7 +2385,7 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
         <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO" : "CEO（上级把关人）"}</div>
         <span style={{ flex: 1 }} />
         <select className="tc-input tc-select" style={{ maxWidth: 240 }} value={ceoId} onChange={(e) => onCeo(e.target.value)}>
-          <option value="">{en ? "Auto (title has CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
+          <option value="">{en ? "Auto (CEO role / default team CEO)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
           {employees.map((m: any) => <option key={m.id} value={m.id}>{employeeLabel(m, en ? "en" : "zh")}{m.title ? ` (${localizeEmployee(m, en ? "en" : "zh").title})` : ""}</option>)}
         </select>
       </div>
