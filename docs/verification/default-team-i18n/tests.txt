@@ -1,0 +1,15 @@
+✔ six defaults and pack are English; switching back is lossless and immutable (2.3736ms)
+✔ custom fields, renamed defaults, generated IDs and custom provenance remain untouched (0.1747ms)
+✔ canonical, aliases and stable IDs resolve; name or ID collisions fail closed (0.1754ms)
+✔ English and Chinese mentions route to the same IDs, deduplicate and reject ambiguous aliases (0.87ms)
+✔ English routing roster and team tool descriptions are English with stable references (0.292ms)
+✔ UI edit action keeps canonical record; all exact-name routing surfaces use resolver (2.0719ms)
+✔ existing installed persona files switch at assembly only; custom identity and memory preserved (20.4626ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 176.2456

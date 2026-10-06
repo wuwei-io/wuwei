@@ -1,3 +1,4 @@
+import { resolveEmployee, employeeLabel, employeeRoster, TEAM_TOOL_EN } from "../../src/team/default-localization.js";
 // Electron 主进程：创建窗口，复用核心(agent/tools/config)，
 // 通过 IPC 把 Agent 流式 hooks 推给渲染进程，权限确认走 IPC 往返。
 import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, session, clipboard, Menu, safeStorage, Tray, nativeImage, dialog, screen, nativeTheme } from "electron";
@@ -1552,7 +1553,7 @@ function resolveCeoId(): string | null {
   if (cfgId && emps.some((e) => e.id === cfgId)) return cfgId;
   const byTitle = emps.find((e) => /ceo/i.test(e.title || ""));
   if (byTitle) return byTitle.id;
-  return emps.find((e) => e.name === "小笨")?.id || null;
+  return resolveEmployee(emps, "wj-ceo")?.id || resolveEmployee(emps, "小笨")?.id || null;
 }
 
 // 把关链：员工请示(ask_user)先问谁、再问谁。顺序 = 本部门负责人(若 self 在某部门且自己不是负责人) → 公司 CEO。
@@ -1580,11 +1581,13 @@ async function askCeoDecision(
   const qtext = questions
     .map((q: any, i: number) => `${i + 1}. ${q.question}\n   可选：${(q.options || []).map((o: any) => o.label).join(" | ")}${q.multiSelect ? "（可多选）" : ""}`)
     .join("\n");
-  const input =
-    `你是公司 CEO。团队成员「${askerName}」在干活时遇到需要拍板的选择，按流程先请示你。\n\n` +
-    `· 你能替公司拍板 → 直接给出每题的选择(从给定选项里选)+一句简短理由。\n` +
-    `· 确实超出你的判断、必须董事长(老板)亲自定 → 只回一行：ESCALATE：<为什么需要老板>。\n\n` +
-    `需要拍板的问题：\n${qtext}`;
+  const input = process.env.WUWEI_LANG === "en"
+    ? `You are the company CEO. A teammate requests a decision. Choose from the provided options and give a brief reason. If the chair must decide, reply only ESCALATE: <reason>.
+
+${qtext}`
+    : `你是公司 CEO。团队成员「${askerName}」请求拍板。能决定请从选项中选择并说明理由；必须董事长决定时只回复 ESCALATE：<原因>。
+
+${qtext}`;
   const sys = buildEmployeeSystem(ceo, sysPrompt, loadEmployeeMemory(ceo.id), "## 当前场景\n\n你在做 CEO 把关：下属把需要拍板的选择请示到你这。能定就定、定不了才上报董事长。别反问下属，直接给结论或 ESCALATE。");
   // 倒计时：到点就 abort 掉 CEO 这一轮，当「没拍板」上报董事长。父级(员工会话)被取消也一起中止。
   const ac = new AbortController();
@@ -1751,9 +1754,9 @@ const dmTeammateTool: Tool = {
     const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
     const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
 
-    const target = available.find((e) => e.name === name);
+    const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可私信的同事）", "(no other teammates available)");
+      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可私信的同事）", "(no other teammates available)");
       return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
     }
 
@@ -1767,7 +1770,7 @@ const dmTeammateTool: Tool = {
     // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
     const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(ctx), (ctx.dmDepth ?? 0) + 1,
       { taskReportScope: ctx.taskReportScope });
-    return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
+    return { content: tt(`「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」回复：\n${reply}`, `"${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}" replied:\n${reply}`) };
   },
 };
 
@@ -1813,9 +1816,9 @@ const assignTaskTool: Tool = {
     const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
     const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
 
-    const target = available.find((e) => e.name === name);
+    const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可派活的同事）", "(no other teammates available)");
+      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可派活的同事）", "(no other teammates available)");
       return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
     }
 
@@ -1856,7 +1859,7 @@ const assignTaskTool: Tool = {
       : urgent
         ? tt("他在忙，已把这件作为急事插到他队列最前，手头这件一完就优先做", "they're busy; queued this as urgent at the front — they'll do it next")
         : tt(`他在忙，已排进他的队列（前面还有 ${ahead + 1} 件），轮到就做`, `they're busy; queued (about ${ahead + 1} ahead), will do it when free`);
-    return { content: tt(`已把活派给「${target.name}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${target.name}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
+    return { content: tt(`已把活派给「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
   },
 };
 
@@ -2075,7 +2078,7 @@ const updateEmployeeTool: Tool = {
     const a = input as any;
     const name = clampStr(a.name);
     if (!name) return { content: tt("需要 name(要修改的同事名字)。", "name is required."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === name);
+    const emp = resolveEmployee(loadEmployees(), name);
     if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
     const patch: Record<string, unknown> = {};
     if (a.newName != null) patch.name = clampStr(a.newName);
@@ -2107,7 +2110,7 @@ const deleteEmployeeTool: Tool = {
     const name = clampStr(a.name);
     if (!name) return { content: tt("需要 name。", "name is required."), isError: true };
     if (a.confirm !== true) return { content: tt(`未删除：删除是不可撤销操作，请确认后再传 confirm=true。`, "Not deleted: deletion is irreversible, pass confirm=true to proceed."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === name);
+    const emp = resolveEmployee(loadEmployees(), name);
     if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
     if (ctx.employeeId === emp.id) return { content: tt("不能删除你自己。", "You can't delete yourself."), isError: true };
     removeEmployee(emp.id);
@@ -2144,8 +2147,8 @@ const manageDepartmentTool: Tool = {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
-    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
-    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
     // 把一串名字转成 id，顺带收集没找到的名字，提示 AI 名字写错。
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2231,8 +2234,8 @@ const manageGroupTool: Tool = {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
-    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
-    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
     const groupsOf = () => loadRooms().filter((r: any) => r.type !== "dm");
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2344,7 +2347,7 @@ const createScheduleTool: Tool = {
     const employeeName = clampStr(a.employeeName);
     const name = clampStr(a.name);
     if (!employeeName || !name) return { content: tt("需要 employeeName 和 name。", "employeeName and name are required."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === employeeName);
+    const emp = resolveEmployee(loadEmployees(), employeeName);
     if (!emp) return { content: tt(`没找到叫「${employeeName}」的同事。`, `No teammate named "${employeeName}".`), isError: true };
     const sopId = clampStr(a.sopId);
     const doc = clampStr(a.doc);
@@ -2353,7 +2356,7 @@ const createScheduleTool: Tool = {
     if (err || !trigger) return { content: err || tt("触发规则无效。", "Invalid trigger."), isError: true };
     const task = addSchedule({ employeeId: emp.id, name, trigger, sopId, doc, enabled: a.enabled !== false });
     broadcastSchedules();
-    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${emp.name}: ${triggerText(trigger, true)}.`) };
+    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${employeeLabel(emp, process.env.WUWEI_LANG === "en" ? "en" : "zh")}: ${triggerText(trigger, true)}.`) };
   },
 };
 
@@ -2365,12 +2368,13 @@ const listSchedulesTool: Tool = {
   async run(input): Promise<ToolResult> {
     const emps = loadEmployees();
     const filterName = clampStr((input as any).employeeName);
-    const fid = filterName ? emps.find((e) => e.name === filterName)?.id : undefined;
+    const fid = filterName ? resolveEmployee(emps, filterName)?.id : undefined;
+    if (filterName && !fid) return { content: tt("员工名不存在或有歧义。", "Employee reference is unknown or ambiguous."), isError: true };
     let list = loadSchedules();
     if (filterName) list = list.filter((s) => s.employeeId === fid);
     if (!list.length) return { content: tt("还没有定时任务。", "No scheduled tasks yet.") };
     const lines = list.map((s) => {
-      const nm = emps.find((e) => e.id === s.employeeId)?.name || s.employeeId;
+      const nm = employeeLabel(emps.find((e) => e.id === s.employeeId), process.env.WUWEI_LANG === "en" ? "en" : "zh", s.employeeId);
       return `· [${s.id}] ${s.name} — ${nm} · ${triggerText(s.trigger)} · ${s.enabled ? "启用" : "暂停"}${s.sopId ? " · 引用SOP" : ""}`;
     });
     return { content: (filterName ? `「${filterName}」的定时任务：\n` : "定时任务：\n") + lines.join("\n") };
@@ -2559,7 +2563,16 @@ function localizeSchemaEn(name: string, schema: any): any {
   };
   return walk(schema);
 }
+function englishTeamSchema(schema: any): any {
+  if (!schema || typeof schema !== "object") return schema;
+  const out = { ...schema };
+  if (out.description) delete out.description;
+  if (out.properties) out.properties = Object.fromEntries(Object.entries(out.properties).map(([key, value]) => [key, englishTeamSchema(value)]));
+  if (out.items) out.items = englishTeamSchema(out.items);
+  return out;
+}
 function localizeToolEn(t: Tool): Tool {
+  if (TEAM_TOOL_EN[t.name]) return { ...t, description: TEAM_TOOL_EN[t.name] + " Employee references accept stable IDs, canonical names or unique unmodified default English aliases. Ambiguous references are rejected.", inputSchema: englishTeamSchema(t.inputSchema) };
   const desc = TOOL_DESC_EN_MODEL[t.name];
   if (!desc && !TOOL_PARAM_EN_MODEL[t.name]) return t;
   return { ...t, description: desc ?? t.description, inputSchema: localizeSchemaEn(t.name, t.inputSchema) };

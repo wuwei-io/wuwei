@@ -63,13 +63,13 @@ export function parseMentions(
   const t = text || "";
   // 负向断言而不是 \b：\b 是零宽断言不能带量词(TS1507)，而且对中文边界判定也不可靠。
   // 这样 @all 命中、@allen 不命中；@所有人 命中、@所有人员 不命中。
-  if (/@(所有人|全体|all)(?![A-Za-z0-9一-龥])/i.test(t)) return { ids: members.map((m) => m.id), all: true };
+  if (/@(所有人|全体|all)(?![A-Za-z0-9一-龥])/i.test(t)) return { ids: [...new Set(members.map((m) => m.id))], all: true };
   const ids: string[] = [];
   for (const m of members) {
     if (!m.name) continue;
     // 名字后面不能紧跟别的中文/字母，避免「@小文」误命中「@小文文」
     const re = new RegExp(`@${escapeRe(m.name)}(?![\\u4e00-\\u9fa5A-Za-z0-9])`);
-    if (re.test(t)) ids.push(m.id);
+    if (re.test(t) && !ids.includes(m.id)) ids.push(m.id);
   }
   return { ids, all: false };
 }

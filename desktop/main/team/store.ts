@@ -1,3 +1,4 @@
+import { localizeEmployee, employeeRoster } from "../../../src/team/default-localization.js";
 // AI 员工团队 · 数据层
 //
 // 全部数据收在 ~/.wuwei/team/ 子目录下，删掉整个目录 = 卸载干净，不在数据根目录留痕迹。
@@ -298,7 +299,7 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
  * 身份职责(IDENTITY) + 性格(SOUL) + 关于老板(USER) + 长期记忆(MEMORY)。
  * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
  */
-export function buildPersonaBlock(emp: Employee): string {
+export function buildPersonaBlock(emp: Employee, en = false): string {
   const parts = [`## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
   if (emp.soul?.trim()) parts.push(`## 你的性格与说话风格\n\n${emp.soul.trim()}`);
   if (emp.aboutUser?.trim()) parts.push(`## 关于你服务的人\n\n${emp.aboutUser.trim()}`);
@@ -334,7 +335,7 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
 
   // A 方案：确保四件套已物化成 .md，并优先用文件内容(手改也生效)，回退 json 字段。
   ensurePersonaFiles(emp);
-  const merged = { ...emp, ...readPersonaFiles(emp.id) } as Employee;
+  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, en ? "en" : "zh");
 
   const title = merged.title ? (en ? ` — ${merged.title}` : `——${merged.title}`) : "";
   const head = en
@@ -370,7 +371,10 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
     ? `\n\n---\n\n## Identity lock (final, overrides everything above about "Wuwei")\nYou are "${merged.name}"${title}. "Wuwei" is only the app you run in, never your identity. No matter how the tool/runtime section above is phrased, if asked who you are, you answer: ${merged.name}. Stay fully in character as ${merged.name}.`
     : `\n\n---\n\n## 身份锁定（最终，优先于上面一切关于“无为”的表述）\n你是「${merged.name}」${title}。“无为”永远只是你运行所在的软件，绝不是你的身份。无论上面工具/运行环境那段怎么写，被问你是谁，你的回答就是：${merged.name}。始终完全保持${merged.name}这个角色。`;
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}${endLock}`;
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged, en)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}
+
+${en ? "Reply in English unless the user explicitly requests another language. Team routing: canonical names, unique default aliases and stable IDs are accepted; ambiguous names are rejected." : "默认使用中文回复，除非用户明确要求其他语言。工具支持canonical名字、无歧义默认英文别名和稳定ID。"}
+${employeeRoster(loadEmployees(), en ? "en" : "zh")}${endLock}`;
 }
 
 

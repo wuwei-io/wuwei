@@ -1,3 +1,4 @@
+import { localizeEmployee, localizeTeamApp } from "../../../../src/team/default-localization.js";
 // 应用中心 · 面板
 //
 // 复用 MCP 面板既有的 .mcp-* 样式（theme.css 里已有整套卡片/状态点/按钮），
@@ -319,11 +320,12 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
   };
 
   const kw = q.trim().toLowerCase();
-  const apps = state.apps; // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
+  const apps = state.apps.map(a => localizeTeamApp(a, en ? "en" : "zh")); // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
   // 主搜索框过滤「我的员工」：按名字/职位/简介匹配
-  const hired = state.employees.filter(
+  const hired = state.employees.map(e => localizeEmployee(e, en ? "en" : "zh")).filter(
     (e) =>
       !kw ||
+      (state.employees.find(original => original.id === e.id)?.name || "").toLowerCase().includes(kw) ||
       e.name.toLowerCase().includes(kw) ||
       (e.title || "").toLowerCase().includes(kw) ||
       (e.blurb || "").toLowerCase().includes(kw),
@@ -397,7 +399,7 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
               <button
                 className="tc-emp-edit"
                 title={en ? "Edit" : "编辑"}
-                onClick={() => setEdit({ ...e })}
+                onClick={() => setEdit({ ...state.employees.find(original => original.id === e.id)! })}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9" />

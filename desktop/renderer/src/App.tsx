@@ -1,3 +1,4 @@
+import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
@@ -2305,7 +2306,7 @@ function RoomSettingsModal({
             <div className="rs-coord">
               <button type="button" className={"rs-coord-item" + (!coordinator ? " on" : "")} onClick={() => setCoordinator(undefined)}>{en ? "None" : "不设"}</button>
               {members.map((m) => (
-                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{m.name}</button>
+                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{employeeLabel(m, en ? "en" : "zh")}</button>
               ))}
             </div>
             <p className="st-hint">{en ? "The coordinator replies without being @-ed and helps split up the work. Leave as None so everyone needs an @." : "协调者无需 @ 也会响应，帮忙拆活派活。选「不设」则谁都得被 @ 才说话。"}</p>
@@ -2345,13 +2346,13 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
   const onLevels = (n: number) => { const v = clampLv(n); setLevels(v); persist({ maxDmLevels: v }); };
   const onCeo = (id: string) => { setCeoId(id); persist({ ceoEmployeeId: id || null }); };
   const onSec = (n: number) => { const v = clampSec(n); setCeoSec(v); persist({ ceoDecideTimeoutSec: v }); };
-  const ceoName = employees.find((e) => e.id === ceoId)?.name || (en ? "the CEO" : "CEO");
+  const ceoName = employeeLabel(employees.find((e) => e.id === ceoId), en ? "en" : "zh", en ? "the CEO" : "CEO");
   // 部门 CRUD：改完以后端返回的 departments 为准(含成员互斥规整)。
   const applyDept = (r: any) => { if (r?.departments) setDepartments(r.departments); flash(); };
   const deptCreate = () => api?.deptCreate?.({ name: en ? "New department" : "新部门", memberIds: [] }).then(applyDept).catch(() => {});
   const deptUpdate = (id: string, patch: any) => api?.deptUpdate?.(id, patch).then(applyDept).catch(() => {});
   const deptDelete = (id: string) => api?.deptDelete?.(id).then(applyDept).catch(() => {});
-  const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || id;
+  const nameOf = (id: string) => employeeLabel(employees.find((e) => e.id === id), en ? "en" : "zh", id);
   return (
     <>
       {/* 模块总开关：置于一人公司模块顶部。关闭时主进程完全不参与(不注册 IPC、不读写数据目录)；
@@ -2385,7 +2386,7 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
         <span style={{ flex: 1 }} />
         <select className="tc-input tc-select" style={{ maxWidth: 240 }} value={ceoId} onChange={(e) => onCeo(e.target.value)}>
           <option value="">{en ? "Auto (title has CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
-          {employees.map((m: any) => <option key={m.id} value={m.id}>{m.name}{m.title ? `（${m.title}）` : ""}</option>)}
+          {employees.map((m: any) => <option key={m.id} value={m.id}>{employeeLabel(m, en ? "en" : "zh")}{m.title ? ` (${localizeEmployee(m, en ? "en" : "zh").title})` : ""}</option>)}
         </select>
       </div>
       {/* 拍板倒计时秒数 */}
@@ -2476,8 +2477,8 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
                     deptUpdate(d.id, { memberIds: next });
                   }}
                 >
-                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                  {e.name}{otherDept && !inDept ? (en ? ` · ${otherDept.name}` : `·${otherDept.name}`) : ""}
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")}  /></span>
+                  {employeeLabel(e, en ? "en" : "zh")}{otherDept && !inDept ? (en ? ` · ${otherDept.name}` : `·${otherDept.name}`) : ""}
                 </button>
               );
             })}
@@ -6879,12 +6880,12 @@ export function App() {
                       >
                         <button
                           className="tool-sub-item"
-                          title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                          title={lang === "en" ? `Chat with ${employeeLabel(e, "en")}` : `和${e.name}私聊`}
                           onClick={openLatest}
                           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                         >
-                          <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                          <span className="tool-sub-nm">{tx(e.name)}</span>
+                          <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, lang)} /></span>
+                          <span className="tool-sub-nm">{employeeLabel(e, lang)}</span>
                           {headIds.has(e.id) && <span className="tool-sub-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head" : "负责人"}</span>}
                         </button>
                         {(empSessions.length > 0 || empDms.length > 0) && (
@@ -6936,12 +6937,12 @@ export function App() {
                                 role="button"
                                 tabIndex={0}
                                 className={"tool-sub-convo tool-sub-dm" + (onDm ? " on" : "")}
-                                title={lang === "en" ? `DM with ${other?.name || otherId}` : `与${other?.name || otherId}的私聊`}
+                                title={lang === "en" ? `DM with ${employeeLabel(other, "en", otherId)}` : `与${other?.name || otherId}的私聊`}
                                 onClick={() => { setDmSelfId(e.id); setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
                                 onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
                               >
-                                <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                                <span className="tool-sub-convo-t">{tx(other?.name || otherId)}</span>
+                                <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={employeeLabel(other, lang, otherId)} /></span>
+                                <span className="tool-sub-convo-t">{employeeLabel(other, lang, otherId)}</span>
                                 <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
                                 <button
                                   className="tool-sub-convo-del"
@@ -6998,7 +6999,7 @@ export function App() {
                       {groups.map(({ dept, mems }: any) => (
                         <div className="tool-dept" key={dept.id}>
                           <div className="tool-dept-head">
-                            <span className="tool-dept-nm">{tx(dept.name)}</span>
+                            <span className="tool-dept-nm">{dept.name}</span>
                             <span className="tool-dept-cnt">{mems.length}</span>
                           </div>
                           {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
@@ -7036,7 +7037,7 @@ export function App() {
                     <span className="tool-sub-stack">
                       {(r.members || []).slice(0, 3).map((mid: string) => {
                         const m = teamEmployees.find((x: any) => x.id === mid);
-                        return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                        return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>;
                       })}
                     </span>
                     <span className="tool-sub-nm">{tx(r.name)}</span>
@@ -8443,8 +8444,8 @@ export function App() {
                 const other = teamEmployees.find((x: any) => x.id === otherId);
                 return (
                   <>
-                    <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                    <span className="tb-title-txt">{tx(other?.name || otherId)}</span>
+                    <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={employeeLabel(other, lang, otherId)} /></span>
+                    <span className="tb-title-txt">{employeeLabel(other, lang, otherId)}</span>
                   </>
                 );
               }
@@ -8454,7 +8455,7 @@ export function App() {
                     <span className="tb-avatar stack">
                       {(room.members || []).slice(0, 3).map((mid: string) => {
                         const m = teamEmployees.find((x: any) => x.id === mid);
-                        return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                        return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>;
                       })}
                     </span>
                     <span className="tb-title-txt">{tx(room.name)}</span>
@@ -8468,8 +8469,8 @@ export function App() {
               if (curEmp) {
                 return (
                   <>
-                    <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={curEmp.name} /></span>
-                    <span className="tb-title-txt">{tx(curEmp.name)}</span>
+                    <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={employeeLabel(curEmp, lang)} /></span>
+                    <span className="tb-title-txt">{employeeLabel(curEmp, lang)}</span>
                   </>
                 );
               }
@@ -8497,8 +8498,8 @@ export function App() {
                             const m = teamEmployees.find((x: any) => x.id === mid);
                             return (
                               <span className="tb-room-mem" key={mid}>
-                                <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>
-                                <span className="tb-room-mem-nm">{m?.name || mid}</span>
+                                <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>
+                                <span className="tb-room-mem-nm">{employeeLabel(m, lang, mid)}</span>
                                 {room.coordinator === mid && <span className="tb-room-mem-host">{lang === "en" ? "host" : "主持"}</span>}
                               </span>
                             );
@@ -13104,6 +13105,7 @@ const mcpFieldEn = (name: string, key: string, kind: "label" | "hint", fallback:
 
 // 内置工具描述的英文（仅设置页 Tools 标签显示用；模型侧描述仍走 src/tools 原文）。按工具名。
 const TOOL_DESC_EN: Record<string, string> = {
+  ...TEAM_TOOL_EN,
   read_file: "Read a text file's content with line numbers. For viewing code/files.",
   write_file: "Write/overwrite a file (creates it and parent dirs if missing).",
   edit_file: "Make an exact string replacement in a file. old_string must appear exactly once, or it errors.",
