@@ -10,6 +10,7 @@ New installations of the complete default company initialize CEO办公室, 技�
 - `node scripts/test-release.mjs`: 140 tests passed, zero failures/skips.
 - `npm run desktop:build`: passed.
 - `node scripts/run-full-team-ui-harness.mjs`: passed with actual application main, preload, renderer, team IPC and persisted fixture files, in a separate temporary profile. See `ui/full-app-interaction.txt` and the DOM snapshots. Covers six English teammates, four departments, team pack, edit dialog, unchanged save, custom save, department blur, CEO-chat to Groups navigation, Chinese switch and preserved member references. These are full-application DOM interaction checks, not native pointer/screenshot acceptance.
+- `node scripts/run-full-team-ui-harness.mjs --fresh-profile`: passed. With no settings file at all, the actual persisted backend becomes `wuwei-free`, OpenAI-compatible, GLM-4.7-Flash and the hosted gateway URL. This covers the null-config edge case rather than merely checking the selected UI label. See `ui/fresh-profile.txt`.
 - Real hosted GLM-4.7-Flash called catalog and generate, showed the English cost confirmation, and cancellation placed no order. The actual client downloaded and completely decoded a previously settled 1024×1024 PNG. See `live-client.json`. Synthetic credentials are excluded from evidence.
 
 ## Production backend verification
@@ -31,3 +32,7 @@ The Gemini metadata response initially could not confirm final usage. The origin
 The production website uses OSS through `WUWEI_DOWNLOAD_BASE`. The released client also uses OSS directly. Old clients with R2 update feeds receive only a small compatibility manifest there; its absolute file URLs point to OSS, retaining SHA512 and file sizes. No large new artifacts are required on R2.
 
 The user-facing debug build runs `electron-vite dev`, can access the live catalog and starts with the free provider. Its Wuwei profile/userData are isolated explicitly. Browser AppData paths are inherited normally so browser login can use the user's existing Chrome configuration. The earlier offline test window, its `offline-test` model and its `Test Department` fixture are not product defaults.
+
+The initial v1.7.41 hosted Windows CI could not start the full Electron desktop harness. The portable suite and the full application tests on the local desktop passed. The release workflow keeps portable checks on all hosted runners and supports finishing a selected platform independently. v1.7.42 also fixes missing-config initialization and is the final version for this rollout.
+
+Production acceptance cleanup closed both synthetic accounts, removed their credentials and reset unused fixture balances to zero with an audited administrative operation. The generated orders and settlement evidence are retained.

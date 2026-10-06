@@ -4463,8 +4463,8 @@ export function App() {
       // 真正落盘。否则界面显示免费、settings.kind 却停在默认(anthropic) → 免费模型被当 anthropic 发、报"无法解析鉴权"。
       if (!r?.settings?.providerId) {
         const freeP = PRESETS.find((x) => x.id === "wuwei-free");
-        if (freeP && r?.settings) {
-          window.wuwei.setSettings({ ...r.settings, kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r.settings.model || freeP.models[0] });
+        if (freeP) {
+          window.wuwei.setSettings({ ...(r?.settings || {}), kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r?.settings?.model || freeP.models[0] });
         }
       }
       // 可选模块开关：以主进程 settings 为准校准本地镜像（用户可能在别处改过/换了机器）

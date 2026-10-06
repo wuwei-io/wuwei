@@ -10,7 +10,7 @@ app.on('browser-window-created',(_event,window)=>{
   window.once('ready-to-show',()=>window.hide());
 });
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
-function check(ok,message){assert.ok(ok,message);console.log('PASS '+message);fs.appendFileSync(path.join(evidence,'progress.txt'),'PASS '+message+'\n');}
+function check(ok,message){assert.ok(ok,message);console.log('PASS '+message);}
 async function testApp(){
   let win;
   for(let i=0;i<100;i++){win=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('app://bundle'));if(win)break;await delay(100);}
@@ -21,6 +21,13 @@ async function testApp(){
   const textClick=(selector,text)=>js(`[...document.querySelectorAll(${JSON.stringify(selector)})].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`);
   const input=(selector,value)=>js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   const shot=async name=>fs.writeFileSync(path.join(evidence,name+'.json'),JSON.stringify(await js(`({title:document.querySelector('.tb-title-txt')?.textContent,departments:[...document.querySelectorAll('.tool-dept-nm')].map(e=>e.textContent),teammates:[...document.querySelectorAll('.tool-sub-nm')].map(e=>e.textContent),departmentInputs:[...document.querySelectorAll('.dept-card-row input')].map(e=>e.value)})`),null,2));
+  if(process.env.FULL_UI_FRESH==='1'){
+    await wait(`!!window.wuwei?.getSettings`);
+    let settings;
+    for(let i=0;i<100;i++){settings=await js(`window.wuwei.getSettings().then(r=>r.settings)`);if(settings?.providerId==='wuwei-free')break;await delay(100);}
+    check(settings?.providerId==='wuwei-free' && settings.kind==='openai' && settings.model==='glm-4.7-flash' && settings.baseUrl==='https://gw.wuweiai.io/api/gateway/v1','a completely missing config initializes the actual free gateway, not just the UI label');
+    app.exit(0);return;
+  }
   await wait(`document.querySelectorAll('.tool-sub-nm').length===6`);
   // A fresh renderer detects the system language; exercise the actual language switch.
   await js(`document.querySelector('.tool-item-main').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:100,clientY:100}))`);
