@@ -16,5 +16,5 @@ const evidence=path.join(repo,'docs/verification/image-team-20261006/ui');fs.mkd
 const env={...process.env,USERPROFILE:profile,APPDATA:path.join(root,'appdata'),LOCALAPPDATA:path.join(root,'localappdata'),WUWEI_EDITION:'test',FULL_UI_ROOT:root,FULL_UI_REPO:repo,FULL_UI_EVIDENCE:evidence};
 for(const k of Object.keys(env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CODEX_HOME|CLAUDE_CONFIG|MINICC_|ANTHROPIC_|EXPO_TOKEN|WUWEI_SITE_URL|WUWEI_DATA_DIR_NAME|ELECTRON_RUN_AS_NODE|ELECTRON_RENDERER_URL/i.test(k))delete env[k];
 const r=spawnSync(path.join(repo,'node_modules/electron/dist/electron.exe'),[path.join(repo,'scripts/full-team-ui-electron.cjs')],{cwd:repo,env,encoding:'utf8',timeout:120000,windowsHide:true});
-const log=(r.stdout||'')+(r.stderr||'');fs.writeFileSync(path.join(evidence,'full-app-interaction.txt'),log);console.log(log);
+const log=(r.stdout||'')+(r.stderr||'')+`\nEXIT=${r.status}; SIGNAL=${r.signal||''}${r.error?'\n'+r.error.message:''}\n`;fs.writeFileSync(path.join(evidence,'full-app-interaction.txt'),log);console.log(log);
 if(r.status!==0)process.exit(1);

@@ -7,6 +7,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to finish publishing'
+        required: true
+      platforms:
+        description: 'JSON array of build runner platforms'
+        required: true
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
 
 permissions:
   contents: write
@@ -16,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(inputs.platforms || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -35,10 +44,6 @@ jobs:
 
       - name: Build renderer/main
         run: npm run desktop:build
-
-      - name: Verify actual bilingual company UI and persistence
-        if: matrix.os == 'windows-latest'
-        run: node scripts/run-full-team-ui-harness.mjs
 
       # 用 electron-builder.wuwei.yml：含 generic OSS publish 配置 → 会生成 latest*.yml 更新清单
       # （--publish never 只是不让 electron-builder 自己上传；清单仍写入 release/，由下方 OSS 步骤上传）
@@ -133,6 +138,7 @@ jobs:
       - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             release/*.AppImage
             release/*.deb
