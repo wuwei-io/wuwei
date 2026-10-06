@@ -1,0 +1,21 @@
+{
+  "version": "1.7.42",
+  "tag_commit": "932d7b0f82d9f533d90f9edc42754847b2b35b5a",
+  "release_url": "https://github.com/wuwei-io/wuwei/releases/tag/v1.7.42",
+  "published_at": "2026-10-06T17:27:52Z",
+  "draft": false,
+  "prerelease": false,
+  "latest": true,
+  "asset_count": 15,
+  "temporary_relay_assets_remaining": 0,
+  "build_run": 37500011652,
+  "compatibility_run": 37503014094,
+  "windows_signature": "Valid",
+  "transfer_acceleration_restore": {
+    "run": 37503749770,
+    "status": "success",
+    "previous_enabled": true,
+    "enabled": false,
+    "download_urls_unchanged": true
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "version": "1.7.42",
+  "hash_download_base": "https://wuwei-repo.oss-accelerate-overseas.aliyuncs.com/updates/",
+  "manifests": [
+    {
+      "name": "latest.yml",
+      "files": [
+        {
+          "url": "wuwei-1.7.42-setup.exe",
+          "sha512": "Dmy9NhlCcnQz2ZoFpDPllWjtZ01oQp90D8JujuczjKBLbw6DDap3jTlzZbNHTvZQ8eFgxZL5ZbEI3O6FRwLM1A==",
+          "size": 167947440
+        }
+      ]
+    },
+    {
+      "name": "latest-mac.yml",
+      "files": [
+        {
+          "url": "wuwei-1.7.42-mac.zip",
+          "sha512": "blGvoy0j9wuwWwBfiXyeb24T4WgtUQuLmwdAt45pe3opLjBHL3DknjhtaQ3j5EkoLZDhw82ZX2RRblT2h5LllA==",
+          "size": 209006285
+        },
+        {
+          "url": "wuwei-1.7.42-arm64-mac.zip",
+          "sha512": "2WAJfeGVbjZU3ugrasij5y511G8s/UI7LZff4De1+TCcJKKkyDqk9XO7TY6mqeYAAwXWa7e7bA8oUhFBqUNIJA==",
+          "size": 206886549
+        },
+        {
+          "url": "wuwei-1.7.42.dmg",
+          "sha512": "PKOmAJ/ld4ilTxSZbxQ4NX7MzbopGlyhL09F6b9lc0OwTaWXCkTZkYdn+W8FxrNGVktx7TjIVqmqKy5WBOPGvw==",
+          "size": 208231468
+        },
+        {
+          "url": "wuwei-1.7.42-arm64.dmg",
+          "sha512": "7bppsqLlTXrYHrVovY6oe1ruhdvmTUQf65QZGYHdadvVwpOoLOJi+RYGZ+g0K+hUdT3ad5meKuznImoHYlC0Jg==",
+          "size": 206118438
+        }
+      ]
+    },
+    {
+      "name": "latest-linux.yml",
+      "files": [
+        {
+          "url": "wuwei-1.7.42.AppImage",
+          "sha512": "+C87Hxv3o33RkhpqGVmv6hlxfSDjehgE0drKex7L1EMcrl5BP6zU+2iMMf5y8di+9tM2sw9rhlAJT/xjzpf82A==",
+          "size": 210403289
+        },
+        {
+          "url": "wuwei_1.7.42_amd64.deb",
+          "sha512": "9KasC9HQ1abHm9oLgxoPtrvYdN0DbY15IHuXqxoZlLedFmr7IoNJOB3asd13x9EEPKOZdhob/ncyIAyORNBjvQ==",
+          "size": 162742376
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "name": "wuwei-1.7.42-setup.exe",
+      "bytes": 167947440,
+      "sha512_verified": true,
+      "sha256": "f4d40d562eafa4b571de514ae9aa3e08625b89adf7ec3bfefa3002f85274a19d",
+      "github_digest_verified": true
+    },
+    {
+      "name": "wuwei-1.7.42-mac.zip",
+      "bytes": 209006285,
+      "sha512_verified": true,
+      "sha256": "e7bbc776f01732d9ee2ec6f242caff5ddb4a29a6a3d1eaf2a6bf161b7735ed88"
+    },
+    {
+      "name": "wuwei-1.7.42-arm64-mac.zip",
+      "bytes": 206886549,
+      "sha512_verified": true,
+      "sha256": "3cc619fe534ee920c86c1a718cd14d402055a61eb112d3870acbdbd685f368d0"
+    },
+    {
+      "name": "wuwei-1.7.42.dmg",
+      "bytes": 208231468,
+      "sha512_verified": true,
+      "sha256": "992bf5b35228ec3013846457e744f7d82139fa74b4213937dccc7ee01f307fa2",
+      "github_digest_verified": true
+    },
+    {
+      "name": "wuwei-1.7.42-arm64.dmg",
+      "bytes": 206118438,
+      "sha512_verified": true,
+      "sha256": "f6c0414f9d1d362cf666832c05f82abdb74f6e2e2f7b6345f628668fee8633e5",
+      "github_digest_verified": true
+    },
+    {
+      "name": "wuwei-1.7.42.AppImage",
+      "bytes": 210403289,
+      "sha512_verified": true,
+      "sha256": "25dc26244c652b49c1eaeb25290475b0e71cd22db46f7d4b58cfb23b0a9b2ece",
+      "github_digest_verified": true
+    },
+    {
+      "name": "wuwei_1.7.42_amd64.deb",
+      "bytes": 162742376,
+      "sha512_verified": true,
+      "sha256": "079a08c00ee96d01c06b7dfd67487c53d8015cdef9525f0d54ad0116b49a415e",
+      "github_digest_verified": true
+    }
+  ],
+  "downloads": [
+    {
+      "platform": "windows",
+      "arch": "x64",
+      "location": "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/wuwei-1.7.42-setup.exe",
+      "bytes": 167947440
+    },
+    {
+      "platform": "macos",
+      "arch": "x64",
+      "location": "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/wuwei-1.7.42.dmg",
+      "bytes": 208231468
+    },
+    {
+      "platform": "macos",
+      "arch": "arm64",
+      "location": "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/wuwei-1.7.42-arm64.dmg",
+      "bytes": 206118438
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "location": "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/wuwei-1.7.42.AppImage",
+      "bytes": 210403289
+    }
+  ],
+  "r2_compatibility_points_to_oss": true
+}

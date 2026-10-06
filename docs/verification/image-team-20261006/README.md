@@ -55,3 +55,11 @@ Both cancelled once without creating an order, then approved one generation, set
 The full company UI harness also verifies assigned-member-only department cards, Add, movement from another department, Remove, and restoration of original IDs/heads/members. The desktop TypeScript check still reports the same 16 pre-existing errors; the root type check, portable suite, production build and full application interaction checks pass. Google login's reuse of the original Chrome profile has been implemented, but completion of the user's personal Google authorization remains unconfirmed.
 
 Final Cancel/Stop acceptance passed on the latest renderer and main: Stop cleared the fee dialog and returned evt:stopped without creating an order. The separate desktop synthetic accounts were then closed, unused balances reset with an audited operation and local/server credential copies removed while retaining paid orders and ledger evidence.
+
+## Published release
+
+v1.7.42 was published as Latest on 2026-10-06 at 17:27:52 UTC (2026-10-07 at 01:27:52 China time). Its immutable tag is `932d7b0f82d9f533d90f9edc42754847b2b35b5a`. All three platform builds passed in Actions run `37500011652`; the Windows installer signature was Valid. The final release contains 15 assets. Temporary signed-upload relay metadata was removed before publication.
+
+`release-1.7.42.json` records complete SHA512 verification of all seven binaries, matching GitHub SHA256 digests for all five installers, four production website redirects to the correct regional OSS files, and three legacy R2 feeds pointing to OSS with matching sizes and hashes. Complete hash reads used the same bucket's temporary overseas acceleration endpoint; regional download URLs were independently checked and stayed unchanged. `release-1.7.42-transfer.json` records verified transfer of all 15 files without credentials or signed URLs.
+
+Compatibility feed run `37503014094` passed. Restoration run `37503749770` confirmed transfer acceleration disabled again; client and website downloads remain on regional OSS. Publication and restoration metadata are saved in `release-1.7.42-publication.json`. No production image acceptance accounts remain active, and the user-facing dev profile and generated files have been retained.
