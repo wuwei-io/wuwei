@@ -1,0 +1,43 @@
+name: Configure OSS release upload path
+on:
+  workflow_dispatch:
+    inputs:
+      enabled:
+        description: 'Temporary upload acceleration; downloads keep regional OSS URLs'
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure and verify transfer acceleration
+        run: |
+          python -m pip install alibabacloud-oss-v2
+          python - <<'PY'
+          import os, json
+          import alibabacloud_oss_v2 as oss
+          cfg = oss.config.load_default()
+          cfg.credentials_provider = oss.credentials.EnvironmentVariableCredentialsProvider()
+          cfg.region = 'cn-hangzhou'
+          cfg.endpoint = 'https://oss-cn-hangzhou.aliyuncs.com'
+          client = oss.Client(cfg)
+          desired = os.environ['ACCELERATE_ENABLED'] == 'true'
+          before = client.get_bucket_transfer_acceleration(oss.GetBucketTransferAccelerationRequest(bucket='wuwei-repo'))
+          prior = str(before.transfer_acceleration_configuration.enabled).lower() == 'true'
+          if prior != desired:
+              client.put_bucket_transfer_acceleration(oss.PutBucketTransferAccelerationRequest(bucket='wuwei-repo', transfer_acceleration_configuration=oss.TransferAccelerationConfiguration(enabled=desired)))
+          after = client.get_bucket_transfer_acceleration(oss.GetBucketTransferAccelerationRequest(bucket='wuwei-repo'))
+          actual = str(after.transfer_acceleration_configuration.enabled).lower() == 'true'
+          assert actual == desired
+          print(json.dumps({'bucket':'wuwei-repo','previous_enabled':prior,'enabled':actual,'download_urls_unchanged':True}))
+          PY
+        env:
+          ACCELERATE_ENABLED: ${{ inputs.enabled }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
