@@ -1,0 +1,111 @@
+{
+  "version": "1.7.44",
+  "releaseCommit": "f59163754167a4881bd54e36d79989863d115866",
+  "assets": [
+    {
+      "name": "wuwei-1.7.44-setup.exe.blockmap",
+      "bytes": 168340,
+      "sha512": "sS0XUzPI0dtF7O8UOFis5lJYxBhXpt9nhVYFup44KZ7Zv/vb6DBRQbweStnNXZAnuYFQ+al+h9RSEpSjs4KKKA==",
+      "githubDigest": "sha256:a6f475d69cac7dbfb738f8f08f761fff1fd4ee9c760dc0272897b32d1b43ffa1",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-arm64-mac.zip.blockmap",
+      "bytes": 213310,
+      "sha512": "QWT5O1zmjhHeteeRdripAJJWi8kke6R1+rVHUqUZAWdi5qijQQKAg22jSDf+f5iFtw0prkrpQryNvWJ9IN5/fQ==",
+      "githubDigest": "sha256:3457b5fcf2ade75b4814b953138c1b2ea57f99786a79edd79ba067875d1047fa",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-mac.zip.blockmap",
+      "bytes": 214173,
+      "sha512": "44bqV6oM6MO2dzUyQgZLz4Hu1YCX0rmas4/QpTB8EK/nSKkK7sLQgzKKB5oU4Bn8lDPWlYq8KFQNGmVI4r088w==",
+      "githubDigest": "sha256:a9905f4febc20f62f7def9908f434d7885eeff4eb9c82794b5cdd8631be7443e",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-arm64.dmg.blockmap",
+      "bytes": 215201,
+      "sha512": "RXpvjv9BakFsqAICKImH9kfWICM3uhQY5Iswi4t8pOIt3YuFyRPqLMk+T2eOu2G3ph3b71fAjyl5owGF9bYdvA==",
+      "githubDigest": "sha256:0056e1f703e788e38997c2c58fda206eb64a9042acaf6e91ad2fd382a7384daf",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44.dmg.blockmap",
+      "bytes": 219457,
+      "sha512": "30L3vs0KyKAmbQwM6tQrjTStgNzWI//U085mfmKpIYhGc692nhTP296y7CKTdWVBX3SpqoGOaS5SEHDOU1+dsg==",
+      "githubDigest": "sha256:9aeab582e59e1d82a293499c04fd4b21ba15050173ff29798d440fb034eaa0d6",
+      "verified": true
+    },
+    {
+      "name": "wuwei_1.7.44_amd64.deb",
+      "bytes": 162747832,
+      "sha512": "OD/gHLDhrnnms/xRkaonqZTWJ+vZ6vDbAUuqZRfI2jV50uDqaONw+R1rJ4kiFTiGizBudzTKx5XVco5aMCS4RQ==",
+      "githubDigest": "sha256:b001abbb002d7df81c7e00b4f2c2bcffd070e0441ea5896e470d42ebdc590278",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-setup.exe",
+      "bytes": 167950000,
+      "sha512": "Yv5TWPnXLbkn3pKbkV6r74HukCMehwf64WTe0nVsOgjStsTY593NZpxlzpplOnEl3sMqB7faNPljFrrYhol6Ag==",
+      "githubDigest": "sha256:633900b7bff0b6664a8d0f693c48b32482a809ddc44190739757393a2d409595",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-arm64.dmg",
+      "bytes": 206144164,
+      "sha512": "J1MsvYh1vAlW9NAM7jy3zmrEkrufJGHjwieb6VF0ISX6kIBrM3yopWsPjmf2wMNvw97v1ts77+ofb5A9wXDugA==",
+      "githubDigest": "sha256:4940515d4038bbf6b37ca1075249e9ad1bbec7ec028f1fd318056f4c5c3f6a34",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-arm64-mac.zip",
+      "bytes": 206893187,
+      "sha512": "6uBDxHeqThsl18vmofp2oVS0raxy2l4ImO58vuL9GIuDWuWeauMyzbPmbzRoyoFc8frLArt+ljNUVZMaUJyUTQ==",
+      "githubDigest": "sha256:537a7f834e15b16e19e10fe1b5764d94625b812dd5089854b5c25bb9b392e0f4",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44.dmg",
+      "bytes": 208236075,
+      "sha512": "b06rEn/i7OhAQVHDavZfinnkEtZIrZ3kE+Mfawz1advbDMt0HqYSqAUjlIEECKv5FmK0mNNp2Uz0LmONVYADcg==",
+      "githubDigest": "sha256:d32c07eed27d2859798fbfd57c2bc1ba8f9a5e86a871f083c8544bc21b3d436c",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44-mac.zip",
+      "bytes": 209012923,
+      "sha512": "spyryIGqYX8/9zFNrAu1oYloQwFzaBGHhiEz4w5dAeJB51G4mAGZ47j7q59nLU56HaFpDfodOLnn10fp5vYzxA==",
+      "githubDigest": "sha256:ba456d9749e3875cbb50bc071ef7d34b765784b70ebf3f2eed1bac4dfb220009",
+      "verified": true
+    },
+    {
+      "name": "wuwei-1.7.44.AppImage",
+      "bytes": 210403573,
+      "sha512": "7fAh86WyOExRWxlooYgUPprSLUWvYXmjzrhzWBe8LtMHArAl8anPstj/wUfHHmbch7tN3WE4MeJ+UKtL09BWeQ==",
+      "githubDigest": "sha256:122615f23af99df3b84827921311ac16fe43241a9fba9292c424351d206e7227",
+      "verified": true
+    },
+    {
+      "name": "latest.yml",
+      "bytes": 342,
+      "sha512": "JUMA8Bz2cUZsgZlgqsJKFg/26d+0qZwqMuX0SddvVkyEKAsBA6ko0w5b3GIkJ1sATN++W4XpsmifBR41dRPL4g==",
+      "githubDigest": "sha256:dd79b467d00baed0407dae98f22b8186c9e087bb635ae529662ed55efe344cbc",
+      "verified": true
+    },
+    {
+      "name": "latest-linux.yml",
+      "bytes": 518,
+      "sha512": "9vMrehORYggV4oHRDVYtoaw+HgDYMZlanulNvUT/hCxmbm6L/7r600iRLNlk2AAD/w0A7ZYtDlX/LuCQ58hwMA==",
+      "githubDigest": "sha256:94486f2515b85a296eaa51c60b9fd315cc1ce4aaa64d2f1798c489231d31d605",
+      "verified": true
+    },
+    {
+      "name": "latest-mac.yml",
+      "bytes": 795,
+      "sha512": "O9GzOS9qJhMA2ZvP17PCWAIaZn0DkHNl8xjrAlYYHk3i3TvApKhMhjyybQQHKOGRgHDx/8ysLoB2/zt6T5vxbQ==",
+      "githubDigest": "sha256:37c275e7405f62fe65053c96b48aaf4377986391747324b85bb0068ca825aee1",
+      "verified": true
+    }
+  ]
+}

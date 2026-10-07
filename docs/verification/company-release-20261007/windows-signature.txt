@@ -1,0 +1,1 @@
+build (windows-latest)	Package Windows (exe)	2026-10-07T14:15:54.0737529Z 签名有效，签发者: CN="NaisNet Technology Co., Ltd.", O="NaisNet Technology Co., Ltd.", L=Shenyang, S=Liaoning, C=CN, SERIALNUMBER=91210103MA7CJ3C094, OID.1.3.6.1.4.1.311.60.2.1.1=Shenyang, OID.1.3.6.1.4.1.311.60.2.1.2=Liaoning, OID.1.3.6.1.4.1.311.60.2.1.3=CN, OID.2.5.4.15=Private Organization
