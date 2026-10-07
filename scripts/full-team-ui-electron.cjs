@@ -4,7 +4,8 @@ const root=process.env.FULL_UI_ROOT,repo=process.env.FULL_UI_REPO,evidence=proce
 if(!root || path.relative(root,os.homedir()).startsWith('..'))throw Error('Profile isolation failed');
 app.setPath('userData',path.join(root,'electron-userData'));
 const team=path.join(os.homedir(),'.wuwei-test','team');
-const original=JSON.parse(fs.readFileSync(path.join(team,'employees.json'),'utf8'));
+const original=fs.existsSync(path.join(team,'employees.json'))?JSON.parse(fs.readFileSync(path.join(team,'employees.json'),'utf8')):[];
+if(process.env.FULL_UI_FRESH==='1' || process.env.FULL_UI_EXISTING_OFF==='1') globalThis.fetch=async()=>{throw Error('Network disabled in isolated first-run acceptance');};
 app.on('browser-window-created',(_event,window)=>{
   window.hide();
   window.once('ready-to-show',()=>window.hide());
@@ -26,6 +27,23 @@ async function testApp(){
     let settings;
     for(let i=0;i<100;i++){settings=await js(`window.wuwei.getSettings().then(r=>r.settings)`);if(settings?.providerId==='wuwei-free')break;await delay(100);}
     check(settings?.providerId==='wuwei-free' && settings.kind==='openai' && settings.model==='glm-4.7-flash' && settings.baseUrl==='https://gw.wuweiai.io/api/gateway/v1','a completely missing config initializes the actual free gateway, not just the UI label');
+    check(settings.app.teamEnabled===true,'fresh company is enabled without a toggle or seeded fixture');
+    await wait(`document.querySelectorAll('.tool-sub-nm').length===6 && document.querySelectorAll('.tool-dept-nm').length===4`);
+    check(JSON.parse(fs.readFileSync(path.join(team,'employees.json'),'utf8')).length===6,'actual first boot installs the default team');
+    check(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments.length===4,'actual first boot creates the four default departments');
+    await shot('new-user-default-team');
+    await js(`[...document.querySelectorAll('.sidebar-top button')].find(b=>b.textContent.trim()==='«').click()`);await wait(`!!document.querySelector('.toolbar-min')`);
+    check(await js(`document.querySelectorAll('.toolbar-min button').length===1 && !document.querySelector('.toolbar-min svg')`),'collapsed sidebar contains only its expand button, no search icon');
+    await click('.toolbar-min button');await wait(`!!document.querySelector('.sidebar-top')`);
+    check(await js(`!!document.querySelector('.sidebar-top button svg')`),'expanded sidebar retains its controls');
+    app.exit(0);return;
+  }
+  if(process.env.FULL_UI_EXISTING_OFF==='1') {
+    await wait(`!!window.wuwei?.getSettings`);
+    const settings=(await js(`window.wuwei.getSettings()`)).settings;
+    check(settings.app.teamEnabled===false,'existing explicit off stays off in the actual desktop');
+    check(await js(`document.querySelectorAll('.tool-sub-nm').length===0`),'existing off does not show company teammates');
+    check(!fs.existsSync(path.join(team,'employees.json')),'existing off does not seed a new team');
     app.exit(0);return;
   }
   await wait(`document.querySelectorAll('.tool-sub-nm').length===6`);

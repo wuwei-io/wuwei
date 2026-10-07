@@ -1,0 +1,18 @@
+{
+  "title": "Groups",
+  "departments": [
+    "CEO Office",
+    "Engineering",
+    "Design",
+    "General Affairs"
+  ],
+  "teammates": [
+    "Ben",
+    "Cody",
+    "Mia",
+    "Ivy",
+    "Wendy",
+    "Dana"
+  ],
+  "departmentInputs": []
+}

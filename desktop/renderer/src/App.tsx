@@ -2368,8 +2368,8 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
           <div className="app-set-label">{en ? "Enable My Company" : "启用一人公司"}</div>
           <div className="app-set-hint">
             {en
-              ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
-              : "开启后侧边栏会多出「一人公司」，可以雇 AI 员工、分别私聊、拉进群一起干活。默认关闭，关掉后不留任何痕迹。"}
+              ? "Chat with AI teammates or bring them into a group to work together. On by default for new users."
+              : "与 AI 员工私聊，或建群一起完成任务。新用户默认开启。"}
           </div>
         </div>
         <input
@@ -8698,9 +8698,6 @@ export function App() {
           <div className="toolbar-min">
             <button className="icon-btn" title={t("side.expand", "展开侧栏")} onClick={() => toggleCollapse(false)}>
               »
-            </button>
-            <button className="icon-btn" title={t("side.search", "搜索所有对话内容（⌘/Ctrl+F）")} onClick={openSearch}>
-              <SearchIcon />
             </button>
           </div>
         )}

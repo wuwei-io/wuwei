@@ -80,6 +80,7 @@ import { ensureFresh as ensureSearchIndex, searchSessions as searchInSessions } 
 import {
   loadSettings,
   saveSettings,
+  initializeFirstRunSettings,
   applyEnvFromSettings,
   detectSysLang,
   loadRateLimits,
@@ -103,6 +104,8 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
+import { findBuiltinApp } from "./team/catalog.js";
+import { installApp as installTeamApp } from "./team/store.js";
 import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments, createDepartment, updateDepartment, removeDepartment } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
@@ -3325,6 +3328,10 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
+    if (initializeFirstRunSettings()) {
+      const defaultTeam = findBuiltinApp('wuwei-team-basic');
+      if (defaultTeam) installTeamApp(defaultTeam);
+    }
     // 所有模型请求统一压缩发送副本：限制长边和编码字节，包含历史附件、截图和手机上传。
     // 小图保持原样；大图优先 PNG，必要时 JPEG/继续缩小，原始展示图不受影响。
     setImageCapper((dataUrl: string, maxEdge: number) => {

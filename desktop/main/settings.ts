@@ -1,7 +1,7 @@
 // 用户设置持久化：模型后端(provider)与模型选择，存 ~/.wuwei/config.json。
 import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei");
 
@@ -203,7 +203,7 @@ export interface AppSettings {
   brainDocs?: boolean; // brain_recall 是否连带扫描文档冷存储的『相关文档』(默认开)
   resumeDetect?: boolean; // 启动时检测被中断/干到一半的任务并提示恢复(默认开=undefined 视为 true)
   telemetry?: boolean; // 发送诊断信息用于改善体验(默认开=undefined 视为 true)；关掉后不再上报任何诊断日志/报错
-  teamEnabled?: boolean; // 启用「AI 员工团队」可选模块(应用中心/员工/房间)。⚠️与上面几个相反：默认关，用户主动开
+  teamEnabled?: boolean; // 新用户首次初始化开启一人公司；已有用户保留原选择。
   // --- 手机端远程设备执行(relay) --- 默认关,用户主动开。WS常驻连接是稀缺资源,不全员常连。
   remoteEnabled?: boolean; // 允许手机端远程调用本机:开了才建relay常驻连接
   remoteShareSubscription?: boolean; // 同步本机订阅版模型(Claude Code/Codex订阅)给手机:不开则上报清单剔除本地订阅
@@ -249,6 +249,19 @@ export function loadSettings(): Settings | null {
   } catch {
     return null;
   }
+}
+
+// Initialize only a genuinely missing file, after legacy-profile migration.
+// Existing choices, legacy files and unreadable files are never overwritten.
+export function initializeFirstRunSettings(file = FILE): boolean {
+  if (existsSync(file)) return false;
+  const settings: Settings = {
+    kind: 'openai', providerId: 'wuwei-free', model: 'glm-4.7-flash',
+    baseUrl: 'https://gw.wuweiai.io/api/gateway/v1', app: { teamEnabled: true },
+  };
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(settings, null, 2), { flag: 'wx' });
+  return true;
 }
 
 export function saveSettings(s: Settings) {
