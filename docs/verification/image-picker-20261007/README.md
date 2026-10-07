@@ -24,3 +24,11 @@ Read-only inspection found earlier GPT Image 1 low, GPT Image 1 medium and GPT I
 The server catalog ordering change was deployed and pushed to `KehuiPang/wuwei-site` as `d6174d3`. Both production services stayed active; authentication and regional OSS download redirects were verified. The backend rollback directory is `/opt/wuwei-site.before-image-sort-20261007`.
 
 The user's existing isolated online dev profile was reused when restarting the owned dev process; login, conversations and original-order receipts were preserved. Production image service checks and synthetic transport failures validate different parts of the flow; they do not guarantee uninterrupted access from every client network.
+
+## Publication
+
+`v1.7.43` was published as Latest from immutable source tag `8eb129cd7af6af60079a98d78a052d9e7c4a23a6`. All three platform build jobs passed in Actions run `37624348547`, including the Windows installer's mandatory Authenticode `Valid` check. Compatibility publishing passed in run `37626010828`.
+
+All 15 distribution files were relayed to regional OSS with matching sizes, MD5, SHA512 and GitHub SHA256 digests. An independent full download then verified all seven binaries against their original hashes. The four website download redirects resolve to regional OSS version 1.7.43. Legacy R2 manifests contain version 1.7.43 and point their binaries at OSS. The three private scoped-upload maps were removed from the draft before publication; the published release contains 15 normal distribution assets.
+
+Temporary transfer acceleration was used only for uploading and integrity verification, then restored to disabled in run `37626527904`. Public download URLs were unchanged. See `release-build.json`, `release-compatibility.json`, `release-publication.json`, `release-transfer.json`, and `release-downloads.json`.
