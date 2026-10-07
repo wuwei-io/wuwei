@@ -52,6 +52,38 @@ async function testApp(){
     check(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments.length===4,'explicit Install creates the four default departments');
     await shot('new-user-installed-team');
     await click('.tc-modal-x');
+    if(process.env.FULL_UI_SIDEBAR==='1'){
+      const height=()=>js(`document.querySelector('.side-tools').getBoundingClientRect().height`);
+      async function drag(delta){
+        await js(`(()=>{const e=document.querySelector('.side-tools-resizer');const y=e.getBoundingClientRect().top+3;window.__splitDragY=y;e.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,clientY:y}));document.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientY:y+${delta}}));})()`);
+        await delay(100);
+        await js(`document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,clientY:window.__splitDragY+${delta}}))`);
+        await delay(100);
+      }
+      const before=await height();await drag(-60);
+      const smaller=await height();check(Math.abs(smaller-(before-60))<2,'separator drag upward reduces the company panel height');
+      await drag(40);const larger=await height();check(Math.abs(larger-(smaller+40))<2,'separator drag downward increases the company panel height');
+      const stored=await js(`localStorage.getItem('wuwei-tools-h')`);
+      await click('.tool-expand');await wait(`!document.querySelector('.tool-sub')`);
+      check(await height()<100,'collapse snaps the separator below the company menu despite a saved expanded height');
+      check(await js(`localStorage.getItem('wuwei-tools-h')`)===stored,'collapse preserves the preferred expanded height');
+      await click('.tool-expand');await wait(`!!document.querySelector('.tool-sub')`);
+      check(Math.abs(await height()-larger)<2,'expansion restores the saved panel height');
+      await click('.tool-expand');await wait(`!document.querySelector('.tool-sub')`);
+      const collapsedHeight=await height();await drag(120);await wait(`!!document.querySelector('.tool-sub')`);
+      check(Math.abs(await height()-(collapsedHeight+120))<2,'dragging the collapsed boundary down expands and resizes the company panel');
+      await js(`document.querySelector('.side-tools-resizer').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`);await delay(100);
+      check(await js(`localStorage.getItem('wuwei-tools-h')===null`),'double-click restores automatic sizing');
+      await drag(1000);
+      const size=win.getSize();win.setSize(size[0],520);await delay(200);
+      check(await js(`document.querySelector('.side-tools').getBoundingClientRect().height<=window.innerHeight*0.72+1 && document.querySelector('.session-list').getBoundingClientRect().height>0`),'saved height stays bounded after reducing the window, keeping chat history visible');
+      win.setSize(...size);await delay(100);
+      await click('.tool-expand');await wait(`!document.querySelector('.tool-sub')`);
+      await js(`document.querySelectorAll('.side-seg-btn')[1].click()`);await delay(100);
+      check(await height()<100,'collapsed company stays compact when the chat list is hidden');
+      await js(`document.querySelectorAll('.side-seg-btn')[1].click()`);await delay(100);
+      fs.writeFileSync(path.join(evidence,'sidebar-layout.json'),JSON.stringify({before,smaller,larger,collapsedHeight,stored,drag_and_snap_verified:true},null,2));
+    }
     await js(`[...document.querySelectorAll('.sidebar-top button')].find(b=>b.textContent.trim()==='«').click()`);await wait(`!!document.querySelector('.toolbar-min')`);
     check(await js(`document.querySelectorAll('.toolbar-min button').length===1 && !document.querySelector('.toolbar-min svg')`),'collapsed sidebar contains only its expand button, no search icon');
     await click('.toolbar-min button');await wait(`!!document.querySelector('.sidebar-top')`);

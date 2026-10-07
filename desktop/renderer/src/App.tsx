@@ -5540,11 +5540,20 @@ export function App() {
     e.preventDefault();
     const startY = e.clientY;
     const el = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null;
-    const startH = toolsHRef.current || (el ? el.getBoundingClientRect().height : 220);
+    const startH = el ? el.getBoundingClientRect().height : 220;
+    let expandedByDrag = false;
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
     const move = (ev: MouseEvent) => {
+      // 收起时不占用保存的高度；向下拖动分界线可重新展开。
+      if (!teamExpanded && !expandedByDrag) {
+        if (ev.clientY - startY < 8) return;
+        expandedByDrag = true;
+        setTeamExpanded(true);
+        localStorage.setItem("wuwei-team-expanded", "1");
+      }
       const h = Math.min(Math.round(window.innerHeight * 0.72), Math.max(72, startH + ev.clientY - startY));
+      toolsHRef.current = h;
       setToolsH(h);
     };
     const up = () => {
@@ -6881,8 +6890,8 @@ export function App() {
         {teamEnabled && showTeam && (
           <>
           <div
-            className={"side-tools" + (!showChats ? " full" : "")}
-            style={showChats && toolsH > 0 ? ({ height: toolsH, maxHeight: "none", flex: "0 0 auto" } as React.CSSProperties) : undefined}
+            className={"side-tools" + (!teamExpanded ? " collapsed" : !showChats ? " full" : "")}
+            style={teamExpanded && showChats && toolsH > 0 ? ({ height: toolsH, maxHeight: "72vh", flex: "0 0 auto" } as React.CSSProperties) : undefined}
           >
             {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
                 展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
@@ -7150,7 +7159,7 @@ export function App() {
               </div>
             )}
           </div>
-          {teamExpanded && showChats && (
+          {showChats && (
             <div
               className="side-tools-resizer"
               onMouseDown={startToolsResize}
