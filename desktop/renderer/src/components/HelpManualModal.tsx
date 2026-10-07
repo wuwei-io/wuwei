@@ -101,6 +101,41 @@ export function HelpManualModal({ lang, onClose }: Props) {
       ),
     },
     {
+      id: "company",
+      icon: <IconGroup />,
+      label: L("My Company", "一人公司"),
+      body: (
+        <>
+          <p className="guide-lead">{L("Build a team of AI teammates with their own roles. Chat with one teammate, delegate work, or bring several into a group.", "给 AI 员工分配不同职责，既能单独私聊、安排任务，也能建群一起协作。")}</p>
+          <h4>{L("Install your team", "安装团队")}</h4>
+          <FeatRow badge={<span className="guide-num">1</span>} title={L("Open My Company", "打开一人公司")} desc={L("New users have My Company enabled, with its sidebar menu collapsed. Click the menu title to open the company page; the arrow expands or collapses Contacts and Groups. Existing users can enable it in Settings → Company.", "新用户默认开启一人公司，侧栏菜单初始收起。点菜单标题进入操作页，点箭头展开或收起通讯录和群聊。已有用户可在「设置 → 一人公司」开启。")} />
+          <FeatRow badge={<span className="guide-num">2</span>} title={L("Choose a team pack", "选择团队安装")} desc={L("No teammates are installed automatically. On the Teammates page, click Add teammate. Under Team packs, choose Wuwei One-Person Company and click Install. You can also import teammates from openclaw here.", "员工不会自动安装。在「员工」页点「添加员工」，在「可安装的团队」中选择「无为一人公司」，点击「安装」。这里也可以从 openclaw 导入员工。")} />
+          <FeatRow badge={<span className="guide-num">3</span>} title={L("Start working", "开始使用")} desc={L("The default team includes six teammates in CEO Office, Engineering, Design and General Affairs. Click a teammate card or a name in Contacts to start a private chat. Tell Ben your goal and ask him to coordinate the relevant teammates.", "默认团队包含六位员工，分属 CEO办公室、技术部、设计部和综合部。点员工卡片或通讯录中的姓名开始私聊，也可以把目标交给小笨，让他协调相关员工完成。")} />
+          <h4>{L("Manage teammates and departments", "管理员工与部门")}</h4>
+          <FeatRow badge={<IconGroup />} title={L("Ask AI to manage teammates", "直接让 AI 管理员工")} desc={L("In a chat, describe the teammate's name and responsibilities, for example: “Add a teammate named Alex to write and review product copy.” You can also ask AI to change responsibilities or remove a teammate. Right-click a teammate to edit or delete them yourself.", "在对话中说清姓名和职责，例如：「添加一名叫小营的员工，负责产品文案和内容审核。」也可以让 AI 修改员工职责、删除不需要的员工；手动管理时，右键员工可编辑或删除。")} />
+          <FeatRow badge={<IconSettings2 />} title={L("Organize departments", "组织部门")} desc={L("Ask AI: “Create a Marketing department, make Alex its head, and add Wendy.” Ask it to update the head or members, or remove a department. You can also manage departments in Settings → Company. Each teammate belongs to one department; adding someone moves them from their previous department.", "可以说：「创建运营部，由小营担任负责人，把小文加入运营部。」再让 AI 调整负责人、成员或删除部门。也可在「设置 → 一人公司」手动管理。每位员工只属于一个部门，添加到新部门会移出原部门。")} />
+          <h4>{L("Create groups and collaborate", "建群协作")}</h4>
+          <FeatRow badge={<IconGroup />} title={L("Bring the right people together", "把相关员工拉进群")} desc={L("Open My Company → Groups → New group, name it and choose its members. Or ask AI: “Create a Website Launch group with Ben, Cody and Mia; let Ben coordinate.” In the group, @ a teammate to involve them, or @ everyone for a team discussion. Without a mention, a configured coordinator replies.", "进入「一人公司 → 群 → 新建群」，填写群名并选择成员。也可以说：「建一个官网上线群，把小笨、小码、小美拉进来，由小笨协调。」群里 @员工让他参与，@所有人一起讨论；未 @任何人时，由已设置的协调者应答。")} />
+          <Tip>{L("Give the team a concrete goal and deliverables. For example: “Mia designs the landing page, Cody implements it, and Ben reviews the result. Report the files and checks when finished.” Teammates can delegate and hand off work; you can adjust their roles and group membership as the project changes.", "说清目标和交付要求，例如：「小美设计首页，小码实现，小笨验收，完成后汇报文件和验证结果。」员工可分派任务、转交工作，项目变化时再调整职责和群成员。")}</Tip>
+        </>
+      ),
+    },
+    {
+      id: "images",
+      icon: IconStart,
+      label: L("Image generation", "生图模型"),
+      body: (
+        <>
+          <p className="guide-lead">{L("Generate images in the conversation with hosted image models. No API key setup is needed.", "使用无为托管的生图模型，在对话中直接生成图片，无需配置 API Key。")}</p>
+          <FeatRow badge={<span className="guide-num">1</span>} title={L("Sign in and choose a model", "登录并选择模型")} desc={L("Click the platform below the message box and choose Wuwei hosted · Image models. Select GPT Image 2, Nano Banana 2, Nano Banana or GPT Image 1.", "登录后，点击输入框下方的平台，选择「无为托管 · 生图模型」，再选择 GPT Image 2、Nano Banana 2、Nano Banana 或 GPT Image 1。")} />
+          <FeatRow badge={<span className="guide-num">2</span>} title={L("Describe your image", "描述图片")} desc={L("Describe the subject, setting, style and intended use, then send. For example: “Create a warm, minimalist illustration of a coffee shop for a website banner.” You can request a supported size or quality in the prompt; the model picker selects the model itself.", "说清主体、场景、风格和用途后发送，例如：「生成一张咖啡店网站横幅，温暖色调，简约插画风。」需要尺寸或画质时可在描述中提出，具体选项以模型支持为准；模型列表只选择模型。")} />
+          <FeatRow badge={<span className="guide-num">3</span>} title={L("Confirm the cost", "确认费用")} desc={L("The confirmation dialog shows the estimated coin reservation and maximum authorization. Check these before confirming. The model list shows a reference price; quality and size can change the quote. GPT Image 1 uses low quality by default and also supports medium quality in this release.", "确认弹窗会显示预计预占的无为币和最高授权额度，核对后再确认。模型列表是参考价格，画质和尺寸会影响报价。当前版本 GPT Image 1 默认低画质，也支持中画质。")} />
+          <FeatRow badge={<span className="guide-num">4</span>} title={L("View the result", "查看结果")} desc={L("When generation finishes, the image appears directly in the conversation. Click it to view it larger. There is no need to ask AI to send the same image again.", "生成完成后，图片直接显示在对话中，点击可放大查看，不必再让 AI 发送同一张图片。")} />
+          <Tip>{L("If the result is unknown or the connection is interrupted, ask AI to check the original order. Avoid placing another order until its status is clear, to prevent duplicate generations and charges.", "若提示结果不明或连接中断，让 AI 查询原订单。确认原订单状态后再决定是否重新生成，避免重复下单和扣费。")}</Tip>
+        </>
+      ),
+    },
+    {
       id: "modes",
       icon: IconModes,
       label: L("Run modes & depth", "运行模式与深度"),

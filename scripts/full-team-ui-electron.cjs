@@ -21,6 +21,15 @@ async function testApp(){
   const click=selector=>js(`document.querySelector(${JSON.stringify(selector)}).click()`);
   const textClick=(selector,text)=>js(`[...document.querySelectorAll(${JSON.stringify(selector)})].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`);
   const input=(selector,value)=>js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  async function verifyGuide(en){
+    await click('.acct-btn');await textClick('.acct-it',en?'User Guide':'使用手册');
+    await wait(`!!document.querySelector('.guide-modal')`);
+    await textClick('.guide-nav__it',en?'My Company':'一人公司');
+    check(await js(`document.querySelector('.guide-body__scroll').textContent.includes(${JSON.stringify(en?'No teammates are installed automatically':'员工不会自动安装')}) && document.querySelector('.guide-body__scroll').textContent.includes(${JSON.stringify(en?'Create groups and collaborate':'建群协作')})`),'actual '+(en?'English':'Chinese')+' company manual describes optional installation and collaboration');
+    await textClick('.guide-nav__it',en?'Image generation':'生图模型');
+    check(await js(`document.querySelector('.guide-body__scroll').textContent.includes('GPT Image 2') && document.querySelector('.guide-body__scroll').textContent.includes(${JSON.stringify(en?'Confirm the cost':'确认费用')})`),'actual '+(en?'English':'Chinese')+' image manual shows model selection, fees and results');
+    await click('.guide-x');
+  }
   const shot=async name=>fs.writeFileSync(path.join(evidence,name+'.json'),JSON.stringify(await js(`({title:document.querySelector('.tb-title-txt')?.textContent,departments:[...document.querySelectorAll('.tool-dept-nm')].map(e=>e.textContent),teammates:[...document.querySelectorAll('.tool-sub-nm')].map(e=>e.textContent),departmentInputs:[...document.querySelectorAll('.dept-card-row input')].map(e=>e.value)})`),null,2));
   if(process.env.FULL_UI_FRESH==='1'){
     await wait(`!!window.wuwei?.getSettings`);
@@ -28,10 +37,21 @@ async function testApp(){
     for(let i=0;i<100;i++){settings=await js(`window.wuwei.getSettings().then(r=>r.settings)`);if(settings?.providerId==='wuwei-free')break;await delay(100);}
     check(settings?.providerId==='wuwei-free' && settings.kind==='openai' && settings.model==='glm-4.7-flash' && settings.baseUrl==='https://gw.wuweiai.io/api/gateway/v1','a completely missing config initializes the actual free gateway, not just the UI label');
     check(settings.app.teamEnabled===true,'fresh company is enabled without a toggle or seeded fixture');
+    await wait(`!!document.querySelector('.tool-item-main')`);
+    check(await js(`!document.querySelector('.tool-sub') && !document.querySelector('.tool-chev.open')`),'fresh company menu starts collapsed');
+    check(!fs.existsSync(path.join(team,'employees.json')) && !fs.existsSync(path.join(team,'apps.json')),'fresh company does not install teammates or a team pack');
+    await click('.tool-item-main');await wait(`!!document.querySelector('.tc-empty-hero')`);
+    check(await js(`document.querySelector('.tc-count').textContent==='0'`),'company title opens an empty company operation page');
+    await shot('new-user-empty-company');
+    await click('.tool-expand');await wait(`!!document.querySelector('.tool-sub')`);
+    check(await js(`document.querySelectorAll('.tool-sub-nm').length===0 && document.querySelectorAll('.tool-dept-nm').length===0`),'expanding the empty company does not add employees or departments');
+    await click('.tc-add');await wait(`!!document.querySelector('.tc-app-nm')`);
+    await js(`document.querySelector('.tc-app .tc-btn').click()`);
     await wait(`document.querySelectorAll('.tool-sub-nm').length===6 && document.querySelectorAll('.tool-dept-nm').length===4`);
-    check(JSON.parse(fs.readFileSync(path.join(team,'employees.json'),'utf8')).length===6,'actual first boot installs the default team');
-    check(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments.length===4,'actual first boot creates the four default departments');
-    await shot('new-user-default-team');
+    check(JSON.parse(fs.readFileSync(path.join(team,'employees.json'),'utf8')).length===6,'explicit Install adds the six default teammates through actual IPC');
+    check(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments.length===4,'explicit Install creates the four default departments');
+    await shot('new-user-installed-team');
+    await click('.tc-modal-x');
     await js(`[...document.querySelectorAll('.sidebar-top button')].find(b=>b.textContent.trim()==='«').click()`);await wait(`!!document.querySelector('.toolbar-min')`);
     check(await js(`document.querySelectorAll('.toolbar-min button').length===1 && !document.querySelector('.toolbar-min svg')`),'collapsed sidebar contains only its expand button, no search icon');
     await click('.toolbar-min button');await wait(`!!document.querySelector('.sidebar-top')`);
@@ -46,6 +66,8 @@ async function testApp(){
     check(!fs.existsSync(path.join(team,'employees.json')),'existing off does not seed a new team');
     app.exit(0);return;
   }
+  await wait(`!!document.querySelector('.tool-item-main')`);
+  await click('.tool-expand');
   await wait(`document.querySelectorAll('.tool-sub-nm').length===6`);
   // A fresh renderer detects the system language; exercise the actual language switch.
   await js(`document.querySelector('.tool-item-main').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:100,clientY:100}))`);
@@ -58,6 +80,7 @@ async function testApp(){
   await wait(`document.querySelector('.tool-sub-item[title="Chat with Ben"]')!==null`);
   check(await js(`['Ben','Wendy','Cody','Dana','Mia','Ivy'].every(n=>[...document.querySelectorAll('.tool-sub-nm')].some(e=>e.textContent===n))`),'actual English sidebar has six localized teammates');
   check(await js(`JSON.stringify([...document.querySelectorAll('.tool-dept-nm')].map(e=>e.textContent))===JSON.stringify(['CEO Office','Engineering','Design','General Affairs'])`),'actual four English departments, no test department or unassigned people');
+  await verifyGuide(true);
   const departments=JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments;
   await shot('full-english-sidebar');
   await click('.tool-sub-item[title="Chat with Ben"]');
@@ -111,6 +134,7 @@ async function testApp(){
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(team,'config.json'),'utf8')).departments,departments);
   await shot('full-chinese-custom');
   console.log('PASS member and department references stay unchanged across language switches and profile saves');
+  await verifyGuide(false);
   app.exit(0);
 }
 require(path.join(repo,'out/main/index.cjs'));

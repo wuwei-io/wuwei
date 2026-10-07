@@ -3669,7 +3669,7 @@ export function App() {
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
   const [teamDepartments, setTeamDepartments] = useState<any[]>([]); // 部门(组织架构)：通讯录按部门分组展示
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
-  const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
+  const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") === "1"); // 首次收起，之后保留用户的展开选择
   const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
   const [contactsExpanded, setContactsExpanded] = useState(() => localStorage.getItem("wuwei-contacts-expanded") !== "0"); // 一人公司下「通讯录」子板块展开态
   const [groupsExpanded, setGroupsExpanded] = useState(() => localStorage.getItem("wuwei-groups-expanded") !== "0"); // 一人公司下「群聊」子板块展开态
@@ -8167,6 +8167,14 @@ export function App() {
                           {t("login.signin")}
                         </button>
                       </div>
+                    )}
+                    {!wuwei && (
+                      <button className="acct-it" onClick={() => {
+                        setShowAcctMenu(false);
+                        setShowGuide(true);
+                      }}>
+                        {lang === "en" ? "User Guide" : "使用手册"}
+                      </button>
                     )}
                   </div>
                 </>

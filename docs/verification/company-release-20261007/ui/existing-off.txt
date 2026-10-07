@@ -1,10 +1,10 @@
 
-[renderer] [boot] renderer mounted ok (app://bundle/assets/index-D-c2f2Kr.js:77133)
 PASS actual application window loaded
+[renderer] [boot] renderer mounted ok (app://bundle/assets/index-7uoNJj4j.js:77238)
 PASS existing explicit off stays off in the actual desktop
 PASS existing off does not show company teammates
 PASS existing off does not seed a new team
-(node:137120) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(node:116800) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `electron --trace-deprecation ...` to show where the warning was created)
 (electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
 

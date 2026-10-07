@@ -1,13 +1,17 @@
 
 PASS actual application window loaded
-[renderer] [boot] renderer mounted ok (app://bundle/assets/index-D-c2f2Kr.js:77133)
+[renderer] [boot] renderer mounted ok (app://bundle/assets/index-DfDQq0w2.js:77238)
 PASS a completely missing config initializes the actual free gateway, not just the UI label
 PASS fresh company is enabled without a toggle or seeded fixture
-PASS actual first boot installs the default team
-PASS actual first boot creates the four default departments
+PASS fresh company menu starts collapsed
+PASS fresh company does not install teammates or a team pack
+PASS company title opens an empty company operation page
+PASS expanding the empty company does not add employees or departments
+PASS explicit Install adds the six default teammates through actual IPC
+PASS explicit Install creates the four default departments
 PASS collapsed sidebar contains only its expand button, no search icon
 PASS expanded sidebar retains its controls
-(node:133364) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(node:130976) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `electron --trace-deprecation ...` to show where the warning was created)
 (electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
 
