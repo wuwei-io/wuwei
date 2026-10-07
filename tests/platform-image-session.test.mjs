@@ -26,7 +26,7 @@ test('actual tool session quotes/confirms before POST, writes recovery and displ
  assert.equal(calls.find(c=>c.path==='/api/images/orders').body.authorized_budget,120);
  const lookup=await run({recovery_key:'abcdef12-3456-7890-abcd-1234567890ab'},{cwd:root});assert.equal(JSON.parse(lookup.content).order_id,id);assert.equal(calls.filter(c=>c.path==='/api/images/orders'&&c.body).length,1);
  const recovered=await run({action:'settle',order_id:id},{cwd:root,requestDecision:async()=>({action:'reply',value:'settle_image'})});assert.ok(recovered.displayImage);assert.equal(calls.filter(c=>c.path.endsWith('/settle')).length,1);assert.equal(calls.filter(c=>c.path==='/api/images/orders'&&c.body).length,1);
- const reauthorized=await run({action:'reauthorize',order_id:id},{cwd:root,requestDecision:async d=>{assert.ok(d.question.includes('9 币'));return {action:'reply',value:'reauthorize_image'};}});assert.ok(reauthorized.displayImage);assert.deepEqual(calls.find(c=>c.path.endsWith('/reauthorize')).body,{authorized_budget:9});
+ const reauthorized=await run({action:'reauthorize',order_id:id},{cwd:root,requestDecision:async d=>{assert.ok(d.question.includes('9 无为币'));assert.ok(d.i18n.en.question.includes('9 coins'));return {action:'reply',value:'reauthorize_image'};}});assert.ok(reauthorized.displayImage);assert.deepEqual(calls.find(c=>c.path.endsWith('/reauthorize')).body,{authorized_budget:9});
  const cancelled=await run({sku_id:sku.sku_id,prompt:'cat'},{cwd:root,requestDecision:async()=>({action:'deny'})});assert.ok(cancelled.content.includes('取消'));assert.equal(calls.filter(c=>c.path==='/api/images/orders'&&c.body).length,1);
 });
 

@@ -2,6 +2,7 @@ import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team
 import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
 import { ToolDecisionModal } from './components/ToolDecisionModal.js';
+import { imageModelChoices, imageModelLabel } from '../../../src/imagegen/image-catalog.js';
 import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
@@ -3864,16 +3865,17 @@ export function App() {
   const [settingsTab, setSettingsTab] = useState("model"); // 统一设置页的初始/当前左侧菜单项
   const [curProviderId, setCurProviderId] = useState("");
   const [imageMode, setImageMode] = useState(false);
+  const imageModeRef = useRef(imageMode);
+  imageModeRef.current = imageMode;
   const [imageSku, setImageSku] = useState("");
-  const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;coins_per_image:number}[]>([]);
-  const imagePreset: Preset = {id:"wuwei-image",label:"无为托管 · 生图模型",labelEn:"Wuwei hosted · Image models",kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageCatalog.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
+  const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;quality?:string;coins_per_image:number}[]>([]);
+  const imageChoices = imageModelChoices(imageCatalog);
+  const imagePreset: Preset = {id:"wuwei-image",label:"无为托管 · 生图模型",labelEn:"Wuwei hosted · Image models",kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageChoices.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
   const displayProviderId = imageMode ? imagePreset.id : curProviderId;
-  const displayModel = imageMode ? imageSku : meta.model;
+  const displayModel = imageMode ? imageChoices.find(s=>s.model===imageCatalog.find(row=>row.sku_id===imageSku)?.model)?.sku_id || imageSku : meta.model;
   const imageLabel = (id:string) => {
     const row=imageCatalog.find(s=>s.sku_id===id);
-    if (row?.model === "gpt-image-2") return "GPT Image 2";
-    if (row?.model === "gpt-image-1") return `GPT Image 1 · ${id.endsWith("-low") ? (lang === "en" ? "Low" : "低画质") : (lang === "en" ? "Medium" : "中画质")}`;
-    return row?.label || row?.model || id;
+    return row ? imageModelLabel(row) : id;
   };
   const refreshImageCatalog = async () => {try {const rows=await window.wuwei.imageCatalog();setImageCatalog(rows);}catch {setImageCatalog([]);}};
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({}); // 各平台实时拉到的模型
@@ -4405,6 +4407,7 @@ export function App() {
     reason: getLang() === "en" ? "Checking connection…" : "检测连通状态…",
   });
   const [showConn, setShowConn] = useState(false); // 状态灯说明气泡
+  const connCheckSeqRef = useRef(0);
   const thinkStartRef = useRef<number | null>(null); // 本轮开始时间（思考计时）
   const charsRef = useRef(0); // 本轮已流式字符数（估算 token）
   const turnTextRef = useRef(""); // 本轮已生成的正文(含 instant 模式还没揭示的),供状态栏悬停预览
@@ -4628,22 +4631,26 @@ export function App() {
 
   // 连通状态检测：更新状态灯（红/黄/绿）
   async function runConnCheck() {
-    setConn({ status: "checking", reason: lang === "en" ? "Checking connection…" : "检测连通状态…" });
+    const seq = ++connCheckSeqRef.current;
+    setConn({ status: "checking", reason: langRef.current === "en" ? "Checking connection…" : "检测连通状态…" });
     try {
       const r = await window.wuwei.checkConn();
+      if (seq !== connCheckSeqRef.current) return;
       setConn(r);
       // 需登录/配 Key 的平台(非托管)一旦红灯且属「缺凭证/未授权」→ 主动亮一键授权引导条，
       // 别让用户对着红灯反复重试却不知道要先登录(线上见过选 Codex 没登录 ChatGPT 就卡死循环)。
-      if (r.status === "red" && curPreset && !curPreset.hosted && isAuthErrorText(r.reason || "")) {
+      if (!imageModeRef.current && r.status === "red" && curPreset && !curPreset.hosted && isAuthErrorText(r.reason || "")) {
         setNeedAuth(true);
         setAuthDismissed(false);
       }
       // 产品行为埋点：模型连通检测结果(green=通/其它=不通)，诊断「选了模型能不能用」
       void window.wuwei.track?.("model_connect", { ok: r.status === "green", status: r.status }, r.reason?.slice(0, 500));
     } catch {
-      setConn({ status: "yellow", reason: lang === "en" ? "Check failed, please retry." : "检测失败，请重试。" });
+      if (seq !== connCheckSeqRef.current) return;
+      setConn({ status: "yellow", reason: langRef.current === "en" ? "Check failed, please retry." : "检测失败，请重试。" });
     }
   }
+  useEffect(() => { if (imageMode) void runConnCheck(); }, [imageMode, imageSku, wuwei?.user?.id, lang]);
 
   // ——— API Key 平台：一键获取 → 复制自动检测 → 通了自动设置 ———
   // 把验证过的 key 存进当前平台槽并切换生效
@@ -6427,11 +6434,16 @@ export function App() {
                           className="allow"
                           onClick={() => {
                             setShowConn(false);
+                            if (imageMode) {
+                              if (conn.status === 'red') setShowLoginIntro(true);
+                              else { void refreshImageCatalog(); void runConnCheck(); }
+                              return;
+                            }
                             setSettingsTab("model");
                             setShowSettings(true);
                           }}
                         >
-                          {conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
+                          {imageMode ? conn.status === 'red' ? (lang === 'en' ? 'Sign in' : '登录') : (lang === 'en' ? 'Refresh models' : '刷新模型') : conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
                         </button>
                       )}
                     </div>
@@ -6663,7 +6675,12 @@ export function App() {
                       >
                         <span>
                           {imageMode ? imageLabel(m) : MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
-                          {imageMode && <span style={{marginLeft:8,fontSize:11,opacity:0.65}}>≈{imageCatalog.find(s=>s.sku_id===m)?.coins_per_image} {lang === "en" ? "coins" : "无为币"}</span>}
+                          {imageMode && <span style={{marginLeft:8,fontSize:11,opacity:0.65}}>{(() => {
+                            const model = imageCatalog.find(s=>s.sku_id===m)?.model;
+                            const prices = imageCatalog.filter(s=>s.model===model).map(s=>s.coins_per_image);
+                            const varied = new Set(prices).size > 1;
+                            return lang === 'en' ? `${varied ? 'From ' : '≈'}${Math.min(...prices)} coins` : `≈${Math.min(...prices)} 无为币${varied ? '起' : ''}`;
+                          })()}</span>}
                           {gated && (
                             <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
                               {lang === "en" ? "Sign in" : "登录可用"}
@@ -10650,6 +10667,7 @@ export function App() {
       )}
 
       {Object.values(toolDecisions)[0] && <ToolDecisionModal
+        lang={lang}
         key={Object.values(toolDecisions)[0].permId} decision={Object.values(toolDecisions)[0]}
         onRespond={response => window.wuwei.respondDecision(Object.values(toolDecisions)[0].permId, response)} />}
       {asks[currentId] && (() => {

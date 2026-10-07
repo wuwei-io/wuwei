@@ -67,6 +67,8 @@ export interface Decision {
   timeoutSec: number | null; // null=不计时一直等；数字=倒计时
   sourceSession?: string;
   rawDetail?: string;
+  // Native paid-tool dialogs resolve these against the current UI language.
+  i18n?: Record<'zh' | 'en', { title: string; question: string; optionLabels: Record<string, string> }>;
 }
 export interface DecisionResponse {
   action: "allow" | "deny" | "reply";

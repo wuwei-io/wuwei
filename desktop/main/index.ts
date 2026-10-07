@@ -29,6 +29,7 @@ import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits } from "../../src/types.js";
 import { RemoteDecisions } from './remote-decisions.js';
 import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
+import { checkImageAvailability } from '../../src/imagegen/image-availability.js';
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
@@ -2776,6 +2777,8 @@ function msgTextTail(m: any, n: number): string {
     .slice(-n);
 }
 async function maybeSmartTitle(id: string) {
+  // Image turns already have a prompt-derived title; do not call a text model for them.
+  if (loadSettings()?.imageMode) return;
   if (titleInFlight.has(id) || !provider) return;
   const a0 = agents.get(id);
   if (!a0) return;
@@ -5603,6 +5606,13 @@ function hasCredential(cfg: ReturnType<typeof loadConfig>): boolean {
 // 连通状态检测：红=未配置/未授权；绿=实测 ping 通；黄=已配置但请求报错
 // 由渲染层在启动/切换平台/点灯时调用
 ipcMain.handle("conn:check", async () => {
+  const settings = loadSettings();
+  if (settings?.imageMode) {
+    const sess = await getFreshWuweiSession().catch(() => null);
+    if (!sess?.accessToken) return { status: "red", reason: tt("请先登录后使用托管生图。", "Sign in to use hosted image generation.") };
+    return checkImageAvailability(new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform'),
+      settings.imageSku || '', process.env.WUWEI_LANG === 'en' ? 'en' : 'zh');
+  }
   const cfg = loadConfig();
   if (!hasCredential(cfg)) {
     return { status: "red", reason: tt("当前平台未配置凭证 / 未授权，无法使用。", "This provider has no credentials / isn't authorized — can't be used.") };
