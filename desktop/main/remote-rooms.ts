@@ -6,7 +6,7 @@ interface RoomDependencies extends OrchestratorDeps {
   room: (id: string) => Room | undefined;
   history: (id: string) => RoomMessage[];
   running: (id: string) => boolean;
-  run: (id: string, text: string, deps: OrchestratorDeps, options?: { images?: string[] }) => Promise<void>;
+  run: (id: string, text: string, deps: OrchestratorDeps, options?: { images?: string[]; mentions?: string[] }) => Promise<void>;
   abort: (id: string) => void;
 }
 
@@ -16,6 +16,7 @@ export async function runRemoteRoomTurn(args: RemoteRoomArgs, deps: RoomDependen
   if (!room || room.type === 'dm') throw new Error('这台电脑不存在该群聊');
   if (deps.running(room.id)) throw new Error('该群聊正在执行，请等当前任务完成');
   if (args.signal.aborted) throw new Error('已停止');
+  if (args.mentions.some(id => id !== '*' && !room.members.includes(id))) throw new Error('所选成员不属于该群聊');
   const seen = new Set(deps.history(room.id).map(message => message.id));
   let failed = false;
   const abort = () => deps.abort(room.id);
@@ -50,7 +51,7 @@ export async function runRemoteRoomTurn(args: RemoteRoomArgs, deps: RoomDependen
           }
         }
       },
-    }, { images: args.images });
+    }, { images: args.images, mentions: args.mentions });
     if (args.signal.aborted) throw new Error('已停止');
     if (failed) throw new Error('部分群成员执行失败，请查看已返回的具体结果');
   } finally { args.signal.removeEventListener('abort', abort); }

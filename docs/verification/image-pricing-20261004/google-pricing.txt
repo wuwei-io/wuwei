@@ -1,0 +1,3827 @@
+
+Gemini Developer API pricing  |  Gemini API  |  Google AI for Developers
+      Skip to main content
+/
+English
+Deutsch
+Español – América Latina
+Français
+Indonesia
+Italiano
+Polski
+Português – Brasil
+Shqip
+Tiếng Việt
+Türkçe
+Русский
+עברית
+العربيّة
+فارسی
+हिंदी
+বাংলা
+ภาษาไทย
+中文 – 简体
+中文 – 繁體
+日本語
+한국어
+  Get API key
+  Cookbook
+  Community
+Sign in
+    Docs
+    API reference
+      Gemini API
+      Docs
+      API reference
+      Get API key
+      Cookbook
+      Community
+Get started
+Overview
+Get started
+API keys
+Pricing
+Coding agent setup
+Models
+All models
+Latest Gemini models
+Nano Banana
+Veo
+Gemini Omni Flash
+Lyria 3.5 & Lyria Clip
+Overview
+Lyria RealTime
+Lyria prompt guide
+Text-to-speech
+Overview
+Voice design
+Voice replication
+Transcribe
+Live
+Live translate
+Embeddings
+Robotics
+Overview
+Spatial reasoning
+Agentic vision
+Task orchestration
+Robotics with streaming
+Video understanding
+Core capabilities
+Text
+Image
+Image generation 🍌
+Image understanding
+Video
+Video overview
+Video understanding
+Documents
+Speech and audio
+Speech generation
+Audio understanding
+Audio transcription
+Thinking
+Thinking
+Thought signatures
+Structured outputs
+Function calling
+Long context
+Agents
+Overview
+Quickstart
+Antigravity agent
+Building managed agents
+Environments
+Credentials
+Hooks
+Deep Research agent
+Tools
+Overview
+Google Search
+Google Maps
+Code execution
+URL context
+Computer use
+File search
+Combine tools and function calling
+Live API
+Overview
+Get started
+Get started using the GenAI SDK
+Get started using raw WebSockets
+Capabilities
+Thinking
+Live transcription
+Live translation
+Tool use
+Session management
+Ephemeral tokens
+Best practices
+Optimization
+Overview
+Batch API
+Webhooks
+Flex inference
+Priority inference
+Context caching
+Guides
+Interactions API
+Streaming
+Background execution
+File input
+Input methods
+Files API
+OpenAI compatibility
+Media resolution
+Token counting
+Prompt engineering
+Logs and datasets
+Get started with logs
+Data logging and sharing
+Safety
+Safety settings
+Safety guidance
+Frameworks
+LangChain & LangGraph
+CrewAI
+LlamaIndex
+Vercel AI SDK
+Temporal
+Resources
+Release notes
+Deprecations
+Libraries
+Migration
+Migrate to Gen AI SDK
+Migrate to Interactions API
+Interactions breaking changes (May 2026)
+Rate limits
+Billing info
+API troubleshooting
+API errors
+Status
+Partner and library integrations
+Google AI Studio
+Quickstart
+Google AI plans
+Vibe code in Build mode
+Developing full-stack apps
+Build Android apps
+Deploying your app
+Agents in AI Studio Playground
+Try out LearnLM
+Troubleshooting
+Access for Workspace users
+Google Cloud Platform
+Gemini Enterprise Agent Platform Gemini API
+OAuth authentication
+Policies
+Terms of service
+Available regions
+Abuse monitoring
+Feedback information
+      /* Styles inlined from /site-assets/css/style.css */
+body[theme="googledevai-theme"] {
+  --devsite-background-0: var(--devsite-background-1);
+  --devsite-button-border: 1px solid #747775;
+  --devsite-button-border-radius: 20rem;
+  --devsite-button-font: 500 14px/36px 'Google Sans Text', Roboto, sans-serif;
+  --devsite-code-font-family: 'Google Sans Mono', Roboto Mono, monospace;
+  --devsite-primary-font-family: 'Google Sans Text', Roboto, sans-serif;
+  --devsite-table-heading-font: 500 14px/20px 'Google Sans Text', Roboto, sans-serif;
+  --googledevai-border-color: #c4c7c5;
+  --googledevai-blue-light: #d7e6ff;
+  --googledevai-blue-dark: #2e64de;
+  --googledevai-cyan-light: #c7e4ff;
+  --googledevai-cyan-dark: #3c8fe3;
+  --googledevai-purple-light: #dce2ff;
+  --googledevai-purple-dark: #987be9;
+  --googledevai-purple: #ac87eb;
+  --googledevai-red: #ee4d5d;
+  --googledevai-secondary-text: #001d35;
+  --googledevai-button-gradient-light: linear-gradient(90deg, var(--googledevai-blue-light), var(--googledevai-cyan-light), var(--googledevai-purple-light));
+  --googledevai-button-gradient-dark: linear-gradient(90deg, var(--googledevai-blue), var(--googledevai-cyan), var(--googledevai-purple));
+}
+body[theme="googledevai-theme"]:not([type="reference"]){
+  --googledevai-page-width: 1100px;
+}
+body[layout=docs][theme="googledevai-theme"]:not([type="reference"]) .devsite-main-content,
+body[layout=docs][theme="googledevai-theme"]:not([type="reference"]) .devsite-main-content[has-book-nav][has-sidebar] {
+  grid-template-columns: minmax(269px, 1fr) minmax(752px, var(--googledevai-page-width)) minmax(160px, 1fr);
+  grid-gap: 3rem;
+}
+body[layout=docs][theme="googledevai-theme"] devsite-content {
+  max-width: var(--googledevai-page-width);
+}
+body[layout=docs][theme="googledevai-theme"] .devsite-article {
+  box-shadow: unset;
+}
+body[theme="googledevai-theme"] {
+  --googledevai-header-gradient: linear-gradient(90deg, var(--googledevai-blue) 50%, var(--googledevai-cyan), var(--googledevai-purple), var(--googledevai-red));
+}
+body[theme="googledevai-theme"].color-scheme--dark {
+  --googledevai-header-gradient: linear-gradient(90deg, var(--googledevai-blue) 75%, var(--googledevai-cyan), var(--googledevai-purple));
+  --googledevai-border-color: #444746;
+}
+/* Ensure that full-bleed pages get the full width. */
+body[theme="googledevai-theme"][layout="full"] .devsite-main-content {
+  max-width: none;
+  padding: 0;
+}
+/* And ensure that any site banners/ACL warnings/etc don't get hidden on
+ * full-bleed pages. */
+body[theme="googledevai-theme"][layout="full"] .devsite-banner {
+  margin: 0;
+}
+tab:has(> a.hidden-tab) {
+  display: none;
+}
+body[theme="googledevai-theme"] devsite-toc > .devsite-nav-list {
+  border-inline-start: unset;
+}
+/* Banner notice */
+[layout=docs] .devsite-banner:first-of-type {
+  background: var(--googledevai-cyan-light);
+  border-radius: 10px;
+  color: var(--googledevai-secondary-text);
+  margin: -2.5rem -0.25rem 2.5rem;
+  display: flex;
+}
+/* Banner notice smaller screens */
+@media (max-width: 840px) {
+  [layout=docs] .devsite-banner:first-of-type {
+    margin: -0.25rem -0.25rem 2.5rem;
+  }
+}
+/* Asides */
+.devsite-article-body>aside:not([class*=attempt])  {
+  border-radius: 2px;
+}
+/* Tables */
+table:not(.tfo-notebook-buttons) {
+  border: 1px solid var(--googledevai-border-color);
+  border-collapse: unset;
+  border-radius: 9px;
+  margin: auto;
+  width: 100%;
+}
+.gemini-api-model-table tr:not(:last-child) td:not(:first-child),
+.gemini-api-model-table tr:not(:last-child) th,
+th,
+table:not(.gemini-api-model-table):not(.tfo-notebook-buttons) tr:not(:last-child) td {
+  border-bottom: 1px solid var(--googledevai-border-color);
+}
+th,
+td {
+  background: transparent;
+  padding: 1rem;
+}
+/* Notebooks */
+devsite-code .tfo-notebook-code-cell-output {
+  max-height: 300px;
+  overflow: auto;
+  background: rgba(237, 247, 255, 1);  /* blue bg to distinguish from input code cells */
+}
+devsite-code .tfo-notebook-code-cell-output + .devsite-code-buttons-container button {
+  background: rgba(237, 247, 255, .7);  /* blue bg to distinguish from input code cells */
+}
+.color-scheme--dark devsite-code .tfo-notebook-code-cell-output {
+  background: rgba(var(--devsite-background-2), 1);
+}
+.color-scheme--dark devsite-code .tfo-notebook-code-cell-output + .devsite-code-buttons-container button {
+  background: rgba(var(--devsite-background-2), .7);
+}
+devsite-code[dark-code] .tfo-notebook-code-cell-output {
+  background: rgba(64, 78, 103, 1);  /* medium slate */
+}
+devsite-code[dark-code] .tfo-notebook-code-cell-output + .devsite-code-buttons-container button {
+  background: rgba(64, 78, 103, .7);  /* medium slate */
+}
+.devsite-article-body>devsite-code {
+  --devsite-code-buttons-container-right: 0;
+  --devsite-code-margin: 0 0;
+  --devsite-code-padding-block: 14px;
+  border-radius: 8px;
+}
+.devsite-article-body>.beta:not([class*=attempt]),
+.devsite-article-body>.caution:not([class*=attempt]),
+.devsite-article-body>.deprecated:not([class*=attempt]),
+.devsite-article-body>.dogfood:not([class*=attempt]),
+.devsite-article-body>.experimental:not([class*=attempt]),
+.devsite-article-body>.key-point:not([class*=attempt]),
+.devsite-article-body>.key-term:not([class*=attempt]),
+.devsite-article-body>.note:not([class*=attempt]),
+.devsite-article-body>.objective:not([class*=attempt]),
+.devsite-article-body>.preview:not([class*=attempt]),
+.devsite-article-body>.special:not([class*=attempt]),
+.devsite-article-body>.success:not([class*=attempt]),
+.devsite-article-body>.tip:not([class*=attempt]),
+.devsite-article-body>.warning:not([class*=attempt]),
+.devsite-article-body>aside:not([class*=attempt]) {
+  --devsite-notice-margin: 0 0;
+  border-radius: 8px;
+}
+/* override default table styles for notebook buttons */
+.devsite-table-wrapper .tfo-notebook-buttons {
+  display: block;
+  width: auto;
+}
+.tfo-notebook-buttons td {
+  display: inline-block;
+  padding: 0 16px 16px 0;
+}
+/* from DevSite's buttons.scss */
+.tfo-notebook-buttons a,
+.tfo-notebook-buttons :link,
+.tfo-notebook-buttons :visited {
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  align-self: var(--devsite-button-align-self);
+  background: var(--devsite-button-background, var(--devsite-background-1));
+  border: var(--devsite-button-border, 0);
+  border-radius: var(--devsite-button-border-radius, 2px);
+  box-sizing: border-box;
+  color: var(--devsite-button-color);
+  cursor: pointer;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  font: var(--devsite-button-font, 500 14px/36px var(--devsite-primary-font-family));
+  height: var(--devsite-button-height, 36px);
+  letter-spacing: var(--devsite-button-letter-spacing, 0);
+  line-height: var(--devsite-button-line-height, 36px);
+  margin: var(--devsite-button-margin, 0);
+  margin-inline-end: var(--devsite-button-margin-x-end);
+  max-width: var(--devsite-button-max-width, none);
+  min-width: 36px;
+  outline: 0;
+  overflow: hidden;
+  padding: var(--devsite-button-with-icon-padding, 0 16px);
+  text-align: center;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  text-transform: var(--devsite-button-text-transform, uppercase);
+  transition:
+    background-color .2s,
+    border .2s;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: var(--devsite-button-width, auto);
+}
+.tfo-notebook-buttons a:hover,
+.tfo-notebook-buttons a:focus {
+  background: var(--devsite-button-background-hover);
+  border: var(--devsite-button-border-hover, 0);
+  color: var(--devsite-button-color-hover, var(--devsite-button-color));
+  text-decoration: var(--devsite-button-text-decoration-hover, none);
+}
+.tfo-notebook-buttons a:active {
+  background: var(--devsite-button-background-active);
+  border: var(--devsite-button-border-active, 0);
+  transform: var(--devsite-button-transform-active, none);
+}
+.tfo-notebook-buttons tr {
+  background: 0;
+  border: 0;
+}
+/* on rendered notebook page,
+   remove link to webpage since we're already here */
+.tfo-notebook-buttons:not(.tfo-api) td:first-child {
+  display: none;
+}
+.tfo-notebook-buttons td > a > img {
+  margin: 0 8px 0 -4px;
+  height: 20px;
+}
+[appearance='dark'] .tfo-notebook-buttons td > a > img {
+  filter: invert(1);
+}
+@media (prefers-color-scheme: dark) {
+  [appearance='device'] .tfo-notebook-buttons td > a > img {
+    filter: invert(1);
+  }
+  .sub-heading {
+    background-color: #333;
+    color: #bdbdbd;
+  }
+}
+[appearance='dark'] .sub-heading {
+  background-color: #333;
+  color: #bdbdbd;
+}
+.sub-heading {
+  background-color: #f2f2f2;
+  color: #5f6368;
+}
+@media screen and (max-width: 600px) {
+  .tfo-notebook-buttons td {
+    display: block;
+  }
+}
+devsite-nav-buttons button {
+  margin-left: 0;
+  margin-top: 5px;
+}
+code {
+  border-radius: 6px
+}
+devsite-book-nav .devsite-nav-list>.devsite-nav-heading:not(.devsite-nav-divider) {
+  border-top: 0;
+  padding-bottom: 0.9rem;
+  font-size: 1rem;
+}
+/*
+ * TODO(b/439059414): Remove this workaround in favor of a project-level
+ * body_class when possible.
+ */
+.ais-theme-marker {
+  display: none;
+}
+/*
+ * Gemini API body class.
+ * https://source.corp.google.com/piper///depot/google3/third_party/devsite/googledevai/en/gemini-api/_project.yaml;l=7
+ */
+.gemini-api devsite-thumb-rating[position="header"],
+.gemini-api devsite-feedback[position="header"] {
+  /* Hide the thumb rating and feedback widgets at the top of the page. */
+  display: none;
+}
+/*
+ * Shaded table styles look like a .pricing-table but are more flexible around
+ * content sizes in each column.
+ */
+.shaded-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.shaded-table th {
+  background-color: #f2f2f2;
+  text-align: left;
+  padding: 8px;
+}
+/* These should use theme colours for light too, so we don't
+ * need an override. */
+.color-scheme--dark .shaded-table th {
+  background-color: var(--devsite-ref-palette--grey800);
+}
+.shaded-table td {
+    padding: 8px;
+}
+.shaded-table th:first-child {
+  border-top-left-radius: 8px;
+}
+.shaded-table th:last-child {
+  border-top-right-radius: 8px;
+}
+.shaded-table tr:last-child td:first-child {
+  border-bottom-left-radius: 8px;
+}
+.shaded-table tr:last-child td:last-child {
+  border-bottom-right-radius: 8px;
+}
+.devsite-nav {
+    font-size: var(--devsite-nav-font-size, 14px);
+}
+.devsite-nav-item {
+    line-height: var(--devsite-nav-item-line-height, 20px);
+}
+.devsite-book-nav-bg, devsite-book-nav {
+    width: 210px;
+    scrollbar-width: thin;
+}
+/* Hide the old toggle button immediately */
+.devsite-expandable-nav > .devsite-nav-toggle {
+    display: none !important;
+}
+/* Ion setup: Default State (Chevron Right) */
+.devsite-expandable-nav > .devsite-nav-title::after {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 18px;
+    line-height: 1;
+    color: #888;
+    /* Default: Chevron Right */
+    content: "\e5cc";
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+/* Down state logic */
+.devsite-expandable-nav.expanded > .devsite-nav-title::after,
+.devsite-expandable-nav:has(.devsite-nav-active) > .devsite-nav-title::after,
+.devsite-expandable-nav > .devsite-nav-title[aria-expanded="true"]::after {
+    content: "\e313";
+}
+/* Close state logic */
+.devsite-expandable-nav > .devsite-nav-title[aria-expanded="false"]::after {
+    content: "\e5cc" !important;
+}
+/* Hovercard styling */
+.gemini-api .heading:has(devsite-gemini-api-hovercard-button) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.gemini-api .heading:has(devsite-gemini-api-hovercard-button) h1 {
+  margin-bottom: 0;
+}
+devsite-gemini-api-hovercard,
+devsite-gemini-api-hovercard-button {
+  /* Render above any code blocks on the page */
+  z-index: 1;
+}
+.devsite-nav-icon[data-icon="beta"], .devsite-nav-icon[data-icon="preview"],
+.devsite-nav-icon[data-icon="experimental"] {
+  margin: -5px 0 -1px 4px;
+}
+      /* Styles inlined from /site-assets/css/overview.css */
+.button-primary {
+  border-radius: 0.375rem;
+}
+.code-snippet {
+  background-color: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow: auto;
+}
+.code-snippet code {
+  font-family: monospace;
+}
+.quickstart {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  padding-bottom: 1rem;
+}
+.quickstart p {
+  margin: 0;
+}
+.quickstart-blurb {
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--googledevai-border-color);
+}
+.gemini-api-card-overview {
+  background: var(--devsite-background-1);
+  border: 1px solid var(--googledevai-border-color);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  color: var(--devsite-primary-text-color);
+  padding: 1rem;
+  text-decoration: none;
+  transition: box-shadow 0.3s ease-in-out;
+}
+.gemini-api-card-overview:active,
+.gemini-api-card-overview:focus {
+  text-decoration: none;
+  border-color: var(--devsite-primary-color);
+}
+.gemini-api-card-overview:hover {
+  box-shadow: var(--gemini-api-elevation-3dp);
+}
+.gemini-api-card-title {
+  align-items: center;
+  display: flex;
+  font-size: 1rem;
+  height: auto; /* Override the setting for now in models.css */
+  margin: 0 0 0.75rem 0;
+}
+.gemini-api-card-overview .google-symbols {
+  font-size: 18px;
+}
+.gemini-api-card-overview .google-symbols.spark {
+  font-size: 16px;
+}
+.gemini-api-card-overview .ais-logo {
+  height: 16px;
+  user-select: none;
+}
+.gemini-api-card-overview .ais-logo,
+.gemini-api-card-overview .google-symbols,
+.gemini-api-card-overview .nano-banana {
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+.gemini-api-card-overview.with-links {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.gemini-api-card-description {
+  margin: 0;
+  height: auto; /* Override the setting for now in models.css */
+}
+.gemini-api-card-description-cta {
+  color: var(--devsite-link-color);
+  margin: 1rem 0 0 0;
+}
+.blue-bold-card {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+.icon-background {
+  display: flex;
+  border-radius: 8px;
+  padding: 0.5rem;
+  background-color: rgb(from var(--devsite-link-background) r g b / 40%);
+}
+.icon-background .google-symbols {
+  margin: 0;
+}
+/* Add this to prevent the button from getting squashed on any screen size */
+.quickstart .button-primary {
+  flex-shrink: 0;      /* Critical: Never let this element shrink */
+  white-space: nowrap; /* Critical: Keep text on one line */
+  min-width: max-content; /* Ensure it takes up as much space as the text needs */
+}
+@media only screen and (min-width: 625px) {
+  .gemini-api-recommended {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+}
+@media only screen and (max-width: 625px) {
+  /* 1. Standard Card Resets for Mobile */
+  .gemini-api-card-overview {
+    display: block;
+    margin: 1rem 0;
+  }
+  .gemini-api-card-title {
+    margin: 0 0 0.25rem 0;
+  }
+  .blue-bold-card {
+    display: flex;
+  }
+  /* 2. Quickstart Split Layout (Text -> Button -> Text) */
+  .quickstart {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  /* "Unwrap" the text container so we can reorder paragraphs individually */
+  .quickstart-blurb {
+    display: contents;
+  }
+  /* Order 1: The first paragraph ("Follow our Quickstart...") */
+  .quickstart-blurb p:first-child {
+    order: 1;
+  }
+  /* Order 2: The Button */
+  .quickstart .button-primary {
+    order: 2;
+  }
+  /* Order 3: The second paragraph ("For most models...") */
+  .quickstart-blurb p:last-child {
+    order: 3;
+  }
+}
+/* Resources Footer Section */
+.gemini-api-header-with-cta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.gemini-api-header-with-cta h2 {
+  margin: 0;
+}
+.gemini-api-cta-link {
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #5f6368;
+}
+.gemini-api-cta-link:hover {
+  text-decoration: underline;
+  color: var(--devsite-link-color);
+}
+.color-scheme--dark .gemini-api-cta-link {
+  color: #9aa0a6;
+}
+.gemini-api-resources-footer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin: 4rem 0 2rem;
+  padding-top: 0;
+}
+.gemini-api-resource-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  padding: 0 1rem;
+  transition: opacity 0.2s ease-in-out;
+}
+.gemini-api-resource-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  padding: 1rem;
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+.gemini-api-resource-item:hover {
+  text-decoration: none;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  background-color: var(--devsite-background-1);
+}
+.color-scheme--dark .gemini-api-resource-item:hover {
+  background-color: #1f1f1f;
+  box-shadow: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.gemini-api-resource-item .icon-container {
+  margin-bottom: 1rem;
+  color: var(--devsite-primary-text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+}
+.gemini-api-resource-item .google-symbols {
+  font-size: 24px;
+}
+.gemini-api-resource-item .ais-logo {
+  height: 24px;
+  width: auto;
+}
+.gemini-api-resource-item .resource-title {
+  font-family: "Google Sans", Roboto, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--devsite-primary-text-color);
+}
+.gemini-api-resource-item .resource-description {
+  font-size: 0.875rem;
+  color: #5f6368;
+  line-height: 1.5;
+  margin: 0;
+}
+.color-scheme--dark .gemini-api-resource-item .resource-description {
+  color: #9aa0a6;
+}
+@media (max-width: 900px) {
+  .gemini-api-resources-footer {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+}
+@media (max-width: 600px) {
+  .gemini-api-resources-footer {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+      /* Styles inlined from /site-assets/css/models.css */
+:root {
+  --gemini-api-table-font-color: #3c4043;
+  --gemini-api-model-font: 'Google Sans Text', Roboto, sans-serif;
+  --gemini-api-card-width: 17rem;
+  --gemini-api-elevation-1dp: 0 1px 1px 0 rgba(0, 0, 0, 0.14),
+                              0 2px 1px -1px rgba(0, 0, 0, 0.12),
+                              0 1px 3px 0 rgba(0, 0, 0, 0.2);
+  --gemini-api-elevation-3dp: 0 3px 4px 0 rgba(0, 0, 0, 0.14),
+                              0 3px 3px -2px rgba(0, 0, 0, 0.12),
+                              0 1px 8px 0 rgba(0, 0, 0, 0.2);
+}
+body[theme="googledevai-theme"] {
+  --googledevai-button-gradient: var(--googledevai-button-gradient-light);
+}
+body[theme="googledevai-theme"].color-scheme--dark {
+  --googledevai-button-gradient: var(--googledevai-button-gradient-dark);
+}
+.google-symbols {
+  background: -webkit-linear-gradient(45deg, var(--googledevai-blue), var(--googledevai-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  user-select: none;
+  vertical-align: bottom;
+}
+/* Cards */
+@media only screen and (min-width: 625px) {
+  .gemini-api-recommended {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);  /* Three equal-width columns */
+    grid-column-gap: 3rem;  /* Keep the gap between columns */
+  }
+}
+.gemini-api-recommended {
+  width: 100%;  /* Take full width of parent */
+  margin: 0 auto;
+}
+.gemini-api-card {
+  background: var(--devsite-background-1);
+  border: 1px solid var(--googledevai-border-color);
+  border-radius: 9px;
+  box-shadow: var(--gemini-api-elevation-1dp);
+  height: 23rem;
+  margin: 1rem .5rem;
+  padding: 1rem;
+  transition: box-shadow 0.3s ease-in-out;
+  width: var(--gemini-api-card-width);
+}
+.color-scheme--dark .gemini-api-card {
+  background: #131314;
+  border-color: #444746;
+}
+.gemini-api-card:hover {
+  box-shadow: var(--gemini-api-elevation-3dp);
+}
+.gemini-api-card a:empty {
+  display: block;
+  position: relative;
+  height: 23rem;
+  width: var(--gemini-api-card-width);
+  top: -22.8rem;
+  left: -1rem;
+}
+.gemini-api-card a:empty:focus {
+  border: 2px solid var(--devsite-primary-color);
+  border-radius: 9px;
+}
+.gemini-api-card-title {
+  font-family: "Google Sans", Roboto, sans-serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  height: 1.5rem;
+  margin-bottom: 2.5rem;
+  line-height: 1.3rem;
+}
+.gemini-api-card-description {
+  font-size: .9rem;
+  height: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+.gemini-api-card-bulletpoints {
+  color: #757575;
+  font-size: .8rem;
+  height: 8.2rem;
+  margin-left: 1rem;
+  padding: 0;
+}
+.color-scheme--dark .gemini-api-card-bulletpoints {
+  color: var(--devsite-primary-text-color);
+}
+.gemini-api-card-description,
+.gemini-api-card-bulletpoints {
+  font-family: var(--gemini-api-model-font);
+}
+.gemini-api-card-bulletpoints li {
+  line-height: 1rem;
+  margin: .3rem 0;
+}
+/* Tables */
+.gemini-api-model-table,
+.gemini-api-model-table th {
+  color: var(--gemini-api-table-font-color);
+  font: .95rem var(--gemini-api-model-font);
+}
+.color-scheme--dark .gemini-api-model-table,
+.color-scheme--dark .gemini-api-model-table th {
+  color: var(--devsite-primary-text-color);
+}
+.gemini-api-model-table th {
+  font-weight: 500;
+}
+.gemini-api-model-table td:first-child {
+  max-width: 0;
+}
+.gemini-api-model-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-gap: 1rem .5rem;
+}
+.gemini-api-model-table section {
+  display: inline-grid;
+}
+.gemini-api-model-table p {
+  margin: 0 0 .5rem;
+}
+.gemini-api-model-table li {
+  margin: 0;
+}
+.gemini-api-model-table ul {
+  margin-top: .5rem;
+}
+.gemini-api-model-table .google-symbols {
+  margin-right: .7rem;
+  vertical-align: middle;
+}
+.gemini-api-supported,
+.gemini-api-not-supported,
+.gemini-api-experimental,
+.gemini-api-new {
+  border-radius: 8px;
+  display: inline-block;
+  font-size: .9rem;
+  font-weight: 500;
+  line-height: 1rem;
+  padding: .3rem 0.5em;
+}
+.gemini-api-supported {
+  background: #e6f4ea; /* GM3 Green 50 */
+  color: #177d37; /* GM3 Green 700 */
+}
+.gemini-api-not-supported {
+  background: #fce8e6; /* GM3 Red 50 */
+  color: #c5221f; /* GM3 Red 700 */
+}
+.gemini-api-experimental {
+  background: #e8def8;
+  color: #4a4458;
+}
+.gemini-api-new {
+  background: #c2e7ff; /* GM3 Blue 100 */
+  color: #001d35; /* GM3 Blue 900 */
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+.color-scheme--dark .gemini-api-supported {
+  background: #177d37; /* GM3 Green 700 */
+  color: #e6f4ea; /* GM3 Green 50 */
+}
+.color-scheme--dark .gemini-api-not-supported {
+  background: #c5221f; /* GM3 Red 700 */
+  color: #fce8e6; /* GM3 Red 50 */
+}
+.color-scheme--dark .gemini-api-new {
+  background: #004a77; /* GM3 Blue 800 */
+  color: #c2e7ff; /* GM3 Blue 100 */
+}
+/* Buttons */
+.gemini-api-model-button {
+  background: var(--googledevai-button-gradient);
+  background-size: 300% 300%;
+  border-radius: 20rem;
+  color: #001d35;
+  font-family: var(--gemini-api-model-font);
+  font-size: .9rem;
+  font-weight: 500;
+  padding: .6rem 1rem;
+  text-align: center;
+  text-decoration: none;
+  transition: filter .2s ease-in-out,
+              box-shadow .2s ease-in-out;
+}
+.gemini-api-model-button:hover{
+  animation: gradient 5s ease infinite;
+  filter: brightness(.98);
+  box-shadow: var(--gemini-api-elevation-1dp);
+}
+.gemini-api-model-button:focus {
+  filter: brightness(.95);
+  outline: #00639b solid 3px;
+  outline-offset: 2px;
+  text-decoration: none;
+}
+.gemini-api-model-button::before {
+  content: 'spark';
+  font-family: 'Google Symbols';
+  padding-right: 0.5rem;
+  vertical-align: middle;
+}
+@keyframes gradient {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
+}
+.model-card {
+    display: flex;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.3s ease;
+}
+.color-scheme--dark .model-card {
+  background-color: #3c4043;
+}
+.model-card:hover {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+.card-content {
+    padding: 2.5rem;
+    flex: 1;
+}
+.sub-heading-model {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 0.5rem 0;
+}
+.color-scheme--dark .sub-heading-model {
+  color: var(--devsite-primary-text-color);
+}
+.card-content h2 {
+    font-size: 2rem;
+    font-weight: 500;
+    margin: 0 0 1rem 0;
+}
+.description {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #3c4043;
+    margin: 0 0 1.5rem 0;
+}
+.color-scheme--dark .description {
+  color: var(--devsite-primary-text-color);
+}
+.card-content a:not(.gemini-api-model-button) {
+    color: #1a73e8;
+    text-decoration: none;
+    font-weight: 600;
+}
+.card-content a:hover {
+    text-decoration: underline;
+}
+@media (max-width: 768px) {
+    .model-card {
+        flex-direction: column;
+    }
+    .card-content {
+        padding: 1.5rem;
+    }
+    h1 {
+        font-size: 2rem;
+    }
+    .card-content h2 {
+        font-size: 1.5rem;
+    }
+}
+/* --- COMPACT MODEL GRID (2 Columns) --- */
+/* Grid container to create the two-column layout */
+.gemini-model-grid-compact {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* Two equal columns */
+  grid-column-gap: 2rem;
+  grid-row-gap: 1.5rem;
+  margin: 2rem 0;
+}
+/* Individual row styling with stretched-link support */
+.gemini-model-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative; /* Essential for containing the stretched link */
+  padding: 0.75rem;
+  border-radius: 12px;
+  transition: background-color 0.2s ease;
+}
+/* Row hover effect to indicate clickability */
+.gemini-model-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+.color-scheme--dark .gemini-model-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+/* The small square icon card with gradient background */
+.gemini-icon-card-small {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--googledevai-button-gradient-light); /* [cite: 77] */
+  border-radius: 12px;
+  box-shadow: var(--gemini-api-elevation-1dp); /* [cite: 120] */
+  z-index: 2; /* Keeps icon above the clickable link layer */
+}
+.color-scheme--dark .gemini-icon-card-small {
+  background: var(--googledevai-button-gradient-dark); /* [cite: 77] */
+}
+/* Icon styling */
+.gemini-icon-card-small .google-symbols {
+  font-size: 20px;
+  color: #001d35; /* Dark text for contrast against gradient */
+  -webkit-text-fill-color: initial; /* Override transparent fill [cite: 123] */
+}
+/* Text details container */
+.gemini-model-details {
+  display: flex;
+  flex-direction: column;
+}
+.gemini-model-name {
+  font-family: var(--gemini-api-model-font); /* [cite: 119] */
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0 0 2px 0;
+}
+/* Stretched Link Logic */
+.gemini-model-name a {
+  text-decoration: none;
+  color: inherit;
+}
+.gemini-model-name a::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1; /* Expands click area to the entire .gemini-model-row */
+}
+/* Style for optional status text (e.g., experimental, preview) */
+.gemini-model-name .model-status,
+.title-large h3 .model-status {
+  color: #757576; /* Gray meeting minimum 4.5:1 contrast ratio */
+  font-style: italic;
+  margin-left: 0.4rem;
+}
+/* Dark mode adjustment to ensure it stays "light" relative to the background */
+.color-scheme--dark .gemini-model-name .model-status {
+  color: #70757a;
+}
+.gemini-model-desc {
+  font-family: var(--gemini-api-model-font); /* [cite: 133] */
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: #5f6368;
+  margin: 0;
+}
+.color-scheme--dark .gemini-model-desc {
+  color: var(--devsite-primary-text-color); /* [cite: 54] */
+}
+/* --- CENTERED MODEL GRID (3 Cards) --- */
+.gemini-centered-model-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+.gemini-card-centered {
+  background: var(--devsite-background-1); /* [cite: 53] */
+  border: 1px solid var(--googledevai-border-color); /* [cite: 76] */
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  transition: box-shadow 0.3s ease-in-out; /* [cite: 54] */
+  flex: 0 1 calc(33.333% - 1rem);
+  box-sizing: border-box;
+}
+.gemini-card-centered:hover {
+  box-shadow: var(--gemini-api-elevation-3dp); /* [cite: 121] */
+}
+.gemini-card-centered:active,
+.gemini-card-centered:focus {
+  text-decoration: none;
+}
+.gemini-card-centered .title-large {
+  font-family: var(--devsite-primary-font-family); /* [cite: 75] */
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--devsite-primary-text-color);
+  margin: 0.5rem 0 1rem 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+/* Prevents the double-bananas from stacking */
+.gemini-card-centered .title-large span.nano-banana {
+  flex-shrink: 0;
+}
+.gemini-card-centered .description-centered {
+  font-family: var(--gemini-api-model-font); /* [cite: 133] */
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #3c4043;
+  margin: 0;
+}
+.color-scheme--dark .gemini-card-centered .description-centered {
+  color: var(--devsite-primary-text-color);
+}
+/* --- RESPONSIVE BREAKPOINTS --- */
+@media (max-width: 840px) {
+  .gemini-card-centered {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 768px) {
+  .gemini-model-grid-compact {
+    grid-template-columns: 1fr;
+  }
+}
+/* Ensure H3 tags within the model row don't use default large heading styles */
+.gemini-model-details h3.gemini-model-name {
+  font-family: var(--gemini-api-model-font);
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0 0 0 0;
+  border: none; /* Removes default devsite heading borders if any */
+  padding: 0;
+  line-height: 1.3;
+}
+/* Maintain clickability for the heading */
+.gemini-model-details h3.gemini-model-name a {
+  text-decoration: none;
+  color: inherit;
+}
+/* Normalizes the H3 within centered cards to match your existing design */
+.gemini-card-centered .title-large h3 {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  margin: 0;
+  display: inline; /* Keeps it on the same line as the icon */
+  border: none;
+  padding: 0;
+}
+.status-subtext {
+  font-family: var(--gemini-api-model-font);
+  font-style: italic;
+  color: #757576; /* Gray meeting minimum 4.5:1 contrast ratio */
+  text-align: center;
+  margin: 0.25rem 0 0 0; /* Minimal top margin to stay close to description */
+}
+/* Dark mode adjustment */
+.color-scheme--dark .status-subtext {
+  color: #70757a;
+}
+      /* Styles inlined from /site-assets/css/pricing.css */
+/* Pricing table styles */
+.pricing-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pricing-table th {
+  background-color: #f2f2f2;
+  text-align: left;
+  padding: 8px;
+}
+/* Set the second and after (of three total) columns to 35% width. */
+.pricing-table th:nth-child(n+2) {
+  width: 35%;
+}
+/* These should use theme colours for light too, so we don't
+ * need an override. */
+.color-scheme--dark .pricing-table th {
+  background-color: var(--devsite-ref-palette--grey800);
+}
+.pricing-table td {
+    padding: 8px;
+}
+.free-tier {
+  background-color: none;
+}
+.paid-tier {
+  background-color: #eff5ff;
+}
+.color-scheme--dark .paid-tier {
+  background-color: var(--devsite-background-5);
+}
+.pricing-table th:first-child {
+  border-top-left-radius: 8px;
+}
+.pricing-table th:last-child {
+  border-top-right-radius: 8px;
+}
+.pricing-table tr:last-child td:first-child {
+  border-bottom-left-radius: 8px;
+}
+.pricing-table tr:last-child td:last-child {
+  border-bottom-right-radius: 8px;
+}
+.pricing-container {
+    max-width: 1100px;
+    width: 100%;
+}
+.pricing-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    justify-content: center;
+}
+.pricing-card {
+    background-color: #ffffff;
+    border-radius: 16px; 
+    border: 1px solid #dadce0;
+    padding: 2.5rem;
+    display: flex;
+    flex-direction: column; 
+    transition: all 0.3s ease;
+    position: relative; 
+}
+.color-scheme--dark .pricing-card {
+  background-color: var(--devsite-ref-palette--grey800);
+}
+.plan-name {
+    font-size: 1.75rem;
+    font-weight: 700; 
+    margin: 0 0 0.5rem 0;
+}
+.plan-description {
+    font-size: 1rem;
+    color: #5f6368;
+    margin: 0 0 2.5rem 0;
+    line-height: 1.5;
+    min-height: 80px;
+}
+.color-scheme--dark .plan-description {
+  color: var(--devsite-primary-text-color);
+}
+.plan-description a {
+    color: #1a73e8;
+    text-decoration: none;
+}
+.plan-description a:hover {
+    text-decoration: underline;
+}
+.features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2rem 0;
+}
+.features li {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #3c4043;
+}
+.features li.feature-description {
+    display: block;
+    color: #5f6368;
+}
+.features li a {
+    color: #1a73e8;
+    text-decoration: none;
+    margin-left: 4px;
+}
+.features li .material-symbols-outlined {
+    font-size: 24px;
+    margin-right: 0.75rem;
+    color: #3c4043;
+    margin-top: 2px;
+}
+.color-scheme--dark .features li,
+.features li .material-symbols-outlined {
+  color: var(--devsite-primary-text-color);
+}
+.cta-button {
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    box-sizing: border-box;
+    border: 1px solid #dadce0;
+    background-color: #fff;
+    color: #1a73e8;
+    margin-top: auto;
+}
+.cta-button:hover {
+    background-color: rgba(66, 133, 244, 0.05); 
+}
+.pricing-card.recommended {
+    border: 2px solid #1a73e8;
+    overflow: hidden; 
+}
+.pricing-card.recommended::before {
+    position: absolute;
+    top: 22px;
+    right: -32px;
+    width: 120px;
+    height: 30px;
+    background-color: #1a73e8;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transform: rotate(45deg);
+    z-index: 1; 
+}
+.heading-group {
+    display: flex;
+    flex-direction: column;
+}
+.heading-group h2 {
+    margin-bottom: 0;
+}
+.heading-group em {
+    margin-top: 0;
+}
+.row-gray {
+  background-color: #f2f2f2; /* Light gray */
+  color: #666666;
+  font-style: italic;
+}
+.row-gray code {
+  font-style: italic;
+}
+          Gemini 3.8 Flash is now available. 
+Try it out
+.
+          Home
+          Gemini API
+          Docs
+      Gemini Developer API pricing
+Start building free of charge with generous limits, then scale up with
+prepaid then pay-as-you-go pricing for your production ready applications.
+Free
+For developers and small projects getting started with the Gemini API.
+check_circle
+Limited access to certain models
+check_circle
+Free input & output tokens
+check_circle
+Google AI Studio access
+check_circle
+Content used to improve our products
+*
+Get started for Free
+Paid
+For production applications that require higher volumes and advanced features.
+check_circle
+Higher rate limits for production deployments
+check_circle
+Access to Context caching
+check_circle
+Batch API (50% cost reduction)
+check_circle
+Access to Google's most advanced models
+check_circle
+Content 
+not
+ used to improve our products
+*
+Upgrade to Paid
+Enterprise
+For enterprise deployments, powered by 
+Gemini Enterprise Agent Platform
+.
+check_circle
+All features in Paid, plus optional access to:
+check_circle
+Dedicated support channels
+check_circle
+Advanced security & compliance
+check_circle
+Provisioned throughput
+check_circle
+Volume-based discounts (based on usage)
+check_circle
+ML ops, model garden and more
+Contact Sales
+Gemini 3.8 Flash
+gemini-3.8-flash
+Try it in Google AI Studio
+Our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.75 through December 31, 2026.
+$1.50 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$3.75 through December 31, 2026.
+$7.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.075 through December 31, 2026.
+$0.15 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.35 through December 31, 2026.
+$2.70 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$6.75 through December 31, 2026.
+$13.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.135 through December 31, 2026.
+$0.27 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Gemini 3.7 Flash
+gemini-3.7-flash
+Try it in Google AI Studio
+Our high-speed, efficient Flash model built for everyday coding, agentic tool use, and reliable multi-step execution.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.75 through December 31, 2026.
+$1.50 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$3.75 through December 31, 2026.
+$7.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.075 through December 31, 2026.
+$0.15 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.35 through December 31, 2026.
+$2.70 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$6.75 through December 31, 2026.
+$13.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.135 through December 31, 2026.
+$0.27 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Gemini 3.6 Flash
+gemini-3.6-flash
+Try it in Google AI Studio
+Our previous generation Flash model, balancing speed and multimodal capabilities across general agentic and everyday tasks.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.75 through December 31, 2026.
+$1.50 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$3.75 through December 31, 2026.
+$7.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.075 through December 31, 2026.
+$0.15 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.375 through December 31, 2026.
+$0.75 starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$1.875 through December 31, 2026.
+$3.75 starting January 1, 2027.
+Context caching price
+Not available
+$0.0375 through December 31, 2026.
+$0.075 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.35 through December 31, 2026.
+$2.70 starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$6.75 through December 31, 2026.
+$13.50 starting January 1, 2027.
+Context caching price
+Free of charge
+$0.135 through December 31, 2026.
+$0.27 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+Gemini 3.5 Flash
+gemini-3.5-flash
+Try it in Google AI Studio
+Our earlier Flash model, built for speed and foundational performance across
+routine, high-throughput workloads.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.50
+Output price (including thinking tokens)
+Free of charge
+$9.00
+Context caching price
+Free of charge
+$0.15
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.75
+Output price (including thinking tokens)
+Not available
+$4.50
+Context caching price
+Not available
+$0.075
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.75
+Output price (including thinking tokens)
+Not available
+$4.50
+Context caching price
+Not available
+$0.08
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$2.70
+Output price (including thinking tokens)
+Free of charge
+$16.20
+Context caching price
+Free of charge
+$0.27
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+Gemini 3.8 Live, Gemini 3.8 Live Extended Thinking, and Gemini 3.1 Flash Live Preview
+gemini-3.8-live
+, 
+gemini-3.8-live-extended-thinking
+, and 
+gemini-3.1-flash-live-preview
+Try it in Google AI Studio
+Our low-latency, audio-to-audio models optimized for real-time voice agents and
+live dialogue, including background reasoning support with Extended Thinking.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.75 (text)
+$3.00 or $0.005/min (audio)
+$1.00 or $0.002/min (image/video)
+Output price (including thinking tokens)
+Free of charge
+$4.50 (text)
+$12.00 or $0.018/min (audio)
+Grounding with Google Search
+*
+Supported
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+Gemini 3.5 Live Translate
+gemini-3.5-live-translate-preview
+Try it in Google AI Studio
+Our low-latency, real-time speech to speech translation model that supports 70+ languages.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$3.50 or $0.0053/min
+*
+ (audio)
+Output price (including thinking tokens)
+Free of charge
+$21.00 or $0.0315/min
+*
+ (audio)
+Used to improve our products
+Yes
+No
+*
+ Billing is based on total input and output audio token consumption, calculated at a rate of 25 tokens per second of audio, equating to an effective price of approximately $0.0368 per minute.
+Gemini 3.5 Transcribe Live
+gemini-3.5-transcribe-live
+Try it in Google AI Studio
+Our low-latency, real-time speech-to-text model for bidirectional streaming audio transcription over WebSockets.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$3.50 or $0.005/min
+*
+ (audio)
+Output price (including thinking tokens)
+Free of charge
+$21.00 or $0.004/min
+*
+ (text)
+Grounding with Google Search
+Not Supported
+Used to improve our products
+Yes
+No
+*
+ Estimated pricing is based on 25 audio tokens per second for input
+and 175 text tokens per minute for output, for an effective blended rate of
+~$0.009 per min for Live Transcribe.
+Gemini 3.5 Transcribe
+gemini-3.5-transcribe
+Try it in Google AI Studio
+Our speech-to-text model with automatic language detection, speaker diarization, word-level timestamps, and custom vocabulary biasing.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$2.00 or $0.003/min
+*
+ (audio)
+Output price (including thinking tokens)
+Free of charge
+$12.00 or $0.002/min
+*
+ (text)
+Grounding with Google Search
+Not Supported
+Used to improve our products
+Yes
+No
+*
+ Estimated pricing is based on 25 audio tokens per second for input
+and 175 text tokens per minute for output, for an effective blended rate of
+~$0.005 per min for Transcribe.
+Gemini 3.5 Flash-Lite
+gemini-3.5-flash-lite
+Try it in Google AI Studio
+A cost-efficient model, optimized for high-volume agentic tasks,
+translation, and simple data processing.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.30 (text / image / video / audio)
+Output price (including thinking tokens)
+Free of charge
+$2.50
+Context caching price
+Not available
+$0.03
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.15 (text / image / video / audio)
+Output price (including thinking tokens)
+Free of charge
+$1.25
+Context caching price
+Not available
+$0.02
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.15 (text / image / video / audio)
+Output price (including thinking tokens)
+Free of charge
+$1.25
+Context caching price
+Not available
+$0.02
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.54 (text / image / video / audio)
+Output price (including thinking tokens)
+Free of charge
+$4.50
+Context caching price
+Not available
+$0.05
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+**
+ Can be tested in Google AI Studio.
+Gemini 3.1 Flash-Lite
+gemini-3.1-flash-lite
+Try it in Google AI Studio
+A cost-efficient model, optimized for high-volume agentic tasks,
+translation, and simple data processing.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.25 (text / image / video)
+$0.50 (audio)
+Output price (including thinking tokens)
+Free of charge
+$1.50
+Context caching price
+Not available
+$0.025 (text / image / video)
+$0.05 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.125 (text / image / video)
+$0.25 (audio)
+Output price (including thinking tokens)
+Free of charge
+$0.75
+Context caching price
+Not available
+$0.0125 (text / image / video)
+$0.025 (audio)
+$0.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.125 (text / image / video)
+$0.25 (audio)
+Output price (including thinking tokens)
+Free of charge
+$0.75
+Context caching price
+Not available
+$0.0125 (text / image / video)
+$0.025 (audio)
+$0.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.45 (text / image / video)
+$0.90 (audio)
+Output price (including thinking tokens)
+Free of charge
+$2.70
+Context caching price
+Not available
+$0.045 (text / image / video)
+$0.09 (audio)
+$1.80 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+Gemini Omni Flash
+gemini-omni-1.1-flash
+Try it in Google AI Studio
+Our next-generation video generation and editing model, now generally available
+to developers on the paid tier of the Gemini API.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.50 (text / image / video / audio)
+Output price (including thinking tokens)
+Not available
+$9.00 (text)
+$17.50 (video)
+*
+Used to improve our products
+Yes
+No
+*
+ Billing is based on total output token consumption, calculated at
+a rate of 5,792 tokens per second of 720p video. Under Standard pricing, this
+equates to an effective price of approximately $0.10 per second.
+Gemini Omni Flash Preview
+gemini-omni-flash-preview
+Try it in Google AI Studio
+Our next-generation video generation and editing model.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.50 (text / image / video / audio)
+Output price (including thinking tokens)
+Not available
+$9.00 (text)
+$17.50 (video)
+*
+Used to improve our products
+Yes
+No
+*
+ Billing is based on total output token consumption, calculated at a rate of 5,792 tokens per second of 720p video. Under Standard pricing, this equates to an effective price of approximately $0.10 per second.
+Gemini 3.1 Pro Preview
+gemini-3.1-pro-preview
+ and 
+gemini-3.1-pro-preview-customtools
+Try it in Google AI Studio
+Our 3rd generation Pro model, built for multimodal understanding,
+agentic capabilities, and vibe-coding.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$2.00, prompts 
+$4.00, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$12.00, prompts 
+$18.00, prompts > 200k
+Context caching price
+Not available
+$0.20, prompts 
+$0.40, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.00, prompts 
+$2.00, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$6.00, prompts 
+$9.00, prompts > 200k
+Context caching price
+Not available
+Same as Standard
+        $0.20, prompts 
+$0.40, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.00, prompts 
+$2.00, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$6.00, prompts 
+$9.00, prompts > 200k
+Context caching price
+Not available
+Same as Standard
+        $0.20, prompts 
+$0.40, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$3.60, prompts 
+$7.20, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$21.60, prompts 
+$32.40, prompts > 200k
+Context caching price
+Not available
+$0.36, prompts 
+$0.72, prompts > 200k
+$8.10 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+Gemini 3.1 Flash Image (Nano Banana 2) 🍌
+gemini-3.1-flash-image
+Try it in Google AI Studio
+Designed for speed and efficiency, the Gemini 3.1 Flash Image generation model is
+effective for quick, interactive responses and high throughput.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.50 (text/image)
+Output price
+Not available
+$3 (text and thinking)
+        $60.00 (images)
+        Equivalent to $0.045 per 0.5K image
+*
+        $0.067 per 1K image
+*
+,
+        $0.101 per 2K image
+*
+,
+        and $0.151 per 4K image
+*
+.
+Grounding with Google Web and Image Search
+**
+Not available
+***
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests for text and image-based grounding.
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text, image)
+Output price
+Not available
+$1.50 (text and thinking)
+        $30.00 (images)
+        Equivalent to $0.022 per 0.5K image
+*
+        $0.034 per 1K image
+*
+,
+        $0.050 per 2K image
+*
+,
+        and $0.076 per 4K image
+*
+.
+Used to improve our products
+Yes
+No
+*
+ Image output is priced at $60 per 1,000,000 tokens.
+Output images at 0.5K (512px) consume 747 tokens and are equivalent to $0.045 per
+image. Output images at 1K (1024x1024px) consume 1120 tokens and are equivalent
+to $0.067 per image. Output images at 2K (2048x2048px) consume 1680 tokens and
+are equivalent to $0.101 per image. Output images at 4K (4096x4096px) consume
+2520 tokens and are equivalent to $0.151 per image.
+**
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed. Retrieved context (text or images) provided by Grounding with Google
+Search is not charged as input tokens.
+***
+ Can be tested in Google AI Studio.
+Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) 🍌
+gemini-3.1-flash-lite-image
+Try it in Google AI Studio
+Designed as the efficiency specialist of the image generation family, the Gemini 3.1
+Flash Lite Image model is designed for ultra-low latency and cost-effective image
+generation and editing.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text/image/video)
+Output price
+Not available
+$1.50 (text and thinking)
+        $30.00 (images)
+        Equivalent to $0.0336 per 1K resolution image
+*
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.125 (text/image/video)
+Output price
+Not available
+$0.75 (text and thinking)
+        $15.00 (images)
+        Equivalent to $0.0168 per 1K resolution image
+*
+Used to improve our products
+Yes
+No
+*
+ Image output is priced at $30 per 1,000,000 tokens. Output images at 1K (1024x1024px) consume 1120 tokens and are equivalent to $0.0336 per image.
+Gemini 3.8 Flash TTS
+gemini-3.8-flash-tts
+Try it in Google AI Studio
+Our 3.8 Flash Text-to-Speech audio model engineered for studio-grade voice fidelity, expressive acting, and long-form stability.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.50 (text) through December 31, 2026.
+$1.00 (text) starting January 1, 2027.
+Output price
+Free of charge
+$9.00 (audio) through December 31, 2026.
+$18.00 (audio) starting January 1, 2027.
+Equivalent to $0.00225 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.0045 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Free of charge
+$0.125 (input caching) through December 31, 2026.
+$0.25 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text) through December 31, 2026.
+$0.50 (text) starting January 1, 2027.
+Output price
+Not available
+$4.50 (audio) through December 31, 2026.
+$9.00 (audio) starting January 1, 2027.
+Equivalent to $0.001125 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.00225 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Not available
+$0.0625 (input caching) through December 31, 2026.
+$0.125 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text) through December 31, 2026.
+$0.50 (text) starting January 1, 2027.
+Output price
+Not available
+$4.50 (audio) through December 31, 2026.
+$9.00 (audio) starting January 1, 2027.
+Equivalent to $0.001125 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.00225 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Not available
+$0.025 (input caching) through December 31, 2026.
+$0.05 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.90 (text) through December 31, 2026.
+$1.80 (text) starting January 1, 2027.
+Output price
+Free of charge
+$16.20 (audio) through December 31, 2026.
+$32.40 (audio) starting January 1, 2027.
+Equivalent to $0.00405 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.0081 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Free of charge
+$0.225 (input caching) through December 31, 2026.
+$0.45 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+*
+ Audio tokens correspond to 25 tokens per second of audio.
+Gemini 3.8 Flash-Lite TTS
+gemini-3.8-flash-lite-tts
+Try it in Google AI Studio
+Our 3.8 Flash-Lite Text-to-Speech audio model optimized for high-throughput, low-latency, and cost-efficient conversational speech.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.50 (text) through December 31, 2026.
+$1.00 (text) starting January 1, 2027.
+Output price
+Free of charge
+$6.00 (audio) through December 31, 2026.
+$12.00 (audio) starting January 1, 2027.
+Equivalent to $0.0015 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.003 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Free of charge
+$0.125 (input caching) through December 31, 2026.
+$0.25 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text) through December 31, 2026.
+$0.50 (text) starting January 1, 2027.
+Output price
+Not available
+$3.00 (audio) through December 31, 2026.
+$6.00 (audio) starting January 1, 2027.
+Equivalent to $0.00075 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.0015 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Not available
+$0.0625 (input caching) through December 31, 2026.
+$0.125 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text) through December 31, 2026.
+$0.50 (text) starting January 1, 2027.
+Output price
+Not available
+$3.00 (audio) through December 31, 2026.
+$6.00 (audio) starting January 1, 2027.
+Equivalent to $0.00075 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.0015 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Not available
+$0.025 (input caching) through December 31, 2026.
+$0.05 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.90 (text) through December 31, 2026.
+$1.80 (text) starting January 1, 2027.
+Output price
+Free of charge
+$10.80 (audio) through December 31, 2026.
+$21.60 (audio) starting January 1, 2027.
+Equivalent to $0.0027 per 10s audio
+*
+ through December 31, 2026.
+Equivalent to $0.0054 per 10s audio
+*
+ starting January 1, 2027.
+Context caching price
+Free of charge
+$0.225 (input caching) through December 31, 2026.
+$0.45 (input caching) starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Used to improve our products
+Yes
+No
+*
+ Audio tokens correspond to 25 tokens per second of audio.
+Gemini 3.1 Flash TTS Preview
+gemini-3.1-flash-tts-preview
+Try it in Google AI Studio
+Our 3.1 Flash Text-to-Speech audio model optimized for price-performant,
+low-latency, controllable speech generation.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.00 (text)
+Output price
+Free of charge
+$20.00 (audio)
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.50 (text)
+Output price
+Not available
+$10.00 (audio)
+Used to improve our products
+Yes
+No
+*
+ Audio tokens correspond to 25 tokens per second of audio.
+Gemini 3 Flash Preview
+gemini-3-flash-preview
+Try it in Google AI Studio
+Our legacy Flash model, providing baseline speed and intelligence.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.50 (text / image / video)
+$1.00 (audio)
+Output price (including thinking tokens)
+Free of charge
+$3.00
+Context caching price
+Free of charge
+$0.05 (text / image / video)
+$0.10 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text / image / video)
+$0.50 (audio)
+Output price (including thinking tokens)
+Not available
+$1.50
+Context caching price
+Not available
+Same as Standard
+        $0.05 (text / image / video)
+        $0.10 (audio)
+        $1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text / image / video)
+$0.50 (audio)
+Output price (including thinking tokens)
+Not available
+$1.50
+Context caching price
+Not available
+Same as Standard
+        $0.05 (text / image / video)
+        $0.10 (audio)
+        $1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 requests per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.90 (text / image / video)
+$1.80 (audio)
+Output price (including thinking tokens)
+Free of charge
+$5.40
+Context caching price
+Free of charge
+$0.09 (text / image / video)
+$0.18 (audio)
+$1.80 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+*
+Not available
+**
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Grounding with Google Maps
+Not available
+**
+5,000 prompts per month (free, shared across Gemini 3), then $14 / 1,000 search queries
+Used to improve our products
+Yes
+No
+*
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+**
+ Can be tested in Google AI Studio.
+Gemini 3 Pro Image (Nano Banana Pro) 🍌
+gemini-3-pro-image
+Try it in Google AI Studio
+Our native image generation model, optimized for speed, flexibility, and
+contextual understanding. 
+Text input and output
+ is priced the same as
+Gemini 3.1 Pro
+.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$2.00 (text/image),
+      equivalent to $0.0011 per image
+*
+Output price
+Not available
+$12.00 (text and thinking)
+        $120.00 (images)
+        Equivalent to $0.134 per 1K/2K image
+**
+        and $0.24 per 4K image
+**
+Grounding with Google Search
+***
+Not available
+****
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.00 (text),
+$0.0006 (image)
+*
+Output price
+Not available
+$6.00 (text and thinking)
+        $0.067 per 1K/2K image
+**
+        $0.12 per 4K image
+**
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.00 (text),
+$0.0006 (image)
+*
+Output price
+Not available
+$6.00 (text and thinking)
+        $0.067 per 1K/2K image
+**
+        $0.12 per 4K image
+**
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$3.60 (text/image)
+Output price
+Not available
+$21.60 (text and thinking)
+        $216.00 (images)
+Grounding with Google Search
+***
+Not available
+****
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+*
+ Image input is set at 560 tokens or $0.0011 per image.
+**
+ Image output is priced at $120 per 1,000,000 tokens. Output
+images from 1024x1024px (1K) and up to 2048x2048px (2K) consume 1120 tokens and
+are equivalent to $0.134 per image. Output images up to 4096x4096px (4K) consume
+2000 tokens and are equivalent to $0.24 per image.
+***
+ A customer-submitted request to Gemini may result in one or more
+queries to Google Search. You will be charged for each individual search query
+performed.
+****
+ Can be tested in Google AI Studio.
+Gemini 2.5 Pro
+gemini-2.5-pro
+Try it in Google AI Studio
+A Pro model which excels at coding and complex reasoning tasks.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.25, prompts 
+$2.50, prompts > 200k tokens
+Output price (including thinking tokens)
+Free of charge
+$10.00, prompts 
+$15.00, prompts > 200k
+Context caching price
+Not available
+$0.125, prompts 
+$0.25, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+10,000 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.625, prompts 
+$1.25, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$5.00, prompts 
+$7.50, prompts > 200k
+Context caching price
+Not available
+$0.125, prompts 
+$0.25, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.625, prompts 
+$1.25, prompts > 200k tokens
+Output price (including thinking tokens)
+Not available
+$5.00, prompts 
+$7.50, prompts > 200k
+Context caching price
+Not available
+$0.125, prompts 
+$0.25, prompts > 200k
+$4.50 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$2.25, prompts 
+$4.50, prompts > 200k tokens
+Output price (including thinking tokens)
+Free of charge
+$18.00, prompts 
+$27.00, prompts > 200k
+Context caching price
+Not available
+$0.225, prompts 
+$0.45, prompts > 200k
+$8.10 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+10,000 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Gemini 2.5 Flash
+gemini-2.5-flash
+Try it in Google AI Studio
+Our first hybrid reasoning model which supports a 1M token context window and
+has thinking budgets.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.30 (text / image / video)
+$1.00 (audio)
+Output price (including thinking tokens)
+Free of charge
+$2.50
+Context caching price
+Not available
+$0.03 (text / image / video)
+$0.1 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Free of charge, up to 500 RPD (limit shared with Flash-Lite RPD)
+1,500 RPD (free, limit shared with Flash-Lite RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+500 RPD
+1,500 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.15 (text / image / video)
+$0.50 (audio)
+Output price (including thinking tokens)
+Not available
+$1.25
+Context caching price
+Not available
+$0.03 (text / image / video)
+$0.1 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free, limit shared with Flash-Lite RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.15 (text / image / video)
+$0.50 (audio)
+Output price (including thinking tokens)
+Not available
+$1.25
+Context caching price
+Not available
+$0.03 (text / image / video)
+$0.1 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free, limit shared with Flash-Lite RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.54 (text / image / video)
+$1.80 (audio)
+Output price (including thinking tokens)
+Free of charge
+$4.50
+Context caching price
+Not available
+$0.054 (text / image / video)
+$0.18 (audio)
+$1.80 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Free of charge, up to 500 RPD (limit shared with Flash-Lite RPD)
+1,500 RPD (free, limit shared with Flash-Lite RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+500 RPD
+1,500 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Gemini 2.5 Flash-Lite
+gemini-2.5-flash-lite
+Try it in Google AI Studio
+A small and cost effective model, built for at scale usage.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price (text, image, video)
+Free of charge
+$0.10 (text / image / video)
+$0.30 (audio)
+Output price (including thinking tokens)
+Free of charge
+$0.40
+Context caching price
+Not available
+$0.01 (text / image / video)
+$0.03 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Free of charge, up to 500 RPD (limit shared with Flash RPD)
+1,500 RPD (free, limit shared with Flash RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+500 RPD
+1,500 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price (text, image, video)
+Not available
+$0.05 (text / image / video)
+$0.15 (audio)
+Output price (including thinking tokens)
+Not available
+$0.20
+Context caching price
+Not available
+$0.01 (text / image / video)
+$0.03 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free, limit shared with Flash RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price (text, image, video)
+Not available
+$0.05 (text / image / video)
+$0.15 (audio)
+Output price (including thinking tokens)
+Not available
+$0.20
+Context caching price
+Not available
+$0.01 (text / image / video)
+$0.03 (audio)
+$1.00 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Not available
+1,500 RPD (free, limit shared with Flash RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price (text, image, video)
+Free of charge
+$0.18 (text / image / video)
+$0.54 (audio)
+Output price (including thinking tokens)
+Free of charge
+$0.72
+Context caching price
+Not available
+$0.018 (text / image / video)
+$0.054 (audio)
+$1.80 / 1,000,000 tokens per hour (storage price)
+Grounding with Google Search
+Free of charge, up to 500 RPD (limit shared with Flash RPD)
+1,500 RPD (free, limit shared with Flash RPD), then $35 / 1,000 grounded prompts
+Grounding with Google Maps
+500 RPD
+1,500 RPD (free), then $25 / 1,000 grounded prompts
+Used to improve our products
+Yes
+No
+Gemini 2.5 Flash Native Audio (Live API)
+gemini-2.5-flash-native-audio-preview-12-2025
+Try it in Google AI Studio
+Our 
+Live API
+ native audio models optimized for higher
+quality audio outputs with better pacing, voice naturalness, verbosity, and
+mood.
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.50 (text)
+$3.00 (audio / video)
+Output price (including thinking tokens)
+Free of charge
+$2.00 (text)
+$12.00 (audio)
+Used to improve our products
+Yes
+No
+Gemini 2.5 Flash Image (Nano Banana) 🍌
+gemini-2.5-flash-image
+Try it in Google AI Studio
+Warning:
+ Gemini 2.5 Flash Image (
+gemini-2.5-flash-image
+) is 
+deprecated
+ and will be shut down on October 2, 2026; migrate to 
+Gemini 3.1 Flash Image
+ or 
+Gemini 3.1 Flash Lite Image
+ to avoid service disruption.
+A native image generation model, optimized for speed, flexibility, and
+contextual understanding. Text input and output is priced the same as
+2.5 Flash
+.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.30 (text / image)
+Output price
+Not available
+$0.039 per image*
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.15 (text / image)
+Output price
+Not available
+$0.0195 per image*
+Used to improve our products
+Yes
+No
+Flex
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.15 (text / image)
+Output price
+Not available
+$0.0195 per image*
+Used to improve our products
+Yes
+No
+Priority
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.54 (text / image)
+Output price
+Not available
+$0.0702 per image*
+Used to improve our products
+Yes
+No
+[*] Image output is priced at $30 per 1,000,000 tokens. Output images up to
+1024x1024px consume 1290 tokens and are equivalent to $0.039 per image.
+Gemini 2.5 Flash Preview TTS
+gemini-2.5-flash-preview-tts
+Try it in Google AI Studio
+Our 2.5 Flash text-to-speech audio model optimized for price-performant,
+low-latency, controllable speech generation.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$0.50 (text)
+Output price
+Free of charge
+$10.00 (audio)
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.25 (text)
+Output price
+Not available
+$5.00 (audio)
+Used to improve our products
+Yes
+No
+Gemini 2.5 Pro Preview TTS
+gemini-2.5-pro-preview-tts
+Try it in Google AI Studio
+Our 2.5 Pro text-to-speech audio model optimized for powerful, low-latency
+speech generation for more natural outputs and easier to steer prompts.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$1.00 (text)
+Output price
+Not available
+$20.00 (audio)
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.50 (text)
+Output price
+Not available
+$10.00 (audio)
+Used to improve our products
+Yes
+No
+Veo 3.1
+veo-3.1-generate-preview
+, 
+veo-3.1-fast-generate-preview
+, 
+veo-3.1-lite-generate-preview
+Try Veo 3.1
+A fast video generation model.
+Free Tier
+Paid Tier, per second in USD
+Veo 3.1 Standard video with audio price (default)
+Not available
+$0.40 (720p and 1080p)
+$0.60 (4k)
+Veo 3.1 Fast video with audio price (default)
+Not available
+$0.10 (720p)
+$0.12 (1080p)
+$0.30 (4k)
+Veo 3.1 Lite video with audio price (default)
+Not available
+$0.05 (720p)
+$0.08 (1080p)
+(4k output not supported)
+Used to improve our products
+Yes
+No
+Note:
+ In some cases, an audio processing issue may prevent a video from being
+generated. You will only be charged if your video is successfully generated.
+Lyria 3.5
+lyria-3.5
+Google's music generation model.
+Free Tier
+Paid Tier, per request in USD
+Lyria 3.5 (Full Song)
+Not available
+$0.08 per song
+Used to improve our products
+Yes
+No
+Lyria 3
+lyria-3-clip-preview
+ and 
+lyria-3-pro-preview
+Google's family of legacy music generation models.
+Free Tier
+Paid Tier, per request in USD
+Lyria 3 Clip Preview (30s)
+Not available
+$0.04 per song
+Lyria 3 Pro Preview (Full Song)
+Not available
+$0.08 per song
+Used to improve our products
+Yes
+No
+Gemini Embedding 2
+gemini-embedding-2
+Try the API
+Our first multimodal embedding model, mapping text, images, video, audio, and
+PDFs into a unified embedding space.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Text input price
+Free of charge
+$0.20
+Image input price
+Free of charge
+$0.45 ($0.00012 per image)
+Audio input price
+Free of charge
+$6.50 ($0.00016 per second)
+Video input price
+Free of charge
+$12.00 ($0.00079 per frame)
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Text input price
+Not available
+$0.10
+Image input price
+Not available
+$0.225 ($0.00006 per image)
+Audio input price
+Not available
+$3.25 ($0.00008 per second)
+Video input price
+Not available
+$6.00 ($0.000395 per frame)
+Used to improve our products
+Yes
+No
+Gemini Robotics ER 2 Preview
+gemini-robotics-er-2-preview
+Try it in Google AI Studio
+Gemini Robotics ER 2, short for Gemini Robotics Embodied Reasoning 2, is a
+vision-language model endpoint that enables robots to understand their environments
+precisely, supporting agentic orchestration of robots, video progress
+understanding, multi-robot collaboration, and advanced spatial reasoning.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.00 (text / image / video / audio) through December 31, 2026.
+$2.00 (text / image / video / audio) starting January 1, 2027.
+Output price (including thinking tokens)
+Free of charge
+$5.00 through December 31, 2026.
+$10.00 starting January 1, 2027.
+Context caching price
+Not available
+$0.10 through December 31, 2026.
+$0.20 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+Not available
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+Batch
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Not available
+$0.50 (text / image / video / audio) through December 31, 2026.
+$1.00 (text / image / video / audio) starting January 1, 2027.
+Output price (including thinking tokens)
+Not available
+$2.50 through December 31, 2026.
+$5.00 starting January 1, 2027.
+Context caching price
+Not available
+$0.05 through December 31, 2026.
+$0.10 starting January 1, 2027.
+$0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026.
+$1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+Grounding with Google Search
+Not available
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+Gemini Robotics ER 2 Streaming Preview
+gemini-robotics-er-2-streaming-preview
+Try it in Google AI Studio
+Gemini Robotics ER 2 Streaming is a vision-language model endpoint for robotics
+optimized for real-time text streaming using the Live API. It accepts text,
+image, video, and audio input and supports bidirectional streaming with
+function calling.
+Standard
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+$1.00 (text / image / video / audio) through December 31, 2026.
+$2.00 (text / image / video / audio) starting January 1, 2027.
+Output price
+Free of charge
+$5.00 through December 31, 2026.
+$10.00 starting January 1, 2027.
+Grounding with Google Search
+Not available
+5,000 free search requests per month (shared across all Gemini 3.x models), then $14 per 1,000 requests.
+Used to improve our products
+Yes
+No
+Gemma 4
+Our lightweight, state-of the art, open model built from the same technology
+that powers our Gemini models.
+Free Tier
+Paid Tier, per 1M tokens in USD
+Input price
+Free of charge
+Not available
+Output price
+Free of charge
+Not available
+Context caching price
+Free of charge
+Not available
+Context caching (storage)
+Free of charge
+Not available
+Tuning price
+Not available
+Not available
+Grounding with Google Search
+Not available
+Not available
+Used to improve our products
+Yes
+No
+Pricing for tools
+Tools are priced at their own rates, applied to the model using them.
+Check the 
+Models
+ page for which tools are available
+to each model.
+Free Tier
+Paid Tier, per 1M tokens in USD
+Google Search
+500 RPD free (limit shared for Flash and Flash-Lite).
+Not available for Pro.
+Gemini 2.5 models:
+          1,500 RPD free (limit shared for Flash and Flash-Lite).
+Then $35 / 1,000 grounded prompts
+          Gemini 3 models:
+          5,000 free search requests per month (shared across all Gemini models), then $14 per 1,000 requests.
+Google Maps
+500 RPD
+Not available for Pro.
+1,500 RPD free (limit shared for Flash and Flash-Lite)
+10,000 RPD free for Pro.
+Then $25 / 1,000 grounded prompts
+Code execution
+Free of charge
+        Code execution is billed at the standard token rates for the selected model.
+        Costs are determined solely by the tool's usage, no charges are accrued
+        for the session runtime. The generated code and execution results are billed as
+Output tokens
+ when created, and as
+Input tokens
+ when the model uses them as part of its
+        iterative reasoning process.
+URL context
+Free of charge
+Charged as input tokens per model pricing.
+Computer use
+Not available
+Charged as regular tokens per model pricing (e.g., standard 
+Gemini 3.8 Flash
+ pricing).
+File search
+Free of charge
+Charged for 
+embeddings
+ at $0.15 / 1M tokens.
+Retrieved document tokens charged as regular tokens per model pricing.
+Custom Tools endpoint (Gemini 3.1 Pro Preview)
+Not available
+Same as 
+Gemini 3.1 Pro Preview
+ pricing
+Pricing for agents
+Agent usage costs are calculated based on the underlying token
+consumption and usage of the tools.
+Model
+Tools
+Gemini Deep Research agent
+All model inference is charged at standard Gemini list rates,
+          including input, output, and intermediate input / reasoning tokens generated
+          during agentic loops.
+Tool usage fees apply per existing pricing
+          structure, maintaining standard distinctions for Search Grounding (retrieved
+          tokens excluded) versus Url_context / File Search (retrieved tokens included in
+          all other tools).
+Managed agents in Gemini API
+All model inference is charged at standard Gemini list rates,
+          including input, output, and intermediate input / reasoning tokens generated
+          during agentic loops. (See 
+pricing details
+).
+Environment compute (CPU, memory, sandbox execution) is not billed during the preview period.
+Antigravity Agent
+All model inference is charged at standard Gemini list rates,
+          including input, output, and intermediate input / reasoning tokens generated
+          during agentic loops. (See 
+pricing details
+).
+Environment compute (CPU, memory, sandbox execution) is not billed during the preview period.
+Notes
+Agentic video understanding:
+ When using agentic video understanding,
+token usage is variable based on the content loaded by the model rather than
+full video length. This typically results in up to 88% fewer input tokens for
+long-form video, though token counts depend on query complexity and dynamic
+sampling depth (which may exceed 1 FPS for detailed visual segments). See
+Agentic video understanding
+.
+Document token billing:
+ Tokens for the 
+DOCUMENT
+ modality (for example, PDFs) are billed at the image token rate. In API responses, these tokens appear under the 
+DOCUMENT
+ modality within 
+promptTokensDetails
+.
+Google AI Studio usage is free of charge in all 
+available regions
+. See 
+Billing FAQs
+ for details.
+Prices may differ from the prices listed here and the prices offered on
+Gemini Enterprise Agent Platform. For Gemini Enterprise Agent Platform prices, see the 
+Gemini Enterprise Agent Platform pricing page
+.
+If you are using 
+dynamic retrieval
+ to
+optimize costs, only requests that contain at least one grounding support URL
+from the web in their response are charged for Grounding with Google Search.
+Costs for Gemini always apply. Rate limits are subject to change.
+Except as otherwise noted, the content of this page is licensed under the 
+Creative Commons Attribution 4.0 License
+, and code samples are licensed under the 
+Apache 2.0 License
+. For details, see the 
+Google Developers Site Policies
+. Java is a registered trademark of Oracle and/or its affiliates.
+Last updated 2026-10-01 UTC.
+      [[["Easy to understand","easyToUnderstand","thumb-up"],["Solved my problem","solvedMyProblem","thumb-up"],["Other","otherUp","thumb-up"]],[["Missing the information I need","missingTheInformationINeed","thumb-down"],["Too complicated / too many steps","tooComplicatedTooManySteps","thumb-down"],["Out of date","outOfDate","thumb-down"],["Samples / code issue","samplesCodeIssue","thumb-down"],["Other","otherDown","thumb-down"]],["Last updated 2026-10-01 UTC."],[],[]]
+          Terms
+          Privacy
+          Manage cookies
+English
+Deutsch
+Español – América Latina
+Français
+Indonesia
+Italiano
+Polski
+Português – Brasil
+Shqip
+Tiếng Việt
+Türkçe
+Русский
+עברית
+العربيّة
+فارسی
+हिंदी
+বাংলা
+ภาษาไทย
+中文 – 简体
+中文 – 繁體
+日本語
+한국어

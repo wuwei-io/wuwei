@@ -16,6 +16,7 @@ export type RunEmployeeArgs = {
   onPermission?: (name: string, input: unknown) => Promise<'allow' | 'deny'>;
   images?: string[];
   providerOverride?: Provider;
+  providerBinding?: { providerId: string; model: string };
   reportOrigin?: TaskReportScope['origin'];
   taskReportScope?: TaskReportScope;
   employee: Employee;
@@ -251,7 +252,7 @@ function pushAndBroadcast(
  * 互相看不到对方本轮的回复。这是刻意的——串行会让后发言的人被先发言的带偏，
  * 而且慢得多。要让他们互相接话，用户再发一句（或 @ 对方）即可，下一轮就能看到。
  */
-export async function runRoomTurn(roomId: string, userText: string, deps: OrchestratorDeps, options: { images?: string[] } = {}): Promise<void> {
+export async function runRoomTurn(roomId: string, userText: string, deps: OrchestratorDeps, options: { images?: string[]; mentions?: string[] } = {}): Promise<void> {
   const room = loadRooms().find((r) => r.id === roomId);
   if (!room) return;
   const text = (userText || "").trim();
@@ -263,7 +264,9 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     .filter((e): e is Employee => !!e);
 
   // 1. 人类这句话先落盘并广播（不管忙不忙、有没有人被唤醒，都立刻显示 + 留在上下文里）
-  const responders = pickResponders(
+  const responders = options.mentions?.length
+    ? (options.mentions.includes('*') ? members.map(m => m.id) : [...new Set(options.mentions)].filter(id => members.some(m => m.id === id))).slice(0, room.maxWake ?? 3)
+    : pickResponders(
     text,
     members.map((m) => ({ id: m.id, name: m.name })),
     room.coordinator,

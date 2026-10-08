@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import WebSocket from 'ws';
-import { startRelayClient, stopRelayClient, setRemoteExecutor, setRemoteRoomExecutor } from '../desktop/main/relay-client.js';
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor } from '../desktop/main/relay-client.js';
 import { runRemoteSessionTurn } from '../desktop/main/remote-sessions.js';
 import { Agent } from '../src/agent/loop.js';
 import { TOOL_MAP } from '../src/tools/index.js';
@@ -15,7 +15,8 @@ async function main() {
   await app.whenReady();
   mkdirSync(root, { recursive: true });
   writeFileSync(join(root, 'config.json'), JSON.stringify(config));
-  writeFileSync(join(root, 'auth.json'), JSON.stringify({ access_token: 'local-fixture', expires_at: Math.floor(Date.now() / 1000) + 3600 }));
+  const token = process.env.WUWEI_REMOTE_TEST_TOKEN || 'local-fixture';
+  writeFileSync(join(root, 'auth.json'), JSON.stringify({ access_token: token, expires_at: Math.floor(Date.now() / 1000) + 3600 }));
   writeFileSync(join(root, 'device-id'), 'wd_00000000000000000000000000000000');
   const base = process.env.WUWEI_RELAY_WS!; const requests: any[] = []; let saved: any[] = [], updates = 0;
   const tools = [TOOL_MAP.get('ask_decision')!]; let step = 0;
@@ -45,12 +46,12 @@ async function main() {
   const http = base.replace(/^ws/, 'http').replace(/\/ws$/, '/devices');
   let online = false;
   for (let i = 0; i < 60; i++) {
-    const data = await fetch(http, { headers: { Authorization: 'Bearer local-fixture' } }).then(r => r.json());
+    const data = await fetch(http, { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json());
     if (data.devices.some((d: any) => d.deviceId === 'wd_00000000000000000000000000000000')) { online = true; break; }
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   assert.ok(online, 'actual desktop relay connection must register');
-  const options = { url: base + '?token=local-fixture', socketFactory: (url: string) => new WebSocket(url) as any };
+  const options = { url: base + '?token=' + encodeURIComponent(token), socketFactory: (url: string) => new WebSocket(url) as any };
   const req = async (method: string, params?: unknown) => {
     let data: any;
     await runRelayConversation({ ...options, request: { type: 'req', reqId: 'q-' + Math.random(), targetDeviceId: 'wd_00000000000000000000000000000000', method, params },
@@ -62,6 +63,13 @@ async function main() {
     onMessage: m => {
       frames.push(m);
       if (m.type === 'decision') approval = (async () => {
+        refreshRelayClient();
+        let restored = false;
+        for (let i = 0; i < 40; i++) {
+          try { const state = await req('perms.list'); if (state.perms?.some((p: any) => p.permId === m.permId)) { restored = true; break; } } catch { /* registration may still be in progress */ }
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        assert.ok(restored, 'the same desktop task must recover its approval after reconnect');
         const list = await req('perms.list'); assert.equal(list.perms[0].sessionId, 'original'); assert.equal(list.perms[0].decision.timeoutSec, null);
         assert.equal((await req('perms.decide', { permId: m.permId, action: 'reply', text: 'custom reply' })).ok, true);
       })();
@@ -78,6 +86,6 @@ async function main() {
   writeFileSync(join(root, 'config.json'), JSON.stringify({ ...config, app: { remoteEnabled: false } }));
   await assert.rejects(req('perms.list'), /远程调用/);
   stopRelayClient();
-  console.log(JSON.stringify({ ok: true, checks: ['actual Electron relay-client registration', 'original Agent history and saved result', 'approval-tab custom reply', 'group decision and result', 'remote disable enforced'] }));
+  console.log(JSON.stringify({ ok: true, checks: ['actual Electron relay-client registration', 'original Agent history and saved result', 'desktop approval reconnect without duplicate execution', 'approval-tab custom reply', 'group decision and result', 'remote disable enforced'] }));
 }
 main().then(() => app.exit(0)).catch(error => { stopRelayClient(); console.error(error); app.exit(1); });

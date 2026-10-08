@@ -18,9 +18,9 @@ const BASE = "https://wuwei-repo.oss-cn-hangzhou.aliyuncs.com/updates/";
 const ALLOW = new Set([".exe", ".dmg", ".appimage", ".deb", ".zip", ".blockmap", ".yml"]);
 
 const client = new OSS({
-  // 传输加速全球 endpoint：桶已开「传输加速·全球」。GitHub(美)→杭州直连跨境极不稳(超时/socket hang up)，
-  // 走加速走阿里优化线路，稳且快。用 endpoint 就不要再传 region(否则被 region 覆盖回杭州直连)。
-  endpoint: "https://oss-accelerate.aliyuncs.com",
+  // bucket 已关闭传输加速，上传改走杭州地域 endpoint，与下载/自动更新同源。
+  // 不使用加速域名；保留下方小分片、串行上传、大超时和重试应对跨境网络波动。
+  endpoint: "https://oss-cn-hangzhou.aliyuncs.com",
   accessKeyId: KEY_ID,
   accessKeySecret: KEY_SECRET,
   bucket: "wuwei-repo",

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无为手机端 · 高保真 v1</title>
+<style>
+:root{
+  /* 浅色主题（默认）—— 董事长拍板：白底、干净清爽、留白足 */
+  --bg:#ffffff; --bg-soft:#f4f6f8; --bg-raised:#eef1f4; --bg-input:#f4f6f8;
+  --border:#e0e4e8; --border-strong:#cfd5db;
+  --text:#16191e; --text-dim:#5b656d; --text-muted:#5b656d; --text-faint:#8a929a;
+  --accent:#274a63; --accent-soft:rgba(39,74,99,.10);
+  --spark:#c05f3c; --spark-soft:rgba(192,95,60,.12);
+  --green:#3f8f6b; --green-bg:rgba(63,143,107,.12);
+  --red:#e5484d; --red-bg:rgba(229,72,77,.10);
+  --warn:#c8933f; --gold:#c9a24b; --unread:#e5484d;
+  --code-bg:#f4f6f8;
+  --sans:Inter,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+body{background:#dde2e7;font-family:var(--sans);color:var(--text);padding:40px 20px 80px;}
+.page-title{text-align:center;color:var(--text);margin-bottom:6px;font-size:22px;font-weight:750;letter-spacing:.5px;}
+.page-sub{text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:36px;}
+.frames{display:flex;gap:44px;justify-content:center;flex-wrap:wrap;align-items:flex-start;}
+.frame-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+.frame-label{color:var(--text-dim);font-size:13px;font-weight:600;letter-spacing:.3px;}
+.frame-label span{color:var(--text-faint);font-weight:400;font-size:11.5px;}
+/* iPhone 外壳 */
+.phone{width:375px;height:812px;background:var(--bg);border-radius:44px;border:10px solid #1c1f24;
+  position:relative;overflow:hidden;box-shadow:0 24px 60px -18px rgba(30,40,55,.35);}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:150px;height:30px;
+  background:#23272e;border-radius:0 0 18px 18px;z-index:50;}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;}
+/* 状态栏 */
+.statusbar{height:47px;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 26px 6px;font-size:14px;font-weight:600;flex:0 0 auto;z-index:10;}
+.statusbar .icons{display:flex;gap:6px;align-items:center;}
+/* 顶部导航 */
+.navbar{height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;flex:0 0 auto;}
+.navbar .title{font-size:18px;font-weight:750;letter-spacing:.3px;}
+.navbar .big-title{font-size:24px;font-weight:800;}
+.nav-btn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+  color:var(--text-dim);background:var(--bg-raised);cursor:pointer;}
+.nav-btn.plain{background:none;}
+.nav-back{color:var(--text-dim);font-size:22px;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;}
+/* 内容区 */
+.content{flex:1 1 auto;overflow-y:auto;padding:4px 16px 16px;}
+.content::-webkit-scrollbar{width:0;}
+/* 底部 Tab */
+.tabbar{flex:0 0 auto;height:78px;background:var(--bg-soft);border-top:1px solid var(--border);
+  display:flex;padding-bottom:20px;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--text-muted);font-size:10.5px;font-weight:500;position:relative;cursor:pointer;}
+.tab.on{color:var(--accent);}
+.tab .ico{font-size:22px;line-height:1;}
+.tab .dot{position:absolute;top:8px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;
+  background:var(--unread);border-radius:8px;color:#fff;font-size:10px;font-weight:700;
+  display:grid;place-items:center;border:2px solid var(--bg-soft);}
+/* SVG 图标统一 */
+.i{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+/* ---- 会话列表 ---- */
+.search{display:flex;align-items:center;gap:8px;background:var(--bg-raised);border-radius:12px;
+  padding:10px 14px;margin:6px 0 16px;color:var(--text-muted);font-size:14px;}
+.sec-label{font-size:12px;color:var(--text-muted);font-weight:600;margin:14px 2px 8px;letter-spacing:.5px;}
+.chat-item{display:flex;gap:12px;padding:13px 12px;border-radius:14px;margin-bottom:6px;cursor:pointer;}
+.chat-item:active{background:var(--bg-soft);}
+.avatar{width:46px;height:46px;border-radius:13px;flex:0 0 auto;display:grid;place-items:center;
+  font-size:20px;font-weight:700;color:#fff;position:relative;}
+.av-accent{background:linear-gradient(135deg,#7fb0be,#5b8a98);}
+.av-spark{background:linear-gradient(135deg,#d9714a,#c05f3c);}
+.av-green{background:linear-gradient(135deg,#6fa088,#5c8a73);}
+.av-gold{background:linear-gradient(135deg,#d4b25e,#a97f2e);}
+.run-dot{position:absolute;bottom:-1px;right:-1px;width:13px;height:13px;border-radius:50%;
+  background:var(--accent);border:2.5px solid var(--bg);animation:pulse 1.3s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.82);}}
+.chat-main{flex:1;min-width:0;}
+.chat-row1{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.chat-name{font-size:15.5px;font-weight:650;}
+.chat-time{font-size:12px;color:var(--text-faint);flex:0 0 auto;margin-left:8px;}
+.chat-msg{font-size:13.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;}
+.chat-msg .running{color:var(--accent);font-weight:600;}
+.badge-run{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--accent);
+  background:var(--accent-soft);padding:1px 7px;border-radius:6px;font-weight:600;margin-left:6px;}
+/* FAB */
+.fab{position:absolute;bottom:96px;right:20px;width:56px;height:56px;border-radius:18px;
+  background:linear-gradient(135deg,#d9714a,#c05f3c);display:grid;place-items:center;
+  box-shadow:0 8px 22px -4px rgba(192,95,60,.55);color:#fff;z-index:20;cursor:pointer;}
+/* ---- 对话详情 ---- */
+.msg-flow{display:flex;flex-direction:column;gap:16px;padding:8px 0;}
+.msg-row{display:flex;gap:10px;}
+.msg-row.user{justify-content:flex-end;}
+.bubble-user{background:var(--accent-soft);color:var(--text);border-radius:15px;border-bottom-right-radius:5px;
+  padding:11px 14px;max-width:74%;font-size:15px;line-height:1.55;}
+.ai-av{width:30px;height:30px;border-radius:9px;flex:0 0 auto;background:linear-gradient(135deg,#7fb0be,#5b8a98);
+  display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;}
+.ai-body{flex:1;min-width:0;}
+.ai-name{font-size:12.5px;color:var(--text-muted);font-weight:600;margin-bottom:5px;}
+.ai-text{font-size:15px;line-height:1.6;color:var(--text);}
+.ai-text p{margin-bottom:8px;}
+/* 工具执行行 */
+.tool-row{display:flex;align-items:center;gap:8px;background:var(--bg-raised);border:1px solid var(--border);
+  border-radius:10px;padding:9px 12px;margin:8px 0;font-family:var(--mono);font-size:12.5px;cursor:pointer;}
+.tool-ico{width:16px;height:16px;flex:0 0 auto;}
+.tool-name{color:var(--text-dim);}
+.tool-cmd{color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+.tool-status{font-size:11px;padding:1px 6px;border-radius:5px;flex:0 0 auto;}
+.st-ok{color:var(--green);background:var(--green-bg);}
+.st-run{color:var(--accent);background:var(--accent-soft);}
+.tool-chevron{color:var(--text-faint);flex:0 0 auto;}
+.spin{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px;
+  font-family:var(--mono);font-size:12px;color:#3a4550;line-height:1.6;margin:8px 0;overflow-x:auto;}
+.code-block .k{color:#274a63;} .code-block .s{color:#3f8f6b;} .code-block .c{color:var(--text-faint);}
+/* 顶部任务标 */
+.task-chip{display:flex;align-items:center;gap:8px;background:var(--bg-raised);border:1px solid var(--border);
+  border-radius:10px;padding:8px 12px;margin:4px 0 8px;font-size:12.5px;cursor:pointer;}
+.task-chip .pbar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.task-chip .pfill{height:100%;background:var(--accent);border-radius:2px;}
+/* 输入栏 */
+.input-bar{flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg-soft);
+  padding:10px 14px 26px;display:flex;align-items:flex-end;gap:10px;}
+.input-box{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:20px;
+  padding:10px 16px;font-size:15px;color:var(--text-muted);min-height:42px;display:flex;align-items:center;}
+.send-btn{width:42px;height:42px;border-radius:50%;background:var(--spark);display:grid;place-items:center;
+  color:#fff;flex:0 0 auto;cursor:pointer;box-shadow:0 3px 10px rgba(192,95,60,.35);}
+.stop-btn{width:42px;height:42px;border-radius:50%;background:var(--bg-raised);border:1px solid var(--border-strong);
+  display:grid;place-items:center;color:var(--red);flex:0 0 auto;}
+/* ---- 任务详情 ---- */
+.task-head{background:var(--bg-raised);border:1px solid var(--border);border-radius:16px;padding:16px;margin:8px 0 18px;}
+.task-title{font-size:18px;font-weight:750;margin-bottom:10px;line-height:1.35;}
+.task-meta{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.pill{font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600;}
+.pill-run{color:var(--accent);background:var(--accent-soft);}
+.pill-owner{display:flex;align-items:center;gap:6px;color:var(--text-dim);font-size:12.5px;}
+.mini-av{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;}
+.prog-wrap{margin-top:4px;}
+.prog-row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-muted);margin-bottom:6px;}
+.prog-bar{height:7px;background:var(--border);border-radius:4px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:4px;background:var(--accent);}
+.prog-fill.warn{background:var(--warn);} .prog-fill.hot{background:var(--spark);}
+/* 时间线 */
+.timeline{position:relative;padding-left:26px;}
+.timeline::before{content:"";position:absolute;left:8px;top:6px;bottom:14px;width:2px;background:var(--border);}
+.tl-item{position:relative;padding-bottom:20px;}
+.tl-dot{position:absolute;left:-24px;top:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--border-strong);}
+.tl-item.done .tl-dot{background:var(--green);border-color:var(--green);}
+.tl-item.now .tl-dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);}
+.tl-time{font-size:11.5px;color:var(--text-faint);margin-bottom:3px;}
+.tl-title{font-size:14.5px;font-weight:600;margin-bottom:3px;}
+.tl-title.active{color:var(--accent);}
+.tl-desc{font-size:13px;color:var(--text-muted);line-height:1.5;}
+.tl-log{background:var(--bg-raised);border:1px solid var(--border);border-radius:8px;padding:8px 11px;
+  font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:8px;line-height:1.5;}
+/* 产出预览 */
+.output-card{display:flex;align-items:center;gap:12px;background:var(--bg-raised);border:1px solid var(--border);
+  border-radius:12px;padding:13px;margin-top:6px;cursor:pointer;}
+.out-ico{width:40px;height:40px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);flex:0 0 auto;}
+/* 底部固定操作 */
+.bottom-actions{flex:0 0 auto;border-top:1px solid var(--border);background:var(--bg-soft);
+  padding:12px 16px 28px;display:flex;gap:10px;}
+.btn{flex:1;height:46px;border-radius:12px;font-size:15px;font-weight:650;display:grid;place-items:center;cursor:pointer;border:none;}
+.btn-primary{background:var(--spark);color:#fff;box-shadow:0 4px 12px rgba(192,95,60,.3);}
+.btn-ghost{background:transparent;border:1px solid var(--border-strong);color:var(--text-dim);}
+.btn-danger{background:transparent;border:1px solid var(--red);color:var(--red);}
+.btn-green{background:var(--green);color:#fff;}
+/* ---- 审批详情 ---- */
+.approve-hero{text-align:center;padding:18px 0 20px;}
+.risk-badge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;
+  padding:5px 14px;border-radius:999px;margin-bottom:14px;}
+.risk-high{color:var(--red);background:var(--red-bg);}
+.risk-mid{color:var(--warn);background:rgba(200,147,63,.16);}
+.approve-who{font-size:14px;color:var(--text-dim);margin-bottom:6px;}
+.approve-what{font-size:19px;font-weight:750;line-height:1.4;padding:0 12px;}
+.detail-card{background:var(--bg-raised);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;}
+.detail-label{font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:8px;letter-spacing:.3px;}
+.cmd-view{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+  font-family:var(--mono);font-size:12.5px;color:#3a4550;line-height:1.6;word-break:break-all;}
+.cmd-view .danger{color:var(--red);}
+.impact-item{display:flex;gap:10px;font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:9px;}
+.impact-item:last-child{margin-bottom:0;}
+.impact-item .dot{color:var(--warn);flex:0 0 auto;}
+.ctx-link{display:flex;align-items:center;justify-content:space-between;color:var(--accent);
+  font-size:14px;font-weight:600;padding:2px;cursor:pointer;}
+/* 引导登录态（游客） */
+.empty-guide{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;height:100%;padding:0 40px;gap:6px;}
+.guide-logo{width:90px;height:90px;margin-bottom:12px;opacity:.9;}
+.guide-title{font-size:17px;font-weight:700;}
+.guide-desc{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:20px;}
+.guide-btn{background:var(--spark);color:#fff;padding:12px 32px;border-radius:999px;font-size:15px;font-weight:650;box-shadow:0 4px 14px rgba(192,95,60,.35);cursor:pointer;}
+.note{max-width:900px;margin:36px auto 0;background:var(--bg-raised);border:1px solid var(--border);
+  border-radius:14px;padding:20px 24px;color:var(--text-dim);font-size:13.5px;line-height:1.7;}
+.note h3{color:var(--text);font-size:15px;margin-bottom:10px;}
+.note b{color:var(--accent);}
+.note code{font-family:var(--mono);background:#e2e7ec;padding:1px 6px;border-radius:4px;color:var(--spark);font-size:12px;}
+</style>
+</head>
+<body>
+<div class="page-title">无为手机端 · 高保真原型 v1</div>
+<div class="page-sub">浅色主题（默认·白底清爽）· 四页黄金动线核心页 · 375×812 · 深色可在设置切换</div>
+<div class="frames" id="frames"></div>
+
+<script>
+// 通用零件
+const statusbar = `<div class="statusbar"><span>9:41</span><span class="icons">●●● 📶 100%</span></div>`;
+const svgIcon = (p)=>`<svg class="i" viewBox="0 0 24 24">${p}</svg>`;
+const iconSearch = '<path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"/>';
+const iconPlus = '<path d="M12 5v14M5 12h14"/>';
+const iconSend = '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>';
+const iconStop = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+const iconChevR = '<path d="M9 18l6-6-6-6"/>';
+const iconBack = '<path d="M15 18l-6-6 6-6"/>';
+const iconFile = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>';
+const iconTerminal = '<path d="M4 17l6-6-6-6M12 19h8"/>';
+const iconWarn = '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>';
+const iconShield = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>';
+const iconChat = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>';
+const iconChart = '<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/>';
+const iconCheck = '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>';
+const iconUser = '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>';
+
+// 底部 Tab（4个：对话/进度/审批/我）
+function tabbar(active){
+  const tabs=[['chat',iconChat,'对话'],['chart',iconChart,'进度'],['check',iconCheck,'审批'],['user',iconUser,'我']];
+  return `<div class="tabbar">${tabs.map(([k,ic,label])=>`
+    <div class="tab ${active===k?'on':''}">
+      <svg class="i" style="width:24px;height:24px" viewBox="0 0 24 24">${ic}</svg>
+      <span>${label}</span>
+      ${k==='check'?'<span class="dot">2</span>':''}
+    </div>`).join('')}</div>`;
+}
+
+// —— 屏1：会话列表 ——
+const screen1 = `
+${statusbar}
+<div class="navbar"><span class="big-title">对话</span>
+  <div class="nav-btn plain">${svgIcon(iconSearch)}</div></div>
+<div class="content">
+  <div class="search">${svgIcon(iconSearch)}<span>搜索对话内容</span></div>
+  <div class="sec-label">运行中</div>
+  <div class="chat-item">
+    <div class="avatar av-spark">码<span class="run-dot"></span></div>
+    <div class="chat-main">
+      <div class="chat-row1"><span class="chat-name">小码 · 手机端脚手架</span><span class="chat-time">刚刚</span></div>
+      <div class="chat-msg"><span class="running">正在执行 npm install…</span></div>
+    </div>
+  </div>
+  <div class="chat-item">
+    <div class="avatar av-accent">数<span class="run-dot"></span></div>
+    <div class="chat-main">
+      <div class="chat-row1"><span class="chat-name">小数 · 上周数据周报</span><span class="chat-time">2分钟前</span></div>
+      <div class="chat-msg"><span class="running">正在生成图表…</span></div>
+    </div>
+  </div>
+  <div class="sec-label">最近</div>
+  <div class="chat-item">
+    <div class="avatar av-green">文</div>
+    <div class="chat-main">
+      <div class="chat-row1"><span class="chat-name">小文 · 落地页文案</span><span class="chat-time">14:20</span></div>
+      <div class="chat-msg">好的，三版标题我都给你放在上面了，你看哪个方向…</div>
+    </div>
+  </div>
+  <div class="chat-item">
+    <div class="avatar av-accent">移</div>
+    <div class="chat-main">
+      <div class="chat-row1"><span class="chat-name">小移 · App 设计评审</span><span class="chat-time">昨天</span></div>
+      <div class="chat-msg">四页高保真已交付，等你确认后铺其余页面</div>
+    </div>
+  </div>
+  <div class="chat-item">
+    <div class="avatar av-gold">笨</div>
+    <div class="chat-main">
+      <div class="chat-row1"><span class="chat-name">小笨 · 本周计划</span><span class="chat-time">周一</span></div>
+      <div class="chat-msg">这周重点：手机端设计 + 数据周报，其它往后排</div>
+    </div>
+  </div>
+</div>
+<div class="fab">${svgIcon(iconPlus)}</div>
+${tabbar('chat')}`;
+
+// —— 屏2：对话详情 ——
+const screen2 = `
+${statusbar}
+<div class="navbar">
+  <div class="nav-back">${svgIcon(iconBack)}</div>
+  <span class="title">小码 · 手机端脚手架</span>
+  <div class="nav-btn plain" style="width:36px"></div></div>
+<div class="content">
+  <div class="task-chip">
+    <span style="color:var(--accent)">⚙</span>
+    <span style="color:var(--text-dim)">关联任务 · 搭建 RN 脚手架</span>
+    <div class="pbar"><div class="pfill" style="width:45%"></div></div>
+    <span style="color:var(--text-muted)">45%</span>
+    ${svgIcon(iconChevR).replace('class="i"','class="i" style="width:16px;height:16px;color:var(--text-faint)"')}
+  </div>
+  <div class="msg-flow">
+    <div class="msg-row user"><div class="bubble-user">帮我把 Expo 项目初始化好，装上导航和状态管理</div></div>
+    <div class="msg-row">
+      <div class="ai-av">码</div>
+      <div class="ai-body">
+        <div class="ai-name">小码</div>
+        <div class="ai-text"><p>好，我来初始化 Expo 项目，装 expo-router + zustand。先建工程：</p></div>
+        <div class="tool-row">
+          <svg class="i tool-ico" viewBox="0 0 24 24" style="color:var(--green)">${iconTerminal}</svg>
+          <span class="tool-name">终端</span>
+          <span class="tool-cmd">npx create-expo-app wuwei-mobile</span>
+          <span class="tool-status st-ok">✓ 完成</span>
+          <svg class="i tool-chevron" viewBox="0 0 24 24" style="width:16px;height:16px">${iconChevR}</svg>
+        </div>
+        <div class="ai-text"><p>工程建好了。接着装依赖：</p></div>
+        <div class="tool-row">
+          <div class="spin"></div>
+          <span class="tool-name">终端</span>
+          <span class="tool-cmd">npm install expo-router zustand</span>
+          <span class="tool-status st-run">运行中</span>
+          <svg class="i tool-chevron" viewBox="0 0 24 24" style="width:16px;height:16px">${iconChevR}</svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="input-bar">
+  <div class="input-box">发消息给小码…</div>
+  <div class="stop-btn">${svgIcon(iconStop).replace('class="i"','class="i" style="width:20px;height:20px"')}</div>
+</div>`;
+
+// —— 屏3：任务详情 ——
+const screen3 = `
+${statusbar}
+<div class="navbar">
+  <div class="nav-back">${svgIcon(iconBack)}</div>
+  <span class="title">任务详情</span>
+  <div class="nav-btn plain" style="width:36px"></div></div>
+<div class="content">
+  <div class="task-head">
+    <div class="task-title">搭建 RN 脚手架并跑通首页</div>
+    <div class="task-meta">
+      <span class="pill pill-run">● 运行中</span>
+      <span class="pill-owner"><span class="mini-av av-spark">码</span>小码</span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-row"><span>进度 · 第 3 / 6 步</span><span style="color:var(--accent)">45%</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:45%"></div></div>
+    </div>
+  </div>
+  <div class="sec-label">执行时间线</div>
+  <div class="timeline">
+    <div class="tl-item done"><div class="tl-dot"></div>
+      <div class="tl-time">14:02</div><div class="tl-title">初始化 Expo 工程</div>
+      <div class="tl-desc">create-expo-app 完成，TypeScript 模板</div></div>
+    <div class="tl-item done"><div class="tl-dot"></div>
+      <div class="tl-time">14:05</div><div class="tl-title">配置目录结构</div>
+      <div class="tl-desc">建 app / components / theme 目录</div></div>
+    <div class="tl-item now"><div class="tl-dot"></div>
+      <div class="tl-time">14:08 · 进行中</div><div class="tl-title active">安装核心依赖</div>
+      <div class="tl-desc">expo-router、zustand、reanimated</div>
+      <div class="tl-log">› npm install expo-router zustand<br>added 214 packages, building…</div></div>
+    <div class="tl-item"><div class="tl-dot"></div>
+      <div class="tl-time">待执行</div><div class="tl-title">写入主题 token</div></div>
+    <div class="tl-item"><div class="tl-dot"></div>
+      <div class="tl-time">待执行</div><div class="tl-title">搭底部 Tab 导航</div></div>
+    <div class="tl-item"><div class="tl-dot"></div>
+      <div class="tl-time">待执行</div><div class="tl-title">跑通会话列表首页</div></div>
+  </div>
+  <div class="sec-label">阶段产出</div>
+  <div class="output-card">
+    <div class="out-ico">${svgIcon(iconFile).replace('class="i"','class="i" style="width:22px;height:22px"')}</div>
+    <div style="flex:1"><div style="font-size:14.5px;font-weight:600">wuwei-mobile/</div>
+      <div style="font-size:12.5px;color:var(--text-muted)">脚手架工程 · 32 个文件</div></div>
+    <svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--text-faint)">${iconChevR}</svg>
+  </div>
+</div>
+<div class="bottom-actions">
+  <button class="btn btn-ghost">查看会话</button>
+  <button class="btn btn-danger">停止任务</button>
+</div>`;
+
+// —— 屏4：审批详情 ——
+const screen4 = `
+${statusbar}
+<div class="navbar">
+  <div class="nav-back">${svgIcon(iconBack)}</div>
+  <span class="title">审批详情</span>
+  <div class="nav-btn plain" style="width:36px"></div></div>
+<div class="content">
+  <div class="approve-hero">
+    <div class="risk-badge risk-high">
+      <svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px">${iconWarn}</svg> 高风险操作
+    </div>
+    <div class="approve-who"><b style="color:var(--text-dim)">小码</b> 请求执行</div>
+    <div class="approve-what">删除数据库中的 12 条测试记录</div>
+  </div>
+  <div class="detail-card">
+    <div class="detail-label">将执行的命令</div>
+    <div class="cmd-view">DELETE FROM users<br>WHERE email LIKE <span class="danger">'%@test.local'</span>;<br><span style="color:var(--text-faint)">-- 预计影响 12 行</span></div>
+  </div>
+  <div class="detail-card">
+    <div class="detail-label">影响范围</div>
+    <div class="impact-item"><span class="dot">▪</span><span>删除操作<b style="color:var(--red)">不可撤销</b>，无自动备份</span></div>
+    <div class="impact-item"><span class="dot">▪</span><span>影响 users 表 12 行测试账号</span></div>
+    <div class="impact-item"><span class="dot">▪</span><span>不影响正式用户数据（已按 test.local 域名过滤）</span></div>
+  </div>
+  <div class="detail-card" style="padding:14px 16px">
+    <div class="ctx-link">
+      <span>查看关联会话 · 小码 · 数据清理</span>
+      <svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px">${iconChevR}</svg>
+    </div>
+  </div>
+</div>
+<div class="bottom-actions">
+  <button class="btn btn-ghost">拒绝</button>
+  <button class="btn btn-primary">通过并执行</button>
+</div>`;
+
+const screens = [
+  ['会话列表','B1 · Tab 首页',screen1],
+  ['对话详情','B2 · 主战场',screen2],
+  ['任务详情','C2 · 随身盯进度',screen3],
+  ['审批详情','D2 · 随身拍板',screen4],
+];
+document.getElementById('frames').innerHTML = screens.map(([label,sub,html])=>`
+  <div class="frame-wrap">
+    <div class="frame-label">${label} <span>${sub}</span></div>
+    <div class="phone"><div class="notch"></div><div class="screen">${html}</div></div>
+  </div>`).join('');
+</script>
+</body>
+</html>

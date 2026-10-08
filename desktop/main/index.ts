@@ -5,6 +5,7 @@ import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, ses
 //    之后 sessions/settings/brain 等模块初始化时才能按正确版本(wuwei/minicc/test)选数据目录。
 import { EDITION, IS_MINICC, IS_TEST, APP_NAME, APP_ID, DATA_DIR_NAME, appDisplayName } from "./edition.js";
 import electronUpdater from "electron-updater";
+import { createUpdatePolicy, DEFAULT_UPDATE_INTERVAL_MS, updateIntervalMs, jitterUpdateInterval } from "./update-policy.js";
 const safeStorageOk = () => {
   try {
     return safeStorage.isEncryptionAvailable();
@@ -24,7 +25,7 @@ import { Agent } from "../../src/agent/loop.js";
 import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
-import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits } from "../../src/types.js";
+import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
@@ -151,8 +152,10 @@ import {
   type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
-import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels } from "./relay-client.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
+import { notifyRemote } from './remote-notify.js';
 import { runRemoteSessionTurn, waitForRemoteResult } from './remote-sessions.js';
+import { resolveRemoteSelection, providerKindForId } from './remote-models.js';
 import { remoteHistoryBounds } from './remote-history.js';
 import { runRemoteRoomTurn } from './remote-rooms.js';
 import { remoteTaskDetail, remoteRoomTaskDetail, remoteBatchTaskDetail } from './remote-task-detail.js';
@@ -200,12 +203,28 @@ let currentId = "";
 
 // 权限往返：id → resolve
 const pendingPerm = new Map<number, (d: "allow" | "deny") => void>();
+const pendingPermSid = new Map<number, string>();
 let permSeq = 0;
 // ask_user(AI 弹选择框)往返：id → resolve；turnSid=当前正在跑的会话(供事件带 sid)
 const pendingAsk = new Map<number, (answers: any) => void>();
 // ask id → 发起该询问的会话 id：答案里带截图时，据此把图片注入回该会话的循环边界
 const pendingAskSid = new Map<number, string>();
 let askSeq = 0;
+function requestDesktopDecision(decision: Decision, sid: string, signal: AbortSignal, source: { sessionId?: string; roomId?: string }) {
+  const id = ++askSeq;
+  pendingAskSid.set(id, sid);
+  pendingAsk.set(id, answers => {
+    const first = answers?.list?.[0];
+    const selected = decision.options.find(option => option.label === first?.selected?.[0]);
+    answerLocalDecision(decision.permId, answers?.cancelled ? { action: 'deny' } : first?.text?.trim() && decision.allowCustom ? { action: 'reply', text: first.text.trim() } : selected ? { action: 'reply', value: selected.value } : { action: 'deny' });
+  });
+  const waiting = requestLocalDecision(decision, source, signal, event => {
+    if (event.type === 'decision-resolved') { pendingAsk.delete(id); pendingAskSid.delete(id); send('evt:ask-resolved', { sid, id }); }
+  });
+  if (!signal.aborted) send('evt:ask-user', { sid, id, decision: true, questions: [{ question: decision.question, header: decision.title, allowCustom: decision.allowCustom, options: decision.options.map(option => ({ label: option.label, description: option.desc || '' })) }] });
+  else { pendingAsk.delete(id); pendingAskSid.delete(id); }
+  return waiting;
+}
 let turnSid = "";
 // 崩溃恢复：本进程是否已做过一次「残留 running→interrupted」检测(在首个 bootstrap 请求里同步做，避免时序竞争)
 let interruptDetected = false;
@@ -235,10 +254,11 @@ function providerForEmployee(emp: { model?: { providerId: string; model: string 
     const s: Settings = {
       ...gs,
       providerId: emp.model.providerId,
+      kind: providerKindForId(emp.model.providerId, gs),
       model: emp.model.model,
-      baseUrl: slot.baseUrl ?? gs.baseUrl,
-      apiKey: slot.apiKey,
-      oauthToken: slot.oauthToken,
+      baseUrl: slot.baseUrl ?? (gs.providerId === emp.model.providerId ? gs.baseUrl : undefined),
+      apiKey: slot.apiKey || (gs.providerId === emp.model.providerId ? gs.apiKey : undefined),
+      oauthToken: slot.oauthToken || (gs.providerId === emp.model.providerId ? gs.oauthToken : undefined),
     };
     try {
       applyEnvFromSettings(s);
@@ -283,12 +303,18 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 跑一名员工一轮（群/私聊共用）：临时 Agent，历史来自投影层，不落盘、不进 agents Map。
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, remoteExecution }: RunEmployeeArgs): Promise<string> => {
+const roomContextUsage = new Map<string, { providerId: string; model: string; usedTokens: number | null; maxTokens: number | null; capturedAt: number }>();
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => {
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
-  const decide = requestDecision || remoteExecution?.requestDecision;
-  const decisionHook: ToolContext['requestDecision'] = decide ? decision => waitForRemoteResult(decide(decision), executionSignal) : undefined;
-  const permit = onPermission || remoteExecution?.requestPermission;
+  const origin = reportOrigin || taskReportScope?.origin;
+  const localSource = origin?.kind === 'room' ? { roomId: origin.id } : { sessionId: origin?.id || `__room_${employee.id}` };
+  const decide = requestDecision || remoteExecution?.requestDecision || ((decision: Decision) => requestDesktopDecision(decision, `__room_${employee.id}`, executionSignal, localSource));
+  const decisionHook: ToolContext['requestDecision'] = decision => waitForRemoteResult(decide(decision), executionSignal);
+  const permit = onPermission || remoteExecution?.requestPermission || (async (name: string, input: unknown): Promise<'allow' | 'deny'> => {
+    const answer = await requestDesktopDecision({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) }, `__room_${employee.id}`, executionSignal, localSource);
+    return answer.action === 'allow' || answer.value === 'allow' ? 'allow' : 'deny';
+  });
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
   if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
       ['claude-oauth', 'codex'].includes(employee.model?.providerId || curProviderId()))
@@ -309,7 +335,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
-    requestPermission: permit ? async (tool: any, args: any) => waitForRemoteResult(permit(tool.name, args), executionSignal) : undefined,
+    requestPermission: async (tool: any, args: any) => waitForRemoteResult(permit(tool.name, args), executionSignal),
     onTurnEnd: (turnId: string) => taskReports.closeTurn(turnId),
     onText: (delta: string) => onProgress?.({ kind: "text", delta }),
     onToolStart: (id: string, name: string, input: any) => onProgress?.({ kind: "tool-start", id, name, input }),
@@ -317,11 +343,16 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
     // 群/私聊里员工跑订阅平台(Claude/Codex)时也上报额度快照——否则群里干活消耗了订阅额度，
     // 底部状态栏(主会话)却看不到，用户以为额度没动。按员工自己的平台存(没绑走全局平台兜底)。
     onRateLimits: (rl: unknown) => {
-      const pid = employee.model?.providerId || curProviderId();
+      const pid = providerBinding?.providerId || employee.model?.providerId || curProviderId();
       try { saveRateLimits(pid, rl as any); } catch { /* 存不下不影响本轮 */ }
       send("evt:ratelimits", rl);
     },
   } as any, executionSignal, images);
+  if (reportOrigin?.kind === 'room') {
+    const providerId = providerBinding?.providerId || employee.model?.providerId || curProviderId();
+    const model = providerBinding?.model || employee.model?.model || loadSettings()?.creds?.[providerId]?.model || (providerId === curProviderId() ? loadConfig().model : '');
+    roomContextUsage.set(`${reportOrigin.id}:${employee.id}`, { providerId, model, usedTokens: a.getUsage().lastInput || null, maxTokens: a.getContextBudget().contextWindow || null, capturedAt: Date.now() });
+  }
   executionSignal.throwIfAborted();
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
@@ -1649,6 +1680,19 @@ const askUserTool: Tool = {
     let questions = Array.isArray((input as any).questions) ? (input as any).questions : [];
     if (!questions.length) return { content: tt("ask_user 需要至少一个带 options 的问题", "ask_user needs at least one question with options"), isError: true };
 
+    // Remote runs must never disappear into the desktop-only legacy ask_user dialog.
+    if (ctx.remoteExecution?.requestDecision) {
+      const replies: string[] = [];
+      for (const question of questions) {
+        const options = (Array.isArray(question.options) ? question.options : []).map((option: any, i: number) => ({ label: String(option.label || `选项 ${i + 1}`), value: `option_${i}`, desc: typeof option.description === 'string' ? option.description : undefined }));
+        if (!options.length) return { content: '问题缺少可选项', isError: true };
+        const answer = await ctx.remoteExecution.requestDecision({ permId: randomUUID(), title: question.header || '需要你决定', question: String(question.question || '请选择') + (question.multiSelect ? '（需要多个选项时请在自定义回复中填写）' : ''), risk: 'high', options, allowCustom: true, timeoutSec: null });
+        if (answer.action === 'deny') return { content: '用户取消了选择，未获同意。' };
+        replies.push(`${question.question} → ${answer.text || options.find((option: { value: string }) => option.value === answer.value)?.label || answer.value || answer.action}`);
+      }
+      return { content: `用户的选择：\n${replies.join('\n')}` };
+    }
+
     // ⭐逐级把关：员工请示 → 先问本部门负责人(若有)、再问公司 CEO；哪一级能定就当场替员工拍板、不惊动上面；
     // 一级拿不准(回 ESCALATE / 超时)就往上一级问；全都上报才弹给董事长(下面的人类弹窗)，并把最上一级的理由带进弹窗。
     const self = ctx.employeeId;
@@ -2601,7 +2645,7 @@ function providerForSession(id: string, strict = false): ReturnType<typeof makeP
     const sSettings: Settings = {
       ...gs,
       providerId: meta.providerId,
-      kind: (meta.kind as Settings["kind"]) || gs.kind,
+      kind: (meta.kind as Settings["kind"]) || providerKindForId(meta.providerId, gs),
       model: meta.model,
       baseUrl: meta.baseUrl ?? slot.baseUrl ?? gs.baseUrl,
       apiKey: slot.apiKey,
@@ -3309,22 +3353,38 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    const remoteProvider = (channel: string | null | undefined, existingId?: string | null) => {
+    const remoteProvider = (channelId: string | null | undefined, existingId?: string | null, model?: string | null) => {
       const settings = loadSettings();
       const meta = existingId ? listSessions().find(session => session.id === existingId) : undefined;
-      if (!remoteShareSubscription(settings) && (!channel && ['claude-oauth', 'codex'].includes(meta?.providerId || settings?.providerId || '')))
+      const selection = resolveRemoteSelection(detectChannels(settings), channelId, model);
+      if (!remoteShareSubscription(settings) && (!selection && ['claude-oauth', 'codex'].includes(meta?.providerId || settings?.providerId || '')))
         throw new Error('本机未开启同步订阅，请在电脑设置中主动开启或选择非订阅渠道');
-      if (channel && !detectChannels(settings).some(item => item.id === channel)) throw new Error('该渠道不属于这台电脑当前共享的渠道');
-      const selected = channel === 'api-key' ? provider : channel ? providerForChannel(channel) : providerForSession(existingId || '', true);
+      let selected = selection ? null : providerForSession(existingId || '', true);
+      if (selection && settings) {
+        const ch = selection.channel, slot = settings.creds?.[ch.providerId] || {};
+        try {
+          applyEnvFromSettings({ ...settings, providerId: ch.providerId, kind: ch.providerKind, model: selection.model,
+            apiKey: slot.apiKey || (settings.providerId === ch.providerId ? settings.apiKey : undefined),
+            oauthToken: slot.oauthToken || (settings.providerId === ch.providerId ? settings.oauthToken : undefined),
+            baseUrl: slot.baseUrl || (settings.providerId === ch.providerId ? settings.baseUrl : undefined) });
+          selected = makeProvider(loadConfig());
+        } finally { applyEnvFromSettings(settings); }
+      }
       if (!selected) throw new Error('所选渠道未就绪，请检查电脑端模型配置');
-      return selected;
+      return { provider: selected, selection };
     };
     setRemoteExecutor(async args => {
       let remoteSid = '';
       await ensureFreshClaudeOAuth();
-      const selected = remoteProvider(args.model, args.sessionId);
       const remoteSettings = loadSettings();
-      const selectedBinding = args.model === 'claude-code-subscription' ? 'claude-oauth' : args.model === 'codex-subscription' ? 'codex' : args.model === 'api-key' ? remoteSettings?.providerId : undefined;
+      const employee = args.employeeId && !args.sessionId ? loadEmployees().find(item => item.id === args.employeeId) : undefined;
+      if (args.employeeId && !args.sessionId && (!teamEnabled(remoteSettings) || !employee)) throw new Error('所选员工未在这台电脑启用');
+      const employeeBinding = !args.channelId && !args.model ? employee?.model : undefined;
+      if (employeeBinding && !remoteShareSubscription(remoteSettings) && ['claude-oauth', 'codex'].includes(employeeBinding.providerId)) throw new Error('本机未同步该员工使用的订阅渠道');
+      const choice = employeeBinding ? { provider: providerForEmployee(employee!), selection: null } : remoteProvider(args.channelId, args.sessionId, args.model);
+      const selected = choice.provider;
+      if (!selected) throw new Error('该员工配置的模型未就绪，请在电脑检查配置');
+      const selectedBinding = choice.selection?.channel.providerId || employeeBinding?.providerId;
       const permission = args.onPermission ? async (name: string, input: unknown): Promise<'allow' | 'deny'> => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined;
       const toolNames = new Map<string, string>();
       const result = await runRemoteSessionTurn({
@@ -3350,13 +3410,12 @@ if (!gotLock) {
           if (selectedBinding) {
             const settings = loadSettings();
             const slot = settings?.creds?.[selectedBinding] || {};
-            setSessionBinding(id, { providerId: selectedBinding, kind: selectedBinding === 'codex' ? 'codex' : selectedBinding === 'claude-oauth' ? 'anthropic-oauth' : settings!.kind,
-              model: slot.model || (settings?.providerId === selectedBinding ? settings.model : undefined), baseUrl: slot.baseUrl });
+            setSessionBinding(id, { providerId: selectedBinding, kind: choice.selection?.channel.providerKind || (settings ? providerKindForId(selectedBinding, settings) : undefined),
+              model: choice.selection?.model || employeeBinding!.model, baseUrl: slot.baseUrl || (settings?.providerId === selectedBinding ? settings.baseUrl : undefined) });
             backendBySid.set(id, selectedBinding);
           }
           if (args.employeeId && !args.sessionId) {
             if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
-            const employee = loadEmployees().find(item => item.id === args.employeeId);
             if (!employee) throw new Error('所选员工不属于这台电脑');
             setSessionEmployee(id, employee.id, employee.name);
           }
@@ -3378,7 +3437,8 @@ if (!gotLock) {
     });
     setRemoteRoomExecutor(async args => {
       if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
-      const selected = args.model ? remoteProvider(args.model) : undefined;
+      const choice = args.channelId || args.model ? remoteProvider(args.channelId, undefined, args.model) : undefined;
+      const selected = choice?.provider;
       await runRemoteRoomTurn(args, {
         ...teamOrchestratorDeps(),
         room: id => loadRooms().find(room => room.id === id), history: loadRoomMessages,
@@ -3387,7 +3447,7 @@ if (!gotLock) {
           const providerId = employeeArgs.employee.model?.providerId || loadSettings()?.providerId;
           if (!selected && !remoteShareSubscription(loadSettings()) && ['claude-oauth', 'codex'].includes(providerId || ''))
             throw new Error('本机未同步该员工使用的订阅渠道');
-          return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, remoteExecution: { signal: args.signal, shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
+          return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, providerBinding: choice?.selection ? { providerId: choice.selection.channel.providerId, model: choice.selection.model } : undefined, remoteExecution: { signal: args.signal, shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
         },
       });
     });
@@ -3398,7 +3458,9 @@ if (!gotLock) {
         const list = listSessions()
           .filter((s: any) => !s.employeeId)
           .sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .map((s: any) => ({ id: s.id, title: s.title || "新对话", updatedAt: s.updatedAt || 0 }));
+          .map((s: any) => ({ id: s.id, title: s.title || "新对话", updatedAt: s.updatedAt || 0,
+            run: runs.has(s.id) ? 'running' : 'idle', model: s.model, providerId: s.providerId,
+            lastMessage: (agents.get(s.id)?.getDisplayMessages() || loadMessages(s.id)).flatMap((m: any) => m.content || []).filter((b: any) => b.type === 'text').at(-1)?.text?.slice(0, 160) || '' }));
         return { sessions: list };
       }
       if (method === "sessions.messages") {
@@ -3409,7 +3471,7 @@ if (!gotLock) {
         const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i)).filter(m => m.text || m.image);
         const meta = listSessions().find(s => s.id === sid);
         return { messages: page, hasMore, total, nextOffset,
-          meta: meta ? { title: meta.title, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined, employeeId: meta.employeeId } : undefined };
+          meta: meta ? { title: meta.title, model: meta.model, providerId: meta.providerId, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined, employeeId: meta.employeeId } : undefined };
       }
       // ── 一人公司同步 ──
       if (method === "team.state") {
@@ -3418,7 +3480,7 @@ if (!gotLock) {
         const employees = loadEmployees().map((e: any) => {
           // 该员工最近的一条「你和他的对话」会话 id，供手机点进去看历史
           const latest = sess.filter((s: any) => s.employeeId === e.id).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
-          return { id: e.id, name: e.name, title: e.title || "", blurb: e.blurb || "", icon: e.icon || "", avatarData: e.avatarData || "", sessionId: latest?.id || "" };
+          return { id: e.id, name: e.name, title: e.title || "", blurb: e.blurb || "", icon: e.icon || "", avatarData: e.avatarData || "", sessionId: latest?.id || "", model: e.model || { providerId: curProviderId(), model: loadConfig().model } };
         });
         const groups = loadRooms()
           .filter((r: any) => r.type !== "dm")
@@ -3432,6 +3494,23 @@ if (!gotLock) {
         const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
         const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", images: m.images, error: !!m.error }));
         return { messages: page, hasMore, total, nextOffset };
+      }
+      if (method === 'team.room.usage') {
+        const room = loadRooms().find(room => room.id === params?.roomId);
+        if (!room || !teamEnabled(loadSettings())) throw new Error('该群聊不可用');
+        const settings = loadSettings();
+        const selected = resolveRemoteSelection(detectChannels(settings), params?.channelId, params?.model);
+        return { items: loadEmployees().filter(employee => room.members.includes(employee.id)).map(employee => {
+          const providerId = selected?.channel.providerId || employee.model?.providerId || curProviderId();
+          const subscription = ['claude-oauth', 'codex'].includes(providerId);
+          const model = selected?.model || employee.model?.model || settings?.creds?.[providerId]?.model || (providerId === curProviderId() ? loadConfig().model : '');
+          const snapshot = roomContextUsage.get(`${room.id}:${employee.id}`);
+          const matching = snapshot?.providerId === providerId && snapshot?.model === model;
+          return { employeeId: employee.id, employeeName: employee.name, providerId, model,
+            kind: subscription ? 'subscription' : 'api-key', available: !subscription || remoteShareSubscription(settings),
+            quota: subscription && remoteShareSubscription(settings) ? loadRateLimits(providerId) : null,
+            context: { usedTokens: matching ? snapshot.usedTokens : null, maxTokens: matching ? snapshot.maxTokens : null }, capturedAt: matching ? snapshot.capturedAt : null };
+        }) };
       }
       if (method === "sop.tree") {
         return { tree: sopLoadTree() };
@@ -3782,12 +3861,31 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
         },
         onToolStart: (id, name, input) => { toolDepth++; send("evt:tool-start", { sid: useId, id, name, input }); },
         onToolEnd: (id, result, isError, image) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError, image }); },
-        requestPermission: (tool, input) =>
-          new Promise((resolve) => {
-            const id = ++permSeq;
-            pendingPerm.set(id, resolve);
-            send("evt:permission-request", { sid: useId, id, name: tool.name, input });
-          }),
+        requestDecision: (decision: Decision) => {
+          const id = ++askSeq;
+          pendingAskSid.set(id, useId);
+          pendingAsk.set(id, answers => {
+            const first = answers?.list?.[0];
+            const selected = decision.options.find(option => option.label === first?.selected?.[0]);
+            const answer: DecisionResponse = answers?.cancelled ? { action: 'deny' } : first?.text?.trim() && decision.allowCustom ? { action: 'reply', text: first.text.trim() } : selected ? { action: 'reply', value: selected.value } : { action: 'deny' };
+            answerLocalDecision(decision.permId, answer);
+          });
+          const waiting = requestLocalDecision(decision, useId, ac.signal, event => {
+            if (event.type === 'decision-resolved') { pendingAsk.delete(id); pendingAskSid.delete(id); send('evt:ask-resolved', { sid: useId, id }); }
+          });
+          send('evt:ask-user', { sid: useId, id, decision: true, questions: [{ question: decision.question, header: decision.title, allowCustom: decision.allowCustom, options: decision.options.map(option => ({ label: option.label, description: option.desc || '' })) }] });
+          return waiting;
+        },
+        requestPermission: (tool, input) => {
+          const id = ++permSeq, permId = randomUUID();
+          pendingPermSid.set(id, useId);
+          pendingPerm.set(id, action => { answerLocalDecision(permId, { action }); });
+          const waiting = requestLocalDecision({ permId, risk: 'high', title: '需要你确认', question: `是否允许电脑执行 ${tool.name}？`, options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) }, useId, ac.signal, event => {
+            if (event.type === 'decision-resolved') { pendingPerm.delete(id); pendingPermSid.delete(id); send('evt:permission-resolved', { sid: useId, id }); }
+          });
+          send('evt:permission-request', { sid: useId, id, name: tool.name, input });
+          return waiting.then(answer => answer.action === 'allow' || answer.value === 'allow' ? 'allow' as const : 'deny' as const);
+        },
         onUsage: (u) => {
           if (u.round) lastRoundBySid.set(useId, { input: u.round.input, output: u.round.output, cacheHit: u.round.cacheHit, steps: u.round.steps });
           send("evt:usage", { sid: useId, usage: u });
@@ -3881,6 +3979,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     streamDrafts.delete(useId); // 清掉流式草稿(真实消息已在历史)
     draftSaveAt.delete(useId);
     persist(useId); // 该会话跑完落盘
+    notifyRemote({ eventId: `turn_${useId}_${turnT0}`, kind: 'task', deviceId: getDeviceId(), taskId: useId, taskKind: 'session' });
     if (!runs.has(useId)) setSessionRunning(useId, false); // 无残留活跃轮→清运行标记(须在 persist 后,它会保留旧标记)
     conversationReports.drain(useId); // 用户这轮结束后接上员工汇报，不受当前聚焦/智能继续开关影响
     void emitAccount(); // 刷新余额/本会话已消耗(DeepSeek 等)
@@ -3956,7 +4055,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
-  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && pendingPerm.size === 0 && pendingAsk.size === 0) {
+  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values()].includes(id)) {
     agent.requestSoftStop();
     log("softStop", id.slice(0, 8), "温和收尾中(再点一次强制停止)");
     return;
@@ -3967,11 +4066,14 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   ac?.abort();
   // 若正卡在权限确认，一并取消(否则中断信号也叫不醒它)
   for (const [pid, r] of pendingPerm) {
+    if (pendingPermSid.get(pid) !== id) continue;
     r("deny");
     pendingPerm.delete(pid);
+    pendingPermSid.delete(pid);
   }
   // 若正卡在 ask_user 选择框，一并取消
   for (const [aid, r] of pendingAsk) {
+    if (pendingAskSid.get(aid) !== id) continue;
     r({ cancelled: true });
     pendingAsk.delete(aid);
     pendingAskSid.delete(aid);
@@ -3983,6 +4085,7 @@ ipcMain.on("perm:respond", (_e, id: number, decision: "allow" | "deny") => {
   if (r) {
     r(decision);
     pendingPerm.delete(id);
+    pendingPermSid.delete(id);
   }
 });
 
@@ -5200,12 +5303,16 @@ ipcMain.handle("app:version", () => app.getVersion());
 // 未打包(dev)或无更新源时 checkForUpdates 会抛错，一律吞掉，不影响使用。
 const { autoUpdater } = electronUpdater;
 let updaterWired = false;
+let updatePollInterval = DEFAULT_UPDATE_INTERVAL_MS;
 function setupUpdater(): void {
   if (updaterWired) return;
   updaterWired = true;
   // 测试版不接自动更新：否则会去正式版更新源下载并把自己覆盖，失去「独立测试」意义。
   if (IS_TEST) { log("updater", "测试版跳过自动更新"); return; }
-  autoUpdater.autoDownload = true; // 发现新版即后台下载
+  autoUpdater.autoDownload = false; // 策略统一控制下载，避免检查自动开启重复下载
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.disableDifferentialDownload = false; // 保留 SDK 的差分下载和校验缓存
+  autoUpdater.logger = { info: (...args) => log("updater", ...args), warn: (...args) => log("updater", ...args), error: (...args) => log("updater", ...args) };
   autoUpdater.autoInstallOnAppQuit = false; // 不擅自在退出时装，由用户点「升级」触发
   autoUpdater.on("update-available", (info) => {
     send("evt:update-available", { version: info.version, notes: typeof info.releaseNotes === "string" ? info.releaseNotes : "" });
@@ -5221,6 +5328,7 @@ function setupUpdater(): void {
     });
   });
   autoUpdater.on("update-downloaded", (info) => {
+    downloadedUpdatePath = info.downloadedFile;
     log("updater", "update-downloaded 事件", info.version);
     send("evt:update-downloaded", { version: info.version, notes: typeof info.releaseNotes === "string" ? info.releaseNotes : "" });
     void trackClientLog("info", "update", { version: app.getVersion(), accessToken: loadWuweiSession()?.accessToken ?? null, message: `新版 v${info.version} 已下载就绪`, meta: { phase: "downloaded", newVersion: info.version } }).catch(() => {});
@@ -5230,86 +5338,42 @@ function setupUpdater(): void {
     log("updater", "更新出错", msg);
     void trackClientLog("error", "update", { message: `更新出错: ${msg}`, meta: { phase: "updater-event" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
   });
-  cleanOldUpdaterCache(); // 清理旧版本下载残留，只保留最新一个安装包（用户反馈旧缓存囤积）
-  // 启动后尽快查一次（2.5s 让窗口先渲染，随即检测→发现新版立刻推「下载中」给界面）
-  setTimeout(() => { void checkAndPrepareUpdate(); }, 2500);
-  // 轮询间隔后台可配：拉 /api/client-config 的 updateCheckSec（默认 60s，范围 30..3600），拉不到用默认。
-  // 只拉一次配置(启动时)，改配置下次启动生效；拉的只是几 KB，开销极小。
+  // 不手工删除 pending：SDK 的 update-info.json、安装包与差分基底必须保持完整。
+  if (!app.isPackaged) return;
+
   void (async () => {
-    let sec = 60;
     try {
       const site = process.env.WUWEI_SITE_URL || "https://wuweiai.io";
-      const res = await fetch(`${site}/api/client-config`);
-      if (res.ok) { const j = await res.json(); const s = Number(j && typeof j === 'object' && 'updateCheckSec' in j ? j.updateCheckSec : undefined); if (Number.isFinite(s) && s >= 30 && s <= 3600) sec = Math.floor(s); }
-    } catch { /* 拉不到用默认 60s */ }
-    log("updater", `更新轮询间隔 ${sec}s`);
-    setInterval(() => { void checkAndPrepareUpdate(); }, sec * 1000);
+      const res = await fetch(`${site}/api/client-config`, { signal: AbortSignal.timeout(10_000) });
+      if (res.ok) updatePollInterval = updateIntervalMs(((await res.json()) as { updateCheckSec?: unknown })?.updateCheckSec);
+    } catch { /* 默认两小时；旧后台的 60s 配置会被安全下限覆盖 */ }
   })();
-  // 窗口重新获得焦点时也查一次（用户切回来=大概率停留过一阵，趁机检测；60s 内不重复）
-  let lastFocusCheck = 0;
-  app.on("browser-window-focus", () => {
-    const now = Date.now();
-    if (now - lastFocusCheck < 60_000) return;
-    lastFocusCheck = now;
-    void checkAndPrepareUpdate();
-  });
+  let timer: ReturnType<typeof setTimeout>;
+  let stopped = false;
+  const poll = async () => {
+    try { await checkAndPrepareUpdate(); }
+    finally { if (!stopped) timer = setTimeout(poll, jitterUpdateInterval(updatePollInterval)); }
+  };
+  timer = setTimeout(poll, 15_000 + Math.random() * 45_000);
+  app.once("before-quit", () => { stopped = true; clearTimeout(timer); });
+  // 聚焦也经过同一冷却和并发门禁，不再每分钟额外访问 OSS。
+  app.on("browser-window-focus", () => { void checkAndPrepareUpdate(); });
 }
 
-// 清理 electron-updater 下载缓存：只保留最新(改动时间最新)的一个安装包，删掉旧版本残留。
-// 缓存目录 = %LOCALAPPDATA%/wuwei-updater/pending（updaterCacheDirName=wuwei-updater，见 app-update.yml）。
-function cleanOldUpdaterCache(): void {
-  try {
-    const base = process.env.LOCALAPPDATA || join(app.getPath("home"), "AppData", "Local");
-    const dir = join(base, "wuwei-updater", "pending");
-    if (!existsSync(dir)) return;
-    const files = readdirSync(dir)
-      .filter((f) => /\.(exe|dmg|zip|AppImage|deb|blockmap)$/i.test(f))
-      .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t);
-    for (const { f } of files.slice(1)) { try { unlinkSync(join(dir, f)); } catch { /* 单个删失败忽略 */ } }
-    if (files.length > 1) log("updater", `清理旧更新缓存 ${files.length - 1} 个，保留最新`);
-  } catch { /* 清理失败不影响更新 */ }
+let downloadedUpdatePath: string | undefined;
+const updatePolicy = createUpdatePolicy(autoUpdater, {
+  intervalMs: () => updatePollInterval,
+  readyExists: () => !!downloadedUpdatePath && existsSync(downloadedUpdatePath),
+  onReady: (state) => send("evt:update-downloaded", { version: state.version, notes: state.notes }),
+});
+async function checkAndPrepareUpdate(manual = false) {
+  if (IS_TEST || !app.isPackaged) return { available: false };
+  const result = await updatePolicy.check(manual);
+  if (result.error) log("updater", "检查/下载失败", result.error);
+  return result;
 }
-
-// 检查更新 + 等待下载完成（已缓存则立即完成）后主动推「就绪」。返回 {available, downloaded, version, notes}。
-// 关键：不再单纯依赖 update-downloaded 事件——缓存已存在时它可能不重新触发，导致界面永远等不到「升级重启」。
-async function checkAndPrepareUpdate(): Promise<{ available: boolean; downloaded?: boolean; version?: string; notes?: string; error?: string }> {
-  try {
-    const r = await autoUpdater.checkForUpdates();
-    const info = r?.updateInfo;
-    if (!info) return { available: false };
-    const available = info.version !== app.getVersion();
-    const notes = typeof info.releaseNotes === "string" ? info.releaseNotes : "";
-    if (!available) return { available: false, version: info.version };
-    log("updater", "发现新版", info.version);
-    // 关键修复：安装包已缓存时 checkForUpdates 不返回 downloadPromise，之前会漏推「就绪」→ 界面永远等不到。
-    // 统一 await：新下用 r.downloadPromise；已缓存用 downloadUpdate()(秒 resolve 返回已缓存文件路径)。都保证推 evt:update-downloaded。
-    try {
-      const dl = r.downloadPromise ?? autoUpdater.downloadUpdate();
-      const files = await dl;
-      const ok = files == null || (Array.isArray(files) ? files.length > 0 : true); // downloadPromise 无返回值也算成功
-      if (ok) {
-        log("updater", "下载完成/已缓存就绪", info.version);
-        send("evt:update-downloaded", { version: info.version, notes });
-        return { available: true, downloaded: true, version: info.version, notes };
-      }
-      return { available: true, downloaded: false, version: info.version, notes };
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      log("updater", "下载失败", msg);
-      void trackClientLog("error", "update", { message: `下载失败: ${msg}`, meta: { phase: "download", version: info.version }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
-      return { available: true, downloaded: false, version: info.version, notes };
-    }
-  } catch (e: any) {
-    const msg = String(e?.message || e);
-    // 检查更新报错上报后台，供「查看日志」排查（离线/DNS/源 404 等）
-    void trackClientLog("error", "update", { message: `检查更新失败: ${msg}`, meta: { phase: "check" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
-    return { available: false, error: msg };
-  }
-}
-
-// 手动检查更新：会等待下载完成再返回（downloaded=true 时界面直接弹「升级重启」）。dev/无源 → available:false + error。
-ipcMain.handle("updater:check", async () => checkAndPrepareUpdate());
+// 手动检查绕过常规周期，但复用并发任务、就绪包，遵守下载失败冷却。
+ipcMain.handle("updater:check", async () => checkAndPrepareUpdate(true));
 // 立即安装已下载的更新并重启
 ipcMain.on("updater:install", () => {
   try { autoUpdater.quitAndInstall(); } catch (e: any) { log("updater", "安装失败", String(e?.message || e)); }

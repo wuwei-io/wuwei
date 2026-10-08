@@ -505,7 +505,6 @@ const DICT_EN: Record<string, string> = {
   "err.rateLimit": "Error: too many requests or quota exhausted (rate limited). Please try again later.",
   "err.network": "Error: network connection failed. Check your network / proxy and retry.",
   "err.interrupted": "Error: the connection to the model dropped (a long reply got cut off). Just reply “continue” to pick up where it stopped.",
-  "err.interrupted": 'Error: the connection to the model dropped (a long reply got cut off). Reply "continue" to pick up where it stopped.',
   "err.fix.interrupted": "The last reply was cut off",
   "err.fix.continue": "Continue",
   "err.badRequest": "Error: bad request (possibly a wrong model name or an over-long context).",

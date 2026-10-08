@@ -3,6 +3,7 @@ dist/
 out/
 release/
 release-minicc/
+release-test/
 *.log
 *.tgz
 .DS_Store

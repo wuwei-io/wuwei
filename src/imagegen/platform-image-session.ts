@@ -5,12 +5,19 @@ import {randomUUID} from 'node:crypto';
 import {PlatformBillingClient,type Sku} from './platform-billing-client.js';
 import type {ToolContext,ToolResult} from '../types.js';
 
+function emptyImageCatalog(): ToolResult {
+ return {content:JSON.stringify({code:'IMAGE_CATALOG_EMPTY',message:'平台暂未提供可用的生图规格，当前无法生成图片。需要服务端启用生图服务及有效规格；更换图片描述无效，不要猜测 SKU 或反复查询目录。'}),isError:true};
+}
+
 // Bound to the actual hosted provider credentials, never global settings or subscription/BYOK.
 export function createPlatformImageSession(base: string,token: string,recoveryRoot=join(homedir(),'.wuwei','image-orders')) {
  const client=new PlatformBillingClient(base,()=>token,'platform',180000);
  return async(input:Record<string,unknown>,ctx:ToolContext):Promise<ToolResult>=>{
   try {
-   if(input.action==='catalog') return {content:JSON.stringify(await client.catalog())};
+   if(input.action==='catalog') {
+    const catalog=await client.catalog();
+    return Array.isArray(catalog) && catalog.length===0 ? emptyImageCatalog() : {content:JSON.stringify(catalog)};
+   }
    const root=resolve(ctx.cwd,'.wuwei','output');
    if(typeof input.recovery_key==='string') {
     const recovered=await client.lookup(input.recovery_key);
@@ -38,6 +45,7 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
    }
    if(typeof input.prompt!=='string' || typeof input.sku_id!=='string' || !ctx.requestDecision) throw new Error('生图需要用户确认预计费用；当前会话不支持确认');
    const catalog=await client.catalog();if(!Array.isArray(catalog)) throw new Error('图片目录无效');
+   if(catalog.length===0) return emptyImageCatalog();
    const sku=catalog.find((s:Sku)=>s.sku_id===input.sku_id) as Sku|undefined;
    if(!sku) return {content:JSON.stringify({code:'SKU_UNAVAILABLE',catalog}),isError:true};
    const query={sku_id:sku.sku_id,price_version:sku.price_version,prompt:input.prompt,count:1 as const};

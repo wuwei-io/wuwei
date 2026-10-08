@@ -915,10 +915,24 @@ export function makeProvider(cfg: Config): Provider {
   const p: Provider = cfg.provider === "codex" ? new CodexProvider(cfg)
     : cfg.provider === "openai" ? new OpenAIProvider(cfg) : new AnthropicProvider(cfg);
   // Strict known hosted endpoints only: never use a BYOK credential as website token.
-  if(cfg.provider==='openai' && cfg.apiKey && cfg.baseUrl && ['https://wuweiai.io/api/gateway','https://gw.wuweiai.io/api/gateway'].includes(cfg.baseUrl.replace(/\/$/,''))) {
+  if(cfg.provider==='openai' && !cfg.disableTools && cfg.apiKey && isWuweiHostedGateway(cfg.baseUrl)) {
     p.platformImage=createPlatformImageSession('https://wuweiai.io',cfg.apiKey);
   }
   p.contextWindow = cfg.contextWindow;
   p.compactThreshold = cfg.compactThreshold;
   return p;
+}
+
+// Accept the catalog's versioned gateway URL while keeping website credentials
+// isolated from BYOK endpoints, lookalike hosts and alternate ports.
+function isWuweiHostedGateway(baseUrl?: string): boolean {
+  if (!baseUrl) return false;
+  try {
+    const url = new URL(baseUrl);
+    return url.protocol === 'https:' && !url.port && !url.username && !url.password && !url.search && !url.hash
+      && ['wuweiai.io', 'gw.wuweiai.io'].includes(url.hostname)
+      && ['/api/gateway', '/api/gateway/v1'].includes(url.pathname.replace(/\/$/, ''));
+  } catch {
+    return false;
+  }
 }

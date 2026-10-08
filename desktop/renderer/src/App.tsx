@@ -3457,7 +3457,7 @@ export function App() {
   const [runningSet, setRunningSet] = useState<Set<string>>(() => new Set()); // 多任务:正在跑的会话id集
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
-  const [asks, setAsks] = useState<Record<string, { id: number; questions: AskQuestion[] }>>({});
+  const [asks, setAsks] = useState<Record<string, { id: number; questions: AskQuestion[]; decision?: boolean }>>({});
   // CEO 把关中：员工请示后 CEO 正在拍板，按发起会话 id 存 {ceoName, askerName, until(到点时间戳)}。拍完(evt 带 done)即清。
   const [ceoDeciding, setCeoDeciding] = useState<Record<string, { ceoName: string; askerName: string; until: number }>>({});
   // 非当前会话发起的 ask → 右上角通知(点击切过去/✕忽略/30s自动消失)
@@ -5043,6 +5043,12 @@ export function App() {
             return c;
           });
           break;
+        case "evt:permission-resolved":
+          setPending(previous => previous?.id === payload.id ? null : previous);
+          break;
+        case "evt:ask-resolved":
+          setAsks(previous => { if (previous[payload.sid]?.id !== payload.id) return previous; const next = { ...previous }; delete next[payload.sid]; return next; });
+          break;
         case "evt:permission-request":
           // manual 模式每步问；auto/cont 自动放行(等价旧 autoMode)。按发起会话的模式判。
           if (modeOf(payload.sid || currentIdRef.current) !== "manual" || alwaysAllowRef.current.has(payload.name))
@@ -5065,7 +5071,7 @@ export function App() {
           const askSid = payload.sid || currentIdRef.current;
           // 该会话 CEO 把关结束(升级到了董事长)→ 清掉「拍板中」提示，换成选择框。
           setCeoDeciding((m) => { if (!(askSid in m)) return m; const n = { ...m }; delete n[askSid]; return n; });
-          setAsks((m) => ({ ...m, [askSid]: { id: payload.id, questions: payload.questions || [] } }));
+          setAsks((m) => ({ ...m, [askSid]: { id: payload.id, questions: payload.questions || [], decision: payload.decision === true } }));
           const isCur0 = askSid === currentIdRef.current;
           // 后台会话到点自答的公共动作(当前会话交给 AskModal 的可见倒计时)
           const bgAutoAnswer = (sec: number) => {
@@ -5082,7 +5088,7 @@ export function App() {
             }, sec * 1000);
           };
           // 智能继续 cont 模式：红线判定分两种方式
-          if (modeOf(askSid) === "cont") {
+          if (!payload.decision && modeOf(askSid) === "cont") {
             if (redlineModeRef.current === "smart") {
               // 智能识别：先让 LLM 判"自主答会不会真触发危险动作"，结果存 askRisk 给 AskModal 用
               setAskRisk((r) => ({ ...r, [payload.id]: { pending: true, risky: false, reason: "" } }));
@@ -8378,7 +8384,7 @@ export function App() {
                         <div className="msg user"><div className="body">{m.text}</div></div>
                         <div className="turn-foot user">
                           <div className="tf-actions"><CopyBtn text={m.text} /></div>
-                          {!!m.ts && <span className="tf-time">{relTime(m.ts, now)}</span>}
+                          {!!m.ts && <span className="tf-time">{relTime(m.ts)}</span>}
                         </div>
                       </div>
                     ) : (
@@ -8386,7 +8392,7 @@ export function App() {
                         <AssistantMsg text={m.text} />
                         <div className="turn-foot">
                           <div className="tf-actions"><CopyBtn text={m.text} /></div>
-                          {!!m.ts && <span className="tf-time">{relTime(m.ts, now)}</span>}
+                          {!!m.ts && <span className="tf-time">{relTime(m.ts)}</span>}
                         </div>
                       </div>
                     ),
@@ -9605,7 +9611,7 @@ export function App() {
                             ? "AI"
                             : lang === "en" ? "Title" : "标题"}
                       </span>
-                      <span className="search-row-time">{relTime(h.updatedAt, now)}</span>
+                      <span className="search-row-time">{relTime(h.updatedAt)}</span>
                     </div>
                     <div className="search-snip">
                       {h.pre}
@@ -9912,7 +9918,7 @@ export function App() {
                       <div className="trash-title" title={title}>{title}</div>
                       <div className="trash-meta">
                         {ti.group ? (lang === "en" ? `Group "${ti.group}" · ` : `分组「${ti.group}」· `) : ""}
-                        {lang === "en" ? `deleted ${relTime(ti.deletedAt, now, t)} · clears in ${leftDays}d` : `删除于 ${relTime(ti.deletedAt, now, t)} · ${leftDays} 天后清除`}
+                        {lang === "en" ? `deleted ${relTime(ti.deletedAt)} · clears in ${leftDays}d` : `删除于 ${relTime(ti.deletedAt)} · ${leftDays} 天后清除`}
                       </div>
                     </div>
                     <button className="trash-restore" onClick={() => window.wuwei.restoreSession(ti.id)}>
@@ -10584,7 +10590,7 @@ export function App() {
 
       {asks[currentId] && (() => {
         const a = asks[currentId];
-        const cont = modeOf(currentId) === "cont";
+        const cont = !a.decision && modeOf(currentId) === "cont";
         // 红线识别:两种方式算出"能不能自动倒计时/命中了啥"
         let autoSec = 0;
         let redlineHit: { word: string; src: "builtin" | "custom" | "smart" } | null = null;
@@ -11112,7 +11118,7 @@ function ResendIcon() {
 
 // ask_user：AI 弹出的可点击选择框(单选/多选/可多问)
 type AskOption = { label: string; description?: string };
-type AskQuestion = { question: string; header?: string; multiSelect?: boolean; options: AskOption[] };
+type AskQuestion = { question: string; header?: string; multiSelect?: boolean; allowCustom?: boolean; options: AskOption[] };
 // 崩溃恢复框：仿 ask_user，贴输入框上方对齐，非模态。列出被中断的任务，逐个「继续 / 忽略」。
 function ResumeBox({
   sessions,
@@ -11470,6 +11476,7 @@ function AskModal({
         <div className="ask-other-row">
           <input
             className="ask-other"
+            disabled={q.allowCustom === false}
             placeholder={t("ask.otherPlaceholder", "其它（手动输入或粘贴/添加截图，可选）")}
             value={other[step] || ""}
             onFocus={() => setAutoCancelled(true)} // 一点进手动输入框就取消自动提交，别抢你正在打的字/图
@@ -12568,6 +12575,7 @@ const PRESETS: Preset[] = [
     keyUrl: "",
     keyHint: "sk-ant-oat…（点上方一键授权自动获取）",
     models: [
+      "claude-opus-5-5",
       "claude-fable-5-1",
       "claude-opus-5",
       "claude-sonnet-5",
@@ -12589,6 +12597,7 @@ const PRESETS: Preset[] = [
     keyUrl: "https://console.anthropic.com/settings/keys",
     keyHint: "sk-ant-...",
     models: [
+      "claude-opus-5-5",
       "claude-opus-5",
       "claude-opus-4-8",
       "claude-opus-4-7",
@@ -12981,7 +12990,7 @@ function arrangePresets(
 }
 
 type ModelCap = { noTools?: boolean; vision?: boolean };
-type CredSlot = { apiKey?: string; baseUrl?: string; oauthToken?: string; nickname?: string; model?: string; noTools?: boolean; vision?: boolean; modelCaps?: Record<string, ModelCap>; customModels?: string[] };
+type CredSlot = { apiKey?: string; baseUrl?: string; oauthToken?: string; nickname?: string; model?: string; systemPrompt?: string; noTools?: boolean; vision?: boolean; modelCaps?: Record<string, ModelCap>; customModels?: string[] };
 
 // 简约线条眼睛图标：off=true 显示"划掉的眼睛"(当前明文，点击隐藏)
 function EyeIcon({ off }: { off: boolean }) {
@@ -15247,7 +15256,7 @@ function SettingsModal({
                   {t("set.m.addStation")}
                 </button>
                 {preset.custom && (
-                  <button type="button" className="station-edit" onClick={openEditStation}>
+                  <button type="button" className="station-edit" onClick={() => openEditStation()}>
                     {lang === "en" ? "Edit" : "编辑"}
                   </button>
                 )}

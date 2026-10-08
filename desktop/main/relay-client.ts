@@ -6,12 +6,14 @@
 // channels(本机可用渠道)按 remoteShareSubscription 过滤：不开则剔除本地订阅(Claude Code/Codex)。
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
-import { RemoteDecisions } from "./remote-decisions.js";
+import { RemoteDecisions, type RemoteDecisionSource } from "./remote-decisions.js";
 import { hostname, platform } from "node:os";
 import { getDeviceId } from "../../src/device-id.js";
 import { loadWuweiSession } from "./wuwei-session.js";
 import { log } from "./logger.js";
 import type { Decision, DecisionResponse } from "../../src/types.js";
+import { configuredRemoteChannels, type RemoteChannel } from './remote-models.js';
+import { notifyRemote } from './remote-notify.js';
 import {
   loadSettings,
   remoteEnabled,
@@ -25,35 +27,12 @@ const PING_INTERVAL_MS = 25_000; // 心跳(nginx 超时 3600s，这里远小于�
 const RECONNECT_BASE_MS = 2_000;
 const RECONNECT_MAX_MS = 60_000;
 
-interface Channel {
-  id: string;
-  label: string;
-  kind: "subscription" | "api-key" | "other";
-  quota?: unknown; // 订阅额度快照(5h/7d 用量%+reset)，供手机端回显。随 channel 透传经 relay 到 /devices。
-}
+type Channel = RemoteChannel;
 
 // 探测本机可被手机端使用的渠道。订阅类按 shareSubscription 决定是否上报。
 export function detectChannels(s: Settings | null): Channel[] {
-  const share = remoteShareSubscription(s);
-  const out: Channel[] = [];
-  const kind = s?.kind;
-  const slot = s?.creds?.[s?.providerId || ""] || {};
-
-  // Claude Code 订阅(anthropic-oauth) / Codex 订阅：属于「本地订阅」，仅 share 时上报。
-  // 带上本机上次的额度快照(loadRateLimits)，手机端「执行位置」直接显示 5h/7d 剩余，不用等 M3 单独通道。
-  if (share) {
-    if (kind === "anthropic-oauth" || s?.oauthToken || slot.oauthToken) {
-      out.push({ id: "claude-code-subscription", label: "Claude Code 订阅", kind: "subscription", quota: loadRateLimits("claude-oauth") });
-    }
-    if (kind === "codex") {
-      out.push({ id: "codex-subscription", label: "Codex 订阅", kind: "subscription", quota: loadRateLimits("codex") });
-    }
-  }
-  // 非订阅渠道(API key / 兼容端点)：始终可作为"远程执行"能力上报(不涉及订阅外泄)
-  if (kind === "anthropic-apikey" || kind === "openai") {
-    out.push({ id: "api-key", label: "本机 API Key", kind: "api-key" });
-  }
-  return out;
+  return configuredRemoteChannels(s, remoteShareSubscription(s)).map(ch => ({ ...ch,
+    ...(ch.kind === 'subscription' ? { quota: loadRateLimits(ch.providerId) } : {}) }));
 }
 
 let ws: WebSocket | null = null;
@@ -61,6 +40,9 @@ let pingTimer: NodeJS.Timeout | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
 let stopped = true; // 默认停止；start 时置 false
+let connectedAccount = '';
+const executionInstanceId = randomUUID();
+const remoteKinds = new Map<string, 'chat' | 'room-chat'>();
 
 // ── M2：远程执行 ──
 // 手机端经 relay 发来 chat → 跑本机 agent(本机订阅)→ 流式把 delta/done/error 回传 relay。
@@ -72,6 +54,7 @@ export interface RemoteChatArgs {
   images?: string[]; // 手机端随消息发来的图(data URL)，喂给 agent
   sessionId?: string | null;
   model?: string | null;
+  channelId?: string | null;
   employeeId?: string | null;
   onSession?: (sessionId: string) => void;
   signal: AbortSignal;
@@ -111,6 +94,14 @@ export type RemoteRoomExecutor = (args: RemoteRoomArgs) => Promise<void>;
 let _remoteRoomExecutor: RemoteRoomExecutor | null = null;
 export function setRemoteRoomExecutor(fn: RemoteRoomExecutor | null) { _remoteRoomExecutor = fn; }
 const remoteDecisions = new RemoteDecisions();
+export function requestLocalDecision(decision: Decision, source: string | RemoteDecisionSource, signal: AbortSignal, send: (event: Record<string, unknown>) => void) {
+  const origin = typeof source === 'string' ? { sessionId: source } : source;
+  return remoteDecisions.request(`local_${origin.roomId || origin.sessionId}`, decision, origin, false, signal, event => {
+    if (event.type === 'decision') notifyRemote({ eventId: decision.permId, kind: 'approval', deviceId: getDeviceId(), ...(origin.sessionId ? { sessionId: origin.sessionId } : {}) });
+    send(event);
+  });
+}
+export function answerLocalDecision(permId: string, answer: DecisionResponse) { return remoteDecisions.decide(permId, answer); }
 
 // 通用请求处理器(不落库同步)：手机问「会话列表/历史/员工/群/SOP」→ 读本机 ~/.wuwei 数据返回。
 // 由 index.ts 注入(它持有 loadSessions/loadRooms/loadEmployees 等)。
@@ -159,7 +150,10 @@ async function handleRemoteChat(msg: any): Promise<void> {
   if (!reqId || remoteAborts.has(reqId)) return;
   const socket = ws;
   const reply = (event: Record<string, unknown>) => {
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
+    const target = ws || socket;
+    if (target?.readyState === WebSocket.OPEN) target.send(JSON.stringify(event));
+    if (event.type === 'decision') notifyRemote({ eventId: String(event.permId), kind: 'approval', deviceId: getDeviceId() });
+    if (event.type === 'chat-done' || event.type === 'room-done') notifyRemote({ eventId: reqId, kind: 'task', deviceId: getDeviceId(), taskId: String(event.sessionId || event.roomId || msg.sessionId || ''), taskKind: room ? 'room' : 'session' });
   };
   const room = msg.type === "room-chat";
   const errorType = room ? "room-error" : "chat-error";
@@ -168,12 +162,13 @@ async function handleRemoteChat(msg: any): Promise<void> {
   }
   const ac = new AbortController();
   remoteAborts.set(reqId, ac);
+  remoteKinds.set(reqId, room ? 'room-chat' : 'chat');
   const source = () => room ? { roomId: String(msg.roomId || "") } : { sessionId: msg.sessionId || undefined };
   const requestDecision = (decision: Decision) => remoteDecisions.request(reqId, decision, source(), msg.smartTimer === true, ac.signal, reply);
   const heartbeat = setInterval(() => reply({ type: "heartbeat", reqId }), 25_000);
   const args: RemoteChatArgs = {
     reqId, text: String(msg.text || ""), images: Array.isArray(msg.images) ? msg.images : [],
-    sessionId: msg.sessionId ?? null, employeeId: msg.employeeId ?? null, model: msg.model ?? null, signal: ac.signal,
+    sessionId: msg.sessionId ?? null, employeeId: msg.employeeId ?? null, channelId: msg.channelId ?? null, model: msg.model ?? null, signal: ac.signal,
     onSession: sessionId => { msg.sessionId = sessionId; reply({ type: "session", reqId, sessionId }); },
     onDelta: text => reply({ type: "delta", reqId, text }),
     onTool: (name, input) => reply({ type: "tool", reqId, phase: "start", name, input }),
@@ -206,10 +201,11 @@ async function handleRemoteChat(msg: any): Promise<void> {
     clearInterval(heartbeat);
     remoteDecisions.abort(reqId);
     remoteAborts.delete(reqId);
+    remoteKinds.delete(reqId);
   }
 }
 
-function cleanup() {
+function cleanup(abortExecutions = false) {
   if (pingTimer) {
     clearInterval(pingTimer);
     pingTimer = null;
@@ -223,9 +219,11 @@ function cleanup() {
     }
     ws = null;
   }
-  // G1-4：连接已断，决策回批通道没了 → 把全部挂起决策按 deny+abort 兜底解挂，防 Promise 永挂+timer 泄漏
-  for (const controller of remoteAborts.values()) controller.abort();
-  remoteDecisions.abort();
+  // Explicit logout/disable aborts; temporary network loss preserves the original task.
+  if (abortExecutions) {
+    for (const controller of remoteAborts.values()) controller.abort();
+    remoteDecisions.abort();
+  }
 }
 
 function scheduleReconnect() {
@@ -247,6 +245,10 @@ function connect() {
     return;
   }
   const token = loadWuweiSession()?.accessToken || "";
+  let account = '';
+  try { account = JSON.parse(Buffer.from(token.split('.')[1] || '', 'base64url').toString()).sub || ''; } catch { /* invalid credentials cannot expose the pending pool */ }
+  if (connectedAccount && connectedAccount !== account) cleanup(true);
+  connectedAccount = account;
   if (!token) {
     // 未登录：无法鉴权，稍后重试。这是「手机端看不到这台电脑」最常见的原因之一——提示要在电脑端登录无为账号。
     log("relay", "未登录无为账号(无 access_token)，无法连 relay；请在电脑端登录后再试。稍后重连。");
@@ -271,6 +273,10 @@ function connect() {
     const hello = {
       type: "hello",
       deviceId: getDeviceId(),
+      instanceId: executionInstanceId,
+      protocolVersion: 2,
+      activeRequests: [...remoteKinds].map(([reqId, kind]) => ({ reqId, kind,
+        waiting: remoteDecisions.list().filter(item => item.reqId === reqId).map(item => item.permId) })),
       name,
       platform: platform(),
       shareSubscription: remoteShareSubscription(s),
@@ -355,7 +361,7 @@ export function stopRelayClient() {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
-  cleanup();
+  cleanup(true);
 }
 
 /** 设置变更后调用：根据最新 remoteEnabled 决定启或停（并让 hello 用最新设备名/渠道）。 */
