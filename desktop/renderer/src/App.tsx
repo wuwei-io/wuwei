@@ -18,6 +18,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { HelpManualModal } from "./components/HelpManualModal.js";
+import { AnnouncementModal } from "./components/AnnouncementModal.js";
 import { BabyAvatar, inferBabyState } from "./baby/BabyAvatar.js";
 import { BabyHero } from "./baby/BabyHero.js";
 import { BabyPyramid } from "./baby/BabyPyramid.js";
@@ -10289,17 +10290,18 @@ export function App() {
           </div>
         </div>
       )}
-      {/* 客户端公告弹窗：打开即弹(未读过该版本)，读完关闭存本地，同版本不再弹 */}
+      {/* 客户端公告弹窗：只升级渲染层，沿用既有 version/title/body 协议与已读逻辑。 */}
       {announce && (() => {
         const closeAnnounce = () => { try { localStorage.setItem("wuwei_seen_announcement", announce.version); } catch { /* ignore */ } setAnnounce(null); };
         return (
-          <div className="perm-overlay" onClick={closeAnnounce}>
-            <div className="add-st-dialog announce-dialog" style={{ maxWidth: 500, width: "92vw", position: "relative", paddingTop: 22 }} onClick={(e) => e.stopPropagation()}>
-              <button className="announce-x" aria-label={lang === "en" ? "Close" : "关闭"} title={lang === "en" ? "Close" : "关闭"} onClick={closeAnnounce}>×</button>
-              <h3 style={{ marginTop: 0, paddingRight: 28 }}>{announce.title}</h3>
-              <div className="s-note" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, maxHeight: "68vh", overflow: "auto" }}>{announce.body}</div>
-            </div>
-          </div>
+          <AnnouncementModal
+            version={announce.version}
+            title={announce.title}
+            body={announce.body}
+            lang={lang}
+            onClose={closeAnnounce}
+            onOpenManual={() => { closeAnnounce(); setShowGuide(true); }}
+          />
         );
       })()}
       {/* 免费模型当天次数用完(已登录)：弹窗引导——明天继续 / 一键切到对应托管付费模型。无为币再用完才走升级窗 */}
