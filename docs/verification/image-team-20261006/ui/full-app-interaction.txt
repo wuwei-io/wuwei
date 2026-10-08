@@ -1,0 +1,23 @@
+
+PASS actual application window loaded
+[renderer] [boot] renderer mounted ok (app://bundle/assets/index-9XhtoxTU.js:77095)
+PASS actual English sidebar has six localized teammates
+PASS actual four English departments, no test department or unassigned people
+PASS group list title follows page after opening CEO chat
+PASS actual English team pack
+PASS actual English teammate edit dialog
+PASS actual unchanged Save through IPC preserves original stored teammate fields
+PASS actual edited Save persists custom name with stable ID
+PASS actual English department edit controls
+PASS unchanged English department blur preserves canonical names, heads and members
+PASS department cards show only assigned members
+PASS adding moves a teammate out of the previous department
+PASS actual department Add, move, Remove and restore through React and IPC
+PASS actual switch back shows four Chinese departments
+PASS actual Chinese sidebar preserves custom teammate edits
+PASS member and department references stay unchanged across language switches and profile saves
+(node:124888) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `electron --trace-deprecation ...` to show where the warning was created)
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+
+EXIT=0; SIGNAL=

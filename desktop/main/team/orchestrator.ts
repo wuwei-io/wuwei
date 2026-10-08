@@ -1,3 +1,4 @@
+import { employeeMentionTargets, employeeLabel, employeeRoster } from "../../../src/team/default-localization.js";
 // AI 员工团队 · 群编排器
 //
 // 职责只有两件：决定「谁该说话」，以及「他能看到什么」（后者委托给 projection.ts）。
@@ -268,7 +269,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     ? (options.mentions.includes('*') ? members.map(m => m.id) : [...new Set(options.mentions)].filter(id => members.some(m => m.id === id))).slice(0, room.maxWake ?? 3)
     : pickResponders(
     text,
-    members.map((m) => ({ id: m.id, name: m.name })),
+    employeeMentionTargets(members),
     room.coordinator,
     room.maxWake ?? 3,
   );

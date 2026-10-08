@@ -1,3 +1,4 @@
+import { employeeLabel, localizeEmployee } from "../../../../src/team/default-localization.js";
 // 群 · 多员工协作界面（tc- 设计语言，与一人公司内页统一）
 //
 // 三个界面：群列表、建群、群内聊天。每条消息显示"谁说的"——人类靠右、员工靠左带头像+名字，
@@ -70,7 +71,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
 
   const room = rooms.find((r) => r.id === cur) || null;
   const empOf = (id: string) => employees.find((e) => e.id === id);
-  const nameOf = (id: string) => empOf(id)?.name || id;
+  const nameOf = (id: string) => employeeLabel(empOf(id), en ? "en" : "zh", id);
   const relT = (ts: number) => {
     const d = Date.now() - (ts || 0);
     if (d < 60000) return en ? "just now" : "刚刚";
@@ -267,13 +268,13 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         setNewMembers(n);
                       }}
                     />
-                    <span className="tc-ava"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
+                    <span className="tc-ava"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")} /></span>
                     <span className="tc-emp-meta">
                       <span className="tc-emp-nm">
-                        <b title={e.name}>{tx(e.name)}</b>
-                        {e.title && <span className="tc-role" title={e.title}>{e.title}</span>}
+                        <b title={employeeLabel(e, en ? "en" : "zh")}>{employeeLabel(e, en ? "en" : "zh")}</b>
+                        {e.title && <span className="tc-role" title={localizeEmployee(e, en ? "en" : "zh").title}>{localizeEmployee(e, en ? "en" : "zh").title}</span>}
                       </span>
-                      {e.blurb && <span className="tc-emp-desc" title={e.blurb}>{e.blurb}</span>}
+                      {e.blurb && <span className="tc-emp-desc" title={localizeEmployee(e, en ? "en" : "zh").blurb}>{localizeEmployee(e, en ? "en" : "zh").blurb}</span>}
                     </span>
                     {on && (
                       <span className="tc-pick-check">

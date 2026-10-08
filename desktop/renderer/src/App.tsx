@@ -1,3 +1,9 @@
+import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
+import { departmentLabel } from "../../../src/team/default-departments.js";
+import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
+import { ToolDecisionModal } from './components/ToolDecisionModal.js';
+import { imageModelChoices, imageModelLabel } from '../../../src/imagegen/image-catalog.js';
+import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
@@ -2305,7 +2311,7 @@ function RoomSettingsModal({
             <div className="rs-coord">
               <button type="button" className={"rs-coord-item" + (!coordinator ? " on" : "")} onClick={() => setCoordinator(undefined)}>{en ? "None" : "不设"}</button>
               {members.map((m) => (
-                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{m.name}</button>
+                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{employeeLabel(m, en ? "en" : "zh")}</button>
               ))}
             </div>
             <p className="st-hint">{en ? "The coordinator replies without being @-ed and helps split up the work. Leave as None so everyone needs an @." : "协调者无需 @ 也会响应，帮忙拆活派活。选「不设」则谁都得被 @ 才说话。"}</p>
@@ -2327,6 +2333,7 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
   const clampSec = (n: number) => Math.min(60, Math.max(3, Math.round(n) || 10));
   const [employees, setEmployees] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [addingDept, setAddingDept] = useState<string | null>(null);
   const [levels, setLevels] = useState(3);
   const [ceoId, setCeoId] = useState<string>(""); // "" = 自动识别(职位含CEO/名叫小笨)
   const [ceoSec, setCeoSec] = useState(10);
@@ -2345,13 +2352,13 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
   const onLevels = (n: number) => { const v = clampLv(n); setLevels(v); persist({ maxDmLevels: v }); };
   const onCeo = (id: string) => { setCeoId(id); persist({ ceoEmployeeId: id || null }); };
   const onSec = (n: number) => { const v = clampSec(n); setCeoSec(v); persist({ ceoDecideTimeoutSec: v }); };
-  const ceoName = employees.find((e) => e.id === ceoId)?.name || (en ? "the CEO" : "CEO");
+  const ceoName = employeeLabel(employees.find((e) => e.id === ceoId), en ? "en" : "zh", en ? "the CEO" : "CEO");
   // 部门 CRUD：改完以后端返回的 departments 为准(含成员互斥规整)。
   const applyDept = (r: any) => { if (r?.departments) setDepartments(r.departments); flash(); };
   const deptCreate = () => api?.deptCreate?.({ name: en ? "New department" : "新部门", memberIds: [] }).then(applyDept).catch(() => {});
   const deptUpdate = (id: string, patch: any) => api?.deptUpdate?.(id, patch).then(applyDept).catch(() => {});
   const deptDelete = (id: string) => api?.deptDelete?.(id).then(applyDept).catch(() => {});
-  const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || id;
+  const nameOf = (id: string) => employeeLabel(employees.find((e) => e.id === id), en ? "en" : "zh", id);
   return (
     <>
       {/* 模块总开关：置于一人公司模块顶部。关闭时主进程完全不参与(不注册 IPC、不读写数据目录)；
@@ -2361,8 +2368,8 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
           <div className="app-set-label">{en ? "Enable My Company" : "启用一人公司"}</div>
           <div className="app-set-hint">
             {en
-              ? "Adds an app store where you install AI teammates, then chat with each of them separately. Off by default — turning it off leaves no trace behind."
-              : "开启后侧边栏会多出「一人公司」，可以雇 AI 员工、分别私聊、拉进群一起干活。默认关闭，关掉后不留任何痕迹。"}
+              ? "Chat with AI teammates or bring them into a group to work together. On by default for new users."
+              : "与 AI 员工私聊，或建群一起完成任务。新用户默认开启。"}
           </div>
         </div>
         <input
@@ -2384,8 +2391,8 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
         <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO" : "CEO（上级把关人）"}</div>
         <span style={{ flex: 1 }} />
         <select className="tc-input tc-select" style={{ maxWidth: 240 }} value={ceoId} onChange={(e) => onCeo(e.target.value)}>
-          <option value="">{en ? "Auto (title has CEO / named 小笨)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
-          {employees.map((m: any) => <option key={m.id} value={m.id}>{m.name}{m.title ? `（${m.title}）` : ""}</option>)}
+          <option value="">{en ? "Auto (CEO role / default team CEO)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
+          {employees.map((m: any) => <option key={m.id} value={m.id}>{employeeLabel(m, en ? "en" : "zh")}{m.title ? ` (${localizeEmployee(m, en ? "en" : "zh").title})` : ""}</option>)}
         </select>
       </div>
       {/* 拍板倒计时秒数 */}
@@ -2438,19 +2445,13 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
       </div>
       <div className="app-set-hint" style={{ marginBottom: departments.length ? 10 : 0 }}>
         {en
-          ? "Optional org structure. Flat management is fine — only set up a department once it grows past ~2 people. Each member belongs to at most one department; the head is marked in Contacts."
-          : "组织架构，可不设——扁平管理就够用；一个部门人多了（2 人以上）再建来方便管理。一名员工最多归一个部门，负责人会在通讯录里标出。"}
+          ? "Each teammate belongs to one department. Heads are marked in Contacts."
+          : "一名员工归属一个部门，负责人显示在通讯录中。"}
       </div>
       {departments.map((d: any) => (
         <div key={d.id} className="dept-card">
           <div className="dept-card-row">
-            <input
-              className="set-field-input"
-              style={{ flex: 1, textAlign: "left" }}
-              value={d.name}
-              onChange={(e) => setDepartments((ds) => ds.map((x) => (x.id === d.id ? { ...x, name: e.target.value } : x)))}
-              onBlur={(e) => deptUpdate(d.id, { name: e.target.value.trim() || (en ? "Department" : "部门") })}
-            />
+            <DepartmentNameInput department={d} language={en ? "en" : "zh"} onSave={name => deptUpdate(d.id, { name })} />
             <button type="button" className="tc-btn-ghost danger" style={{ fontSize: 12 }} onClick={() => deptDelete(d.id)}>{en ? "Delete" : "删除"}</button>
           </div>
           <div className="dept-card-row">
@@ -2460,9 +2461,12 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
               {(d.memberIds || []).map((id: string) => <option key={id} value={id}>{nameOf(id)}</option>)}
             </select>
           </div>
-          <div className="dept-card-lbl" style={{ marginTop: 6 }}>{en ? "Members" : "成员"}</div>
+          <div className="dept-card-row" style={{ marginTop: 6 }}>
+            <span className="dept-card-lbl">{en ? "Members" : "成员"}</span>
+            <button type="button" className="tc-btn-ghost" onClick={() => setAddingDept(addingDept === d.id ? null : d.id)}>{addingDept === d.id ? (en ? "Done" : "完成") : (en ? "+ Add member" : "+ 添加成员")}</button>
+          </div>
           <div className="dept-members">
-            {employees.map((e) => {
+            {employees.filter(e => (d.memberIds || []).includes(e.id)).map((e) => {
               const inDept = (d.memberIds || []).includes(e.id);
               const otherDept = departments.find((x) => x.id !== d.id && (x.memberIds || []).includes(e.id));
               return (
@@ -2470,18 +2474,32 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
                   key={e.id}
                   type="button"
                   className={"dept-chip" + (inDept ? " on" : "")}
-                  title={otherDept && !inDept ? (en ? `Currently in ${otherDept.name} — will move here` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
+                  title={otherDept && !inDept ? (en ? `Move from ${departmentLabel(otherDept, "en")}` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
                   onClick={() => {
                     const next = inDept ? (d.memberIds || []).filter((m: string) => m !== e.id) : [...(d.memberIds || []), e.id];
                     deptUpdate(d.id, { memberIds: next });
                   }}
                 >
-                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                  {e.name}{otherDept && !inDept ? (en ? ` · ${otherDept.name}` : `·${otherDept.name}`) : ""}
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")}  /></span>
+                  {employeeLabel(e, en ? "en" : "zh")} <span aria-label={en ? "Remove member" : "移除成员"}>×</span>
                 </button>
               );
             })}
           </div>
+          {!(d.memberIds || []).length && <div className="app-set-hint">{en ? "No members" : "暂无成员"}</div>}
+          {addingDept === d.id && <div className="dept-add-members" style={{ marginTop: 8 }}>
+            <div className="app-set-hint">{en ? "Choose a teammate. Members of another department will be moved here." : "选择员工。已在其他部门的员工会移到本部门。"}</div>
+            <div className="dept-members">
+              {employees.filter(e => !(d.memberIds || []).includes(e.id)).map(e => {
+                const from = departments.find(x => (x.memberIds || []).includes(e.id));
+                return <button key={e.id} type="button" className="dept-chip" onClick={() => { deptUpdate(d.id, { memberIds: [...(d.memberIds || []), e.id] }); setAddingDept(null); }}>
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")} /></span>
+                  {employeeLabel(e, en ? "en" : "zh")}{from ? ` · ${departmentLabel(from, en ? "en" : "zh")}` : ""}
+                </button>;
+              })}
+              {employees.every(e => (d.memberIds || []).includes(e.id)) && <span className="app-set-hint">{en ? "All teammates added" : "已加入所有员工"}</span>}
+            </div>
+          </div>}
         </div>
       ))}
       </>)}
@@ -3458,6 +3476,7 @@ export function App() {
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
   const [asks, setAsks] = useState<Record<string, { id: number; questions: AskQuestion[]; decision?: boolean }>>({});
+  const [toolDecisions, setToolDecisions] = useState<Record<string, Decision>>({});
   // CEO 把关中：员工请示后 CEO 正在拍板，按发起会话 id 存 {ceoName, askerName, until(到点时间戳)}。拍完(evt 带 done)即清。
   const [ceoDeciding, setCeoDeciding] = useState<Record<string, { ceoName: string; askerName: string; until: number }>>({});
   // 非当前会话发起的 ask → 右上角通知(点击切过去/✕忽略/30s自动消失)
@@ -3650,7 +3669,7 @@ export function App() {
   const [teamEmployees, setTeamEmployees] = useState<any[]>([]); // 员工列表，群界面建群选人要用
   const [teamDepartments, setTeamDepartments] = useState<any[]>([]); // 部门(组织架构)：通讯录按部门分组展示
   const [teamRooms, setTeamRooms] = useState<any[]>([]); // 群列表(侧边栏一人公司板块展示 + 点击进群)
-  const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") !== "0"); // 侧边栏一人公司板块是否展开
+  const [teamExpanded, setTeamExpanded] = useState(() => localStorage.getItem("wuwei-team-expanded") === "1"); // 首次收起，之后保留用户的展开选择
   const [empExpanded, setEmpExpanded] = useState<Set<string>>(new Set()); // 哪些员工在侧栏展开了自己的会话子列表(微信式)
   const [contactsExpanded, setContactsExpanded] = useState(() => localStorage.getItem("wuwei-contacts-expanded") !== "0"); // 一人公司下「通讯录」子板块展开态
   const [groupsExpanded, setGroupsExpanded] = useState(() => localStorage.getItem("wuwei-groups-expanded") !== "0"); // 一人公司下「群聊」子板块展开态
@@ -3845,6 +3864,20 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("model"); // 统一设置页的初始/当前左侧菜单项
   const [curProviderId, setCurProviderId] = useState("");
+  const [imageMode, setImageMode] = useState(false);
+  const imageModeRef = useRef(imageMode);
+  imageModeRef.current = imageMode;
+  const [imageSku, setImageSku] = useState("");
+  const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;quality?:string;coins_per_image:number}[]>([]);
+  const imageChoices = imageModelChoices(imageCatalog);
+  const imagePreset: Preset = {id:"wuwei-image",label:"无为托管 · 生图模型",labelEn:"Wuwei hosted · Image models",kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageChoices.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
+  const displayProviderId = imageMode ? imagePreset.id : curProviderId;
+  const displayModel = imageMode ? imageChoices.find(s=>s.model===imageCatalog.find(row=>row.sku_id===imageSku)?.model)?.sku_id || imageSku : meta.model;
+  const imageLabel = (id:string) => {
+    const row=imageCatalog.find(s=>s.sku_id===id);
+    return row ? imageModelLabel(row) : id;
+  };
+  const refreshImageCatalog = async () => {try {const rows=await window.wuwei.imageCatalog();setImageCatalog(rows);}catch {setImageCatalog([]);}};
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({}); // 各平台实时拉到的模型
   const [showAllModels, setShowAllModels] = useState(false); // 切换模型下拉：false=常用(预设旗舰) true=全部(含实时拉取)
   const [showModelPricing, setShowModelPricing] = useState(false); // 模型费用说明弹窗
@@ -4374,6 +4407,7 @@ export function App() {
     reason: getLang() === "en" ? "Checking connection…" : "检测连通状态…",
   });
   const [showConn, setShowConn] = useState(false); // 状态灯说明气泡
+  const connCheckSeqRef = useRef(0);
   const thinkStartRef = useRef<number | null>(null); // 本轮开始时间（思考计时）
   const charsRef = useRef(0); // 本轮已流式字符数（估算 token）
   const turnTextRef = useRef(""); // 本轮已生成的正文(含 instant 模式还没揭示的),供状态栏悬停预览
@@ -4462,12 +4496,14 @@ export function App() {
       // 首启兜底：从未选过平台(providerId 为空)时默认落到「免费体验(wuwei-free, anon 免登录)」，
       // 让全新未登录用户下载后第一条消息就能直接聊、不撞登录墙(头号转化真凶)。已登录/已选过平台者 providerId 非空不受影响。
       setCurProviderId(r?.settings?.providerId || "wuwei-free");
+      setImageMode(!!r?.settings?.imageMode);
+      setImageSku(r?.settings?.imageSku || "");
       // 首启兜底不能只改 UI：若从未选过平台(providerId 空)，把 wuwei-free 的完整配置(kind=openai/网关 baseUrl)
       // 真正落盘。否则界面显示免费、settings.kind 却停在默认(anthropic) → 免费模型被当 anthropic 发、报"无法解析鉴权"。
       if (!r?.settings?.providerId) {
         const freeP = PRESETS.find((x) => x.id === "wuwei-free");
-        if (freeP && r?.settings) {
-          window.wuwei.setSettings({ ...r.settings, kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r.settings.model || freeP.models[0] });
+        if (freeP) {
+          window.wuwei.setSettings({ ...(r?.settings || {}), kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r?.settings?.model || freeP.models[0] });
         }
       }
       // 可选模块开关：以主进程 settings 为准校准本地镜像（用户可能在别处改过/换了机器）
@@ -4500,6 +4536,7 @@ export function App() {
   useEffect(() => {
     window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => setCatalog(null));
   }, [wuwei?.user?.id]);
+  useEffect(() => { void refreshImageCatalog(); }, [wuwei?.user?.id]);
 
   // 内置平台 + 用户自定义供应商：先应用用户的删除/改名/改端点覆盖，再按托管登录+后台可见性过滤，
   // 最后按用户自定义顺序排、隐藏项不进切换菜单
@@ -4535,8 +4572,8 @@ export function App() {
     catalogOrder,
   );
   // 未登录：免费体验(anon)恒置顶(稳定排序，其余相对序不变)——访客第一眼就是免费体验，也是唯一可用项。
-  const providerList = wuwei ? providerListRaw : [...providerListRaw].sort((a, b) => (b.anon ? 1 : 0) - (a.anon ? 1 : 0));
-  const curPreset = providerList.find((p) => p.id === curProviderId);
+  const providerList = [...providerListRaw.filter(p=>p.id==="wuwei-free"), imagePreset, ...providerListRaw.filter(p=>p.id!=="wuwei-free")];
+  const curPreset = imageMode ? imagePreset : providerList.find((p) => p.id === curProviderId);
   // 动态实时模型(从平台 /models 拉)并入预设，去重；预设在前(保证旗舰置顶)，实时补充新模型；
   // 再并入当前生效的模型(meta.model)——自建端点等没有预设列表时，配好的模型也能在快切里看到/切换。
   const quickModels = [
@@ -4548,11 +4585,18 @@ export function App() {
   ];
   // 切换模型下拉展示：常用=预设旗舰(+当前选中项)，全部=预设+实时拉取全量
   const commonModels = curPreset?.models ?? [];
-  const shownModels = showAllModels
+  const shownModels = imageMode ? imagePreset.models : showAllModels
     ? quickModels
     : [...new Set([...commonModels, ...(meta.model && !commonModels.includes(meta.model) ? [meta.model] : [])])];
-  const hasMoreModels = quickModels.length > commonModels.length;
+  const hasMoreModels = !imageMode && quickModels.length > commonModels.length;
   async function quickModel(m: string) {
+    if (imageMode) {
+      if (!wuwei) { setShowModelMenu(false); setShowLoginIntro(true); return; }
+      if (!imageCatalog.some(s=>s.sku_id===m)) return;
+      const r=await window.wuwei.getSettings();
+      window.wuwei.setSettings({...r.settings,imageMode:true,imageSku:m});
+      setImageSku(m);setShowModelMenu(false);return;
+    }
     // 访客门禁：未登录时仅「免费体验(anon)」平台可切它自己的免费模型；其它一律引导登录
     if (!wuwei && !curPreset?.anon) {
       setShowModelMenu(false);
@@ -4587,22 +4631,26 @@ export function App() {
 
   // 连通状态检测：更新状态灯（红/黄/绿）
   async function runConnCheck() {
-    setConn({ status: "checking", reason: lang === "en" ? "Checking connection…" : "检测连通状态…" });
+    const seq = ++connCheckSeqRef.current;
+    setConn({ status: "checking", reason: langRef.current === "en" ? "Checking connection…" : "检测连通状态…" });
     try {
       const r = await window.wuwei.checkConn();
+      if (seq !== connCheckSeqRef.current) return;
       setConn(r);
       // 需登录/配 Key 的平台(非托管)一旦红灯且属「缺凭证/未授权」→ 主动亮一键授权引导条，
       // 别让用户对着红灯反复重试却不知道要先登录(线上见过选 Codex 没登录 ChatGPT 就卡死循环)。
-      if (r.status === "red" && curPreset && !curPreset.hosted && isAuthErrorText(r.reason || "")) {
+      if (!imageModeRef.current && r.status === "red" && curPreset && !curPreset.hosted && isAuthErrorText(r.reason || "")) {
         setNeedAuth(true);
         setAuthDismissed(false);
       }
       // 产品行为埋点：模型连通检测结果(green=通/其它=不通)，诊断「选了模型能不能用」
       void window.wuwei.track?.("model_connect", { ok: r.status === "green", status: r.status }, r.reason?.slice(0, 500));
     } catch {
-      setConn({ status: "yellow", reason: lang === "en" ? "Check failed, please retry." : "检测失败，请重试。" });
+      if (seq !== connCheckSeqRef.current) return;
+      setConn({ status: "yellow", reason: langRef.current === "en" ? "Check failed, please retry." : "检测失败，请重试。" });
     }
   }
+  useEffect(() => { if (imageMode) void runConnCheck(); }, [imageMode, imageSku, wuwei?.user?.id, lang]);
 
   // ——— API Key 平台：一键获取 → 复制自动检测 → 通了自动设置 ———
   // 把验证过的 key 存进当前平台槽并切换生效
@@ -4734,7 +4782,8 @@ export function App() {
   async function applyBoundModel(providerId?: string, model?: string) {
     if (!providerId && !model) return;
     const r = await window.wuwei.getSettings();
-    const cur = r?.settings || {};
+    const cur = { ...(r?.settings || {}), imageMode: false };
+    if (r?.settings?.imageMode) { setImageMode(false); window.wuwei.setSettings(cur); }
     // 已经就是它 → 不重复切(避免 setSettings 抖动)
     if ((!providerId || cur.providerId === providerId) && (!model || cur.model === model)) return;
     if (providerId && cur.providerId !== providerId) {
@@ -4782,11 +4831,21 @@ export function App() {
     }
     const r = await window.wuwei.getSettings();
     const cur = r?.settings || {};
+    if (p.id === "wuwei-image") {
+      const rows=await window.wuwei.imageCatalog().catch(()=>[]);
+      setImageCatalog(rows);
+      if (!rows.length) { push({type:"notice",text:lang==="en"?"Image models are temporarily unavailable. Try again later.":"生图模型暂不可用，请稍后再试。"});setShowProviderMenu(false);return; }
+      const sku=rows.find(s=>s.sku_id===imageSku)?.sku_id || rows.find(s=>s.sku_id==="openai-gpt-image-2-medium")?.sku_id || rows[0].sku_id;
+      window.wuwei.setSettings({...cur,kind:"openai",providerId:"wuwei-free",baseUrl:WUWEI_GATEWAY_BASE,model:"glm-4.7-flash",apiKey:undefined,oauthToken:undefined,imageMode:true,imageSku:sku});
+      setCurProviderId("wuwei-free");setImageMode(true);setImageSku(sku);setShowProviderMenu(false);return;
+    }
+    setImageMode(false);
     const slot = (cur.creds || {})[p.id] || {};
     window.wuwei.setSettings({
       ...cur,
       kind: p.kind,
       providerId: p.id,
+      imageMode: false,
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
       baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
@@ -5066,6 +5125,12 @@ export function App() {
           }
           break;
         }
+        case 'evt:decision-request':
+          setToolDecisions(previous => ({ ...previous, [payload.permId]: payload }));
+          break;
+        case 'evt:decision-resolved':
+          setToolDecisions(previous => { const next = { ...previous }; delete next[payload.permId]; return next; });
+          break;
         case "evt:ask-user": {
           // AI 请用户选择：按发起会话 id 存。当前会话→直接弹框；别的会话→右上角通知，不打断当前对话。
           const askSid = payload.sid || currentIdRef.current;
@@ -5481,11 +5546,20 @@ export function App() {
     e.preventDefault();
     const startY = e.clientY;
     const el = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null;
-    const startH = toolsHRef.current || (el ? el.getBoundingClientRect().height : 220);
+    const startH = el ? el.getBoundingClientRect().height : 220;
+    let expandedByDrag = false;
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
     const move = (ev: MouseEvent) => {
+      // 收起时不占用保存的高度；向下拖动分界线可重新展开。
+      if (!teamExpanded && !expandedByDrag) {
+        if (ev.clientY - startY < 8) return;
+        expandedByDrag = true;
+        setTeamExpanded(true);
+        localStorage.setItem("wuwei-team-expanded", "1");
+      }
       const h = Math.min(Math.round(window.innerHeight * 0.72), Math.max(72, startH + ev.clientY - startY));
+      toolsHRef.current = h;
       setToolsH(h);
     };
     const up = () => {
@@ -5925,6 +5999,10 @@ export function App() {
     }
     setSuggestion(""); // 发送后清掉旧的下一步建议(回复完会重新生成)
     const imgs = pendingImages;
+    if (imageMode && imgs.length) {
+      push({type:"notice",text:lang === "en" ? "These presets currently generate from text. Remove the attachments before generating; image editing is not available yet." : "这些预设目前支持文生图。请移除附件后生成，参考图编辑暂未开放。"});
+      return;
+    }
     const inject = busy; // 跑动中→注入到当前回合
     // 铁律:发送绝不能依赖密钥扫描。扫描失败/无该接口都要照常发,主进程还会兜底脱敏。
     const go = () => {
@@ -6371,11 +6449,16 @@ export function App() {
                           className="allow"
                           onClick={() => {
                             setShowConn(false);
+                            if (imageMode) {
+                              if (conn.status === 'red') setShowLoginIntro(true);
+                              else { void refreshImageCatalog(); void runConnCheck(); }
+                              return;
+                            }
                             setSettingsTab("model");
                             setShowSettings(true);
                           }}
                         >
-                          {conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
+                          {imageMode ? conn.status === 'red' ? (lang === 'en' ? 'Sign in' : '登录') : (lang === 'en' ? 'Refresh models' : '刷新模型') : conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
                         </button>
                       )}
                     </div>
@@ -6455,17 +6538,17 @@ export function App() {
               <span className="mq-mid">·</span>
               <button
                 className="mq-btn mq-mod"
-                title={meta.model}
+                title={imageMode ? imageLabel(imageSku) : meta.model}
                 onClick={(e) => {
                   // 访客门禁：未登录且当前不是免费体验 → 点模型也引导登录
                   if (!wuwei && !curPreset?.anon) { setShowLoginIntro(true); return; }
                   // 打开切换器时重新拉一次后台目录：后台上新/下架模型(如豆包上线、牛来下架)即时可见，不用重启
-                  if (!showModelMenu) { window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
+                  if (!showModelMenu) { if(imageMode) void refreshImageCatalog(); window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
                   openMqMenu(e);
                   setShowModelMenu((v) => !v);
                 }}
               >
-                <span className="mq-txt">{MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
+                <span className="mq-txt">{imageMode ? imageLabel(imageSku) : MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
                 <span className="mq-caret">▾</span>
               </button>
               {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
@@ -6522,11 +6605,11 @@ export function App() {
                     {providerList.map((p) => (
                       <button
                         key={p.id}
-                        className={"mq-item" + (p.id === curProviderId ? " on" : "")}
+                        className={"mq-item" + (p.id === displayProviderId ? " on" : "")}
                         onClick={() => quickProvider(p)}
                       >
                         <span>{pLabel(p, lang)}</span>
-                        {p.id === curProviderId && <span className="mq-check">✓</span>}
+                        {p.id === displayProviderId && <span className="mq-check">✓</span>}
                       </button>
                     ))}
                     <div className="mq-sep" />
@@ -6556,7 +6639,7 @@ export function App() {
                         {t("mq.switchModel", "切换模型")} · {curPreset ? pLabel(curPreset, lang) : meta.backend}
                       </span>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
+                        onClick={(e) => { e.stopPropagation(); if (imageMode) { push({type:"notice",text:lang === "en" ? "Image prices are estimates. The tool confirms the hold and maximum authorized fee before each generation; final billing uses the verified official cost." : "生图价格为预估。每次生成前会确认预占金额和授权上限，最终按核实的官方实费结算。"});return; } setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
                         title={lang === "en" ? "Model pricing" : "模型费用说明"}
                         style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 5, border: "none", cursor: "pointer", background: "transparent", color: "inherit", opacity: 0.65, fontSize: 11 }}
                       >
@@ -6592,19 +6675,27 @@ export function App() {
                         </span>
                       )}
                     </div>
+                    {imageMode && <div className="mq-head">{lang === "en" ? "Fee confirmed before generation" : "生成前确认费用"}</div>}
                     {shownModels.length === 0 && <div className="mq-empty">{lang === "en" ? "No preset models — add one in Settings" : "无预设模型，去设置里填"}</div>}
                     {shownModels.map((m) => {
                       const gated = !wuwei && loginReqModelIds.has(m); // 未登录 + 需登录模型 → 灰置引导
                       return (
                       <button
                         key={m}
-                        className={"mq-item" + (m === meta.model ? " on" : "")}
+                        data-image-sku={imageMode ? m : undefined}
+                        className={"mq-item" + (m === displayModel ? " on" : "")}
                         style={gated ? { opacity: 0.5 } : undefined}
                         title={gated ? (lang === "en" ? "Sign in to use free" : "登录后可免费使用") : undefined}
                         onClick={() => { if (gated) { setShowModelMenu(false); setShowLoginIntro(true); return; } quickModel(m); }}
                       >
                         <span>
-                          {MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
+                          {imageMode ? imageLabel(m) : MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
+                          {imageMode && <span style={{marginLeft:8,fontSize:11,opacity:0.65}}>{(() => {
+                            const model = imageCatalog.find(s=>s.sku_id===m)?.model;
+                            const prices = imageCatalog.filter(s=>s.model===model).map(s=>s.coins_per_image);
+                            const varied = new Set(prices).size > 1;
+                            return lang === 'en' ? `${varied ? 'From ' : '≈'}${Math.min(...prices)} coins` : `≈${Math.min(...prices)} 无为币${varied ? '起' : ''}`;
+                          })()}</span>}
                           {gated && (
                             <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
                               {lang === "en" ? "Sign in" : "登录可用"}
@@ -6636,7 +6727,7 @@ export function App() {
                             </span>
                           )}
                         </span>
-                        {m === meta.model && <span className="mq-check">✓</span>}
+                        {m === displayModel && <span className="mq-check">✓</span>}
                       </button>
                       );
                     })}
@@ -6805,8 +6896,8 @@ export function App() {
         {teamEnabled && showTeam && (
           <>
           <div
-            className={"side-tools" + (!showChats ? " full" : "")}
-            style={showChats && toolsH > 0 ? ({ height: toolsH, maxHeight: "none", flex: "0 0 auto" } as React.CSSProperties) : undefined}
+            className={"side-tools" + (!teamExpanded ? " collapsed" : !showChats ? " full" : "")}
+            style={teamExpanded && showChats && toolsH > 0 ? ({ height: toolsH, maxHeight: "72vh", flex: "0 0 auto" } as React.CSSProperties) : undefined}
           >
             {/* 一人公司：可展开板块（像微信）。标题行点箭头展开/收起；点标题图标进管理页(员工)。
                 展开后列群 + 员工私聊入口。右键标题弹「新建员工/导入/建群」（TODO 下一步）。 */}
@@ -6885,12 +6976,12 @@ export function App() {
                       >
                         <button
                           className="tool-sub-item"
-                          title={lang === "en" ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                          title={lang === "en" ? `Chat with ${employeeLabel(e, "en")}` : `和${e.name}私聊`}
                           onClick={openLatest}
                           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                         >
-                          <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={e.name} /></span>
-                          <span className="tool-sub-nm">{tx(e.name)}</span>
+                          <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, lang)} /></span>
+                          <span className="tool-sub-nm">{employeeLabel(e, lang)}</span>
                           {headIds.has(e.id) && <span className="tool-sub-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head" : "负责人"}</span>}
                         </button>
                         {(empSessions.length > 0 || empDms.length > 0) && (
@@ -6942,12 +7033,12 @@ export function App() {
                                 role="button"
                                 tabIndex={0}
                                 className={"tool-sub-convo tool-sub-dm" + (onDm ? " on" : "")}
-                                title={lang === "en" ? `DM with ${other?.name || otherId}` : `与${other?.name || otherId}的私聊`}
+                                title={lang === "en" ? `DM with ${employeeLabel(other, "en", otherId)}` : `与${other?.name || otherId}的私聊`}
                                 onClick={() => { setDmSelfId(e.id); setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
                                 onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
                               >
-                                <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                                <span className="tool-sub-convo-t">{tx(other?.name || otherId)}</span>
+                                <span className="tool-sub-av mini"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={employeeLabel(other, lang, otherId)} /></span>
+                                <span className="tool-sub-convo-t">{employeeLabel(other, lang, otherId)}</span>
                                 <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
                                 <button
                                   className="tool-sub-convo-del"
@@ -7004,7 +7095,7 @@ export function App() {
                       {groups.map(({ dept, mems }: any) => (
                         <div className="tool-dept" key={dept.id}>
                           <div className="tool-dept-head">
-                            <span className="tool-dept-nm">{tx(dept.name)}</span>
+                            <span className="tool-dept-nm">{departmentLabel(dept, lang)}</span>
                             <span className="tool-dept-cnt">{mems.length}</span>
                           </div>
                           {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
@@ -7042,7 +7133,7 @@ export function App() {
                     <span className="tool-sub-stack">
                       {(r.members || []).slice(0, 3).map((mid: string) => {
                         const m = teamEmployees.find((x: any) => x.id === mid);
-                        return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                        return <span className="tool-sub-av mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>;
                       })}
                     </span>
                     <span className="tool-sub-nm">{tx(r.name)}</span>
@@ -7050,7 +7141,7 @@ export function App() {
                   </button>
                 ))}
                 {groupsExpanded && teamRooms.filter((r:any)=>r.type!=="dm").length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "No groups yet — right-click 「My Company」 to create one." : "还没有群 · 右键「一人公司」建群"}</div>
+                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add a group." : "右键新建群聊"}</div>
                 )}
                 {/* SOP 库子板块头：公司标准流程文档库（树形，可展开/折叠、右键管理、拖拽） */}
                 <button
@@ -7064,7 +7155,7 @@ export function App() {
                 </button>
                 {sopExpanded && renderSopTree(undefined, 0)}
                 {sopExpanded && sopTree.length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "No SOPs yet — right-click 「SOPs」 to add." : "还没有 SOP · 右键「SOP库」新建"}</div>
+                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add an SOP." : "右键新建 SOP"}</div>
                 )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
                   <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
@@ -7074,7 +7165,7 @@ export function App() {
               </div>
             )}
           </div>
-          {teamExpanded && showChats && (
+          {showChats && (
             <div
               className="side-tools-resizer"
               onMouseDown={startToolsResize}
@@ -8092,6 +8183,14 @@ export function App() {
                         </button>
                       </div>
                     )}
+                    {!wuwei && (
+                      <button className="acct-it" onClick={() => {
+                        setShowAcctMenu(false);
+                        setShowGuide(true);
+                      }}>
+                        {lang === "en" ? "User Guide" : "使用手册"}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -8449,8 +8548,8 @@ export function App() {
                 const other = teamEmployees.find((x: any) => x.id === otherId);
                 return (
                   <>
-                    <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={other?.name || otherId} /></span>
-                    <span className="tb-title-txt">{tx(other?.name || otherId)}</span>
+                    <span className="tb-avatar"><EmployeeAvatar icon={other?.icon} avatarData={other?.avatarData} name={employeeLabel(other, lang, otherId)} /></span>
+                    <span className="tb-title-txt">{employeeLabel(other, lang, otherId)}</span>
                   </>
                 );
               }
@@ -8460,7 +8559,7 @@ export function App() {
                     <span className="tb-avatar stack">
                       {(room.members || []).slice(0, 3).map((mid: string) => {
                         const m = teamEmployees.find((x: any) => x.id === mid);
-                        return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>;
+                        return <span className="tb-av-mini" key={mid}><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>;
                       })}
                     </span>
                     <span className="tb-title-txt">{tx(room.name)}</span>
@@ -8474,12 +8573,14 @@ export function App() {
               if (curEmp) {
                 return (
                   <>
-                    <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={curEmp.name} /></span>
-                    <span className="tb-title-txt">{tx(curEmp.name)}</span>
+                    <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={employeeLabel(curEmp, lang)} /></span>
+                    <span className="tb-title-txt">{employeeLabel(curEmp, lang)}</span>
                   </>
                 );
               }
               if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "My Company" : "一人公司"}</span></>;
+              if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "Groups" : "群聊"}</span></>;
+              if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "SOPs" : "SOP"}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
               const isDefault = !st || st === "新对话" || st === "New chat";
               return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (lang === "en" ? "Wuwei" : "无为") : st}</span></>;
@@ -8503,8 +8604,8 @@ export function App() {
                             const m = teamEmployees.find((x: any) => x.id === mid);
                             return (
                               <span className="tb-room-mem" key={mid}>
-                                <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={m?.name || mid} /></span>
-                                <span className="tb-room-mem-nm">{m?.name || mid}</span>
+                                <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>
+                                <span className="tb-room-mem-nm">{employeeLabel(m, lang, mid)}</span>
                                 {room.coordinator === mid && <span className="tb-room-mem-host">{lang === "en" ? "host" : "主持"}</span>}
                               </span>
                             );
@@ -8620,9 +8721,6 @@ export function App() {
           <div className="toolbar-min">
             <button className="icon-btn" title={t("side.expand", "展开侧栏")} onClick={() => toggleCollapse(false)}>
               »
-            </button>
-            <button className="icon-btn" title={t("side.search", "搜索所有对话内容（⌘/Ctrl+F）")} onClick={openSearch}>
-              <SearchIcon />
             </button>
           </div>
         )}
@@ -10588,6 +10686,10 @@ export function App() {
         <CeoDecidingPill lang={lang} anchor={composerRef} info={ceoDeciding[currentId]} />
       )}
 
+      {Object.values(toolDecisions)[0] && <ToolDecisionModal
+        lang={lang}
+        key={Object.values(toolDecisions)[0].permId} decision={Object.values(toolDecisions)[0]}
+        onRespond={response => window.wuwei.respondDecision(Object.values(toolDecisions)[0].permId, response)} />}
       {asks[currentId] && (() => {
         const a = asks[currentId];
         const cont = !a.decision && modeOf(currentId) === "cont";
@@ -13113,6 +13215,7 @@ const mcpFieldEn = (name: string, key: string, kind: "label" | "hint", fallback:
 
 // 内置工具描述的英文（仅设置页 Tools 标签显示用；模型侧描述仍走 src/tools 原文）。按工具名。
 const TOOL_DESC_EN: Record<string, string> = {
+  ...TEAM_TOOL_EN,
   read_file: "Read a text file's content with line numbers. For viewing code/files.",
   write_file: "Write/overwrite a file (creates it and parent dirs if missing).",
   edit_file: "Make an exact string replacement in a file. old_string must appear exactly once, or it errors.",

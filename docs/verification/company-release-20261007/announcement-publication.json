@@ -1,0 +1,9 @@
+{
+  "release": "1.7.44",
+  "published": true,
+  "version": "2026-10-07T14:29:14.574688+00:00",
+  "bilingual_fields_verified": true,
+  "history_and_audit_saved": true,
+  "idempotent_noop": false,
+  "scoped_to": "app.announcement"
+}

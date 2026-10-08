@@ -1,0 +1,12 @@
+{
+  "sku": "nano-banana-2",
+  "order_id": "11118156-7668-4d64-983f-796a21878f7c",
+  "charged_coins": 46,
+  "width": 1024,
+  "height": 1024,
+  "desktop_human_confirmation": true,
+  "desktop_cancel_no_order": true,
+  "paid_attempts": 1,
+  "inline_image_loaded": true,
+  "redundant_send_image": false
+}

@@ -70,6 +70,7 @@ export interface RoundUsage {
 export type UsageReport = SessionUsage & { round?: RoundUsage };
 
 export interface AgentHooks {
+  preferredImageSku?: string;
   remoteExecution?: ToolContext['remoteExecution'];
   requestDecision?: ToolContext['requestDecision'];
   onTurnEnd?(turnId: string): void;
@@ -357,6 +358,33 @@ export class Agent {
     finally { hooks.onTurnEnd?.(turnId); }
   }
 
+  /** Image picker: execute the user's explicit selection without an extra text-model request. */
+  async sendImage(prompt: string, sku: string, hooks: AgentHooks, signal?: AbortSignal): Promise<void> {
+    const turnId = randomUUID();
+    const tool = this.toolMap.get('platform_imagegen');
+    if (!tool || !this.provider.platformImage) throw new Error(tt('请先登录并选择托管生图。','Sign in and select hosted image generation first.'));
+    signal?.throwIfAborted();
+    this.ensureCanAcceptUser();
+    this.messages.push({role:'user',content:[{type:'text',text:prompt}],ts:Date.now()});
+    const id = randomUUID(), input = {action:'generate',sku_id:sku,prompt};
+    this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
+    hooks.onToolStart?.(id,tool.name,input);
+    try {
+      const out = await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,requestDecision:hooks.requestDecision || this.ctx.requestDecision});
+      hooks.onToolEnd?.(id,out.content,!!out.isError,out.displayImage);
+      const content = out.displayImage ? [{type:'text',text:out.content},{type:'image',dataUrl:out.displayImage,displayOnly:true}] : out.content;
+      this.messages.push({role:'user',content:[{type:'tool_result',tool_use_id:id,content,is_error:!!out.isError} as any],ts:Date.now()});
+      let result: any;
+      try { result=JSON.parse(out.content); } catch { /* Cancellation text. */ }
+      const reply = result?.displayed === true ? tt('图片已生成。','Image generated.')
+        : result?.message || out.content;
+      this.messages.push({role:'assistant',content:[{type:'text',text:reply}],ts:Date.now()});
+      hooks.onText?.(reply);
+      hooks.onStep?.();
+      if (!signal?.aborted) hooks.onAssistantDone?.();
+    } finally { hooks.onTurnEnd?.(turnId); }
+  }
+
   private async sendTurn(
     userInput: string,
     hooks: AgentHooks,
@@ -373,6 +401,7 @@ export class Agent {
     this.round = { input: 0, output: 0, cacheHit: 0, cacheMiss: 0, steps: 0, lastInput: 0 }; // 本轮清零重记
     this.softStop = false; // 新一轮开始，清掉上一轮可能残留的软停止标志
     const displayedImages = new Set<string>(); // 本回合展示图去重；下一回合用户仍可要求重发。
+    const displayedImagePaths = new Set<string>();
 
     while (true) {
       if (signal?.aborted) return; // 已被用户硬中断(abort)
@@ -523,6 +552,10 @@ export class Agent {
       const parallelJobs: Promise<void>[] = [];
       for (let idx = 0; idx < toolUses.length; idx++) {
         const call = toolUses[idx];
+        // Bind a new generation to the user's picker selection, while preserving recovery of old orders.
+        if (call.name === 'platform_imagegen' && call.input.action === 'generate' && hooks.preferredImageSku && !call.input.order_id && !call.input.recovery_key) {
+          call.input = { ...call.input, sku_id: hooks.preferredImageSku };
+        }
         const tool = stepToolMap.get(call.name);
         if (!tool || (tool.name==='platform_imagegen' && !stepProvider.platformImage) || (tool.requiresImageGeneration && !stepProvider.generateImage)) {
           resultsBlocks[idx] = {
@@ -541,6 +574,11 @@ export class Agent {
             content: tt("(已停止)", "(stopped)"), // 会显示在工具卡片里，跟随界面语言
             is_error: true,
           };
+          continue;
+        }
+
+        if (call.name === 'send_image' && typeof call.input.path === 'string' && displayedImagePaths.has(call.input.path)) {
+          resultsBlocks[idx] = { type:'tool_result',tool_use_id:call.id,content:tt('图片已经在本轮展示，无需重复发送。','This image is already displayed in this turn. Do not send it again.') };
           continue;
         }
 
@@ -568,6 +606,10 @@ export class Agent {
           if (displayImage && !out.image) {
             if (displayedImages.has(displayImage)) displayImage = undefined;
             else displayedImages.add(displayImage);
+            try {
+              const delivered = JSON.parse(out.content);
+              if (delivered.displayed === true && typeof delivered.path === 'string') displayedImagePaths.add(delivered.path);
+            } catch { /* A plain text image result has no path receipt. */ }
           }
           hooks.onToolEnd?.(call.id, out.content, !!out.isError, out.image || displayImage);
           const capped = capToolResult(out.content); // 存历史前封顶，防单条巨输出撑爆上下文(UI 卡片已拿完整 out.content)

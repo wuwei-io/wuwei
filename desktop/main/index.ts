@@ -1,3 +1,4 @@
+import { resolveEmployee, employeeLabel, employeeRoster, TEAM_TOOL_EN } from "../../src/team/default-localization.js";
 // Electron 主进程：创建窗口，复用核心(agent/tools/config)，
 // 通过 IPC 把 Agent 流式 hooks 推给渲染进程，权限确认走 IPC 往返。
 import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, session, clipboard, Menu, safeStorage, Tray, nativeImage, dialog, screen, nativeTheme } from "electron";
@@ -26,6 +27,8 @@ import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMP
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
+import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
+import { checkImageAvailability } from '../../src/imagegen/image-availability.js';
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
 import { writeFileSync, mkdirSync, appendFileSync, readdirSync, statSync, unlinkSync, renameSync } from "node:fs";
@@ -76,6 +79,7 @@ import { ensureFresh as ensureSearchIndex, searchSessions as searchInSessions } 
 import {
   loadSettings,
   saveSettings,
+  initializeFirstRunSettings,
   applyEnvFromSettings,
   detectSysLang,
   loadRateLimits,
@@ -210,22 +214,24 @@ const pendingAsk = new Map<number, (answers: any) => void>();
 // ask id → 发起该询问的会话 id：答案里带截图时，据此把图片注入回该会话的循环边界
 const pendingAskSid = new Map<number, string>();
 let askSeq = 0;
-function requestDesktopDecision(decision: Decision, sid: string, signal: AbortSignal, source: { sessionId?: string; roomId?: string }) {
-  const id = ++askSeq;
-  pendingAskSid.set(id, sid);
-  pendingAsk.set(id, answers => {
-    const first = answers?.list?.[0];
-    const selected = decision.options.find(option => option.label === first?.selected?.[0]);
-    answerLocalDecision(decision.permId, answers?.cancelled ? { action: 'deny' } : first?.text?.trim() && decision.allowCustom ? { action: 'reply', text: first.text.trim() } : selected ? { action: 'reply', value: selected.value } : { action: 'deny' });
-  });
-  const waiting = requestLocalDecision(decision, source, signal, event => {
-    if (event.type === 'decision-resolved') { pendingAsk.delete(id); pendingAskSid.delete(id); send('evt:ask-resolved', { sid, id }); }
-  });
-  if (!signal.aborted) send('evt:ask-user', { sid, id, decision: true, questions: [{ question: decision.question, header: decision.title, allowCustom: decision.allowCustom, options: decision.options.map(option => ({ label: option.label, description: option.desc || '' })) }] });
-  else { pendingAsk.delete(id); pendingAskSid.delete(id); }
-  return waiting;
-}
 let turnSid = "";
+// Desktop and phone resolve the same pending decision; paid tools use their own human dialog.
+const desktopDecisionSids = new Map<string, string>();
+function requestDesktopDecision(sid: string, signal: AbortSignal, source: { sessionId?: string; roomId?: string } = { sessionId: sid }): NonNullable<ToolContext['requestDecision']> {
+  return decision => {
+    if (signal.aborted) return Promise.resolve({ action: 'deny', reason: 'abort' });
+    desktopDecisionSids.set(decision.permId, sid);
+    try {
+      return requestLocalDecision(decision, source, signal, event => {
+        if (event.type === 'decision-resolved') desktopDecisionSids.delete(decision.permId);
+        send(event.type === 'decision' ? 'evt:decision-request' : 'evt:decision-resolved', event);
+      }).finally(() => desktopDecisionSids.delete(decision.permId));
+    } catch (error) {
+      desktopDecisionSids.delete(decision.permId);
+      throw error;
+    }
+  };
+}
 // 崩溃恢复：本进程是否已做过一次「残留 running→interrupted」检测(在首个 bootstrap 请求里同步做，避免时序竞争)
 let interruptDetected = false;
 // 多任务：每个会话各自的中断控制器；keys = 正在运行的会话集(用于任务计数)
@@ -309,10 +315,10 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   executionSignal.throwIfAborted();
   const origin = reportOrigin || taskReportScope?.origin;
   const localSource = origin?.kind === 'room' ? { roomId: origin.id } : { sessionId: origin?.id || `__room_${employee.id}` };
-  const decide = requestDecision || remoteExecution?.requestDecision || ((decision: Decision) => requestDesktopDecision(decision, `__room_${employee.id}`, executionSignal, localSource));
+  const decide = requestDecision || remoteExecution?.requestDecision || requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource);
   const decisionHook: ToolContext['requestDecision'] = decision => waitForRemoteResult(decide(decision), executionSignal);
   const permit = onPermission || remoteExecution?.requestPermission || (async (name: string, input: unknown): Promise<'allow' | 'deny'> => {
-    const answer = await requestDesktopDecision({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) }, `__room_${employee.id}`, executionSignal, localSource);
+    const answer = await requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource)({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) });
     return answer.action === 'allow' || answer.value === 'allow' ? 'allow' : 'deny';
   });
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
@@ -1582,7 +1588,7 @@ function resolveCeoId(): string | null {
   if (cfgId && emps.some((e) => e.id === cfgId)) return cfgId;
   const byTitle = emps.find((e) => /ceo/i.test(e.title || ""));
   if (byTitle) return byTitle.id;
-  return emps.find((e) => e.name === "小笨")?.id || null;
+  return resolveEmployee(emps, "wj-ceo")?.id || resolveEmployee(emps, "小笨")?.id || null;
 }
 
 // 把关链：员工请示(ask_user)先问谁、再问谁。顺序 = 本部门负责人(若 self 在某部门且自己不是负责人) → 公司 CEO。
@@ -1610,11 +1616,13 @@ async function askCeoDecision(
   const qtext = questions
     .map((q: any, i: number) => `${i + 1}. ${q.question}\n   可选：${(q.options || []).map((o: any) => o.label).join(" | ")}${q.multiSelect ? "（可多选）" : ""}`)
     .join("\n");
-  const input =
-    `你是公司 CEO。团队成员「${askerName}」在干活时遇到需要拍板的选择，按流程先请示你。\n\n` +
-    `· 你能替公司拍板 → 直接给出每题的选择(从给定选项里选)+一句简短理由。\n` +
-    `· 确实超出你的判断、必须董事长(老板)亲自定 → 只回一行：ESCALATE：<为什么需要老板>。\n\n` +
-    `需要拍板的问题：\n${qtext}`;
+  const input = process.env.WUWEI_LANG === "en"
+    ? `You are the company CEO. A teammate requests a decision. Choose from the provided options and give a brief reason. If the chair must decide, reply only ESCALATE: <reason>.
+
+${qtext}`
+    : `你是公司 CEO。团队成员「${askerName}」请求拍板。能决定请从选项中选择并说明理由；必须董事长决定时只回复 ESCALATE：<原因>。
+
+${qtext}`;
   const sys = buildEmployeeSystem(ceo, sysPrompt, loadEmployeeMemory(ceo.id), "## 当前场景\n\n你在做 CEO 把关：下属把需要拍板的选择请示到你这。能定就定、定不了才上报董事长。别反问下属，直接给结论或 ESCALATE。");
   // 倒计时：到点就 abort 掉 CEO 这一轮，当「没拍板」上报董事长。父级(员工会话)被取消也一起中止。
   const ac = new AbortController();
@@ -1794,9 +1802,9 @@ const dmTeammateTool: Tool = {
     const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
     const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
 
-    const target = available.find((e) => e.name === name);
+    const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可私信的同事）", "(no other teammates available)");
+      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可私信的同事）", "(no other teammates available)");
       return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
     }
 
@@ -1810,7 +1818,7 @@ const dmTeammateTool: Tool = {
     // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
     const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(ctx), (ctx.dmDepth ?? 0) + 1,
       { taskReportScope: ctx.taskReportScope });
-    return { content: tt(`「${target.name}」回复：\n${reply}`, `"${target.name}" replied:\n${reply}`) };
+    return { content: tt(`「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」回复：\n${reply}`, `"${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}" replied:\n${reply}`) };
   },
 };
 
@@ -1856,9 +1864,9 @@ const assignTaskTool: Tool = {
     const disabledApps = new Set(loadApps().filter((a) => a.disabled).map((a) => a.id));
     const available = all.filter((e) => e.id !== selfId && !(e.fromApp && disabledApps.has(e.fromApp)));
 
-    const target = available.find((e) => e.name === name);
+    const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = available.map((e) => e.name).join(tt("、", ", ")) || tt("（没有其他可派活的同事）", "(no other teammates available)");
+      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可派活的同事）", "(no other teammates available)");
       return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
     }
 
@@ -1899,7 +1907,7 @@ const assignTaskTool: Tool = {
       : urgent
         ? tt("他在忙，已把这件作为急事插到他队列最前，手头这件一完就优先做", "they're busy; queued this as urgent at the front — they'll do it next")
         : tt(`他在忙，已排进他的队列（前面还有 ${ahead + 1} 件），轮到就做`, `they're busy; queued (about ${ahead + 1} ahead), will do it when free`);
-    return { content: tt(`已把活派给「${target.name}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${target.name}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
+    return { content: tt(`已把活派给「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
   },
 };
 
@@ -2118,7 +2126,7 @@ const updateEmployeeTool: Tool = {
     const a = input as any;
     const name = clampStr(a.name);
     if (!name) return { content: tt("需要 name(要修改的同事名字)。", "name is required."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === name);
+    const emp = resolveEmployee(loadEmployees(), name);
     if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
     const patch: Record<string, unknown> = {};
     if (a.newName != null) patch.name = clampStr(a.newName);
@@ -2150,7 +2158,7 @@ const deleteEmployeeTool: Tool = {
     const name = clampStr(a.name);
     if (!name) return { content: tt("需要 name。", "name is required."), isError: true };
     if (a.confirm !== true) return { content: tt(`未删除：删除是不可撤销操作，请确认后再传 confirm=true。`, "Not deleted: deletion is irreversible, pass confirm=true to proceed."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === name);
+    const emp = resolveEmployee(loadEmployees(), name);
     if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
     if (ctx.employeeId === emp.id) return { content: tt("不能删除你自己。", "You can't delete yourself."), isError: true };
     removeEmployee(emp.id);
@@ -2187,8 +2195,8 @@ const manageDepartmentTool: Tool = {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
-    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
-    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
     // 把一串名字转成 id，顺带收集没找到的名字，提示 AI 名字写错。
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2274,8 +2282,8 @@ const manageGroupTool: Tool = {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
-    const idByName = (nm: string) => emps.find((e) => e.name === String(nm || "").trim())?.id;
-    const nameById = (id: string) => emps.find((e) => e.id === id)?.name || id;
+    const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
     const groupsOf = () => loadRooms().filter((r: any) => r.type !== "dm");
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2387,7 +2395,7 @@ const createScheduleTool: Tool = {
     const employeeName = clampStr(a.employeeName);
     const name = clampStr(a.name);
     if (!employeeName || !name) return { content: tt("需要 employeeName 和 name。", "employeeName and name are required."), isError: true };
-    const emp = loadEmployees().find((e) => e.name === employeeName);
+    const emp = resolveEmployee(loadEmployees(), employeeName);
     if (!emp) return { content: tt(`没找到叫「${employeeName}」的同事。`, `No teammate named "${employeeName}".`), isError: true };
     const sopId = clampStr(a.sopId);
     const doc = clampStr(a.doc);
@@ -2396,7 +2404,7 @@ const createScheduleTool: Tool = {
     if (err || !trigger) return { content: err || tt("触发规则无效。", "Invalid trigger."), isError: true };
     const task = addSchedule({ employeeId: emp.id, name, trigger, sopId, doc, enabled: a.enabled !== false });
     broadcastSchedules();
-    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${emp.name}: ${triggerText(trigger, true)}.`) };
+    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${employeeLabel(emp, process.env.WUWEI_LANG === "en" ? "en" : "zh")}: ${triggerText(trigger, true)}.`) };
   },
 };
 
@@ -2408,12 +2416,13 @@ const listSchedulesTool: Tool = {
   async run(input): Promise<ToolResult> {
     const emps = loadEmployees();
     const filterName = clampStr((input as any).employeeName);
-    const fid = filterName ? emps.find((e) => e.name === filterName)?.id : undefined;
+    const fid = filterName ? resolveEmployee(emps, filterName)?.id : undefined;
+    if (filterName && !fid) return { content: tt("员工名不存在或有歧义。", "Employee reference is unknown or ambiguous."), isError: true };
     let list = loadSchedules();
     if (filterName) list = list.filter((s) => s.employeeId === fid);
     if (!list.length) return { content: tt("还没有定时任务。", "No scheduled tasks yet.") };
     const lines = list.map((s) => {
-      const nm = emps.find((e) => e.id === s.employeeId)?.name || s.employeeId;
+      const nm = employeeLabel(emps.find((e) => e.id === s.employeeId), process.env.WUWEI_LANG === "en" ? "en" : "zh", s.employeeId);
       return `· [${s.id}] ${s.name} — ${nm} · ${triggerText(s.trigger)} · ${s.enabled ? "启用" : "暂停"}${s.sopId ? " · 引用SOP" : ""}`;
     });
     return { content: (filterName ? `「${filterName}」的定时任务：\n` : "定时任务：\n") + lines.join("\n") };
@@ -2442,7 +2451,7 @@ const deleteScheduleTool: Tool = {
 const sendImageTool: Tool = {
   name: "send_image",
   description:
-    "把尚未展示的本地图片发到当前对话框里内联显示、可点开看大图。path=图片绝对路径；caption=可选说明。支持 png/jpg/jpeg/gif/webp，单张≤8MB。codex_imagegen成功时已自动展示图片(displayed:true)，不要再调用本工具重复发送。其它工具只返回文件路径、尚未展示时才用本工具发图。",
+    "把尚未展示的本地图片发到当前对话框里。path=绝对路径，caption=可选说明，单张≤8MB。platform_imagegen 和 codex_imagegen 返回 displayed:true 时图片已展示，直接回复用户，不要调用 send_image。只有尚未展示的图片才用此工具。Send a local image only when it has not been displayed. When platform_imagegen or codex_imagegen returns displayed:true, the image is already visible: reply to the user without calling send_image.",
   readOnly: true,
   inputSchema: {
     type: "object",
@@ -2602,7 +2611,16 @@ function localizeSchemaEn(name: string, schema: any): any {
   };
   return walk(schema);
 }
+function englishTeamSchema(schema: any): any {
+  if (!schema || typeof schema !== "object") return schema;
+  const out = { ...schema };
+  if (out.description) delete out.description;
+  if (out.properties) out.properties = Object.fromEntries(Object.entries(out.properties).map(([key, value]) => [key, englishTeamSchema(value)]));
+  if (out.items) out.items = englishTeamSchema(out.items);
+  return out;
+}
 function localizeToolEn(t: Tool): Tool {
+  if (TEAM_TOOL_EN[t.name]) return { ...t, description: TEAM_TOOL_EN[t.name] + " Employee references accept stable IDs, canonical names or unique unmodified default English aliases. Ambiguous references are rejected.", inputSchema: englishTeamSchema(t.inputSchema) };
   const desc = TOOL_DESC_EN_MODEL[t.name];
   if (!desc && !TOOL_PARAM_EN_MODEL[t.name]) return t;
   return { ...t, description: desc ?? t.description, inputSchema: localizeSchemaEn(t.name, t.inputSchema) };
@@ -2796,6 +2814,8 @@ function msgTextTail(m: any, n: number): string {
     .slice(-n);
 }
 async function maybeSmartTitle(id: string) {
+  // Image turns already have a prompt-derived title; do not call a text model for them.
+  if (loadSettings()?.imageMode) return;
   if (titleInFlight.has(id) || !provider) return;
   const a0 = agents.get(id);
   if (!a0) return;
@@ -3342,6 +3362,7 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
+    initializeFirstRunSettings();
     // 所有模型请求统一压缩发送副本：限制长边和编码字节，包含历史附件、截图和手机上传。
     // 小图保持原样；大图优先 PNG，必要时 JPEG/继续缩小，原始展示图不受影响。
     setImageCapper((dataUrl: string, maxEdge: number) => {
@@ -3826,7 +3847,9 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   }
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
   send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
-  agent.setSystem(sysOverride ?? sysForSession(useId)); // 每轮重置也走会话身份，绑员工则保人格（身份 bug 根因修复）
+  const imageSettings = loadSettings();
+  const selectedImageSku = imageSettings?.imageMode && !sysOverride ? imageSettings.imageSku : undefined;
+  agent.setSystem((sysOverride ?? sysForSession(useId)) + (selectedImageSku ? tt(`\n用户已选择生图模式，规格为 ${selectedImageSku}。本轮描述用于生成图片，直接调用 platform_imagegen；由工具确认费用。已展示图片不再调用 send_image。`, `\nThe user selected image mode with SKU ${selectedImageSku}. Treat this turn's description as an image request and call platform_imagegen. Let the tool confirm the fee. Do not call send_image after displayed:true.`) : ""));
   const ac = new AbortController();
   runs.set(useId, ac);
   emitTasks();
@@ -3841,9 +3864,13 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
     await ensureHostedProviderReady(useId);
-    const runP = agent.send(
+    if (selectedImageSku && images?.length) throw new Error(tt('当前生图预设仅支持文字描述，未提交参考图或扣费。','These image presets accept text only. No reference image or paid order was submitted.'));
+    const runP = (selectedImageSku
+      ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal)
+      : agent.send.bind(agent))(
       text,
       {
+        preferredImageSku: selectedImageSku,
         onTurnEnd: (turnId) => taskReports.closeTurn(turnId),
         onContextWindow: (contextWindow) => send("evt:context-window", { sid: useId, contextWindow }),
         onText: (delta) => {
@@ -3861,21 +3888,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
         },
         onToolStart: (id, name, input) => { toolDepth++; send("evt:tool-start", { sid: useId, id, name, input }); },
         onToolEnd: (id, result, isError, image) => { toolDepth = Math.max(0, toolDepth - 1); send("evt:tool-end", { sid: useId, id, result, isError, image }); },
-        requestDecision: (decision: Decision) => {
-          const id = ++askSeq;
-          pendingAskSid.set(id, useId);
-          pendingAsk.set(id, answers => {
-            const first = answers?.list?.[0];
-            const selected = decision.options.find(option => option.label === first?.selected?.[0]);
-            const answer: DecisionResponse = answers?.cancelled ? { action: 'deny' } : first?.text?.trim() && decision.allowCustom ? { action: 'reply', text: first.text.trim() } : selected ? { action: 'reply', value: selected.value } : { action: 'deny' };
-            answerLocalDecision(decision.permId, answer);
-          });
-          const waiting = requestLocalDecision(decision, useId, ac.signal, event => {
-            if (event.type === 'decision-resolved') { pendingAsk.delete(id); pendingAskSid.delete(id); send('evt:ask-resolved', { sid: useId, id }); }
-          });
-          send('evt:ask-user', { sid: useId, id, decision: true, questions: [{ question: decision.question, header: decision.title, allowCustom: decision.allowCustom, options: decision.options.map(option => ({ label: option.label, description: option.desc || '' })) }] });
-          return waiting;
-        },
+        requestDecision: requestDesktopDecision(useId, ac.signal),
         requestPermission: (tool, input) => {
           const id = ++permSeq, permId = randomUUID();
           pendingPermSid.set(id, useId);
@@ -4000,7 +4013,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
       };
       attempt(40); // 立刻 + 最多 40 次重试(~60s)：长回复流式落定慢，持续轮询直到完整 json 出现
     } else if ((useId === currentId || contSessions.has(useId)) && !ac.signal.aborted &&
-      !taskReports.hasPendingOrigin('session', useId) && !conversationReports.hasPending(useId)) {
+      !selectedImageSku && !taskReports.hasPendingOrigin('session', useId) && !conversationReports.hasPending(useId)) {
       // 当前会话，或开着智能继续的后台会话，跑完都算下一步建议(后台会话切走也能自己接着推进)
       void suggestNextAction(useId);
     }
@@ -4055,7 +4068,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
-  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values()].includes(id)) {
+  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
     agent.requestSoftStop();
     log("softStop", id.slice(0, 8), "温和收尾中(再点一次强制停止)");
     return;
@@ -4087,6 +4100,10 @@ ipcMain.on("perm:respond", (_e, id: number, decision: "allow" | "deny") => {
     pendingPerm.delete(id);
     pendingPermSid.delete(id);
   }
+});
+
+ipcMain.on('decision:respond', (_e, permId: string, response: unknown) => {
+  answerLocalDecision(permId, response as DecisionResponse);
 });
 
 ipcMain.on("ask:answer", (_e, id: number, answers: any) => {
@@ -5244,6 +5261,12 @@ function applyAnonProviders(cat: any[]): void {
   anonProviderIds.add("wuwei-free");
   for (const p of cat) if (p.anon) anonProviderIds.add(p.id);
 }
+ipcMain.handle("account:image-catalog", async () => {
+  const sess = await getFreshWuweiSession().catch(() => null);
+  if (!sess?.accessToken) return [];
+  const result = await new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform').catalog();
+  return Array.isArray(result) ? result : [];
+});
 ipcMain.handle("account:wuwei-catalog", async () => {
   const sess = await getFreshWuweiSession().catch(() => null);
   const cat = await wuweiFetchCatalog(sess?.accessToken ?? null);
@@ -5665,6 +5688,13 @@ function hasCredential(cfg: ReturnType<typeof loadConfig>): boolean {
 // 连通状态检测：红=未配置/未授权；绿=实测 ping 通；黄=已配置但请求报错
 // 由渲染层在启动/切换平台/点灯时调用
 ipcMain.handle("conn:check", async () => {
+  const settings = loadSettings();
+  if (settings?.imageMode) {
+    const sess = await getFreshWuweiSession().catch(() => null);
+    if (!sess?.accessToken) return { status: "red", reason: tt("请先登录后使用托管生图。", "Sign in to use hosted image generation.") };
+    return checkImageAvailability(new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform'),
+      settings.imageSku || '', process.env.WUWEI_LANG === 'en' ? 'en' : 'zh');
+  }
   const cfg = loadConfig();
   if (!hasCredential(cfg)) {
     return { status: "red", reason: tt("当前平台未配置凭证 / 未授权，无法使用。", "This provider has no credentials / isn't authorized — can't be used.") };

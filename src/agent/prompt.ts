@@ -54,8 +54,8 @@ export function withImageToolInstructions(system: string, tools: readonly { name
   }
   if (names.has('platform_imagegen')) {
     notes.push(en
-      ? 'For image generation, call platform_imagegen with action="catalog" first, choose an available sku_id, then call action="generate" with sku_id and prompt. A hosted text model can use this separate image service. The tool presents the fee confirmation before creating an order; let the user approve it. Free text chat does not make image generation free. Query or settle an existing order after an interruption; never automatically create a replacement order.'
-      : '用户要求生图时，先直接调用 platform_imagegen（action="catalog"）获取目录，选择可用 sku_id，再调用 action="generate" 并传入 sku_id 和 prompt。托管文字模型可以通过此独立图片服务生图。工具会在下单前弹出费用确认，由用户批准；免费文字聊天不代表生图免费。中断后查询或结算原订单，不自动重新下单。');
+      ? 'For image generation, call platform_imagegen with action="catalog" first, choose an available sku_id, then call action="generate" with sku_id and prompt. A hosted text model can use this separate image service. Calling generate opens the tool’s fee confirmation; no order or charge occurs until the user approves it. Do not ask for separate confirmation in prose or stop after listing the catalog. Free text chat does not make image generation free. Query or settle an existing order after an interruption; never automatically create a replacement order.'
+      : '用户要求生图时，先直接调用 platform_imagegen（action="catalog"）获取目录，选择可用 sku_id，再调用 action="generate" 并传入 sku_id 和 prompt。托管文字模型可以通过此独立图片服务生图。调用 generate 会先弹出工具自带的费用确认，用户批准后才下单扣费；无需另用文字询问，也不要只列出目录就停下。免费文字聊天不代表生图免费。中断后查询或结算原订单，不自动重新下单。');
   }
   if (!notes.length) return system;
   if (names.has('platform_imagegen')) {
@@ -64,7 +64,7 @@ export function withImageToolInstructions(system: string, tools: readonly { name
       : '目录为空或工具返回 IMAGE_CATALOG_EMPTY 时，明确告知平台生图当前没有可用规格，结束本次生图尝试。不要编造 sku_id、反复查询目录，或让用户换描述、等一会重试；这些操作不能启用服务端生图。');
   }
   notes.push(en
-    ? 'These are built-in callable tools: use them directly for image requests. Do not search for command-line image tools, install software or write scripts first. On success, displayed:true means the image is already shown; do not call send_image again. Report tool failures accurately.'
-    : '以上是内置可直接调用的工具：生图需求直接使用它们，无需先找命令行生图程序、安装软件或写脚本。成功返回 displayed:true 表示图片已展示，不再调用 send_image 重复发送；失败时如实说明工具错误。');
+    ? 'These are built-in callable tools: use them directly for image requests. Do not search for command-line image tools, install software or write scripts first. An order ID or unknown/pending status does not prove success. Only displayed:true confirms delivery. Never claim an undelivered image is ready. On success, displayed:true means the image is already shown; do not call send_image again. Report tool failures accurately.'
+    : '以上是内置可直接调用的工具：生图需求直接使用它们，无需先找命令行生图程序、安装软件或写脚本。订单编号或 unknown/pending 状态不代表生成成功，不要声称尚未交付的图片已准备好。只有成功返回 displayed:true 表示图片已展示，不再调用 send_image 重复发送；失败时如实说明工具错误。');
   return `${system}\n\n${en ? '## Image tools available this request' : '## 本轮可用生图工具'}\n${notes.join('\n')}`;
 }

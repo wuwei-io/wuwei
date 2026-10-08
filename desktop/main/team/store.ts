@@ -1,3 +1,6 @@
+import { localizeEmployee, employeeRoster } from "../../../src/team/default-localization.js";
+import { DEFAULT_TEAM_ID } from "../../../src/team/default-localization.js";
+import { defaultDepartments } from "../../../src/team/default-departments.js";
 // AI 员工团队 · 数据层
 //
 // 全部数据收在 ~/.wuwei/team/ 子目录下，删掉整个目录 = 卸载干净，不在数据根目录留痕迹。
@@ -57,7 +60,7 @@ export interface TeamConfig {
   /** CEO 拍板倒计时(秒)：员工请示后给 CEO 这么久拍板，超时没定就上报董事长。缺省 10，范围 3~60。 */
   ceoDecideTimeoutSec?: number;
   /**
-   * 部门（组织架构）。可不设=扁平管理；一个部门人多（2+）了再建来方便管理。
+   * 部门（组织架构）。默认团队首次安装初始化四个部门；已有部门和显式清空保留。
    * 一名员工最多归一个部门（按 memberIds 判定）；headId=部门负责人（也应在 memberIds 里）。
    */
   departments?: Department[];
@@ -218,7 +221,15 @@ export function installApp(app: TeamApp): { apps: TeamApp[]; employees: Employee
 
   saveApps(apps);
   saveEmployees(employees);
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(employees);
   return { apps, employees };
+}
+
+function ensureDefaultDepartments(employees: Employee[]) {
+  // Missing configuration means first initialization; [] means the user deliberately cleared it.
+  if (loadTeamConfig().departments !== undefined) return;
+  const departments = defaultDepartments(employees);
+  if (departments) saveTeamConfig({ departments });
 }
 
 /**
@@ -232,6 +243,7 @@ export function syncBuiltinApp(app: TeamApp): number {
   const apps = loadApps();
   const stored = apps.find((a) => a.id === app.id);
   if (!stored) return 0; // 没装过：不动（用户自己去应用中心装）
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(loadEmployees());
   if (stored.version === app.version) return 0; // 已是最新
 
   const employees = loadEmployees();
@@ -251,6 +263,7 @@ export function syncBuiltinApp(app: TeamApp): number {
   const nextApps = apps.map((a) => (a.id === app.id ? { ...a, name: app.name, desc: app.desc, version: app.version, employees: app.employees } : a));
   saveApps(nextApps);
   if (added) saveEmployees(employees);
+  if (app.id === DEFAULT_TEAM_ID) ensureDefaultDepartments(employees);
   return added;
 }
 
@@ -298,7 +311,7 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
  * 身份职责(IDENTITY) + 性格(SOUL) + 关于老板(USER) + 长期记忆(MEMORY)。
  * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
  */
-export function buildPersonaBlock(emp: Employee): string {
+export function buildPersonaBlock(emp: Employee, en = false): string {
   const parts = [`## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
   if (emp.soul?.trim()) parts.push(`## 你的性格与说话风格\n\n${emp.soul.trim()}`);
   if (emp.aboutUser?.trim()) parts.push(`## 关于你服务的人\n\n${emp.aboutUser.trim()}`);
@@ -334,7 +347,7 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
 
   // A 方案：确保四件套已物化成 .md，并优先用文件内容(手改也生效)，回退 json 字段。
   ensurePersonaFiles(emp);
-  const merged = { ...emp, ...readPersonaFiles(emp.id) } as Employee;
+  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, en ? "en" : "zh");
 
   const title = merged.title ? (en ? ` — ${merged.title}` : `——${merged.title}`) : "";
   const head = en
@@ -370,7 +383,10 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
     ? `\n\n---\n\n## Identity lock (final, overrides everything above about "Wuwei")\nYou are "${merged.name}"${title}. "Wuwei" is only the app you run in, never your identity. No matter how the tool/runtime section above is phrased, if asked who you are, you answer: ${merged.name}. Stay fully in character as ${merged.name}.`
     : `\n\n---\n\n## 身份锁定（最终，优先于上面一切关于“无为”的表述）\n你是「${merged.name}」${title}。“无为”永远只是你运行所在的软件，绝不是你的身份。无论上面工具/运行环境那段怎么写，被问你是谁，你的回答就是：${merged.name}。始终完全保持${merged.name}这个角色。`;
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(merged)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}${endLock}`;
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged, en)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}
+
+${en ? "Reply in English unless the user explicitly requests another language. Team routing: canonical names, unique default aliases and stable IDs are accepted; ambiguous names are rejected." : "默认使用中文回复，除非用户明确要求其他语言。工具支持canonical名字、无歧义默认英文别名和稳定ID。"}
+${employeeRoster(loadEmployees(), en ? "en" : "zh")}${endLock}`;
 }
 
 

@@ -3000,6 +3000,9 @@ body {
 }
 .ask-title { font-weight: 600; font-size: 14px; }
 .ask-multi { font-size: 11px; color: var(--text-2, #999); }
+.tool-decision-mask { z-index: 10000; }
+.tool-decision { max-width: 520px; }
+.tool-decision p { line-height: 1.6; white-space: pre-wrap; }
 .ask-opts { display: flex; flex-direction: column; gap: 6px; }
 .ask-opt {
   display: flex; flex-direction: column; gap: 2px; text-align: left;
@@ -6104,6 +6107,11 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   min-height: 0;
 }
 /* 一人公司面板下边缘的拖拽条：上下拖调整面板高度，双击恢复自适应 */
+.side-tools.collapsed {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow-y: hidden;
+}
 .side-tools-resizer {
   -webkit-app-region: no-drag;
   flex: 0 0 auto;

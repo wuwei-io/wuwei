@@ -1,0 +1,140 @@
+# push 一个 v* tag（如 git tag v1.1.0 && git push origin v1.1.0）即自动：
+# 在 Linux runner 打 AppImage/deb、macOS runner 打 dmg(Intel+Apple Silicon)、
+# Windows runner 打 exe，并发到 Release（三平台）。
+name: Release via OSS relay
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to finish publishing'
+        required: true
+      platforms:
+        description: 'JSON array of build runner platforms'
+        required: true
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.platforms || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm install --legacy-peer-deps
+
+      - name: Validate images, model vision and asynchronous task reports
+        run: |
+          npm run typecheck
+          node scripts/test-release.mjs
+
+      - name: Build renderer/main
+        run: npm run desktop:build
+
+      # 用 electron-builder.wuwei.yml：含 generic OSS publish 配置 → 会生成 latest*.yml 更新清单
+      # （--publish never 只是不让 electron-builder 自己上传；清单仍写入 release/，由下方 OSS 步骤上传）
+      - name: Package Linux (AppImage/deb)
+        if: matrix.os == 'ubuntu-latest'
+        run: npx electron-builder --linux --config electron-builder.wuwei.yml --publish never
+
+      - name: Package macOS (dmg + zip)
+        if: matrix.os == 'macos-latest'
+        run: npx electron-builder --mac --config electron-builder.wuwei.yml --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false # 无签名证书：跳过签名，产出未签名 dmg
+
+      # Windows 代码签名，三档优先级（互斥，从上到下命中即用）：
+      #   1) EVSIGN_KEY 已配置       → EV Sign(evsign.cn) 云签名。下载 CLI，用 build/evsign.js 钩子
+      #                                (electron-builder 26 字段 = win.signtoolOptions.sign，非老的 win.sign)
+      #                                在打包过程中逐个文件签名(见该文件注释：保证 latest.yml 的 sha512 正确)。
+      #   2) AZURE_TS_ENDPOINT 已配置 → Azure Trusted Signing（electron-builder 26 原生支持）。
+      #   3) 都没配(默认)            → 打未签名包，行为与接入前完全一致，绝不破坏发版。
+      # EV Sign 只需 1 个 secret：EVSIGN_KEY（许可证 UUID）。Azure 需 7 项 AZURE_*。
+      - name: Package Windows (exe)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $common = @('--win', '--config', 'electron-builder.wuwei.yml', '--publish', 'never')
+          if ($env:EVSIGN_KEY) {
+            Write-Host 'EV Sign 已配置 -> 下载 CLI 并打云签名包'
+            $cli = Join-Path $env:RUNNER_TEMP 'evsign-client.exe'
+            # evsign.cn 在国内、GitHub runner 在境外，下载可能慢：给 120s 超时 + 重试一次
+            $ok = $false
+            foreach ($i in 1..2) {
+              try {
+                Invoke-WebRequest -Uri 'https://mc.evsign.cn/evsign-client-cli-windows-latest' -OutFile $cli -TimeoutSec 120 -UseBasicParsing
+                if ((Get-Item $cli).Length -gt 0) { $ok = $true; break }
+              } catch { Write-Host "download evsign-client attempt $i failed: $_" }
+            }
+            if (-not $ok) { Write-Error 'evsign-client CLI 下载失败，中止发版（避免发出未签名包）'; exit 1 }
+            $env:EVSIGN_CLIENT = $cli
+            npx electron-builder @common '-c.win.signtoolOptions.sign=build/evsign.cjs'
+            if ($LASTEXITCODE -ne 0) { Write-Error 'electron-builder 打包失败'; exit 1 }
+            # electron-builder 对"签名失败"只跳过不报错(queue continue)，会静默产出未签名包。
+            # 打包后强制验签：安装包必须是 Valid 签名，否则中止发版(绝不发未签名却以为已签的包)。
+            $setup = Get-ChildItem release\*-setup.exe | Select-Object -First 1
+            $sig = Get-AuthenticodeSignature $setup.FullName
+            Write-Host "验签 $($setup.Name): $($sig.Status)"
+            if ($sig.Status -ne 'Valid') { Write-Error "签名校验失败($($sig.Status))，中止发版"; exit 1 }
+            Write-Host "签名有效，签发者: $($sig.SignerCertificate.Subject)"
+          } elseif ($env:AZURE_TS_ENDPOINT) {
+            Write-Host 'Azure Trusted Signing 已配置 -> 打签名包'
+            npx electron-builder @common `
+              "-c.win.azureSignOptions.endpoint=$env:AZURE_TS_ENDPOINT" `
+              "-c.win.azureSignOptions.codeSigningAccountName=$env:AZURE_TS_ACCOUNT" `
+              "-c.win.azureSignOptions.certificateProfileName=$env:AZURE_TS_PROFILE" `
+              "-c.win.azureSignOptions.publisherName=$env:AZURE_PUBLISHER_NAME"
+          } else {
+            Write-Host '未配置任何签名 -> 打未签名包（行为同接入前）'
+            npx electron-builder @common
+          }
+        env:
+          EVSIGN_KEY: ${{ secrets.EVSIGN_KEY }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TS_ENDPOINT: ${{ secrets.AZURE_TS_ENDPOINT }}
+          AZURE_TS_ACCOUNT: ${{ secrets.AZURE_TS_ACCOUNT }}
+          AZURE_TS_PROFILE: ${{ secrets.AZURE_TS_PROFILE }}
+          AZURE_PUBLISHER_NAME: ${{ secrets.AZURE_PUBLISHER_NAME }}
+
+      - name: Prepare scoped OSS uploads
+        run: |
+          node -e "require('fs').writeFileSync('scripts/make-oss-relay.mjs',require('child_process').execFileSync('git',['show',process.env.RELEASE_WORKFLOW_SHA+':scripts/make-oss-relay.mjs']))"
+          npm i ali-oss@6 --no-save --no-audit --no-fund --legacy-peer-deps --ignore-scripts
+          node scripts/make-oss-relay.mjs
+        env:
+          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      - name: Stage private draft artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+            release/*.exe
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+            release/oss-relay-*.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

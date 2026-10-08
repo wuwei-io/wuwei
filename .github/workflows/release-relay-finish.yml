@@ -1,0 +1,42 @@
+name: Finish OSS relay
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Verified release tag whose OSS files are complete'
+        required: true
+permissions:
+  contents: write # Required to retrieve the private draft release artifacts.
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify ready OSS downloads
+        run: |
+          node -e "require('fs').writeFileSync('scripts/verify-oss-relay-manifests.mjs',require('child_process').execFileSync('git',['show',process.env.RELEASE_WORKFLOW_SHA+':scripts/verify-oss-relay-manifests.mjs']))"
+          node scripts/verify-oss-relay-manifests.mjs
+        env:
+          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+      - name: Retrieve staged artifacts for original SHA512 checks
+        run: gh release download "$RELEASE_TAG" --dir release --pattern 'wuwei-*' --pattern 'wuwei_*'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Point old clients to OSS downloads
+        run: |
+          python -m pip install boto3 pyyaml
+          python scripts/upload-r2.py --oss-manifests-only
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

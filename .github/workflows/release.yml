@@ -7,6 +7,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to finish publishing'
+        required: true
+      platforms:
+        description: 'JSON array of build runner platforms'
+        required: true
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
 
 permissions:
   contents: write
@@ -16,10 +25,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(inputs.platforms || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -31,7 +43,7 @@ jobs:
       - name: Validate images, model vision and asynchronous task reports
         run: |
           npm run typecheck
-          node --import tsx --test tests/subscription-imagegen.test.mjs tests/subscription-image-routing.test.mjs tests/platform-image-routing.test.mjs tests/platform-image-session.test.mjs tests/platform-image-billing-client.test.mjs tests/deepseek-vision.test.mjs tests/codex-tool-output.test.mjs tests/image-preparation.test.mjs tests/image-display.test.mjs tests/team-task-reports.test.mjs tests/team-assignment-execution.test.mjs tests/update-policy.test.mjs tests/update-policy-stability.test.mjs
+          node scripts/test-release.mjs
 
       - name: Build renderer/main
         run: npm run desktop:build
@@ -104,18 +116,35 @@ jobs:
           AZURE_PUBLISHER_NAME: ${{ secrets.AZURE_PUBLISHER_NAME }}
 
       # 上传安装包 + latest*.yml 到阿里云 OSS（自动更新源 + 官网下载源）。
-      # 凭证走仓库 secrets；未配置则脚本内跳过，不影响 GitHub Release。
+      # 凭证走仓库 secrets；上传成功后再发布 GitHub Release。
       - name: Upload to Aliyun OSS
         run: |
-          npm i ali-oss@6 --no-save --no-audit --no-fund
+          node -e "const fs=require('fs'),cp=require('child_process'); for(const p of ['scripts/upload-oss.mjs','scripts/lib/oss-release-upload.mjs','tests/oss-release-upload.test.mjs']) { fs.mkdirSync(require('path').dirname(p),{recursive:true}); fs.writeFileSync(p,cp.execFileSync('git',['show',process.env.RELEASE_WORKFLOW_SHA+':'+p])); }"
+          node --test tests/oss-release-upload.test.mjs
+          npm i ali-oss@6 --no-save --no-audit --no-fund --legacy-peer-deps --ignore-scripts
           node scripts/upload-oss.mjs
         env:
+          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
           OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+      # Old releases point at R2. Only publish small compatibility manifests there.
+      # The installer, binaries and blockmaps are downloaded from OSS.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Point old clients to OSS downloads
+        run: |
+          python -m pip install boto3 pyyaml
+          python scripts/upload-r2.py --oss-manifests-only
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
       - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             release/*.AppImage
             release/*.deb

@@ -1,0 +1,11 @@
+
+[renderer] [boot] renderer mounted ok (app://bundle/assets/index-CtslvrH5.js:77138)
+PASS real grouped picker order, low-price default, selected-image green light and English quality/fee dialog despite Chinese producer text; cancellation has zero orders
+PASS actual Chinese quality choice submits the displayed 29-coin medium SKU once and displays the inline image
+PASS interrupted generation response and asset stream recover the original order and display without duplicate paid POST
+PASS unavailable image model becomes yellow; all image health checks bypass chat models and paid orders
+(node:111204) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `electron --trace-deprecation ...` to show where the warning was created)
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+
+EXIT=0

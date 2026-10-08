@@ -1,0 +1,18 @@
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'getMessages' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'markMessagesRead' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS7006: Parameter 'rr' implicitly has an 'any' type.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'downloaded' does not exist on type '{ available: boolean; version?: string | undefined; notes?: string | undefined; error?: string | undefined; }'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'getMessages' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS7006: Parameter 'r' implicitly has an 'any' type.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'setAskToast' does not exist on type 'WuweiApi'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2554: Expected 1 arguments, but got 2.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2554: Expected 1 arguments, but got 3.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2554: Expected 1 arguments, but got 3.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2339: Property 'systemPrompt' does not exist on type 'CredSlot'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2353: Object literal may only specify known properties, and 'systemPrompt' does not exist in type 'CredSlot'.
+desktop/renderer/src/App.tsx(LINE,COLUMN): error TS2322: Type '(id?: string | undefined) => void' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+  Types of parameters 'id' and 'event' are incompatible.
+    Type 'MouseEvent<HTMLButtonElement, MouseEvent>' is not assignable to type 'string'.
+desktop/renderer/src/i18n.ts(LINE,COLUMN): error TS1117: An object literal cannot have multiple properties with the same name.

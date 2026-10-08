@@ -1,0 +1,1 @@
+configure	Configure and verify transfer acceleration	2026-10-07T15:21:55.6029238Z {"bucket": "wuwei-repo", "previous_enabled": true, "enabled": false, "download_urls_unchanged": true}

@@ -1,0 +1,23 @@
+{
+  "title": "My Company",
+  "departments": [
+    "CEO Office",
+    "Engineering",
+    "Design",
+    "General Affairs"
+  ],
+  "teammates": [
+    "Custom Ben",
+    "Cody",
+    "Mia",
+    "Ivy",
+    "Wendy",
+    "Dana"
+  ],
+  "departmentInputs": [
+    "CEO Office",
+    "Engineering",
+    "Design",
+    "General Affairs"
+  ]
+}

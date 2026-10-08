@@ -1,3 +1,4 @@
+import { localizeEmployee, localizeTeamApp, editLocalizedEmployeeField } from "../../../../src/team/default-localization.js";
 // 应用中心 · 面板
 //
 // 复用 MCP 面板既有的 .mcp-* 样式（theme.css 里已有整套卡片/状态点/按钮），
@@ -150,7 +151,11 @@ export function EmployeeEditModal({
   onSaved?: (r: { apps?: TeamAppCard[]; employees?: Employee[] }) => void;
 }) {
   const api = (window as any).wuwei?.team;
+  // Canonical draft is storage-facing; presentation is derived for the active language.
   const [edit, setEdit] = useState<Employee>(employee);
+  const display = localizeEmployee(edit, en ? "en" : "zh");
+  const saveText = (field: "name" | "title" | "blurb" | "persona") =>
+    edit[field] === employee[field] ? employee[field] : (edit[field] || "").trim();
   const [cropFile, setCropFile] = useState<File | null>(null);
   return (
     <>
@@ -167,7 +172,7 @@ export function EmployeeEditModal({
             <label>{en ? "Avatar" : "头像"}</label>
             <div className="tc-ava-row">
               <span className="tc-ava-preview">
-                <EmployeeAvatar icon={edit.icon} avatarData={edit.avatarData} name={edit.name} />
+                <EmployeeAvatar icon={edit.icon} avatarData={edit.avatarData} name={display.name} />
               </span>
               <div className="tc-ava-actions">
                 <label className="tc-btn-ghost tc-upload">
@@ -182,7 +187,7 @@ export function EmployeeEditModal({
             <div className="tc-icon-grid" style={{ marginTop: 10, opacity: edit.avatarData ? 0.45 : 1 }}>
               {ICON_CHOICES.map((ic) => (
                 <button key={ic || "_txt"} className={"tc-icon-opt" + (!edit.avatarData && (edit.icon || "") === ic ? " on" : "")} title={ic || (en ? "Initial" : "首字")} onClick={() => setEdit({ ...edit, icon: ic || undefined, avatarData: undefined })}>
-                  {ic ? <EmployeeAvatar icon={ic} name={edit.name} /> : <span className="team-avatar-txt">{edit.name.slice(0, 1) || "员"}</span>}
+                  {ic ? <EmployeeAvatar icon={ic} name={display.name} /> : <span className="team-avatar-txt">{display.name.slice(0, 1) || (en ? "T" : "员")}</span>}
                 </button>
               ))}
             </div>
@@ -190,15 +195,15 @@ export function EmployeeEditModal({
 
           <div className="tc-field">
             <label>{en ? "Name" : "名字"}</label>
-            <input className="tc-input" value={edit.name} maxLength={12} onChange={(ev) => setEdit({ ...edit, name: ev.target.value })} />
+            <input className="tc-input" value={display.name} maxLength={12} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "name", ev.target.value, en ? "en" : "zh"))} />
           </div>
           <div className="tc-field">
             <label>{en ? "Title" : "职位"}</label>
-            <input className="tc-input" value={edit.title || ""} maxLength={8} placeholder={en ? "e.g. Copywriter" : "如：文案"} onChange={(ev) => setEdit({ ...edit, title: ev.target.value })} />
+            <input className="tc-input" value={display.title || ""} maxLength={80} placeholder={en ? "e.g. Copywriter" : "如：文案"} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "title", ev.target.value, en ? "en" : "zh"))} />
           </div>
           <div className="tc-field">
             <label>{en ? "One-liner" : "简介"}</label>
-            <input className="tc-input" value={edit.blurb || ""} maxLength={30} placeholder={en ? "A short line under the name" : "名字下方的一句话"} onChange={(ev) => setEdit({ ...edit, blurb: ev.target.value })} />
+            <input className="tc-input" value={display.blurb || ""} maxLength={160} placeholder={en ? "A short line under the name" : "名字下方的一句话"} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "blurb", ev.target.value, en ? "en" : "zh"))} />
           </div>
 
           {providers && providers.length > 0 && (
@@ -227,7 +232,7 @@ export function EmployeeEditModal({
           <div className="tc-divider"><span>{en ? "Persona files" : "人格定义"}</span></div>
           <div className="tc-field">
             <label>{en ? "Identity & duties" : "身份与职责"}<em>{en ? "who they are, what they own, what they don't" : "他是谁、负责什么、不做什么"}</em></label>
-            <textarea className="tc-textarea" rows={5} value={edit.persona || ""} onChange={(ev) => setEdit({ ...edit, persona: ev.target.value })} />
+            <textarea className="tc-textarea" rows={5} value={display.persona || ""} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "persona", ev.target.value, en ? "en" : "zh"))} />
           </div>
           <div className="tc-field">
             <label>{en ? "Personality & voice" : "性格与说话风格"}<em>{en ? "tone, temperament, how they talk" : "语气、脾气、表达习惯"}</em></label>
@@ -243,17 +248,17 @@ export function EmployeeEditModal({
           </div>
 
           <div className="tc-modal-foot">
-            <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(en ? `Delete "${edit.name}"? This can't be undone.` : `删除员工「${edit.name}」？此操作不可撤销。`)) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{en ? "Delete" : "删除员工"}</button>
+            <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(en ? `Delete "${display.name}"? This can't be undone.` : `删除员工「${display.name}」？此操作不可撤销。`)) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{en ? "Delete" : "删除员工"}</button>
             <span style={{ flex: 1 }} />
             <button className="tc-btn-ghost" onClick={onClose}>{en ? "Cancel" : "取消"}</button>
             <button className="tc-btn" disabled={!edit.name.trim() || !edit.persona.trim()} onClick={async () => {
               const r = await api.updateEmployee(edit.id, {
-                name: edit.name.trim(),
-                title: (edit.title || "").trim() || undefined,
-                blurb: (edit.blurb || "").trim() || undefined,
+                name: saveText("name"),
+                title: saveText("title"),
+                blurb: saveText("blurb"),
                 icon: edit.icon,
                 avatarData: edit.avatarData ?? null,
-                persona: edit.persona.trim(),
+                persona: saveText("persona"),
                 soul: (edit.soul || "").trim() || null,
                 aboutUser: (edit.aboutUser || "").trim() || null,
                 memory: (edit.memory || "").trim() || null,
@@ -319,11 +324,12 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
   };
 
   const kw = q.trim().toLowerCase();
-  const apps = state.apps; // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
+  const apps = state.apps.map(a => localizeTeamApp(a, en ? "en" : "zh")); // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
   // 主搜索框过滤「我的员工」：按名字/职位/简介匹配
-  const hired = state.employees.filter(
+  const hired = state.employees.map(e => localizeEmployee(e, en ? "en" : "zh")).filter(
     (e) =>
       !kw ||
+      (state.employees.find(original => original.id === e.id)?.name || "").toLowerCase().includes(kw) ||
       e.name.toLowerCase().includes(kw) ||
       (e.title || "").toLowerCase().includes(kw) ||
       (e.blurb || "").toLowerCase().includes(kw),
@@ -397,7 +403,7 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
               <button
                 className="tc-emp-edit"
                 title={en ? "Edit" : "编辑"}
-                onClick={() => setEdit({ ...e })}
+                onClick={() => setEdit({ ...state.employees.find(original => original.id === e.id)! })}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9" />

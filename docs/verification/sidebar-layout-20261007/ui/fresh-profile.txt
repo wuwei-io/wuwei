@@ -1,0 +1,27 @@
+
+PASS actual application window loaded
+[renderer] [boot] renderer mounted ok (app://bundle/assets/index-B1DtGjbb.js:77246)
+PASS a completely missing config initializes the actual free gateway, not just the UI label
+PASS fresh company is enabled without a toggle or seeded fixture
+PASS fresh company menu starts collapsed
+PASS fresh company does not install teammates or a team pack
+PASS company title opens an empty company operation page
+PASS expanding the empty company does not add employees or departments
+PASS explicit Install adds the six default teammates through actual IPC
+PASS explicit Install creates the four default departments
+PASS separator drag upward reduces the company panel height
+PASS separator drag downward increases the company panel height
+PASS collapse snaps the separator below the company menu despite a saved expanded height
+PASS collapse preserves the preferred expanded height
+PASS expansion restores the saved panel height
+PASS dragging the collapsed boundary down expands and resizes the company panel
+PASS double-click restores automatic sizing
+PASS saved height stays bounded after reducing the window, keeping chat history visible
+PASS collapsed company stays compact when the chat list is hidden
+PASS collapsed sidebar contains only its expand button, no search icon
+PASS expanded sidebar retains its controls
+(node:118692) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `electron --trace-deprecation ...` to show where the warning was created)
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+
+EXIT=0; SIGNAL=

@@ -1,0 +1,7 @@
+{
+  "active": true,
+  "titleZh": "无为 1.7.44：一人公司与生图模型上线",
+  "titleEn": "Wuwei 1.7.44: My Company and image generation",
+  "bodyZh": "一人公司\n让 AI 员工分工协作，帮你写代码、做设计、处理文案和数据。新用户默认开启入口，团队由你选择安装。点击侧栏「一人公司 → 添加员工」，选择「无为一人公司」并安装，即可获得六位员工和四个部门。点击员工私聊，或建群一起完成任务；也可以直接让 AI 添加员工、调整职责和管理部门。已有用户可在「设置 → 一人公司」开启。\n\n生图模型\n登录后，在输入框下方选择「无为托管 · 生图模型」，再选择 GPT Image 2、Nano Banana 2、Nano Banana 或 GPT Image 1。输入图片描述并发送，确认无为币费用后生成，图片直接显示在对话中，无需配置 API Key。\n\n请更新到 1.7.44 并重启。详细步骤见左下角账号菜单中的「使用手册」，已新增一人公司和生图说明。",
+  "bodyEn": "My Company\nWork with AI teammates on coding, design, writing and data. The company entry is on by default for new users; you choose when to install a team. Open My Company → Add teammate, choose Wuwei One-Person Company and click Install to add six teammates and four departments. Chat with a teammate or create a group to work together. You can also ask AI to add teammates, change responsibilities and manage departments. Existing users can enable it in Settings → Company.\n\nImage generation\nSign in, then choose Wuwei hosted · Image models below the message box. Select GPT Image 2, Nano Banana 2, Nano Banana or GPT Image 1. Describe your image and send. Confirm the coin cost to generate; the image appears directly in the conversation. No API key setup is needed.\n\nUpdate to 1.7.44 and restart. Open User Guide in the bottom-left account menu for the new company and image generation instructions."
+}

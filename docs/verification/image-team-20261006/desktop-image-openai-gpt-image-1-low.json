@@ -1,0 +1,11 @@
+{
+  "sku": "openai-gpt-image-1-low",
+  "order_id": "67299041-a857-4010-b163-f42868e27ad3",
+  "charged_coins": 8,
+  "width": 1024,
+  "height": 1024,
+  "desktop_human_confirmation": true,
+  "desktop_cancel_no_order": true,
+  "paid_attempts": 1,
+  "inline_image_loaded": true
+}

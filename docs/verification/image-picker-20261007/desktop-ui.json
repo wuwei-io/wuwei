@@ -1,0 +1,15 @@
+{
+  "menu": [
+    "GPT Image 2",
+    "Nano Banana 2",
+    "Nano Banana",
+    "GPT Image 1"
+  ],
+  "english": "Image cost confirmationGPT Image 1: choose the quality to generate. Estimated hold and authorization limit are shown below. Final billing uses actual cost.Low quality · hold 8 / authorize up to 120 coinsMedium quality · hold 29 / authorize up to 120 coinsCancel",
+  "chinese": "生图费用确认GPT Image 1：选择画质后生成。预计预占和最高授权金额见选项，最终按实费结算。低画质生成 · 预计 8 / 最多 120 无为币中画质生成 · 预计 29 / 最多 120 无为币取消",
+  "paidRequests": 2,
+  "qualitySku": "openai-gpt-image-1-medium",
+  "imageServiceUnavailable": "yellow",
+  "chatRequests": 0,
+  "productionRequests": 0
+}

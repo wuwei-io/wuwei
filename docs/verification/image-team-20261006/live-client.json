@@ -1,0 +1,38 @@
+{
+  "model": "glm-4.7-flash",
+  "events": [
+    {
+      "type": "tool",
+      "name": "platform_imagegen",
+      "action": "catalog"
+    },
+    {
+      "type": "tool-result",
+      "cancelled": false
+    },
+    {
+      "type": "tool",
+      "name": "platform_imagegen",
+      "action": "generate",
+      "sku": "openai-gpt-image-1-low"
+    },
+    {
+      "type": "fee-confirmation",
+      "title": "Image cost confirmation",
+      "question": "Estimated hold: 8 coins. Final billing uses the official cost, up to 120 authorized coins. Settlement pauses if funds are insufficient; the image is kept. Continue?"
+    },
+    {
+      "type": "tool-result",
+      "cancelled": true
+    },
+    {
+      "type": "existing-image-display",
+      "order": "a056d4ac-ac1d-46b7-8b8d-02d8b5862b30",
+      "width": 1024,
+      "height": 1024,
+      "charged_coins": 8
+    }
+  ],
+  "new_orders": 0,
+  "original_order_displayed": true
+}
