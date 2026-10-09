@@ -69,6 +69,10 @@ export interface SearchResult {
 }
 
 export interface WuweiApi {
+  getMessages(): Promise<{ messages: { id: number; category: string; title: string; body: string; reward: { kind: 'coins' | 'membership'; amount: number; plan?: string } | null; readAt: string | null; createdAt: string }[]; unread: number }>;
+  markMessagesRead(arg: { ids?: number[]; all?: boolean }): Promise<{ ok: boolean; unread: number }>;
+  setAskToast(autoDismiss: boolean, sec: number): void;
+
   // ——— AGI 板块:数字婴儿 ———
   agiCfg(): Promise<any>;
   babyStatus(): Promise<string>;
@@ -141,7 +145,7 @@ export interface WuweiApi {
   getAppVersion(): Promise<string>;
   /** 产品行为埋点：任意 UI 事件上报到 product_events（fire-and-forget，失败静默） */
   track(event: string, props?: Record<string, unknown>, detail?: string): Promise<boolean>;
-  checkUpdate(): Promise<{ available: boolean; version?: string; notes?: string; error?: string }>;
+  checkUpdate(): Promise<{ available: boolean; downloaded?: boolean; version?: string; notes?: string; error?: string }>;
   installUpdate(): void;
   deleteExchange(sid: string, ordinal: number): void;
   bootstrap(): Promise<{ sessions: any[]; groups?: string[]; currentId: string; messages: any[]; usage?: any; rateLimits?: any; interrupted?: { id: string; title: string }[] }>;

@@ -504,7 +504,6 @@ const DICT_EN: Record<string, string> = {
   "err.auth": "Error: the current model isn't authorized or is missing credentials (API key / subscription). Please authorize first.",
   "err.rateLimit": "Error: too many requests or quota exhausted (rate limited). Please try again later.",
   "err.network": "Error: network connection failed. Check your network / proxy and retry.",
-  "err.interrupted": "Error: the connection to the model dropped (a long reply got cut off). Just reply “continue” to pick up where it stopped.",
   "err.interrupted": 'Error: the connection to the model dropped (a long reply got cut off). Reply "continue" to pick up where it stopped.',
   "err.fix.interrupted": "The last reply was cut off",
   "err.fix.continue": "Continue",

@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+import { employeeSessionTitle } from "../../../src/team/session-title.js";
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
 import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
@@ -18,6 +20,8 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { HelpManualModal } from "./components/HelpManualModal.js";
+import { AnnouncementModal } from "./components/AnnouncementModal.js";
+import { selectAnnouncementLocale, type AnnouncementSource } from "./components/announcementLocale.js";
 import { BabyAvatar, inferBabyState } from "./baby/BabyAvatar.js";
 import { BabyHero } from "./baby/BabyHero.js";
 import { BabyPyramid } from "./baby/BabyPyramid.js";
@@ -4189,7 +4193,7 @@ export function App() {
     return () => window.removeEventListener("keydown", h);
   }, []);
   // 客户端公告：启动拉取，未读过该版本(version)且 active 才弹；读过存本地，同版本不再弹，后台更新(version 变)则再弹。
-  const [announce, setAnnounce] = useState<{ version: string; title: string; body: string } | null>(null);
+  const [announce, setAnnounce] = useState<(AnnouncementSource & { version: string }) | null>(null);
   // 自动更新：版本号 + 检查态 + 新版就绪(已下载好，点即装)
   const [appVer, setAppVer] = useState("");
   const [updateReady, setUpdateReady] = useState<{ version: string; notes: string } | null>(null);
@@ -4969,6 +4973,47 @@ export function App() {
     return () => { alive = false; clearInterval(timer); };
   }, [wuwei?.user?.id]);
 
+  // 本地开发预览：独立于线上公告及已读状态，不调用公告 API。
+  const [announcementPreview, setAnnouncementPreview] = useState<AnnouncementSource | null>(null);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const preview = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail && ["titleZh", "bodyZh", "titleEn", "bodyEn"].some(key => typeof detail[key] === "string")) {
+        setAnnouncementPreview(Object.fromEntries(["titleZh", "bodyZh", "titleEn", "bodyEn"].map(key => [key, typeof detail[key] === "string" ? detail[key] : ""])));
+      }
+    };
+    let alive = true;
+    let loading = false;
+    const hotkey = async (event: KeyboardEvent) => {
+      const primary = /Mac/i.test(navigator.platform)
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      if (!primary || !event.shiftKey || event.altKey || (event.code !== "KeyN" && event.key.toLowerCase() !== "n") || event.isComposing || event.defaultPrevented) return;
+      event.preventDefault();
+      if (event.repeat || loading) return;
+      loading = true;
+      try {
+        const { default: fixture } = await import("../../../tests/fixtures/announcement-current.json");
+        if (!alive) return;
+        window.dispatchEvent(new CustomEvent("wuwei:preview-announcement", {
+          detail: fixture,
+        }));
+      } catch (error) {
+        console.warn("DEV announcement fixture unavailable", error);
+      } finally {
+        loading = false;
+      }
+    };
+    window.addEventListener("wuwei:preview-announcement", preview);
+    window.addEventListener("keydown", hotkey);
+    return () => {
+      alive = false;
+      window.removeEventListener("wuwei:preview-announcement", preview);
+      window.removeEventListener("keydown", hotkey);
+    };
+  }, []);
+
   // 启动拉公告：active 且未读过该 version → 弹窗（标题/正文随界面语言）。读过或后台没发则不弹。
   useEffect(() => {
     window.wuwei.getAnnouncement().then((a) => {
@@ -4976,10 +5021,8 @@ export function App() {
       let seen = "";
       try { seen = localStorage.getItem("wuwei_seen_announcement") || ""; } catch { /* ignore */ }
       if (seen === a.version) return; // 这版读过了，不再弹
-      const title = (lang === "en" ? a.titleEn : a.titleZh) || a.titleZh || a.titleEn || "";
-      const body = (lang === "en" ? a.bodyEn : a.bodyZh) || a.bodyZh || a.bodyEn || "";
-      if (!title && !body) return;
-      setAnnounce({ version: a.version, title, body });
+      if (!a.titleZh && !a.titleEn && !a.bodyZh && !a.bodyEn) return;
+      setAnnounce({ version: a.version, titleZh: a.titleZh, bodyZh: a.bodyZh, titleEn: a.titleEn, bodyEn: a.bodyEn });
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -7001,7 +7044,7 @@ export function App() {
                               onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
                               onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
                             >
-                              <span className="tool-sub-convo-t">{tx(s.title) || (lang === "en" ? "New chat" : "新对话")}</span>
+                              <span className="tool-sub-convo-t">{employeeSessionTitle(s, e, lang) || (lang === "en" ? "New chat" : "新对话")}</span>
                               <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
                               <button
                                 className="tool-sub-convo-del"
@@ -8477,7 +8520,7 @@ export function App() {
                         <div className="msg user"><div className="body">{m.text}</div></div>
                         <div className="turn-foot user">
                           <div className="tf-actions"><CopyBtn text={m.text} /></div>
-                          {!!m.ts && <span className="tf-time">{relTime(m.ts, now)}</span>}
+                          {!!m.ts && <span className="tf-time">{relTime(m.ts)}</span>}
                         </div>
                       </div>
                     ) : (
@@ -8485,7 +8528,7 @@ export function App() {
                         <AssistantMsg text={m.text} />
                         <div className="turn-foot">
                           <div className="tf-actions"><CopyBtn text={m.text} /></div>
-                          {!!m.ts && <span className="tf-time">{relTime(m.ts, now)}</span>}
+                          {!!m.ts && <span className="tf-time">{relTime(m.ts)}</span>}
                         </div>
                       </div>
                     ),
@@ -9703,7 +9746,7 @@ export function App() {
                             ? "AI"
                             : lang === "en" ? "Title" : "标题"}
                       </span>
-                      <span className="search-row-time">{relTime(h.updatedAt, now)}</span>
+                      <span className="search-row-time">{relTime(h.updatedAt)}</span>
                     </div>
                     <div className="search-snip">
                       {h.pre}
@@ -10010,7 +10053,7 @@ export function App() {
                       <div className="trash-title" title={title}>{title}</div>
                       <div className="trash-meta">
                         {ti.group ? (lang === "en" ? `Group "${ti.group}" · ` : `分组「${ti.group}」· `) : ""}
-                        {lang === "en" ? `deleted ${relTime(ti.deletedAt, now, t)} · clears in ${leftDays}d` : `删除于 ${relTime(ti.deletedAt, now, t)} · ${leftDays} 天后清除`}
+                        {lang === "en" ? `deleted ${relTime(ti.deletedAt)} · clears in ${leftDays}d` : `删除于 ${relTime(ti.deletedAt)} · ${leftDays} 天后清除`}
                       </div>
                     </div>
                     <button className="trash-restore" onClick={() => window.wuwei.restoreSession(ti.id)}>
@@ -10283,17 +10326,21 @@ export function App() {
           </div>
         </div>
       )}
-      {/* 客户端公告弹窗：打开即弹(未读过该版本)，读完关闭存本地，同版本不再弹 */}
-      {announce && (() => {
+      {/* 客户端公告弹窗：只升级渲染层，沿用既有 version/title/body 协议与已读逻辑。 */}
+      {import.meta.env.DEV && announcementPreview && <AnnouncementModal
+        version="" {...selectAnnouncementLocale(announcementPreview, lang)}
+        onClose={() => setAnnouncementPreview(null)}
+        onOpenManual={() => { setAnnouncementPreview(null); setShowGuide(true); }}
+      />}
+      {announce && !announcementPreview && (() => {
         const closeAnnounce = () => { try { localStorage.setItem("wuwei_seen_announcement", announce.version); } catch { /* ignore */ } setAnnounce(null); };
         return (
-          <div className="perm-overlay" onClick={closeAnnounce}>
-            <div className="add-st-dialog announce-dialog" style={{ maxWidth: 500, width: "92vw", position: "relative", paddingTop: 22 }} onClick={(e) => e.stopPropagation()}>
-              <button className="announce-x" aria-label={lang === "en" ? "Close" : "关闭"} title={lang === "en" ? "Close" : "关闭"} onClick={closeAnnounce}>×</button>
-              <h3 style={{ marginTop: 0, paddingRight: 28 }}>{announce.title}</h3>
-              <div className="s-note" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, maxHeight: "68vh", overflow: "auto" }}>{announce.body}</div>
-            </div>
-          </div>
+          <AnnouncementModal
+            version={announce.version}
+            {...selectAnnouncementLocale(announce, lang)}
+            onClose={closeAnnounce}
+            onOpenManual={() => { closeAnnounce(); setShowGuide(true); }}
+          />
         );
       })()}
       {/* 免费模型当天次数用完(已登录)：弹窗引导——明天继续 / 一键切到对应托管付费模型。无为币再用完才走升级窗 */}
@@ -13083,7 +13130,7 @@ function arrangePresets(
 }
 
 type ModelCap = { noTools?: boolean; vision?: boolean };
-type CredSlot = { apiKey?: string; baseUrl?: string; oauthToken?: string; nickname?: string; model?: string; noTools?: boolean; vision?: boolean; modelCaps?: Record<string, ModelCap>; customModels?: string[] };
+type CredSlot = { apiKey?: string; baseUrl?: string; oauthToken?: string; nickname?: string; model?: string; systemPrompt?: string; noTools?: boolean; vision?: boolean; modelCaps?: Record<string, ModelCap>; customModels?: string[] };
 
 // 简约线条眼睛图标：off=true 显示"划掉的眼睛"(当前明文，点击隐藏)
 function EyeIcon({ off }: { off: boolean }) {
@@ -15350,7 +15397,7 @@ function SettingsModal({
                   {t("set.m.addStation")}
                 </button>
                 {preset.custom && (
-                  <button type="button" className="station-edit" onClick={openEditStation}>
+                  <button type="button" className="station-edit" onClick={() => openEditStation()}>
                     {lang === "en" ? "Edit" : "编辑"}
                   </button>
                 )}
