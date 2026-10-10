@@ -11,4 +11,6 @@
 
 GuideScreenshot 的缩略图及放大图共用 lang 选择的同一 src；alt、图注、关闭及放大提示分别本地化。编号为文档叠加，不是原生UI。图片不随主题重新着色。
 
-仍缺图：生图模型列表、输入示例、费用确认、生成结果，以及团队未安装状态。未用旧状态或假订单冒充。
+image-models-zh.png / image-models-en.png：真实中英文模型列表，包含 GPT Image 2、Nano Banana 2、Nano Banana、GPT Image 1。
+
+仍无实截：输入示例、费用确认、生成结果，以及团队未安装状态。未用旧状态或假订单冒充。
