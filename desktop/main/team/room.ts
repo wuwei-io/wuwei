@@ -8,6 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { clearTeamHistoryDigest } from './history.js';
 import type { Room, RoomMessage } from "../../../src/team/types.js";
 
 const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei", "team");
@@ -38,6 +39,7 @@ export function loadRoomMessages(roomId: string): RoomMessage[] {
 }
 
 export function saveRoomMessages(roomId: string, msgs: RoomMessage[]) {
+  clearTeamHistoryDigest(`room:${roomId}`);
   mkdirSync(MSG_DIR, { recursive: true });
   writeFileSync(join(MSG_DIR, `${roomId}.json`), JSON.stringify(msgs, null, 2));
 }
@@ -112,6 +114,7 @@ export function pinRoom(id: string): Room[] {
 }
 
 export function deleteRoom(id: string): Room[] {
+  clearTeamHistoryDigest(`room:${id}`);
   const list = loadRooms().filter((r) => r.id !== id);
   saveRooms(list);
   try {
@@ -145,7 +148,9 @@ export function appendMessage(roomId: string, msg: Omit<RoomMessage, "id" | "ts"
   const msgs = loadRoomMessages(roomId);
   const full: RoomMessage = { id: randomUUID(), ts: msg.ts ?? Date.now(), ...msg };
   msgs.push(full);
-  saveRoomMessages(roomId, msgs);
+  // Appending does not invalidate the older-prefix digest. Edits/clear use saveRoomMessages.
+  mkdirSync(MSG_DIR, { recursive: true });
+  writeFileSync(join(MSG_DIR, `${roomId}.json`), JSON.stringify(msgs, null, 2));
   const preview = (msg.text || "").replace(/\s+/g, " ").slice(0, 40);
   updateRoom(roomId, { lastText: `${msg.speaker.name}：${preview}` });
   return msgs;

@@ -103,6 +103,7 @@ import {
 } from "./settings.js";
 // 「AI 员工团队」可选模块：默认关，开了才注册。整个模块只在这一处被引用（可插拔契约，见设计方案第七节）
 import { registerTeam, unregisterTeam, applyEmployee, broadcastTeam } from "./team/index.js";
+import { teamRequestHistory, clearTeamHistoryDigest } from "./team/history.js";
 import { employeeMemoryPath, loadEmployees, loadApps, addEmployees, updateEmployee, removeEmployee, loadSchedules, addSchedule, updateSchedule, removeSchedule, MIN_INTERVAL_MINUTES, buildEmployeeSystem, loadEmployeeMemory, loadTeamConfig, loadDepartments, createDepartment, updateDepartment, removeDepartment } from "./team/store.js";
 import { startScheduler, stopScheduler } from "./team/scheduler.js";
 import type { Employee, ScheduleTrigger } from "../../src/team/types.js";
@@ -337,7 +338,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   const remoteSys = remoteExecution ? sys + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。' : sys;
   const a = new Agent(p, remoteSys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope,
     remoteExecution: remoteExecution ? { ...remoteExecution, signal: executionSignal } : undefined,
-    requestDecision: decisionHook }, map, agentOpts);
+    requestDecision: decisionHook }, map, { ...agentOpts, requestHistory: teamRequestHistory(origin?.kind === 'room' ? `room:${origin.id}` : `employee:${employee.id}`) });
   if (history.length) a.setMessages(history as any);
   // 转发思考/工具活动给界面显示（可展开/收起、随时中断），但这些不进群消息流。
   await a.send(input, {
@@ -2694,9 +2695,9 @@ function sysForSession(id: string): string {
 
 function getAgent(id: string): Agent | null {
   if (!provider) return null;
+  const meta = listSessions().find((s) => s.id === id);
   let a = agents.get(id);
   if (!a) {
-    const meta = listSessions().find((s) => s.id === id);
     // 「AI 员工团队」：会话绑了员工就套上他的人格与工具白名单；没绑(或模块没开)时 sys/tools 原样返回
     const empBound = meta?.employeeId && teamEnabled(loadSettings());
     const emp = empBound
@@ -2711,7 +2712,8 @@ function getAgent(id: string): Agent | null {
     const memoryFile = empBound ? employeeMemoryPath(meta!.employeeId!) : undefined;
     // 员工私聊会话：把 employeeId 塞进 ToolContext，员工用 dm_teammate 时据此确定「发起方」。
     const employeeId = empBound ? meta!.employeeId! : undefined;
-    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile, employeeId }, empToolMap, agentOpts);
+    a = new Agent(providerForSession(id) || provider, emp.sys, emp.tools, { cwd, sessionId: id, memoryFile, employeeId }, empToolMap,
+      { ...agentOpts, ...(empBound ? { requestHistory: teamRequestHistory(`session:${id}`) } : {}) });
     a.setMessages(loadMessages(id));
     if (meta?.usage) a.setUsage({ ...EMPTY_USAGE, ...meta.usage }); // 兼容未保存缓存/步数的旧会话
     agents.set(id, a);
@@ -2723,6 +2725,8 @@ function getAgent(id: string): Agent | null {
       if (s) setSessionBinding(id, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl });
     }
   }
+  // A freshly opened employee chat may bind its employee after the Agent was created.
+  a.setRequestHistory(meta?.employeeId && teamEnabled(loadSettings()) ? teamRequestHistory(`session:${id}`) : undefined);
   return a;
 }
 
@@ -4349,6 +4353,7 @@ ipcMain.on("session:delete", (_e, id: string) => {
   runs.get(id)?.abort(); // 删除正在跑的会话先中断它
   runs.delete(id);
   deleteSession(id);
+  clearTeamHistoryDigest(`session:${id}`);
   agents.delete(id);
   backendBySid.delete(id);
   if (currentId === id) {

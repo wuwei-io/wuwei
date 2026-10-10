@@ -42,6 +42,8 @@ function isContextOverflow(e: unknown): boolean {
 export type PermissionDecision = "allow" | "deny";
 
 export interface AgentOptions {
+  /** Project only the request context; retain full original history for display/persistence. */
+  requestHistory?: (messages: Message[]) => Message[];
   compactThreshold?: number; // 上一轮 input tokens 超过此值触发压缩（0=关闭）
   compactMsgThreshold?: number; // 消息条数超过此值也触发压缩（0=关闭，只按 token）
   keepRecent?: number; // 压缩时保留最近多少条原始消息
@@ -179,6 +181,7 @@ export class Agent {
   private compactThreshold: number;
   private compactMsgThreshold: number;
   private keepRecent: number;
+  private requestHistory?: (messages: Message[]) => Message[];
   private lastCompactedLen = 0; // 上次压缩后剩下的消息条数;用于反空转:增长不足前不再压
   private pendingInject: { text: string; images: string[] }[] = []; // 运行中注入的新需求，循环边界取用
   private round: RoundUsage = { input: 0, output: 0, cacheHit: 0, cacheMiss: 0, steps: 0, lastInput: 0 }; // 本轮自足用量
@@ -199,6 +202,7 @@ export class Agent {
       : opts.compactThreshold ?? provider.compactThreshold ?? 60000;
     this.compactMsgThreshold = opts.compactMsgThreshold ?? 0;
     this.keepRecent = opts.keepRecent ?? 6;
+    this.requestHistory = opts.requestHistory;
   }
 
   // 温和停止:不 abort 当前模型流，让它把这轮自然吐完、完整落历史后，在下个循环边界干净停下。
@@ -290,6 +294,10 @@ export class Agent {
   // 载入已保存的会话历史（切换/恢复会话时用）
   setMessages(msgs: Message[]): void {
     this.messages = msgs;
+  }
+
+  setRequestHistory(project?: (messages: Message[]) => Message[]): void {
+    this.requestHistory = project;
   }
 
   // 运行时切换模型后端（用户在设置里改 provider/model）
@@ -419,7 +427,7 @@ export class Agent {
         return;
       }
       // 上下文过长则先压缩，再请求模型（省 token / 防撑爆）
-      await this.maybeCompact(hooks);
+      if (!this.requestHistory) await this.maybeCompact(hooks);
 
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
       const stepProvider = this.provider;
@@ -433,7 +441,7 @@ export class Agent {
       let ctxTrims = 0; // 上下文超限时的硬清理次数(防死循环)
       for (let attempt = 0; ; attempt++) {
         try {
-          result = await stepProvider.complete(stepSystem, this.messages, stepTools, {
+          result = await stepProvider.complete(stepSystem, this.requestHistory ? this.requestHistory(this.messages) : this.messages, stepTools, {
             onText: hooks.onText,
             onRecover: hooks.onRecover,
             signal,

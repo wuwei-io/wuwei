@@ -1,6 +1,7 @@
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
 import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
+import { CompanyHistorySettings } from "./team/CompanyHistorySettings.js";
 import { ToolDecisionModal } from './components/ToolDecisionModal.js';
 import { imageModelChoices, imageModelLabel } from '../../../src/imagegen/image-catalog.js';
 import type { Decision } from '../../../src/types.js';
@@ -2386,6 +2387,7 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
         </div>
       )}
       {teamOn && (<>
+      <CompanyHistorySettings lang={lang} />
       <div className="app-set-group">{en ? "CEO gatekeeping" : "CEO 把关"}</div>
       {/* CEO 是谁 */}
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>

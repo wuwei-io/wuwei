@@ -1,5 +1,6 @@
 import { localizeEmployee, employeeRoster } from "../../../src/team/default-localization.js";
 import { DEFAULT_TEAM_ID } from "../../../src/team/default-localization.js";
+import { historyPolicy } from "../../../src/team/history-window.js";
 import { defaultDepartments } from "../../../src/team/default-departments.js";
 // AI 员工团队 · 数据层
 //
@@ -51,6 +52,10 @@ export function saveEmployees(list: Employee[]) {
 
 /** 一人公司级配置(config.json)。 */
 export interface TeamConfig {
+  /** Request history window for company conversations (2–100, default 10). */
+  historyRecentMessages?: number;
+  /** Include a bounded, local extractive digest of older messages (default true). */
+  historyAutoSummary?: boolean;
   /** dm_teammate 转派链最大层数(链上员工数)：1=不允许转派，3=最多三层(如 小笨→小码→小美)。默认 3。 */
   maxDmLevels?: number;
   /** 定时任务总开关：false=全部暂停不触发(与单任务开关叠加)。缺省视为开启。 */
@@ -85,6 +90,7 @@ export function loadTeamConfig(): TeamConfig {
 
 export function saveTeamConfig(patch: Partial<TeamConfig>): TeamConfig {
   const next = { ...loadTeamConfig(), ...patch };
+  Object.assign(next, historyPolicy(next));
   writeJson(CONFIG, next);
   return next;
 }
