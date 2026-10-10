@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { employeeSessionTitle } from '../src/team/session-title.js';
+import type { Employee } from '../src/team/types.js';
+const names = [['wj-ceo','小笨','Ben'],['wj-copy','小文','Wendy'],['wj-code','小码','Cody'],['wj-data','小数','Dana'],['wj-design','小美','Mia'],['wj-mobile','小移','Ivy']];
+for (const [id, zh, en] of names) test(`default/legacy and custom: ${id}`, () => {
+  const employee = { id, name: zh, fromApp: 'wuwei-team-basic' } as Employee;
+  const legacy = { employeeId: id, title: zh };
+  const before = JSON.stringify(legacy);
+  assert.equal(employeeSessionTitle(legacy, employee, 'en'), en);
+  assert.equal(employeeSessionTitle(legacy, employee, 'zh'), zh);
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal(employeeSessionTitle({ ...legacy, titleSource: 'custom' }, employee, 'en'), zh);
+  assert.equal(employeeSessionTitle({ ...legacy, titleSource: 'generated' }, employee, 'en'), zh);
+  assert.equal(employeeSessionTitle({ ...legacy, title: 'My project' }, employee, 'en'), 'My project');
+  assert.equal(employeeSessionTitle({ ...legacy, title: en, titleSource: 'employee-default' }, employee, 'zh'), zh);
+  assert.equal(employeeSessionTitle(legacy, { ...employee, fromApp: undefined }, 'en'), zh);
+  assert.equal(employeeSessionTitle(legacy, { ...employee, id: 'custom' }, 'en'), zh);
+  assert.equal(employeeSessionTitle(legacy, { ...employee, name: 'Custom' }, 'en'), zh);
+  assert.equal(employeeSessionTitle(legacy, undefined, 'en'), zh);
+});

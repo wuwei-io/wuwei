@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+import { employeeSessionTitle } from "../../../src/team/session-title.js";
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
 import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
@@ -19,7 +21,9 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { HelpManualModal } from "./components/HelpManualModal.js";
+import { createAnnouncementDelivery, type UnreadAnnouncement } from "./components/announcementDelivery.js";
 import { AnnouncementModal } from "./components/AnnouncementModal.js";
+import { selectAnnouncementLocale, type AnnouncementSource } from "./components/announcementLocale.js";
 import { BabyAvatar, inferBabyState } from "./baby/BabyAvatar.js";
 import { BabyHero } from "./baby/BabyHero.js";
 import { BabyPyramid } from "./baby/BabyPyramid.js";
@@ -4192,7 +4196,8 @@ export function App() {
     return () => window.removeEventListener("keydown", h);
   }, []);
   // 客户端公告：启动拉取，未读过该版本(version)且 active 才弹；读过存本地，同版本不再弹，后台更新(version 变)则再弹。
-  const [announce, setAnnounce] = useState<{ version: string; title: string; body: string } | null>(null);
+  const announcementDeliveryRef = useRef<ReturnType<typeof createAnnouncementDelivery> | null>(null);
+  const [announce, setAnnounce] = useState<UnreadAnnouncement | null>(null);
   // 自动更新：版本号 + 检查态 + 新版就绪(已下载好，点即装)
   const [appVer, setAppVer] = useState("");
   const [updateReady, setUpdateReady] = useState<{ version: string; notes: string } | null>(null);
@@ -4972,20 +4977,74 @@ export function App() {
     return () => { alive = false; clearInterval(timer); };
   }, [wuwei?.user?.id]);
 
-  // 启动拉公告：active 且未读过该 version → 弹窗（标题/正文随界面语言）。读过或后台没发则不弹。
+  // 本地开发预览：独立于线上公告及已读状态，不调用公告 API。
+  const [announcementPreview, setAnnouncementPreview] = useState<AnnouncementSource | null>(null);
   useEffect(() => {
-    window.wuwei.getAnnouncement().then((a) => {
-      if (!a?.active || !a.version) return;
-      let seen = "";
-      try { seen = localStorage.getItem("wuwei_seen_announcement") || ""; } catch { /* ignore */ }
-      if (seen === a.version) return; // 这版读过了，不再弹
-      const title = (lang === "en" ? a.titleEn : a.titleZh) || a.titleZh || a.titleEn || "";
-      const body = (lang === "en" ? a.bodyEn : a.bodyZh) || a.bodyZh || a.bodyEn || "";
-      if (!title && !body) return;
-      setAnnounce({ version: a.version, title, body });
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!import.meta.env.DEV) return;
+    const preview = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail && ["titleZh", "bodyZh", "titleEn", "bodyEn"].some(key => typeof detail[key] === "string")) {
+        setAnnouncementPreview(Object.fromEntries(["titleZh", "bodyZh", "titleEn", "bodyEn"].map(key => [key, typeof detail[key] === "string" ? detail[key] : ""])));
+      }
+    };
+    let alive = true;
+    let loading = false;
+    const hotkey = async (event: KeyboardEvent) => {
+      const primary = /Mac/i.test(navigator.platform)
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      if (!primary || !event.shiftKey || event.altKey || (event.code !== "KeyN" && event.key.toLowerCase() !== "n") || event.isComposing || event.defaultPrevented) return;
+      event.preventDefault();
+      if (event.repeat || loading) return;
+      loading = true;
+      try {
+        const { default: fixture } = await import("../../../tests/fixtures/announcement-current.json");
+        if (!alive) return;
+        window.dispatchEvent(new CustomEvent("wuwei:preview-announcement", {
+          detail: fixture,
+        }));
+      } catch (error) {
+        console.warn("DEV announcement fixture unavailable", error);
+      } finally {
+        loading = false;
+      }
+    };
+    window.addEventListener("wuwei:preview-announcement", preview);
+    window.addEventListener("keydown", hotkey);
+    return () => {
+      alive = false;
+      window.removeEventListener("wuwei:preview-announcement", preview);
+      window.removeEventListener("keydown", hotkey);
+    };
   }, []);
+
+  // Startup + reconnect/focus + low-frequency checks. Only explicit "Got it" marks read.
+  useEffect(() => {
+    const delivery = createAnnouncementDelivery({
+      fetch: async () => {
+        const [a, appVersion] = await Promise.all([window.wuwei.getAnnouncement(), window.wuwei.getAppVersion()]);
+        return { ...a, appVersion };
+      },
+      storage: {
+        getItem: key => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+      },
+      show: setAnnounce,
+    });
+    announcementDeliveryRef.current = delivery;
+    const refresh = () => { void delivery.check(); };
+    const reconnect = () => { void delivery.check(true); };
+    void delivery.check(true);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", reconnect);
+    return () => {
+      delivery.stop();
+      announcementDeliveryRef.current = null;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", reconnect);
+    };
+  }, []);
+
 
   useEffect(() => {
     const off = window.wuwei.onEvent((ch, payload: any) => {
@@ -7010,7 +7069,7 @@ export function App() {
                               onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
                               onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
                             >
-                              <span className="tool-sub-convo-t">{tx(s.title) || (lang === "en" ? "New chat" : "新对话")}</span>
+                              <span className="tool-sub-convo-t">{employeeSessionTitle(s, e, lang) || (lang === "en" ? "New chat" : "新对话")}</span>
                               <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
                               <button
                                 className="tool-sub-convo-del"
@@ -10292,16 +10351,20 @@ export function App() {
           </div>
         </div>
       )}
-      {/* 客户端公告弹窗：只升级渲染层，沿用既有 version/title/body 协议与已读逻辑。 */}
-      {announce && (() => {
-        const closeAnnounce = () => { try { localStorage.setItem("wuwei_seen_announcement", announce.version); } catch { /* ignore */ } setAnnounce(null); };
+      {/* 客户端公告：按安装版本 + 公告版本确认已读；暂时关闭不写入已读。 */}
+      {import.meta.env.DEV && announcementPreview && <AnnouncementModal
+        version="" {...selectAnnouncementLocale(announcementPreview, lang)}
+        onClose={() => setAnnouncementPreview(null)}
+        onOpenManual={() => { setAnnouncementPreview(null); setShowGuide(true); }}
+      />}
+      {announce && !announcementPreview && (() => {
+        const closeAnnounce = () => announcementDeliveryRef.current?.dismiss(announce);
         return (
           <AnnouncementModal
             version={announce.version}
-            title={announce.title}
-            body={announce.body}
-            lang={lang}
+            {...selectAnnouncementLocale(announce, lang)}
             onClose={closeAnnounce}
+            onAcknowledge={() => announcementDeliveryRef.current?.acknowledge(announce)}
             onOpenManual={() => { closeAnnounce(); setShowGuide(true); }}
           />
         );

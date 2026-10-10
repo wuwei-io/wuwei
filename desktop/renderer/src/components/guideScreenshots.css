@@ -1,0 +1,15 @@
+.guide-capture-figure{margin:16px 0 22px;color:var(--text)}
+.guide-capture-open{display:block;width:100%;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--bg-soft);cursor:zoom-in;overflow:hidden}
+.guide-capture{position:relative;line-height:0;max-width:100%;margin:auto}
+.guide-capture img{display:block;width:100%;height:auto}
+.guide-capture-open{width:fit-content;max-width:100%;margin-inline:auto}.guide-capture-open img{width:auto;max-width:100%;max-height:310px;object-fit:contain}
+.guide-capture__mark{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#334f99;color:white;border:2px solid white;font:700 13px/1 sans-serif;box-shadow:0 0 0 2px #334f99}
+.guide-capture-figure figcaption{font-size:13px;line-height:1.6;margin-top:10px}
+.guide-capture-figure small{display:block;color:var(--text-muted);font-size:11px}
+.guide-capture-open:focus-visible,.guide-capture-close:focus-visible{outline:3px solid #678ce1;outline-offset:3px}
+.guide-capture-dialog{box-sizing:border-box;max-width:96vw;max-height:94vh;width:max-content;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--bg);color:var(--text);overflow:auto}
+.guide-capture-dialog::backdrop{background:rgb(0 0 0 / .7)}
+.guide-capture-close{display:block;position:sticky;top:0;z-index:2;margin:0 0 12px auto;padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer}
+.guide-capture-full{max-width:1200px;min-width:280px}.guide-capture-full img{width:auto;max-width:100%}
+.guide-modal:has(.guide-capture-figure){--bg:inherit;--bg-soft:inherit;--bg-raised:inherit;--border:inherit;--text:inherit;--text-dim:inherit;--text-muted:inherit;--accent:inherit}
+@media(max-width:700px){.guide-overlay{padding:8px}.guide-modal{width:100%;height:94vh;flex-direction:column}.guide-nav{flex:0 0 auto;padding:8px;border-right:0;border-bottom:1px solid var(--border)}.guide-nav__brand{display:none}.guide-nav__list{flex-direction:row;overflow-x:auto}.guide-nav__it{white-space:nowrap}.guide-body{min-height:0}.guide-body__scroll{padding:16px}.guide-capture__mark{width:20px;height:20px;font-size:11px}}

@@ -407,7 +407,7 @@ const api = {
   // 每日签到（幂等）：返回 {success, amount, balanceAfter, streak, message} 或 null
   checkin: () =>
     ipcRenderer.invoke("account:checkin") as Promise<{ success?: boolean; amount?: number; balanceAfter?: number; streak?: number; message?: string } | null>,
-  // 客户端公告（公开）：返回当前发布中的公告 + version(updated_at)，未发布/异常 → {active:false}
+  // 客户端公告（公开）：返回当前发布中的公告 + version(updated_at)，未发布 → {active:false}，网络失败抛错供客户端重试
   getAnnouncement: () =>
     ipcRenderer.invoke("announcement:get") as Promise<{ active: boolean; version?: string; titleZh?: string; titleEn?: string; bodyZh?: string; bodyEn?: string }>,
   // 消息中心：拉取当前用户的消息列表 + 未读数（需登录，未登录返回空）

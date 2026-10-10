@@ -1,5 +1,14 @@
 import React, { useState } from "react";
 import type { Lang } from "../i18n.js";
+import { GuideScreenshot } from "./GuideScreenshot.js";
+import companyZh from "../assets/guide/company-zh.png";
+import companyEn from "../assets/guide/company-en.png";
+import teamZh from "../assets/guide/team-pack-zh.png";
+import teamEn from "../assets/guide/team-pack-en.png";
+import platformZh from "../assets/guide/platform-menu-zh.png";
+import platformEn from "../assets/guide/platform-menu-en.png";
+import imageModelsZh from "../assets/guide/image-models-zh.png";
+import imageModelsEn from "../assets/guide/image-models-en.png";
 
 /**
  * 使用手册 / User Guide —— 账号菜单入口打开的大弹窗。
@@ -107,7 +116,9 @@ export function HelpManualModal({ lang, onClose }: Props) {
       body: (
         <>
           <p className="guide-lead">{L("Build a team of AI teammates with their own roles. Chat with one teammate, delegate work, or bring several into a group.", "给 AI 员工分配不同职责，既能单独私聊、安排任务，也能建群一起协作。")}</p>
+          <GuideScreenshot src={lang === "en" ? companyEn : companyZh} lang={lang} alt={L("Company sidebar, Add teammate button, teammate cards and Groups tab", "一人公司侧栏入口、添加员工按钮、员工卡片及群入口")} caption={L("1 Open My Company → 2 Add teammate. 3 Click a teammate card for private chat, or the Groups tab for group chat.", "1 点侧栏一人公司 → 2 添加员工。3 点员工卡片进入私聊，或点顶部「群」进入群聊列表。")} marks={[{n:1,x:3,y:4},{n:2,x:90,y:18},{n:3,x:23,y:47}]} />
           <h4>{L("Install your team", "安装团队")}</h4>
+          <GuideScreenshot src={lang === "en" ? teamEn : teamZh} lang={lang} alt={L("Add teammates dialog: six-person team already installed", "添加员工弹窗：六人团队已安装状态")} caption={L("Team pack after installation. Disable / Uninstall are management actions, not installation steps. No team data was changed for this capture.", "团队已安装后的真实界面。「停用／卸载」是管理操作，不是安装步骤；截图未改动团队数据。")} />
           <FeatRow badge={<span className="guide-num">1</span>} title={L("Open My Company", "打开一人公司")} desc={L("New users have My Company enabled, with its sidebar menu collapsed. Click the menu title to open the company page; the arrow expands or collapses Contacts and Groups. Existing users can enable it in Settings → Company.", "新用户默认开启一人公司，侧栏菜单初始收起。点菜单标题进入操作页，点箭头展开或收起通讯录和群聊。已有用户可在「设置 → 一人公司」开启。")} />
           <FeatRow badge={<span className="guide-num">2</span>} title={L("Choose a team pack", "选择团队安装")} desc={L("No teammates are installed automatically. On the Teammates page, click Add teammate. Under Team packs, choose Wuwei One-Person Company and click Install. You can also import teammates from openclaw here.", "员工不会自动安装。在「员工」页点「添加员工」，在「可安装的团队」中选择「无为一人公司」，点击「安装」。这里也可以从 openclaw 导入员工。")} />
           <FeatRow badge={<span className="guide-num">3</span>} title={L("Start working", "开始使用")} desc={L("The default team includes six teammates in CEO Office, Engineering, Design and General Affairs. Click a teammate card or a name in Contacts to start a private chat. Tell Ben your goal and ask him to coordinate the relevant teammates.", "默认团队包含六位员工，分属 CEO办公室、技术部、设计部和综合部。点员工卡片或通讯录中的姓名开始私聊，也可以把目标交给小笨，让他协调相关员工完成。")} />
@@ -127,6 +138,9 @@ export function HelpManualModal({ lang, onClose }: Props) {
       body: (
         <>
           <p className="guide-lead">{L("Generate images in the conversation with hosted image models. No API key setup is needed.", "使用无为托管的生图模型，在对话中直接生成图片，无需配置 API Key。")}</p>
+          <GuideScreenshot src={lang === "en" ? platformEn : platformZh} lang={lang} alt={L("Platform menu showing Wuwei hosted · Image models", "平台菜单中的无为托管·生图模型入口")} caption={L("1 Open the platform switcher below the input; find Wuwei hosted · Image models. This capture shows the entry, not a selected model or a paid generation.", "1 打开输入框下方的平台菜单，找到「无为托管 · 生图模型」。实图仅展示入口，不表示已选模型或付费生成。")} />
+          <GuideScreenshot src={lang === "en" ? imageModelsEn : imageModelsZh} lang={lang} alt={L("Image model menu showing GPT Image 2, Nano Banana 2, Nano Banana and GPT Image 1", "生图模型菜单：GPT Image 2、Nano Banana 2、Nano Banana、GPT Image 1")} caption={L("2 Choose an image model from the model menu. Actual test-client capture; listed prices are references, not an order. Prices are subject to the final confirmation.", "2 在模型菜单选择生图模型。测试客户端实截；列表价格为参考，不是订单，价格以实际确认为准。")} />
+
           <FeatRow badge={<span className="guide-num">1</span>} title={L("Sign in and choose a model", "登录并选择模型")} desc={L("Click the platform below the message box and choose Wuwei hosted · Image models. Select GPT Image 2, Nano Banana 2, Nano Banana or GPT Image 1.", "登录后，点击输入框下方的平台，选择「无为托管 · 生图模型」，再选择 GPT Image 2、Nano Banana 2、Nano Banana 或 GPT Image 1。")} />
           <FeatRow badge={<span className="guide-num">2</span>} title={L("Describe your image", "描述图片")} desc={L("Describe the subject, setting, style and intended use, then send. For example: “Create a warm, minimalist illustration of a coffee shop for a website banner.” You can request a supported size or quality in the prompt; the model picker selects the model itself.", "说清主体、场景、风格和用途后发送，例如：「生成一张咖啡店网站横幅，温暖色调，简约插画风。」需要尺寸或画质时可在描述中提出，具体选项以模型支持为准；模型列表只选择模型。")} />
           <FeatRow badge={<span className="guide-num">3</span>} title={L("Confirm the cost", "确认费用")} desc={L("The confirmation dialog shows the estimated coin reservation and maximum authorization. Check these before confirming. The model list shows a reference price; quality and size can change the quote. GPT Image 1 uses low quality by default and also supports medium quality in this release.", "确认弹窗会显示预计预占的无为币和最高授权额度，核对后再确认。模型列表是参考价格，画质和尺寸会影响报价。当前版本 GPT Image 1 默认低画质，也支持中画质。")} />
@@ -377,7 +391,7 @@ export function HelpManualModal({ lang, onClose }: Props) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </header>
-          <div className="guide-body__scroll">{cur.body}</div>
+          <div key={cur.id} className="guide-body__scroll">{cur.body}</div>
         </section>
       </div>
     </div>

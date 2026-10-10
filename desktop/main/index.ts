@@ -6,6 +6,8 @@ import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, ses
 //    之后 sessions/settings/brain 等模块初始化时才能按正确版本(wuwei/minicc/test)选数据目录。
 import { EDITION, IS_MINICC, IS_TEST, APP_NAME, APP_ID, DATA_DIR_NAME, appDisplayName } from "./edition.js";
 import electronUpdater from "electron-updater";
+import { fetchAnnouncement } from "./announcement.js";
+import { sessionAfterDelete } from "../../src/team/session-after-delete.js";
 import { createUpdatePolicy, DEFAULT_UPDATE_INTERVAL_MS, updateIntervalMs, jitterUpdateInterval } from "./update-policy.js";
 const safeStorageOk = () => {
   try {
@@ -418,6 +420,25 @@ const taskReports = new TaskReports({
   },
 });
 
+function startEmployeeChat(employeeId: string, employeeName: string, model?: { providerId: string; model: string }) {
+  lockSessionModel(currentId); // 同 session:new：先锁住正要离开的会话的模型
+  currentId = randomUUID();
+  setSessionEmployee(currentId, employeeId, employeeName);
+  // 员工绑了自定义模型 → 把它写进会话绑定，底栏就显示员工的模型（显示=实际用的，一致）。
+  // 没绑 → 会话不绑，底栏显示全局默认，applyEmployee 也不改模型。正好对应"自定义优先、否则用默认"。
+  if (model?.providerId && model.model) {
+    const gs = loadSettings();
+    const slot = (gs?.creds || {})[model.providerId] || {};
+    // kind 不从 creds slot 取(CredSlot 无此字段)——会话按 providerId 重建 provider 时自会推断。
+    setSessionBinding(currentId, { providerId: model.providerId, model: model.model, baseUrl: slot.baseUrl });
+  }
+  const a = getAgent(currentId);
+  send("evt:sessions", listSessions());
+  send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [], boundModel: model?.model, boundProviderId: model?.providerId });
+  sendUsageFor(currentId);
+  void emitAccount();
+}
+
 function syncTeamModule(s: Settings | null) {
   if (teamEnabled(s))
     registerTeam(ipcMain, {
@@ -425,24 +446,7 @@ function syncTeamModule(s: Settings | null) {
       log,
       // 开一名员工的私聊：与 session:new 同一套流程，只是先把 employeeId 写进 meta，
       // 这样 getAgent 建 Agent 时就能读到并套上人格。
-      startChat: (employeeId, employeeName, model) => {
-        lockSessionModel(currentId); // 同 session:new：先锁住正要离开的会话的模型
-        currentId = randomUUID();
-        setSessionEmployee(currentId, employeeId, employeeName);
-        // 员工绑了自定义模型 → 把它写进会话绑定，底栏就显示员工的模型（显示=实际用的，一致）。
-        // 没绑 → 会话不绑，底栏显示全局默认，applyEmployee 也不改模型。正好对应"自定义优先、否则用默认"。
-        if (model?.providerId && model.model) {
-          const gs = loadSettings();
-          const slot = (gs?.creds || {})[model.providerId] || {};
-          // kind 不从 creds slot 取(CredSlot 无此字段)——会话按 providerId 重建 provider 时自会推断。
-          setSessionBinding(currentId, { providerId: model.providerId, model: model.model, baseUrl: slot.baseUrl });
-        }
-        const a = getAgent(currentId);
-        send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
-        send("evt:sessions", listSessions());
-        sendUsageFor(currentId);
-        void emitAccount();
-      },
+      startChat: startEmployeeChat,
       baseSys: () => sysPrompt,
       runEmployee: runEmployeeTurn,
     });
@@ -4350,6 +4354,7 @@ ipcMain.on("session:dismiss-interrupted", (_e, id: string) => {
 });
 
 ipcMain.on("session:delete", (_e, id: string) => {
+  const deleted = listSessions().find(s => s.id === id);
   runs.get(id)?.abort(); // 删除正在跑的会话先中断它
   runs.delete(id);
   deleteSession(id);
@@ -4357,11 +4362,25 @@ ipcMain.on("session:delete", (_e, id: string) => {
   agents.delete(id);
   backendBySid.delete(id);
   if (currentId === id) {
-    const list = listSessions();
-    currentId = list[0]?.id ?? randomUUID();
-    const a = getAgent(currentId);
-    send("evt:session-loaded", { id: currentId, messages: a ? a.getDisplayMessages() : [] });
-    sendUsageFor(currentId);
+    const next = sessionAfterDelete(deleted, listSessions());
+    const employee = deleted?.employeeId && teamEnabled(loadSettings())
+      ? loadEmployees().find(e => e.id === deleted.employeeId) : undefined;
+    if (!next && employee) {
+      // The last chat was removed: open an empty chat with the same employee.
+      // Binding is installed before getAgent, so identity, tools and model match.
+      currentId = ""; // do not re-bind the deleted session when creating its replacement
+      startEmployeeChat(employee.id, employee.name, employee.model);
+    } else {
+      currentId = next?.id ?? randomUUID();
+      const a = getAgent(currentId);
+      send("evt:session-loaded", {
+        id: currentId, messages: a ? a.getDisplayMessages() : [],
+        boundModel: next?.model, boundProviderId: next?.providerId,
+        contextWindow: a?.getContextBudget().contextWindow,
+      });
+      sendUsageFor(currentId);
+      void emitAccount();
+    }
   }
   send("evt:sessions", listSessions());
   send("evt:groups", listGroups());
@@ -5312,15 +5331,13 @@ ipcMain.handle("login:remember-clear-password", (_e, email: string) => {
   return true;
 });
 // 客户端公告：从 wuwei-site 拉当前发布中的公告(公开、无需登录)。走主进程避免 CORS。
-// 返回 { active, version, titleZh/En, bodyZh/En }；异常/未发布 → { active:false }。
+// 网络失败保留为失败，渲染进程会重试；只有服务端明确未发布才返回 inactive。
 ipcMain.handle("announcement:get", async () => {
   try {
-    const site = process.env.WUWEI_SITE_URL || "https://wuweiai.io";
-    const res = await fetch(`${site}/api/announcement`);
-    if (!res.ok) return { active: false };
-    return await res.json();
-  } catch {
-    return { active: false };
+    return await fetchAnnouncement(net.fetch.bind(net), process.env.WUWEI_SITE_URL || "https://wuweiai.io");
+  } catch (error) {
+    log("announcement", "公告拉取失败，将重试", error instanceof Error ? error.message : String(error));
+    throw new Error("Announcement temporarily unavailable");
   }
 });
 // 当前应用版本号（帮助菜单显示 + 更新比对）
