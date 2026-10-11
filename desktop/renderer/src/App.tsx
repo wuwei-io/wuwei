@@ -2799,7 +2799,6 @@ const WECHAT_LOGIN_ENABLED = false;
 // 点「登录」再切到真正的登录表单。比一上来就甩登录框更干净、转化更好。
 function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang, showLangSwitch }: { lang: Lang; t: T; onClose: () => void; onLogin: () => void; onKeepFree?: () => void; reason?: string | null; onLang?: (l: Lang) => void; showLangSwitch?: boolean }) {
   const zh = lang === "zh";
-  const [langOpen, setLangOpen] = useState(false); // 小地球语言下拉开合
   return (
     <>
       <div className="mq-overlay" onClick={onClose} />
@@ -2818,6 +2817,7 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
             textAlign: "center",
           }}
         >
+          {showLangSwitch && onLang && <button type="button" aria-label="Language / 语言" onClick={() => onLang(zh ? "en" : "zh")} style={{ position: "absolute", top: 10, left: 12, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}>{zh ? "English" : "中文"}</button>}
           <button
             onClick={onClose}
             title={makeT(getLang())("msg.close", "关闭")}
@@ -2934,9 +2934,11 @@ function WuweiLoginModal({
   t,
   onClose,
   onSuccess,
+  onLang,
 }: {
   incentive?: boolean;
   lang: Lang;
+  onLang: (l: Lang) => void;
   t: T;
   onClose: () => void;
   onSuccess: (me: WuweiMe, action?: "login" | "register" | "reset") => void;
@@ -3128,6 +3130,7 @@ function WuweiLoginModal({
             position: "relative",
           }}
         >
+          {onLang && <button type="button" aria-label="Language / 语言" onClick={() => onLang(zh ? "en" : "zh")} style={{ position: "absolute", top: 10, left: 12, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}>{zh ? "English" : "中文"}</button>}
           <button
             onClick={onClose}
             title={makeT(getLang())("msg.close", "关闭")}
@@ -10294,6 +10297,7 @@ export function App() {
             setShowLoginForm(false);
             setLoginResume(false);
           }}
+          onLang={changeLang}
           onSuccess={onWuweiLoggedIn}
         />
       )}

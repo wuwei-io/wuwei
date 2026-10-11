@@ -9,13 +9,9 @@ export function getLang(): Lang {
   } catch {
     /* ignore */
   }
-  // 未手动设置：按地区自动。中国(时区/语言)→中文，其它→英文。
-  // 用时区做地区代理(离线、无需外部 IP 服务、不涉隐私)，配合系统语言兜底。
+  // 系统首选语言优先于地区；不支持的语言回退英文，用户仍可手动切换。
   try {
-    const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || "").toLowerCase();
-    if (/shanghai|chongqing|harbin|urumqi|kashgar|hong_kong|macau|taipei/.test(tz)) return "zh";
-    if (navigator.language.toLowerCase().startsWith("zh")) return "zh";
-    return "en";
+    return /^zh(?:[-_]|$)/i.test(navigator.language || "") ? "zh" : "en";
   } catch {
     return "en";
   }
