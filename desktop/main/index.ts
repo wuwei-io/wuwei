@@ -220,14 +220,17 @@ let askSeq = 0;
 let turnSid = "";
 // Desktop and phone resolve the same pending decision; paid tools use their own human dialog.
 const desktopDecisionSids = new Map<string, string>();
-function requestDesktopDecision(sid: string, signal: AbortSignal, source: { sessionId?: string; roomId?: string } = { sessionId: sid }): NonNullable<ToolContext['requestDecision']> {
+function requestDesktopDecision(sid: string, signal: AbortSignal, source: { sessionId?: string; roomId?: string } = { sessionId: sid }, toolPermission?: { name: string; sid: string }): NonNullable<ToolContext['requestDecision']> {
   return decision => {
     if (signal.aborted) return Promise.resolve({ action: 'deny', reason: 'abort' });
     desktopDecisionSids.set(decision.permId, sid);
     try {
       return requestLocalDecision(decision, source, signal, event => {
         if (event.type === 'decision-resolved') desktopDecisionSids.delete(decision.permId);
-        send(event.type === 'decision' ? 'evt:decision-request' : 'evt:decision-resolved', event);
+        // Native local tool permission only. Paid tools, ask_decision and remote
+        // approvals must not inherit automatic execution from the current tab.
+        send(event.type === 'decision' ? 'evt:decision-request' : 'evt:decision-resolved',
+          event.type === 'decision' && toolPermission ? { ...event, toolPermission } : event);
       }).finally(() => desktopDecisionSids.delete(decision.permId));
     } catch (error) {
       desktopDecisionSids.delete(decision.permId);
@@ -321,7 +324,8 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   const decide = requestDecision || remoteExecution?.requestDecision || requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource);
   const decisionHook: ToolContext['requestDecision'] = decision => waitForRemoteResult(decide(decision), executionSignal);
   const permit = onPermission || remoteExecution?.requestPermission || (async (name: string, input: unknown): Promise<'allow' | 'deny'> => {
-    const answer = await requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource)({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) });
+    const answer = await requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource,
+      { name, sid: origin?.id || `__room_${employee.id}` })({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) });
     return answer.action === 'allow' || answer.value === 'allow' ? 'allow' : 'deny';
   });
   if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');

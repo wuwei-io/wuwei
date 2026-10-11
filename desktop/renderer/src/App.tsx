@@ -5,6 +5,7 @@ import { departmentLabel } from "../../../src/team/default-departments.js";
 import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
 import { CompanyHistorySettings } from "./team/CompanyHistorySettings.js";
 import { ToolDecisionModal } from './components/ToolDecisionModal.js';
+import { shouldAutoApproveToolPermission } from './tool-permission-policy.js';
 import { imageModelChoices, imageModelLabel } from '../../../src/imagegen/image-catalog.js';
 import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -5191,7 +5192,11 @@ export function App() {
           break;
         }
         case 'evt:decision-request':
-          setToolDecisions(previous => ({ ...previous, [payload.permId]: payload }));
+          if (shouldAutoApproveToolPermission(payload, modeRef.current, alwaysAllowRef.current)) {
+            window.wuwei.respondDecision(payload.permId, { action: 'allow' });
+          } else {
+            setToolDecisions(previous => ({ ...previous, [payload.permId]: payload }));
+          }
           break;
         case 'evt:decision-resolved':
           setToolDecisions(previous => { const next = { ...previous }; delete next[payload.permId]; return next; });
