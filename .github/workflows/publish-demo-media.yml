@@ -1,0 +1,33 @@
+name: Publish homepage demo media
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install ali-oss@6 --no-audit --no-fund --ignore-scripts
+      - name: Copy public demo media to dedicated OSS prefix
+        env:
+          OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        run: |
+          node <<'JS'
+          const OSS=require('ali-oss');
+          const client=new OSS({endpoint:'https://oss-cn-hangzhou.aliyuncs.com',bucket:'wuwei-repo',accessKeyId:process.env.OSS_KEY_ID,accessKeySecret:process.env.OSS_KEY_SECRET,secure:true});
+          (async()=>{for(const lang of ['en','zh']){
+            const response=await fetch(`https://wuweiai.io/demo/demo-${lang}.mp4`);
+            if(!response.ok)throw new Error('Source unavailable');
+            const data=Buffer.from(await response.arrayBuffer());
+            if(data.length<1000000||data.length>15000000||data.toString('ascii',4,8)!=='ftyp')throw new Error('Invalid video');
+            const key=`website-demo/20261011-faststart/demo-${lang}.mp4`;
+            await client.put(key,data,{headers:{'Content-Type':'video/mp4','Cache-Control':'public,max-age=31536000,immutable'}});
+            const check=await client.get(key);
+            if(!data.equals(check.content))throw new Error('Verification mismatch');
+            console.log(`${key}: ${data.length} bytes, verified`);
+          }})().catch(e=>{console.error(e.code||e.name);process.exit(1)});
+          JS
