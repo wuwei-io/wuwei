@@ -4366,9 +4366,6 @@ body {
 .trial-bal-mini { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 11px; font-weight: 600; color: #a2a8b0; letter-spacing: 0.2px; margin: -2px 30px 12px; }
 .trial-bal-mini .pay-coin { width: 12px; height: 12px; vertical-align: 0; }
 
-/* 二级·佐证：升级后可用的顶级模型（官方 logo 一排），轻量不抢套餐 */
-.trial-models { display: flex; align-items: center; justify-content: center; gap: 10px 16px; flex-wrap: wrap; margin: 0 30px 14px; padding: 8px 12px; border-radius: 10px; background: #fafbfc; border: 1px solid rgba(22, 25, 30, 0.045); }
-.trial-models-t { font-size: 10.5px; font-weight: 600; color: #a2a8b0; flex: 0 0 auto; letter-spacing: 0.2px; }
 .trial-models-row { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
 .trial-model { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #5a616b; }
 .trial-model-badge { width: 19px; height: 19px; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }

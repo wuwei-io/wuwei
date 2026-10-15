@@ -1962,10 +1962,6 @@ function TrialPayModal({
           <div className="trial-bal-mini"><span className="pay-coin" /> {context === "browse" ? (en ? `Balance ${balance} credits` : `当前余额 ${balance} 无为币`) : (en ? `Balance ${balance} credits · upgrade to continue` : `当前余额 ${balance} 无为币 · 升级后即可继续`)}</div>
         )}
 
-        <div className="trial-models">
-          <span className="trial-models-t">{en ? "Value models for everyday work; premium models when needed." : "日常干活优先高性价比，复杂任务再选顶级模型。"}</span>
-        </div>
-
         {/* 顶部 tab：会员套餐 / 积分包，直接切换并排选项（替代原「改用积分包」跳窗） */}
         <div className="trial-tabs">
           <button className={"trial-tab" + (tab === "plan" ? " on" : "")} onClick={() => switchTab("plan")}>{en ? "Membership" : "会员套餐"}</button>
