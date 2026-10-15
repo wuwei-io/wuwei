@@ -43,6 +43,8 @@ export interface WuweiMe {
 
 // AI 提供商目录（/api/catalog，脱敏）：后台可配的平台顺序/显隐/模型。客户端拿它当默认序 + 模型源，拉不到则回退硬编码 PRESETS。
 export interface CatalogModelDto {
+  selection?: { category?: string; rank?: number; recommended?: boolean; defaultForNewUsers?: boolean; hiddenInPicker?: boolean };
+  price?: { input: number | null; output: number | null; cache: number | null };
   id: string;
   label: string;
   labelEn?: string | null;
@@ -50,6 +52,7 @@ export interface CatalogModelDto {
   free: boolean;
   anon?: boolean; // 未登录是否可用；false=展示但需登录(免费列表里灰置引导登录)。缺省视为 true
   badge?: string | null; // 角标（如「快」），下拉里显示，提醒用户
+  inputModalities?: string[]; // 可选能力元数据；缺省时模型列表使用已核对的接入能力
 }
 export interface CatalogProviderDto {
   id: string;

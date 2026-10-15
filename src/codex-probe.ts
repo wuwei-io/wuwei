@@ -5,14 +5,19 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 
+// Diagnostics must also name the intended model before reading credentials or
+// making a request. No subscription model is selected implicitly.
+const model = process.argv[2]?.trim();
+if (!model) {
+  console.error('Usage: npx tsx src/codex-probe.ts <model-id>');
+  process.exit(2);
+}
+
 const authPath = `${homedir()}/.codex/auth.json`;
 const auth = JSON.parse(readFileSync(authPath, "utf8"));
 const accessToken: string = auth.tokens.access_token;
 const accountId: string = auth.tokens.account_id;
 console.log(`凭证: auth_mode=${auth.auth_mode} account_id=${accountId.slice(0, 8)}… token_len=${accessToken.length}`);
-
-// 允许命令行覆盖 model，方便试不同名字： tsx codex-probe.ts gpt-5.3-codex
-const model = process.argv[2] || "gpt-5-codex";
 
 const body = {
   model,

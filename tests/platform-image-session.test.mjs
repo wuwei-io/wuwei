@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
+import {imageToolBalanceFailure} from '../src/usage-limit.ts';
 // Compile with owned dependencies, preserving project's ESM config.
 const out=mkdtempSync(path.join(process.cwd(),'.image-session-'));let create;
 try{execFileSync(process.execPath,['node_modules/typescript/bin/tsc','--target','ES2022','--module','commonjs','--moduleResolution','node','--strict','--skipLibCheck','--esModuleInterop','--outDir',out,'src/imagegen/platform-image-session.ts']);
@@ -80,4 +81,29 @@ test('a pending order is a delivery error, never a success or a new paid request
  assert.equal(result.isError,true);assert.equal(result.displayImage,undefined);
  assert.equal(JSON.parse(result.content).displayed,false);assert.equal(JSON.parse(result.content).code,'IMAGE_NOT_DELIVERED');
  assert.equal(requests.length,1);assert.equal(requests[0].method,'GET');
+});
+
+for (const phase of ['quote','create','settle','reauthorize']) test(`image ${phase} HTTP 402 preserves its billing code for payment without repeating a paid order`,async t=>{
+ const root=mkdtempSync(path.join(tmpdir(),'wuwei-image-balance-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const id='abcdef12-3456-7890-abcd-1234567890ab',requests=[];
+ const sku={sku_id:'image-two',price_version:id,authorization_ceiling:120,coins_per_image:36,model:'gpt-image-2',size:'1024x1024',quality:'default',max_count:1,max_prompt_bytes:1000};
+ const original=globalThis.fetch;
+ globalThis.fetch=async(url,options={})=>{
+  const method=options.method||'GET';requests.push({url,method});
+  if ((phase==='quote'&&url.endsWith('/quote')) || (phase==='create'&&url.endsWith('/orders')&&method==='POST') || url.endsWith('/'+phase)) return Response.json({code:'INSUFFICIENT_BALANCE'},{status:402});
+  if(url.endsWith('/catalog'))return Response.json([sku]);
+  if(url.endsWith('/quote'))return Response.json({sku_id:sku.sku_id,price_version:id,estimated_coins:36,authorization_ceiling:120});
+  return Response.json({order_id:id,status:'unknown',actual_coins:40});
+ };
+ t.after(()=>{globalThis.fetch=original;});
+ const input=phase==='settle'?{action:'query',order_id:id}:phase==='reauthorize'?{action:'reauthorize',order_id:id}:{action:'generate',sku_id:sku.sku_id,prompt:'cube'};
+ let confirmations=0;
+ const result=await create('https://wuweiai.io','test-only-token',path.join(root,'recovery'))(input,{cwd:root,requestDecision:async()=>{confirmations++;return {action:'reply',value:phase==='reauthorize'?'reauthorize_image':'generate_image'};}});
+ assert.equal(result.isError,true);assert.equal(result.displayImage,undefined);
+ const data=JSON.parse(result.content);assert.equal(data.billing_code,'INSUFFICIENT_BALANCE');assert.equal(data.billing_status,402);
+ assert.equal(imageToolBalanceFailure('platform_imagegen',result.content,result.isError),true);
+ assert.equal(requests.filter(r=>r.url.endsWith('/orders')&&r.method==='POST').length,phase==='create'?1:0);
+ assert.equal(confirmations,phase==='create'||phase==='reauthorize'?1:0);
+ if(phase==='create') assert.ok(data.recovery_key);
+ if(phase==='settle') assert.equal(data.order_id,id);
 });

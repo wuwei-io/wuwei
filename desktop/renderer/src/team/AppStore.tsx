@@ -8,6 +8,8 @@ import { localizeEmployee, localizeTeamApp, editLocalizedEmployeeField } from ".
 import { useEffect, useRef, useState } from "react";
 import type { Employee, TeamAppCard } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
+import { ModelPicker } from '../components/ModelPicker.js';
+import type { ModelChoice } from '../../../../src/model-selection.js';
 
 type TeamState = { apps: TeamAppCard[]; employees: Employee[] };
 
@@ -137,15 +139,18 @@ type ImportSource = { kind: string; path: string; candidates: ImportCandidate[] 
 // 可选头像图标（都在 EmployeeIcon 里有画）。空值=用名字首字。
 const ICON_CHOICES = ["", "pen", "code", "chart", "palette", "brain", "coin", "crystal", "ring", "sprout"];
 
-type ProviderOpt = { id: string; label: string; models: string[] };
+type ProviderOpt = { id: string; label: string; models: string[]; choices?: ModelChoice[] };
 
 // 员工编辑弹窗：独立组件，AppStore(管理页) 与 App(右键「编辑」在当前界面直接弹，不跳转到一人公司) 共用。
 // 自带草稿状态；保存/删除后回调 onSaved(带最新列表)再 onClose。
 export function EmployeeEditModal({
-  en, providers, employee, onClose, onSaved,
+  en, providers, employee, onClose, onSaved, loggedIn = false, onRequireLogin, onConnections,
 }: {
   en: boolean;
   providers?: ProviderOpt[];
+  loggedIn?: boolean;
+  onRequireLogin?: () => void;
+  onConnections?: () => void;
   employee: Employee;
   onClose: () => void;
   onSaved?: (r: { apps?: TeamAppCard[]; employees?: Employee[] }) => void;
@@ -157,6 +162,10 @@ export function EmployeeEditModal({
   const saveText = (field: "name" | "title" | "blurb" | "persona") =>
     edit[field] === employee[field] ? employee[field] : (edit[field] || "").trim();
   const [cropFile, setCropFile] = useState<File | null>(null);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const choices = (providers || []).flatMap(p => p.choices || []).filter(c => c.category !== 'images');
+  const selectedKey = edit.model ? `${edit.model.providerId}/${edit.model.model}` : '';
+  const selectedModel = choices.find(c => c.key === selectedKey);
   return (
     <>
       <div className="tc-modal-mask" onClick={onClose}>
@@ -209,8 +218,11 @@ export function EmployeeEditModal({
           {providers && providers.length > 0 && (
             <div className="tc-field">
               <label>{en ? "Model" : "模型"}<em>{en ? "which platform & model this teammate uses" : "这名员工用哪个平台和模型"}</em></label>
-              <div className="tc-model-row">
-                <select className="tc-input tc-select" value={edit.model?.providerId || ""} onChange={(ev) => { const pid = ev.target.value; if (!pid) { setEdit({ ...edit, model: undefined }); return; } const p = providers.find((x) => x.id === pid); setEdit({ ...edit, model: { providerId: pid, model: p?.models?.[0] || "" } }); }}>
+              {choices.length > 0 ? <div className="tc-model-row">
+                <button type="button" className="tc-btn-ghost" data-testid="employee-model-picker" onClick={() => setShowModelPicker(true)}>{selectedModel ? (en ? selectedModel.labelEn : selectedModel.label) : edit.model?.model || (en ? 'Follow current chat' : '跟随当前会话')}</button>
+                {edit.model && <button type="button" className="tc-btn-ghost" onClick={() => setEdit({ ...edit, model: undefined })}>{en ? 'Follow current chat' : '跟随当前会话'}</button>}
+              </div> : <div className="tc-model-row">
+                <select className="tc-input tc-select" value={edit.model?.providerId || ""} onChange={(ev) => { const pid = ev.target.value; setEdit({ ...edit, model: pid ? { providerId: pid, model: '' } : undefined }); }}>
                   <option value="">{en ? "Follow current chat" : "跟随当前会话"}</option>
                   {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
@@ -219,13 +231,14 @@ export function EmployeeEditModal({
                   const models = p?.models || [];
                   return models.length > 0 ? (
                     <select className="tc-input tc-select" value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })}>
+                      <option value="" disabled>{en ? 'Choose a model' : '请选择模型'}</option>
                       {models.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   ) : (
                     <input className="tc-input" placeholder={en ? "model id" : "模型名"} value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })} />
                   );
                 })()}
-              </div>
+              </div>}
             </div>
           )}
 
@@ -251,7 +264,7 @@ export function EmployeeEditModal({
             <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(en ? `Delete "${display.name}"? This can't be undone.` : `删除员工「${display.name}」？此操作不可撤销。`)) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{en ? "Delete" : "删除员工"}</button>
             <span style={{ flex: 1 }} />
             <button className="tc-btn-ghost" onClick={onClose}>{en ? "Cancel" : "取消"}</button>
-            <button className="tc-btn" disabled={!edit.name.trim() || !edit.persona.trim()} onClick={async () => {
+            <button className="tc-btn" disabled={!edit.name.trim() || !edit.persona.trim() || !!(edit.model?.providerId && !edit.model.model.trim())} onClick={async () => {
               const r = await api.updateEmployee(edit.id, {
                 name: saveText("name"),
                 title: saveText("title"),
@@ -270,6 +283,13 @@ export function EmployeeEditModal({
           </div>
         </div>
       </div>
+      {showModelPicker && <div className="team-model-picker" onClick={() => setShowModelPicker(false)}><div onClick={event => event.stopPropagation()}>
+        <ModelPicker choices={choices} selectedKey={selectedKey} loggedIn={loggedIn} lang={en ? 'en' : 'zh'} loading={false}
+          onChoose={async choice => { setEdit({ ...edit, model: { providerId: choice.providerId, model: choice.modelId } }); }}
+          onClose={() => setShowModelPicker(false)}
+          onRequireLogin={() => { setShowModelPicker(false); onClose(); onRequireLogin?.(); }}
+          onConnections={() => { setShowModelPicker(false); onClose(); onConnections?.(); }} />
+      </div></div>}
       {cropFile && (
         <AvatarCropper file={cropFile} en={en} onCancel={() => setCropFile(null)} onDone={(dataUrl) => { setEdit({ ...edit, avatarData: dataUrl }); setCropFile(null); }} />
       )}
@@ -277,7 +297,7 @@ export function EmployeeEditModal({
   );
 }
 
-export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boolean; onEmployees?: (list: Employee[]) => void; onOpenChat?: () => void; providers?: ProviderOpt[] }) {
+export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onRequireLogin, onConnections }: { en: boolean; onEmployees?: (list: Employee[]) => void; onOpenChat?: () => void; providers?: ProviderOpt[]; loggedIn?: boolean; onRequireLogin?: () => void; onConnections?: () => void }) {
   const [state, setState] = useState<TeamState>({ apps: [], employees: [] });
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -579,6 +599,9 @@ export function AppStore({ en, onEmployees, onOpenChat, providers }: { en: boole
         <EmployeeEditModal
           en={en}
           providers={providers}
+          loggedIn={loggedIn}
+          onRequireLogin={onRequireLogin}
+          onConnections={onConnections}
           employee={edit}
           onClose={() => setEdit(null)}
           onSaved={(r) => { if (r?.apps) setState({ apps: r.apps as any, employees: (r.employees || []) as any }); }}

@@ -2,11 +2,12 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {PlatformBillingClient,type Sku} from './platform-billing-client.js';
+import {BillingError,PlatformBillingClient,type Sku} from './platform-billing-client.js';
 import type {ToolContext,ToolResult,Decision} from '../types.js';
 import {imageModelLabel} from './image-catalog.js';
 const tt=(zh:string,en:string)=>process.env.WUWEI_LANG==='en'?en:zh;
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+const billingDetails=(error:unknown)=>error instanceof BillingError ? {billing_code:error.code,billing_status:error.status} : {};
 function imageDecision(zhTitle:string,enTitle:string,zhQuestion:string,enQuestion:string,options:{value:string;zh:string;en:string}[]):Decision {
  const i18n={zh:{title:zhTitle,question:zhQuestion,optionLabels:Object.fromEntries(options.map(o=>[o.value,o.zh]))},
   en:{title:enTitle,question:enQuestion,optionLabels:Object.fromEntries(options.map(o=>[o.value,o.en]))}};
@@ -38,7 +39,7 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
     if(detail.status==='unknown') {
      ctx.signal?.throwIfAborted();
      try {await client.settle(orderId);detail=await client.order(orderId);} catch(error) {
-      return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tt('原订单尚未完成结算，图片未展示。不能声称生成成功；保留原订单，不重新生图。','The original order has not settled and no image was displayed. Do not claim success or generate again.'),reason:error instanceof Error?error.message:'Settlement pending'}),isError:true};
+      return {content:JSON.stringify({...detail,...billingDetails(error),displayed:false,code:'IMAGE_NOT_DELIVERED',message:tt('原订单尚未完成结算，图片未展示。不能声称生成成功；保留原订单，不重新生图。','The original order has not settled and no image was displayed. Do not claim success or generate again.'),reason:error instanceof Error?error.message:'Settlement pending'}),isError:true};
      }
     }
     if(detail.status!=='settled') return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tt('图片尚未交付，不能声称生成成功。只处理此原订单，不重新生图。','No image has been delivered. Do not claim success. Recover this original order only; never generate again.')}),isError:true};
@@ -116,8 +117,8 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
      } catch { /* Keep the durable receipt if recovery is still unavailable. */ }
     }
     await writeFile(receipt,JSON.stringify({key:attempt.key,input:attempt.input,state:attempt.state,order_id:attempt.orderId}),{mode:0o600});
-    return {content:JSON.stringify({code:'IMAGE_ORDER_ERROR',message:attempt.orderId || attempt.state==='unknown' ? tt('连接中断，暂未取回原图片。原订单已保留，请恢复原订单查看，避免重复生成。','The connection was interrupted and the original image could not be retrieved. The original order is saved; recover it instead of generating again.') : error instanceof Error ? error.message : tt('生图失败，未重新下单。','Image generation failed. No new order was submitted.'),recovery_key:attempt.key,recovery_file:receipt,order_id:attempt.orderId,reason:error instanceof Error?error.message:'Image unavailable'}),isError:true};
+    return {content:JSON.stringify({...billingDetails(error),code:'IMAGE_ORDER_ERROR',message:attempt.orderId || attempt.state==='unknown' ? tt('连接中断，暂未取回原图片。原订单已保留，请恢复原订单查看，避免重复生成。','The connection was interrupted and the original image could not be retrieved. The original order is saved; recover it instead of generating again.') : error instanceof Error ? error.message : tt('生图失败，未重新下单。','Image generation failed. No new order was submitted.'),recovery_key:attempt.key,recovery_file:receipt,order_id:attempt.orderId,reason:error instanceof Error?error.message:'Image unavailable'}),isError:true};
    }
-  } catch(error) {return {content:JSON.stringify({code:'IMAGE_ORDER_ERROR',message:error instanceof Error?error.message:tt('生图失败，请查询原订单。','Image generation failed. Check the original order.')}),isError:true};}
+  } catch(error) {return {content:JSON.stringify({...billingDetails(error),code:'IMAGE_ORDER_ERROR',message:error instanceof Error?error.message:tt('生图失败，请查询原订单。','Image generation failed. Check the original order.')}),isError:true};}
  };
 }

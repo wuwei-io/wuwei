@@ -26,7 +26,7 @@ const partsOf = (body) => body.messages.flatMap(m => Array.isArray(m.content) ? 
 const imagesOf = (body) => partsOf(body).filter(p => p.type === 'image_url');
 const userMessage = [{ role: 'user', content: [{ type: 'text', text: 'read this screenshot' }, { type: 'image', dataUrl: image }] }];
 
-for (const model of ['deepseek-flash', 'deepseek-v4.1-flash', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek/deepseek-v4.1-flash']) {
+for (const model of ['deepseek-flash', 'deepseek-v4.1-flash', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp', 'deepseek/deepseek-v4.1-flash', 'glm-5.3-flash', 'z-ai/glm-5.3-flash']) {
   test(`${model} sends the actual image by default`, async t => {
     const requests = intercept(t);
     await makeProvider(config(model)).complete('system', userMessage, [], {});
@@ -42,7 +42,7 @@ test('hosted DeepSeek keeps the image when the request goes through the Wuwei ga
   assert.equal(imagesOf(requests[0].body)[0].image_url.url, image);
 });
 
-for (const model of ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-v3.2', 'deepseek-r1', 'deepseek-r1-distill-qwen-32b', 'deepseek-v4-pro']) {
+for (const model of ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3', 'deepseek-v3.2', 'deepseek-r1', 'deepseek-r1-distill-qwen-32b', 'deepseek-v4-pro', 'glm-5', 'glm-5.2', 'nemotron-3.5-lightning', 'nvidia/nemotron-3.5-lightning']) {
   test(`${model} retains text-only compatibility`, async t => {
     const requests = intercept(t);
     await makeProvider(config(model)).complete('', userMessage, [], {});

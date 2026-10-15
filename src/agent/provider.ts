@@ -1,4 +1,5 @@
 import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
+import { devGatewayUrl } from '../dev-gateway.js';
 // Provider 实现：把统一的 Message/Tool 语义翻译到具体后端。
 // - AnthropicProvider：原生 Anthropic Messages API（流式）
 // - OpenAIProvider：任意 OpenAI 兼容 /chat/completions（本地 vLLM 等），做消息与工具的双向转换
@@ -25,7 +26,7 @@ const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : z
 // 只对无为网关(baseUrl 含 /api/gateway)生效；第三方端点保持原样报错，不误翻。
 // 从网关原始错误体里取稳定错误码（供渲染层按码判定弹窗，语言无关）。
 function gwCode(rawBody: string): string {
-  try { const e = JSON.parse(rawBody)?.error; if (e?.type === "gateway_error") return String(e.code || ""); } catch { /* ignore */ }
+  try { const e = JSON.parse(rawBody)?.error; if (e?.type === "gateway_error") return e.code === "upstream_error" && Number(e.status) === 429 ? "upstream_rate_limited" : String(e.code || ""); } catch { /* ignore */ }
   return "";
 }
 
@@ -35,7 +36,7 @@ function humanizeGatewayError(status: number, rawBody: string): string | null {
     const j = JSON.parse(rawBody);
     const e = j?.error;
     if (!e || e.type !== "gateway_error") return null; // 不是网关结构化错误 → 交回原始处理
-    code = String(e.code || "");
+    code = gwCode(rawBody);
     if (typeof e.balance === "number") bal = e.balance;
     if (typeof e.estimated_cost === "number") est = e.estimated_cost;
   } catch {
@@ -43,6 +44,15 @@ function humanizeGatewayError(status: number, rawBody: string): string | null {
   }
   const coins = (n?: number) => (typeof n === "number" ? String(n) : "");
   switch (code) {
+    case "upstream_rate_limited":
+      return tt("模型供应商暂时限流，请稍后重试，或切换其他热门模型。", "The model provider is temporarily rate limited. Retry shortly or choose another popular model.");
+    case "upstream_error":
+      return tt("模型供应商暂时不可用，请稍后重试或切换其他模型。", "The model provider is temporarily unavailable. Retry shortly or choose another model.");
+    case "auth_unavailable":
+      return tt("账号校验服务暂时连接失败，请稍后重试，无需退出登录。", "The account service is temporarily unreachable. Please retry; you do not need to sign out.");
+    case "invalid_token":
+    case "no_token":
+      return tt("登录状态已过期，请重新登录后重试。", "Your session has expired. Please sign in again and retry.");
     case "insufficient_balance": {
       const need = est != null ? tt(`（本次约需 ${coins(est)} 无为币，`, `(this request needs ~${coins(est)} coins, `) : tt("（", "(");
       const have = bal != null ? tt(`当前余额 ${coins(bal)}）`, `you have ${coins(bal)})`) : tt("）", ")");
@@ -134,7 +144,7 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Pro
   // 网关迁移(2026-09)：托管聊天从 Vercel 上的 wuweiai.io 网关迁到海外常驻 gw.wuweiai.io(不再穿 Vercel、
   // 不再吃 Fluid Compute 额度)。此处运行时改写 host → 一并覆盖所有「已把旧 URL 存进本地设置」的老用户，无需数据迁移。
   // 只改写网关聊天流量；余额/coins 等 /api/me/* 仍走 wuweiai.io(Vercel)，不受影响。
-  if (typeof url === "string") url = url.replace("https://wuweiai.io/api/gateway", "https://gw.wuweiai.io/api/gateway");
+  if (typeof url === "string") url = devGatewayUrl(url).replace("https://wuweiai.io/api/gateway", "https://gw.wuweiai.io/api/gateway");
   // 无为网关：带上 X-Client-OS，后台「用量记录」据此显示游客系统。(gw.wuweiai.io/api/gateway 仍匹配下方正则)
   if (CLIENT_OS && typeof url === "string" && /wuweiai\.io\/api\/gateway/.test(url)) {
     const h = new Headers(init.headers as ConstructorParameters<typeof Headers>[0]);
@@ -142,17 +152,22 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Pro
     init = { ...init, headers: h };
   }
   const signal = init.signal as AbortSignal | undefined;
+  // Hosted gateways already recover upstream streams. Avoid stacking ten more
+  // client retries on top and leaving a failed model waiting for minutes.
+  const hostedGateway = /^https:\/\/(?:gw\.)?wuweiai\.io\/api\/gateway\//.test(url);
+  const gatewayRetryLimit = hostedGateway ? Math.min(retries, 2) : retries;
   for (let attempt = 0; ; attempt++) {
     let res: Response | null = null;
     try {
       res = await fetch(url, init);
     } catch (e: any) {
-      if (e?.name === "AbortError" || signal?.aborted || attempt >= retries) throw e;
-      await sleep(backoffMs(attempt), signal); // 网络错误退避重试
+      if (e?.name === "AbortError" || signal?.aborted || attempt >= gatewayRetryLimit) throw e;
+      await sleep(hostedGateway ? Math.min(backoffMs(attempt), 3000) : backoffMs(attempt), signal); // 网络错误退避重试
       continue;
     }
     const transient = res.status === 429 || res.status === 503 || (res.status >= 500 && res.status < 600);
-    if (transient && attempt < retries) {
+    const retryLimit = gatewayRetryLimit;
+    if (transient && attempt < retryLimit) {
       const ra = Number(res.headers.get("retry-after"));
       const wait = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 20000) : backoffMs(attempt);
       try {
@@ -160,7 +175,7 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Pro
       } catch {
         /* ignore */
       }
-      await sleep(wait, signal);
+      await sleep(hostedGateway ? Math.min(wait, 3000) : wait, signal);
       continue;
     }
     return res;
@@ -350,7 +365,7 @@ class OpenAIProvider implements Provider {
     // ⚠️这些模型收到图片不一定报错——GLM-5.2 实测是「收下然后没反应」，比报 400 更难排查，
     //    所以宁可保守列进来，也别让用户对着空白等半天。
     const NON_VISION =
-      /deepseek-(?:chat|reasoner|v3(?:[.-]\d+)*|r1|v4-pro)(?:$|[-/:])|moonshot-v1-\d+k$|glm-[45](?!.*v)|qwen-?(max|plus|turbo)|embedding|\bbge\b/i;
+      /deepseek-(?:chat|reasoner|v3(?:[.-]\d+)*|r1|v4-pro)(?:$|[-/:])|moonshot-v1-\d+k$|glm-[45](?!.*v)(?!\.3-flash(?:$|[:/]))|nemotron-3\.5-lightning(?:$|[:/])|qwen-?(max|plus|turbo)|embedding|\bbge\b/i;
     const vision =
       this.cfg.vision === true
         ? true // 强制开：自建端点模型名不含 vl 但其实支持

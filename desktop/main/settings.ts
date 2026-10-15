@@ -154,6 +154,8 @@ export interface CredSlot {
 }
 
 export interface Settings {
+  modelChoiceExplicit?: boolean; // Legacy marker; defaults now distinguish current-chat choices from persisted choices.
+  modelPreferences?: Record<string, { providerId: string; modelId: string }>; // Explicit signed-in choices, isolated by account.
   kind: ProviderKind;
   providerId?: string; // UI 预设平台标识(codex/claude-oauth/anthropic/openai/deepseek/qwen/doubao/minimax/custom)
   model?: string;
@@ -256,7 +258,8 @@ export function loadSettings(): Settings | null {
 export function initializeFirstRunSettings(file = FILE): boolean {
   if (existsSync(file)) return false;
   const settings: Settings = {
-    kind: 'openai', providerId: 'wuwei-free', model: 'glm-4.7-flash',
+    kind: 'openai', providerId: 'wuwei-free', model: 'openrouter-auto-free',
+    modelChoiceExplicit: false,
     baseUrl: 'https://gw.wuweiai.io/api/gateway/v1', app: { teamEnabled: true },
   };
   mkdirSync(dirname(file), { recursive: true });
@@ -288,7 +291,10 @@ export function applyEnvFromSettings(s: Settings | null) {
   // 用户未手动设过 lang → 按系统语言自动判定（海外默认英文），与 renderer i18n getLang() 一致。
   process.env.WUWEI_LANG =
     s?.app?.lang === "en" ? "en" : s?.app?.lang === "zh" ? "zh" : detectSysLang();
-  if (!s) return; // 无设置：走 loadConfig 自动推断（有 ~/.codex 即 codex）
+  // Missing/unreadable/incomplete desktop settings must never infer a costly
+  // backend from credentials installed on this computer. Login resolves the
+  // recommended value model from the catalog; guests start with anonymous chat.
+  if (!s?.model || !['codex', 'anthropic-oauth', 'anthropic-apikey', 'openai'].includes(s.kind)) s = { kind: 'openai', providerId: 'wuwei-free', model: 'openrouter-auto-free', baseUrl: 'https://gw.wuweiai.io/api/gateway/v1' };
   if (s.model) process.env.MINICC_MODEL = s.model;
   // 当前生效模型的能力开关：优先按模型(modelCaps[model])，回退到旧的平台级(迁移兼容)
   const slot = s.creds?.[s.providerId || ""] || {};

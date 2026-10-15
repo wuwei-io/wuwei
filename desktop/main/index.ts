@@ -5182,12 +5182,14 @@ ipcMain.handle("account:codex-login", async () => {
   log("codex-login-ipc", "应用内 ChatGPT 授权");
   const r = await codexOAuthLogin();
   if (!r) return false;
-  // 持久化选中 codex + 重载 provider(读新写的 ~/.codex/auth.json)，前端账号随 evt:ready/account 刷新
+  // Authorization refreshes credentials. It must not select a backend or model;
+  // the renderer applies a model only after the user explicitly chooses one.
   const s = loadSettings();
-  if (s) saveSettings({ ...s, providerId: "codex", kind: "codex", model: s.model || "gpt-5.5" });
   try {
-    initProvider();
-    send("evt:ready", { backend: backendLabel, model: modelLabel, cwd, sub: subFlag, ctxWindow });
+    if (s?.providerId === 'codex' && s.kind === 'codex' && s.model) {
+      initProvider();
+      send("evt:ready", { backend: backendLabel, model: modelLabel, cwd, sub: subFlag, ctxWindow });
+    }
     void emitAccount();
   } catch (e) {
     log("codex-login-ipc", "重载 provider 失败", String(e));
@@ -5755,7 +5757,7 @@ ipcMain.handle("conn:check", async () => {
     void emitAccount(); // 检测通过后刷新账户/余额(DeepSeek 等计费平台余额也随检测更新)
     return { status: "green", reason: tt(`已连通 · ${backendLabel} / ${modelLabel}，可随时使用。`, `Connected · ${backendLabel} / ${modelLabel}, ready to use.`) };
   } catch (e: any) {
-    const msg = e?.message ? String(e.message) : String(e);
+    const msg = (e?.message ? String(e.message) : String(e)).replace(/\[\[gw:[^\]]+\]\]\s*/g, "");
     return { status: "yellow", reason: tt("已配置但请求报错：", "Configured but the request errored: ") + msg.slice(0, 600) };
   }
 });

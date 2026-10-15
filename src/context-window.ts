@@ -10,6 +10,15 @@ export const GPT_API_WINDOWS: Readonly<Record<string, number>> = {
   "gpt-6-sol": 1_050_000,
   "gpt-6-luna": 1_050_000,
 };
+// Context capacities declared by the reviewed OpenRouter endpoints. These are
+// configuration limits, not a claim that a full-window task was benchmarked.
+export const ECONOMY_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
+  'mimo-v2.6-flash': 1_048_576, 'deepseek-flash': 1_048_576,
+  'deepseek-v4.1-flash': 1_048_576, 'deepseek-v4-flash': 1_048_576,
+  'qwen3-8-flash': 1_000_000, 'glm-5.3-flash': 1_024_000,
+  'nemotron-3.5-lightning': 262_144, 'minimax-m3': 1_048_576,
+  'step-5-preview': 1_000_000,
+};
 // Observed in Codex 0.160.0 models_cache.json. Never use experimental max_context_window.
 const CODEX_DEFAULTS: Readonly<Record<string, number>> = {
   "gpt-5.6-sol": 272_000,
@@ -40,7 +49,7 @@ export function codexWindow(model: string, readCache: () => string = () =>
 export function resolveContextWindow(provider: string, model: string, fallback: number,
   explicit?: unknown, readCache?: () => string): number {
   const id = model.toLowerCase();
-  const supported = provider === "codex" ? codexWindow(id, readCache) : GPT_API_WINDOWS[id];
+  const supported = provider === "codex" ? codexWindow(id, readCache) : GPT_API_WINDOWS[id] ?? ECONOMY_CONTEXT_WINDOWS[id.split('/').at(-1)!];
   const requested = positiveWindow(explicit);
   // Codex explicit overrides may reduce the default, never implicitly enable experimental context.
   // Known API models cannot claim more than their documented total window.

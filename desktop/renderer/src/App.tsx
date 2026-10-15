@@ -6,7 +6,18 @@ import { DepartmentNameInput } from "./team/DepartmentNameInput.js";
 import { CompanyHistorySettings } from "./team/CompanyHistorySettings.js";
 import { ToolDecisionModal } from './components/ToolDecisionModal.js';
 import { shouldAutoApproveToolPermission } from './tool-permission-policy.js';
+import { DEFAULT_MODE_KEY, SESSION_MODES_KEY, executionModeFor, readDefaultExecutionMode, readSessionExecutionModes, sessionModesAfterSettingsChange, type ExecutionMode } from './execution-mode.js';
 import { imageModelChoices, imageModelLabel } from '../../../src/imagegen/image-catalog.js';
+import { localizeModelBadge } from '../../../src/model-badge.js';
+import { arrangeProviderEntries } from '../../../src/provider-order.js';
+import { createCatalogRefresher } from '../../../src/catalog-refresh.js';
+import { createAccountRefresher, type AccountRefreshState } from '../../../src/account-refresh.js';
+import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
+import { ModelPicker } from './components/ModelPicker.js';
+import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
+import { hasPaidAllowance, imageToolBalanceFailure, usageLimitKind, usageLimitDestination } from '../../../src/usage-limit.js';
+import { recommendedValueModel, premiumSelectionNeedsConfirmation } from '../../../src/premium-model.js';
+import { PremiumModelNotice } from './components/PremiumModelNotice.js';
 import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
@@ -424,15 +435,17 @@ function parseServerCtxLimit(raw: string): number {
 
 // 把后端/SDK 的原始报错（多为英文）归纳成一句中文提示，避免把整段英文甩给用户。
 // 返回值以「出错：」开头，鉴权类务必含 isAuthError 能识别的关键词（未授权/凭证），以便触发一键授权条。
-function friendlyError(raw: string, t: T): string {
+function friendlyError(raw: string, t: T, freeModel = true): string {
   const r = raw || "";
   // 无为托管网关的业务错误 → 友好文案（优先，避免被下方通用 401/429 规则吃掉）
   if (/insufficient_balance/i.test(r)) return t("err.insufficientBalance", "无为币余额不足：请点账号头像「充值」后，再使用无为托管模型。");
   if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota", "免费体验次数已用完：登录即可继续使用（注册送 100 无为币）。");
   if (/free_trial_disabled/i.test(r)) return t("err.freeDisabled", "免费体验暂未开放：请登录使用，或稍后再试。");
+  if (/\bdaily_cap_reached\b/i.test(r) && !freeModel) return t("err.paidDailyCap", "已达今日付费使用上限，请明天再试或调整使用限额。");
   if (/daily_cap_reached/i.test(r)) return t("err.dailyCap", "今日免费额度已用完：明日自动恢复，登录可解锁更高额度。");
   if (/gateway_not_configured/i.test(r)) return t("err.gatewayNotConfigured", "无为托管暂不可用（服务维护中）：请稍后再试，或切换到其它模型。");
   if (/unknown_hosted_model/i.test(r)) return t("err.unknownModel", "该无为托管模型暂不可用，请换一个模型。");
+  if (/upstream_rate_limited/i.test(r)) return t("err.providerRateLimited", "模型供应商暂时限流，请稍后重试，或切换其他热门模型。");
   if (/upstream_error/i.test(r)) return t("err.upstream", "模型服务商暂时不可用：请稍后重试。");
   // 模型名不对（自建/中转端点没有该模型）：常见于切到「自建端点」却没填模型，默认名在该端点不存在。
   // 明确指路去设置改模型名，而不是甩一句 "model 'xxx' not found 404"。
@@ -774,12 +787,12 @@ function buildPackOpts(): PayPlanOpt[] {
 }
 const PACK_PERKS: [string, string][] = [
   ["永久有效，绝不清零", "买了就是你的，不像订阅按月过期作废"],
-  ["顶级模型照样扣", "Claude、GPT、Gemini 等付费旗舰都能用这个币"],
+  ["日常任务优先省钱", "优先选择高性价比模型；顶级模型按需使用，消耗单独看价格"],
   ["随用随充，多少都行", "按需购买，用多少充多少，不用被套餐绑住"],
 ];
 const PACK_PERKS_EN: [string, string][] = [
   ["Never expires", "Once bought it's yours. It won't reset monthly like a subscription."],
-  ["Works on top models", "Spend it on Claude, GPT, Gemini and other paid flagships."],
+  ["Value models for everyday tasks", "Choose affordable models first; use premium models when needed and check their prices."],
   ["Top up any amount", "Pay as you go, buy exactly what you need, no plan lock-in."],
 ];
 
@@ -1721,18 +1734,18 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
 // 缺币付款弹窗：并排套餐(¥1体验/Pro/Plus/Max) + 积分包 tab，选中即出支付宝码(国内)/Paddle(海外)。
 // 缺币弹窗右侧「下单理由」：每条 = 加粗钩子 + 具体说明，精准戳付费点（顶级模型 / 更快 / 更多额度 / 记忆 / 省钱）。
 const PAYNOW_PERKS: [string, string][] = [
-  ["一份订阅，顶三份钱", "别再 ChatGPT 20刀、Claude 20刀、Gemini 20刀分开交，无为一份全给你"],
-  ["旗舰全家桶，一键随便切", "Claude Fable 5.1、GPT-6、Gemini 3.7、DeepSeek V4、Grok 4.6 想用哪个用哪个，不绑死任何一家"],
-  ["长任务一口气跑完", "额度更足、无为币更多，几万字的活儿中途不断供"],
-  ["会员走快车道", "专属极速通道，高峰期不用排在免费用户后面干等"],
-  ["它永远记得你", "脑网络永久记忆，跨对话记住你的项目、代码风格和偏好"],
+  ["日常干活，优先省钱", "选择热门高性价比模型，让同一份额度完成更多任务"],
+  ["模型和费用看得清", "免费、高性价比、顶级、生图分类选择，不同模型消耗不同"],
+  ["按实际用量使用额度", "任务可能调用模型多次；查看价格后选择适合自己的模型"],
+  ["按需补充，不必换工具", "额度用完可选择充值，或在免费额度允许时切回免费模型"],
+  ["跨对话保存经验", "会员记忆功能帮助沉淀项目资料、代码习惯和任务经验"],
 ];
 const PAYNOW_PERKS_EN: [string, string][] = [
-  ["One subscription beats three", "Skip paying $20 for ChatGPT, $20 for Claude, $20 for Gemini. Wuwei runs all of them."],
-  ["All the flagships, one click away", "Claude Fable 5.1, GPT-6, Gemini 3.7, DeepSeek V4, Grok 4.6, switch anytime, locked to no one."],
-  ["Long jobs won't die halfway", "More tokens, more Wuwei coins. Your big task runs to the end without cutting out."],
-  ["Members jump the queue", "Priority lane for faster replies, no waiting behind free users at peak hours."],
-  ["It remembers you, forever", "Brain-network memory keeps your project, code style and habits across every chat."],
+  ["Spend less on everyday work", "Choose popular value models to complete more tasks with the same allowance."],
+  ["Clear model choices and prices", "Browse free, value, premium and image models. Usage costs differ by model."],
+  ["Allowance follows actual usage", "An agent task may make several model calls. Check prices before choosing."],
+  ["Top up when needed", "Add credits when your allowance runs out, or use free models while free allowance remains."],
+  ["Keep experience across chats", "Member memory helps retain project information, coding preferences and task experience."],
 ];
 // 模型费用说明弹窗：免费/付费模型按平台分组，输入/输出/缓存命中价，可切无为币/人民币/美元。
 type PricingUnit = "coin" | "cny" | "usd";
@@ -1801,8 +1814,7 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
               {paidProviders.map((p) => (
                 <div key={p.id} style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
-                    {(en && p.labelEn) || p.label}
-                    {p.hosted && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 999, background: "rgba(37,99,235,.12)", color: "#2563eb", border: "1px solid rgba(37,99,235,.28)" }}>{en ? "hosted" : "托管"}</span>}
+                    {((en && p.labelEn) || p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")}
                   </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
@@ -1884,11 +1896,6 @@ function TrialPayModal({
     : isMaxTier
       ? "别再 ChatGPT Pro 200刀、Claude Max 200刀、Gemini 顶配分开交，无为一份全给你"
       : "别再 ChatGPT 20刀、Claude 20刀、Gemini 20刀分开交，无为一份全给你";
-  // 价格锚点（会员 tab 底部）：包月单价低至 ¥18/千币，vs 按需买积分包最优 ¥22.1/千币（pack_l），
-  // 指向 Max 档「低至/最多」措辞，数值真实非虚标（Pro 档单价高于积分包，故不笼统说"包月更省"）。
-  const packAnchor = en
-    ? "Buying credits as you go costs more — membership goes as low as $0.36/1k credits, up to ~19% off."
-    : "按需买币更贵，包月低至 ¥18/千币，比按需买最多省约 19%。";
   const [qr, setQr] = useState("");
   const [orderId, setOrderId] = useState("");
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
@@ -1938,7 +1945,7 @@ function TrialPayModal({
       <div className="pay-card pay-card-wide" onClick={(e) => e.stopPropagation()}>
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: (context === "weekly" || context === "freecap") ? 16 : 2, paddingTop: 22 }}>
-          <h2>{context === "freecap" ? (en ? "Today's free quota is used up" : "今日免费额度用完啦") : context === "weekly" ? (en ? "This month's quota is used up" : "本月额度已用完") : context === "browse" ? (en ? "Choose your plan" : "选择你的套餐") : (en ? "You're out of credits" : "无为币用完啦")}</h2>
+          <h2>{context === "freecap" ? (en ? "Today's free quota is used up" : "今日免费额度用完啦") : context === "weekly" ? (en ? "This month's quota is used up" : "本月额度已用完") : context === "browse" ? (en ? "Choose your plan" : "选择你的套餐") : balance > 0 ? (en ? 'Not enough coins for this request' : '无为币余额不足') : (en ? "You're out of credits" : "无为币用完啦")}</h2>
           <p>{context === "freecap"
             ? (en
                 ? <>Your free quota refreshes tomorrow. In a hurry? <button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>Upgrade your plan</button> or buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
@@ -1947,7 +1954,7 @@ function TrialPayModal({
             ? (en
                 ? <>Your monthly quota is used up — it refreshes at your next billing cycle. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
                 : <>您的本月额度已用完，将在下个订阅周期自动恢复。着急使用可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续。</>)
-            : context === "browse" ? (en ? "One subscription, every top flagship. Faster replies, fuller quota." : "一份订阅，用遍全球最强旗舰，响应更快、额度更足。") : (en ? "Pick a plan to keep going. Every top model, one click away." : "选个套餐接着用，全球最强旗舰随便切换。")}</p>
+            : context === "browse" ? (en ? "More allowance for everyday agent work. Choose value models first." : "更多额度用于日常 Agent 干活，优先选择高性价比模型。") : (en ? "Pick a plan to continue. Value models help your allowance last longer." : "选个套餐接着用，高性价比模型让额度用得更久。")}</p>
         </div>
 
         {/* weekly/freecap 态不显余额行：一句话说明已足够，余额对这两种场景无关或为0 */}
@@ -1955,18 +1962,8 @@ function TrialPayModal({
           <div className="trial-bal-mini"><span className="pay-coin" /> {context === "browse" ? (en ? `Balance ${balance} credits` : `当前余额 ${balance} 无为币`) : (en ? `Balance ${balance} credits · upgrade to continue` : `当前余额 ${balance} 无为币 · 升级后即可继续`)}</div>
         )}
 
-        {/* 升级后畅用的最强顶级模型（官方 logo）——直观放大购买欲 */}
         <div className="trial-models">
-          <span className="trial-models-t">{en ? "Unlock the strongest flagships" : "升级后畅用最强顶级模型"}</span>
-          <span className="trial-models-row">
-            {PAY_MODEL_MARKS.map((m) => (
-              <span key={m.n} className="trial-model" title={m.n}>
-                <BrandLogo brand={m.brand} size={19} glyph={13} />
-                <span className="trial-model-n">{m.n}</span>
-                {m.nw && <span className="trial-model-new">NEW</span>}
-              </span>
-            ))}
-          </span>
+          <span className="trial-models-t">{en ? "Value models for everyday work; premium models when needed." : "日常干活优先高性价比，复杂任务再选顶级模型。"}</span>
         </div>
 
         {/* 顶部 tab：会员套餐 / 积分包，直接切换并排选项（替代原「改用积分包」跳窗） */}
@@ -2000,10 +1997,6 @@ function TrialPayModal({
             );
           })}
         </div>
-        {/* 价格锚点：会员 tab 且未选体验包时显示，引导「包月比按需买更省」往高客单走 */}
-        {tab === "plan" && cur.kind !== "trial" && (
-          <div className="trial-anchor">{packAnchor}</div>
-        )}
 
         <div className="trial-grid">
           {/* 左：国内二维码 / 海外 Paddle 按钮（跟随选中套餐） */}
@@ -2150,18 +2143,6 @@ function PayFaqModal({ en, onClose }: { en: boolean; onClose: () => void }) {
 }
 
 // 缺币弹窗顶部展示的「升级后畅用」最强顶级模型（官方 SVG logo，取自共用库 modelLogos）。
-// 名字对齐官网 ModelShowcase 的旗舰清单；换代时随客户端发版更新即可。
-const PAY_MODEL_MARKS: { brand: string; n: string; nw?: boolean }[] = [
-  { brand: "claude", n: "Claude Fable 5.1", nw: true },
-  { brand: "gpt", n: "GPT-6", nw: true },
-  { brand: "gemini", n: "Gemini 3.7", nw: true },
-  { brand: "deepseek", n: "DeepSeek V4" },
-  { brand: "qwen", n: "Qwen3.8 Max", nw: true },
-  { brand: "grok", n: "Grok 4.6", nw: true },
-  { brand: "kimi", n: "Kimi K3" },
-  { brand: "glm", n: "GLM-5.3" },
-];
-
 type PayResult =
   | { kind: "coin"; added: number; bonus: number; balance: number; order: string }
   | { kind: "pro"; planName: string; expire: string; giftCoins: number; signin: number; perks: string[]; saved?: number; order: string }
@@ -2850,16 +2831,16 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 7, lineHeight: 1.3, letterSpacing: 0.2, color: "var(--text)" }}>
             {zh ? (
               <>
-                <span style={{ color: "#C05F3C" }}>免费</span>使用最新顶级模型
+                <span style={{ color: "#C05F3C" }}>登录</span>，解锁更多模型
               </>
             ) : (
               <>
-                Top-tier models, <span style={{ color: "#C05F3C" }}>free</span>
+                <span style={{ color: "#C05F3C" }}>Sign in</span> to unlock more models
               </>
             )}
           </div>
           <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-            {zh ? "无需自备 API Key，登录即用" : "No API key needed — just sign in"}
+            {zh ? "免费模型有每日额度，付费模型按用量消耗无为币。" : "Free models have daily limits. Paid models use Wuwei coins based on usage."}
           </div>
           <div
             style={{
@@ -3530,35 +3511,25 @@ export function App() {
   }, [lightbox, imgMenu]);
   const [suggestion, setSuggestion] = useState(""); // 输入框幽灵提示：下一步动作建议(Tab 补全)
   const [interruptedSessions, setInterruptedSessions] = useState<{ id: string; title: string }[]>([]); // 上次被强杀、待恢复的任务
-  // 运行模式按【会话】各记各的：manual=每步问权限；auto=自动放行权限；cont=智能继续(自动放行+跑完自己接着推进)
-  const [modeBySid, setModeBySid] = useState<Record<string, "manual" | "auto" | "cont">>(() => {
-    try { return JSON.parse(localStorage.getItem("wuwei-mode-by-sid") || "{}"); } catch { return {}; }
-  });
+  // 设置里显式开启才自动放行/继续；每个会话仍可单独暂停。
+  const [defaultMode, setDefaultMode] = useState<ExecutionMode>(() => readDefaultExecutionMode(localStorage));
+  const defaultModeRef = useRef(defaultMode);
+  defaultModeRef.current = defaultMode;
+  const [modeBySid, setModeBySid] = useState<Record<string, ExecutionMode>>(() => readSessionExecutionModes(localStorage));
   const modeRef = useRef(modeBySid);
   modeRef.current = modeBySid;
-  const modeOf = (sid: string) => modeRef.current[sid] || "auto"; // 默认 auto(=旧 autoMode 默认放行权限)
-  const [contN, setContN] = useState(0); // 当前会话已连续自动继续多少次
-  const contBySid = useRef(new Map<string, number>()); // 计数也按会话各算各的
-  const setMode = (sid: string, m: "manual" | "auto" | "cont") => {
-    setModeBySid((prev) => {
-      const next = { ...prev, [sid]: m };
-      localStorage.setItem("wuwei-mode-by-sid", JSON.stringify(next));
-      return next;
-    });
+  const modeOf = (sid: string) => executionModeFor(sid, modeRef.current, defaultModeRef.current);
+  const [contN, setContN] = useState(0);
+  const contBySid = useRef(new Map<string, number>());
+  const setMode = (sid: string, mode: ExecutionMode) => {
+    const next = { ...modeRef.current, [sid]: mode };
+    modeRef.current = next; // 关闭后，已排队的权限/继续回调立即读到新状态。
+    setModeBySid(next);
+    localStorage.setItem(SESSION_MODES_KEY, JSON.stringify(next));
     contBySid.current.set(sid, 0);
     setContN(0);
+    if (mode !== "cont") setSuggestWait(0);
   };
-  // 告诉主进程哪些会话开着智能继续：它们在后台跑完也要算下一步建议，好自己接着推进
-  useEffect(() => {
-    window.wuwei.setContSessions?.(Object.keys(modeBySid).filter((s) => modeBySid[s] === "cont"));
-  }, [modeBySid]);
-  // 「手动」模式默认藏起来(底部只留 自动/连推)，需要每步确认权限的人在设置里开
-  const [showManual, setShowManual] = useState(() => localStorage.getItem("wuwei-show-manual") === "1");
-  useEffect(() => {
-    const onToggle = (e: any) => setShowManual(!!e.detail);
-    window.addEventListener("wuwei-show-manual", onToggle);
-    return () => window.removeEventListener("wuwei-show-manual", onToggle);
-  }, []);
   // 安全阀都可调(设置→运行模式)：最多连推几轮、发出前留多久反悔、选择题等多少秒
   const [contMax, setContMax] = useState(() => {
     const v = localStorage.getItem("wuwei-cont-max");
@@ -3659,6 +3630,10 @@ export function App() {
   const stopRulesRef = useRef(stopRules); stopRulesRef.current = stopRules;
   const lastSuggestRef = useRef<{ text: string; canContinue: boolean; auto: boolean }>({ text: "", canContinue: false, auto: false });
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  useEffect(() => {
+    const ids = new Set([...sessions.map((session) => session.id), ...Object.keys(modeBySid)]);
+    window.wuwei.setContSessions?.([...ids].filter((sid) => executionModeFor(sid, modeBySid, defaultMode) === "cont"));
+  }, [sessions, modeBySid, defaultMode]);
   const [trash, setTrash] = useState<import("./env").TrashItem[]>([]); // 回收站:软删除的会话(7天自动清)
   const [showTrash, setShowTrash] = useState(false);
   // —— 全局搜索(搜所有对话正文) ——
@@ -3895,11 +3870,18 @@ export function App() {
   const [stations, setStations] = useState<Station[]>([]); // 自定义中转站
   const [providerOrder, setProviderOrder] = useState<string[]>([]); // 平台自定义顺序
   const [catalog, setCatalog] = useState<CatalogProviderDto[] | null>(null); // 后台 AI 提供商目录(默认序/显隐/模型)，null=回退硬编码 PRESETS
+  const [catalogReady, setCatalogReady] = useState(false);
+  const catalogRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  catalogRefreshRef.current ??= createCatalogRefresher<CatalogProviderDto>(
+    async () => window.wuwei.wuweiCatalog?.(), setCatalog, () => setCatalogReady(true));
+  const refreshCatalog = () => catalogRefreshRef.current!();
   const [hiddenProviders, setHiddenProviders] = useState<string[]>([]); // 隐藏的平台
   const [removedProviders, setRemovedProviders] = useState<string[]>([]); // 已删除的平台
   const [providerOverrides, setProviderOverrides] = useState<Record<string, { label?: string; baseUrl?: string }>>({}); // 平台改名/改端点
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showProviderMenu, setShowProviderMenu] = useState(false);
+  const [modelPickerCategory, setModelPickerCategory] = useState<ModelCategory | undefined>();
+  const [valueSwitchBusy, setValueSwitchBusy] = useState(false);
   const [sidebarW, setSidebarW] = useState(
     () => Number(localStorage.getItem("wuwei-sidebar-w")) || 232,
   );
@@ -4079,6 +4061,7 @@ export function App() {
   const [checkinBusy, setCheckinBusy] = useState(false); // 签到请求中，防重复点击
   const [checkinPop, setCheckinPop] = useState<{ amount: number; streak?: number } | "already" | null>(null); // 居中签到弹窗
   const [loginResume, setLoginResume] = useState(false); // 登录成功后是否续发刚才拦下的消息
+  const loginSendRef = useRef<{ userId: string; sid: string; text: string; images: string[] } | null>(null);
   const [lang, setLangState] = useState<Lang>(getLang()); // 界面语言
   const t = makeT(lang);
   useTx(); // 订阅翻译显示层：译文到货/切换翻译态时刷新本组件里的 tx() 覆盖文本
@@ -4099,7 +4082,7 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false); // 失败处一键授权 Claude 进行中
   const [codexBusy, setCodexBusy] = useState(false); // Codex 一键授权进行中
   // 无为账号（B2：全新正交账号态，≠模型商账号，独立身份区。最终顶栏样式待小美定稿换皮）
-  const [wuwei, setWuwei] = useState<{
+  const [wuwei, setWuweiState] = useState<{
     user: { id: string; email: string | null; name: string | null; avatar: string | null };
     coin: { balance: number; lastSignin?: string | null };
     membership?: {
@@ -4112,8 +4095,33 @@ export function App() {
     trialEligible?: boolean; // 从未付费 → 缺币弹 ¥1 体验；否则弹「升级正式会员」
     providers?: { hidden?: string[] };
   } | null>(null);
+  const [wuweiReady, setWuweiReady] = useState(false);
   const wuweiRef = useRef(wuwei); // 空依赖事件闭包里读最新登录态(否则 wuwei 冻结在挂载时=未登录)
   wuweiRef.current = wuwei;
+  const wuweiRevisionRef = useRef(0);
+  function setWuwei(value: React.SetStateAction<typeof wuwei>) {
+    ++wuweiRevisionRef.current;
+    setWuweiReady(true);
+    setWuweiState(current => {
+      const next = typeof value === 'function' ? value(current) : value;
+      wuweiRef.current = next;
+      return next;
+    });
+  }
+  const [balanceRefresh, setBalanceRefresh] = useState<AccountRefreshState>({ busy: false, error: false, updatedAt: null });
+  const accountRefreshRef = useRef<ReturnType<typeof createAccountRefresher<WuweiMe>> | null>(null);
+  accountRefreshRef.current ??= createAccountRefresher<WuweiMe>(
+    () => window.wuwei.wuweiMe(), () => wuweiRef.current,
+    (me) => setWuwei((current) => current?.user.id === me.user.id ? me : current), setBalanceRefresh);
+  useEffect(() => {
+    const refresh = accountRefreshRef.current!;
+    refresh.reset();
+    return () => refresh.cancel();
+  }, [wuwei?.user.id]);
+  // 菜单关闭后仍更新缓存余额；反复开关/手动刷新共用进行中的请求。
+  useEffect(() => {
+    if (showAcctMenu) void accountRefreshRef.current!.refresh();
+  }, [showAcctMenu, wuwei?.user.id]);
   // 海外 Paddle 结账后台轮询定时器：付款在系统浏览器完成，客户端无回调，只能轮询 wuweiMe 检测到账。
   // 存 ref 便于「再次点付款先清上一个」+「组件卸载清理」，绝不留下永远跑的定时器。
   const enPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -4133,7 +4141,9 @@ export function App() {
   const [wuweiBusy, setWuweiBusy] = useState(false);
   // rebind：当前绑的是「无为托管·Claude」且用户已授权 Claude 订阅时，弹窗给「一键改用订阅继续」（订阅走账号额度、不扣无为币）
   const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
-  const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number } | null>(null); // 免费模型当天次数用完(已登录)→弹窗引导
+  const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number; hasMemberQuota?: boolean } | null>(null);
+  const usageLimitHandlerRef = useRef<(kind: 'free' | 'balance', message: string) => void>(() => {});
+  const usageLimitRequestRef = useRef<{ user: string; sid: string; model: string; at: number; pending: boolean } | null>(null);
   const [quotaWarn, setQuotaWarn] = useState<{ model: string; usedPct: number; resetsAt: string | null } | null>(null); // 用高价模型烧周额度过快(≥50/80%)→弹窗建议切省钱模型
   // 所有付费/提醒弹窗「展示」统一埋点：依赖用 !!state(布尔)，只在弹窗打开的一刻发一次(对象内容更新不重复发)。
   // 后台「弹窗提示总数」按这些 *_shown 事件汇总，可下钻看谁/IP/地区/时间/弹了什么/点了什么。
@@ -4156,6 +4166,8 @@ export function App() {
   function closeShortage(action: string) {
     const dwellMs = shortageShownAt.current ? Date.now() - shortageShownAt.current : 0;
     void window.wuwei.track?.("credits_shortage_action", { action, dwell_ms: dwellMs });
+    usageLimitRequestRef.current = null;
+    shortageShownAt.current = 0;
     setCoinShortage(null);
     setDebugCtx(null); // 关掉调试强制的 context
   }
@@ -4177,7 +4189,7 @@ export function App() {
       else if (c === "Digit3") { e.preventDefault(); openPay("freecap"); }
       else if (c === "Digit4") { e.preventDefault(); openPay("browse"); }
       else if (c === "Digit5") { e.preventDefault(); setQuotaWarn({ model: "claude-opus-4-8", usedPct: 85, resetsAt: new Date(Date.now() + 20 * 864e5).toISOString() }); }
-      else if (c === "Digit6") { e.preventDefault(); setFreeCapModal({ model: "gpt-oss-20b-free", balance: 0 }); }
+      else if (c === "Digit6") { e.preventDefault(); setFreeCapModal({ model: "nemotron-super-free", balance: 100 }); }
       else if (c === "Digit9") { e.preventDefault(); openPay("shortage"); } // 兼容旧快捷键
     };
     window.addEventListener("keydown", h);
@@ -4216,29 +4228,53 @@ export function App() {
   async function refreshWuweiForShortage(message: string) {
     // 去抖：自主推进/智能继续的会话会连续重试，每次撞余额都会调这里 → 弹窗弹好几次。
     // 3 秒内已弹过就跳过(点「刷新余额」按钮走的是同函数，但那是用户主动、间隔一般 >3s，不受影响)。
+    usageLimitRequestRef.current = null;
     if (coinShortage && Date.now() - shortageShownAt.current < 3000) return;
-    // 若当前绑的是「无为托管·Claude」且已授权 Claude 订阅 → 提供一键改用订阅继续（订阅直连 Anthropic、走账号额度、不扣无为币）。
-    // 托管 GPT → Codex 订阅同理，但 Codex 登录态在 ~/.codex、渲染层不易可靠判定，暂只做 Claude（正是本次触发场景）。
-    let rebind: { providerId: string; model: string; label: string } | undefined;
-    try {
-      const rs = await window.wuwei.getSettings();
-      const creds = (rs?.settings?.creds || {}) as Record<string, { oauthToken?: string }>;
-      if (curProviderId === "wuwei-claude" && creds["claude-oauth"]?.oauthToken) {
-        rebind = { providerId: "claude-oauth", model: "claude-opus-4-8", label: lang === "en" ? "Claude subscription" : "Claude 订阅" };
-      }
-    } catch {
-      /* 读设置失败 → 不给改绑入口，退回充值路径 */
-    }
-    setCoinShortage({ message, rebind }); // 展示埋点(credits_shortage_shown)由下方统一 effect 按「弹窗打开」发，防漏防重
+    // 直接打开充值付款界面，后台刷新账号不阻塞展示。
+    setFreeCapModal(null); setQuotaWarn(null); setShowAcctMenu(false);
+    setShowProviderMenu(false); setShowModelMenu(false); setDebugCtx(null);
+    const userId = wuweiRef.current?.user.id;
+    setCoinShortage({ message, balance: wuweiRef.current?.coin.balance ?? 0 });
     shortageShownAt.current = Date.now();
     try {
       const me = await window.wuwei.wuweiMe();
-      if (me) {
+      if (me && me.user.id === userId && wuweiRef.current?.user.id === userId) {
         setWuwei(me);
-        setCoinShortage({ message, balance: me.coin.balance, rebind });
+        setCoinShortage((current) => current?.message === message ? { ...current, balance: me.coin.balance } : current);
       }
     } catch {
       /* 弹窗仍然保留充值入口 */
+    }
+  }
+  async function handleUsageLimit(kind: 'free' | 'balance', message: string) {
+    const account = wuweiRef.current;
+    if (!account) { requestModelLogin(); return; }
+    if (kind === 'balance') { void refreshWuweiForShortage(message); return; }
+    const previous = usageLimitRequestRef.current;
+    const sid = currentIdRef.current;
+    const model = quotaModelRef.current.model;
+    if (previous?.user === account.user.id && previous.sid === sid && previous.model === model && (previous.pending || Date.now() - previous.at < 3000)) return;
+    const request = { user: account.user.id, sid, model, at: Date.now(), pending: true };
+    usageLimitRequestRef.current = request;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refreshed = await Promise.race([
+      window.wuwei.wuweiMe().catch(() => null),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 3000); }),
+    ]);
+    clearTimeout(timer);
+    if (usageLimitRequestRef.current !== request) return;
+    request.pending = false;
+    if (wuweiRef.current?.user.id !== request.user || currentIdRef.current !== sid || quotaModelRef.current.model !== model) return;
+    const latest = refreshed?.user.id === request.user ? refreshed : wuweiRef.current;
+    if (refreshed?.user.id === request.user) setWuwei(refreshed);
+    setShowAcctMenu(false); setShowProviderMenu(false); setShowModelMenu(false); setQuotaWarn(null); setDebugCtx(null);
+    if (usageLimitDestination(kind, latest) === 'recommend') {
+      setCoinShortage(null);
+      setFreeCapModal({ model, balance: latest.coin.balance, hasMemberQuota: !!latest.membership?.weeklyQuota?.active && (latest.membership.weeklyQuota.remainingPct ?? 0) > 0 });
+    } else {
+      setFreeCapModal(null);
+      setCoinShortage({ message: 'freecap', balance: latest.coin.balance, freecap: true });
+      shortageShownAt.current = Date.now();
     }
   }
   async function doWuweiLogout() {
@@ -4371,6 +4407,7 @@ export function App() {
   // 应用内登录框成功回调：更新账号 + 关框 + (若从发送门槛来)续发刚才拦下的消息
   function onWuweiLoggedIn(me: WuweiMe, action?: "login" | "register" | "reset") {
     setWuwei(me);
+    setWuweiReady(true);
     setShowLoginForm(false);
     void runConnCheck(); // 登录后立刻重测连通灯，避免登录前的黄灯一直挂着（凭证已变、必须重探）
     const en = getLang() === "en";
@@ -4385,8 +4422,9 @@ export function App() {
     if (loginResume) {
       const t = input.trim();
       if (t || pendingImages.length) {
-        doSend(t, pendingImages);
-        clearComposer();
+        // Wait for the signed-in default before resuming; otherwise an old
+        // premium model can receive the first request while login is rendering.
+        loginSendRef.current = { userId: me.user.id, sid: currentId, text: t, images: [...pendingImages] };
       }
       setLoginResume(false);
     }
@@ -4398,7 +4436,7 @@ export function App() {
       push({
         type: "notice",
         text: ok
-          ? (lang === "en" ? "✓ Codex authorized — switched to the Codex subscription, ready to chat." : "✓ Codex 授权成功，已切到 Codex 订阅，可以直接对话了。")
+          ? (lang === "en" ? "✓ Codex authorized. Choose a model in My connections to use your subscription." : "✓ Codex 授权成功，可在“我的接入”中选择订阅模型使用。")
           : (lang === "en" ? "Codex authorization didn't complete (cancelled/timeout/port 1455 in use). If codex CLI is running locally, close it and retry." : "Codex 授权未完成（取消/超时/端口 1455 被占）。若本机在跑 codex CLI 请先关掉再试。"),
       });
     } finally {
@@ -4515,7 +4553,7 @@ export function App() {
       if (!r?.settings?.providerId) {
         const freeP = PRESETS.find((x) => x.id === "wuwei-free");
         if (freeP) {
-          window.wuwei.setSettings({ ...(r?.settings || {}), kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: r?.settings?.model || freeP.models[0] });
+          window.wuwei.setSettings({ ...(r?.settings || {}), kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, modelChoiceExplicit: false, model: freeP.models.includes(r?.settings?.model || "") ? r.settings.model : freeP.models[0] });
         }
       }
       // 可选模块开关：以主进程 settings 为准校准本地镜像（用户可能在别处改过/换了机器）
@@ -4546,7 +4584,7 @@ export function App() {
   // 后台「AI 提供商」目录：默认序 / 显隐 / 模型（含免费）由后台可配。带登录 token 拉(应用每用户显隐)。
   // 拉不到(离线/老后端)→ catalog=null → 全量回退硬编码 PRESETS + PROVIDER_ORDER，保证永远能用。
   useEffect(() => {
-    window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => setCatalog(null));
+    void refreshCatalog();
   }, [wuwei?.user?.id]);
   useEffect(() => { void refreshImageCatalog(); }, [wuwei?.user?.id]);
 
@@ -4559,10 +4597,10 @@ export function App() {
   const modelBadges = new Map<string, string>(); // 后台配的模型角标(如「快」)，下拉里显示
   // 后台角标中英对照：DB 里混存中文词(限免/快/更强/深度思考/识图)与英文码(new/hot/top)，英文界面统一映射成英文
   const BADGE_EN: Record<string, string> = { "限免": "Free", "免费": "Free", "快": "Fast", "更强": "Stronger", "深度思考": "Reasoning", "识图": "Vision", "new": "New", "hot": "Hot", "top": "Top" };
-  const badgeEn = (b: string) => BADGE_EN[b] ?? BADGE_EN[b.toLowerCase()] ?? (/[一-鿿]/.test(b) ? "" : b);
+  const badgeEn = (b: string) => BADGE_EN[b] ?? BADGE_EN[b.toLowerCase()] ?? localizeModelBadge(b, 'en');
   // 英文码 → 中文角标：后台 badge 存的是 new/hot/top 这类码，中文下拉直接显原码(如"top")很丑，这里统一映射
   const BADGE_CN: Record<string, string> = { "new": "最新", "hot": "热门", "top": "顶级", "free": "免费" };
-  const badgeCn = (b: string) => BADGE_CN[b] ?? BADGE_CN[b.toLowerCase()] ?? b;
+  const badgeCn = (b: string) => BADGE_CN[b] ?? BADGE_CN[b.toLowerCase()] ?? localizeModelBadge(b, 'zh');
   const modelLabels = new Map<string, string>(); // 后台配的模型显示名(如 gpt-5.6→"GPT-5.6 Sol")，下拉里优先显示 label
   const modelLabelsEn = new Map<string, string>(); // 后台配的英文显示名(ai_model.label_en)，英文界面优先显示
   const loginReqModelIds = new Set<string>(); // 免费列表里「需登录才可用」的便宜模型 id（匿名灰置引导登录）
@@ -4586,6 +4624,159 @@ export function App() {
   // 未登录：免费体验(anon)恒置顶(稳定排序，其余相对序不变)——访客第一眼就是免费体验，也是唯一可用项。
   const providerList = [...providerListRaw.filter(p=>p.id==="wuwei-free"), imagePreset, ...providerListRaw.filter(p=>p.id!=="wuwei-free")];
   const curPreset = imageMode ? imagePreset : providerList.find((p) => p.id === curProviderId);
+  const selectedModelKey = imageMode ? `wuwei-image/${displayModel}` : `${curProviderId}/${meta.model}`;
+  const imageBillingScopeRef = useRef({ sid: currentId, user: wuwei?.user.id, model: selectedModelKey });
+  const imageBillingToolsRef = useRef(new Map<string, object>());
+  if (imageBillingScopeRef.current.sid !== currentId || imageBillingScopeRef.current.user !== wuwei?.user.id || imageBillingScopeRef.current.model !== selectedModelKey) {
+    imageBillingScopeRef.current = { sid: currentId, user: wuwei?.user.id, model: selectedModelKey };
+    imageBillingToolsRef.current.clear();
+  }
+  const pickerCatalog = (catalog || []).filter((provider) => providerList.some((p) => p.id === provider.id));
+  const extraConnections = providerList.filter((p) => !p.hosted && !pickerCatalog.some((row) => row.id === p.id)).map((p) => ({
+    id: p.id, hosted: false, sort: 999, label: p.label, labelEn: p.labelEn,
+    models: [...new Set([...p.models, ...(liveModels[p.id] || []), ...(p.id === curProviderId ? [meta.model] : [])])].filter((m) => m && m !== "…").map((id) => ({ id, label: id, free: false })),
+  }));
+  const pickerChoices: ModelChoice[] = [
+    ...catalogModelChoices([...pickerCatalog, ...extraConnections], selectedModelKey),
+    ...imageChoices.map((row, index) => ({ key: `wuwei-image/${row.sku_id}`, providerId: "wuwei-image", modelId: row.sku_id,
+      label: imageModelLabel(row), labelEn: imageModelLabel(row), category: "images" as const, rank: index, recommended: false, defaultForNewUsers: false,
+      free: false, needsLogin: true, imageCoins: Math.min(...imageCatalog.filter((entry) => entry.model === row.model).map((entry) => entry.coins_per_image)),
+    })),
+  ];
+  const selectedChoice = pickerChoices.find((choice) => choice.key === selectedModelKey);
+  const pickerChoicesRef = useRef(pickerChoices);
+  pickerChoicesRef.current = pickerChoices;
+  const providerListRef = useRef(providerList);
+  providerListRef.current = providerList;
+  const [modelRetry, setModelRetry] = useState<{ sid: string; userId: string | null; key: string; text: string; images: string[] } | null>(null);
+  const quotaModelRef = useRef({ model: meta.model, free: freeModelIds.has(meta.model) });
+  quotaModelRef.current = { model: meta.model, free: freeModelIds.has(meta.model) };
+  usageLimitHandlerRef.current = (kind, message) => { void handleUsageLimit(kind, message); };
+  useEffect(() => {
+    // A response from before an account/session/model change cannot open a stale dialog.
+    usageLimitRequestRef.current = null;
+    setFreeCapModal(null); setCoinShortage(null);
+  }, [wuwei?.user.id, currentId, selectedModelKey]);
+  const selectedCategory = selectedChoice?.category ?? (imageMode ? "images" : curPreset?.hosted ? "premium" : "connections");
+  const selectedCategoryLabel = MODEL_CATEGORIES.find((category) => category.id === selectedCategory)!;
+  const closeModelPicker = () => {
+    setShowProviderMenu(false); setShowModelMenu(false);
+    setModelPickerCategory(undefined);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".mq-select")?.focus());
+  };
+  const modelDefaultRef = useRef<{ userId: string | null; handled: Set<string> }>({ userId: null, handled: new Set() });
+  const modelDefaultSendRef = useRef<object | null>(null);
+  if (modelDefaultRef.current.userId !== (wuwei?.user.id ?? null)) {
+    modelDefaultRef.current = { userId: wuwei?.user.id ?? null, handled: new Set() };
+    if (loginSendRef.current?.userId !== wuwei?.user.id) loginSendRef.current = null;
+  }
+  const modelDefaultScopeRef = useRef({ sid: currentId, empty: true, busy: false });
+  modelDefaultScopeRef.current = { sid: currentId, empty: !items.some(item => item.type === 'user'), busy };
+  const requestModelLogin = () => {
+    setShowProviderMenu(false); setShowModelMenu(false);
+    setLoginResume(false); setLoginIntroReason(null);
+    setShowLoginIntro(false); setShowLoginForm(true);
+  };
+  async function selectModelChoice(choice: ModelChoice, automatic = false, premiumConfirmed = false): Promise<boolean> {
+    const approved = premiumConfirmed ? choice : undefined;
+    const resolveChoice = () => {
+      const current = pickerChoicesRef.current.find(c => c.key === choice.key);
+      if (!current) throw new Error('Model unavailable');
+      return current;
+    };
+    if (!automatic && premiumSelectionNeedsConfirmation(resolveChoice(), approved)) {
+      setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
+      return false;
+    }
+    const defaults = modelDefaultRef.current;
+    const sid = currentIdRef.current;
+    if (!automatic) defaults.handled.add(sid);
+    if (automatic && defaults.handled.has(sid)) return false;
+    if (choice.needsLogin && !wuweiRef.current) { requestModelLogin(); return false; }
+    const r = await window.wuwei.getSettings(); const cur = r?.settings || {};
+    if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid) return false;
+    choice = resolveChoice();
+    if (!automatic && premiumSelectionNeedsConfirmation(choice, approved)) {
+      setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
+      return false;
+    }
+    if (!automatic) setModelRetry(null);
+    const userId = wuweiRef.current?.user.id;
+    const choices = pickerChoicesRef.current;
+    const remembered = userId ? rememberedModelChoice(choices, cur, userId) : undefined;
+    if (automatic) {
+      const scope = modelDefaultScopeRef.current;
+      const hosted = providerListRef.current.find(p => p.id === cur.providerId)?.hosted === true || cur.providerId?.startsWith('wuwei-') === true;
+      const target = userId ? remembered ?? recommendedValueModel(choices) : anonymousDefaultModel(choices);
+      const eligible = userId ? !!remembered || shouldApplyEconomyDefault(cur, true, scope.empty, hosted) : hosted || !cur.providerId;
+      if (defaults.handled.has(sid) || defaults.userId !== (userId ?? null) || scope.sid !== sid || scope.busy || !scope.empty || !eligible || target?.key !== choice.key) return false;
+      defaults.handled.add(sid);
+    }
+    // A first-login default is not a preference. Only explicit signed-in
+    // choices, including confirmed premium models, are remembered by account.
+    const remember = !!userId && (!automatic || remembered?.key === choice.key);
+    const modelPreferences = remember ? { ...(cur.modelPreferences || {}), [userId!]: { providerId: choice.providerId, modelId: choice.modelId } } : cur.modelPreferences;
+    const modelChoiceExplicit = !automatic || remember;
+    if (automatic && !cur.imageMode && cur.providerId === choice.providerId && cur.model === choice.modelId && (!remember || cur.modelPreferences?.[userId!])) return true;
+    if (choice.category === "images") {
+      if (!imageCatalog.some((row) => row.sku_id === choice.modelId)) throw new Error("Image model unavailable");
+      window.wuwei.setSettings({ ...cur, modelPreferences, kind: "openai", providerId: "wuwei-free", baseUrl: WUWEI_GATEWAY_BASE, model: "glm-4.7-flash", apiKey: undefined, oauthToken: undefined, imageMode: true, imageSku: choice.modelId, modelChoiceExplicit });
+      setCurProviderId("wuwei-free"); setImageMode(true); setImageSku(choice.modelId);
+    } else {
+      const provider = providerListRef.current.find((p) => p.id === choice.providerId);
+      if (!provider) throw new Error("Provider unavailable");
+      const slot = (cur.creds || {})[provider.id] || {};
+      window.wuwei.setSettings({ ...cur, modelPreferences, kind: provider.kind, providerId: provider.id, model: choice.modelId, imageMode: false,
+        apiKey: slot.apiKey, oauthToken: slot.oauthToken, baseUrl: provider.fixedBaseUrl ? provider.baseUrl : slot.baseUrl || provider.baseUrl, modelChoiceExplicit });
+      setCurProviderId(provider.id); setImageMode(false); setRate(null);
+    }
+    if (!automatic) markFirstAction("switch_model");
+    void window.wuwei.track?.("model_switch", { model: choice.modelId, provider: choice.providerId, category: choice.category, automatic });
+    return true;
+  }
+  async function applyDefaultModel() {
+    const defaults = modelDefaultRef.current;
+    const sid = currentIdRef.current;
+    if (defaults.handled.has(sid)) return;
+    const r = await window.wuwei.getSettings();
+    if (defaults !== modelDefaultRef.current || sid !== currentIdRef.current) return;
+    const userId = wuweiRef.current?.user.id;
+    const choice = userId ? rememberedModelChoice(pickerChoices, r?.settings || {}, userId) ?? recommendedValueModel(pickerChoices) : anonymousDefaultModel(pickerChoices);
+    if (choice) await selectModelChoice(choice, true);
+  }
+  async function switchToRecommendedValue() {
+    if (valueSwitchBusy) return;
+    const choice = recommendedValueModel(pickerChoices);
+    if (!choice) {
+      setModelPickerCategory('economy'); setShowModelMenu(false); setShowProviderMenu(true);
+      void refreshCatalog(); return;
+    }
+    if (choice.needsLogin && !wuwei) { requestModelLogin(); return; }
+    setValueSwitchBusy(true);
+    try {
+      if (busy) window.wuwei.stop(currentId);
+      if (!await selectModelChoice(choice)) return;
+      setShowProviderMenu(false); setShowModelMenu(false);
+    } catch {
+      push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please choose again.' : '切换模型失败，请重新选择。' });
+    } finally { setValueSwitchBusy(false); }
+  }
+  useEffect(() => {
+    if (!wuweiReady || !catalogReady || !currentId || meta.model === "…" || busy) return;
+    let alive = true;
+    void (async () => {
+      if (!items.some(item => item.type === 'user')) await applyDefaultModel();
+      if (!alive) return;
+      const pending = loginSendRef.current;
+      if (pending && pending.userId === wuweiRef.current?.user.id && pending.sid === currentIdRef.current) {
+        loginSendRef.current = null;
+        doSend(pending.text, pending.images);
+        clearComposer();
+      }
+    })().catch(() => { /* Keep the pending login send for a successful directory refresh. */ });
+    return () => { alive = false; };
+  }, [wuwei?.user?.id, wuweiReady, catalog, catalogReady, currentId, meta.model, items.length, busy]);
+
   // 动态实时模型(从平台 /models 拉)并入预设，去重；预设在前(保证旗舰置顶)，实时补充新模型；
   // 再并入当前生效的模型(meta.model)——自建端点等没有预设列表时，配好的模型也能在快切里看到/切换。
   const quickModels = [
@@ -4601,46 +4792,6 @@ export function App() {
     ? quickModels
     : [...new Set([...commonModels, ...(meta.model && !commonModels.includes(meta.model) ? [meta.model] : [])])];
   const hasMoreModels = !imageMode && quickModels.length > commonModels.length;
-  async function quickModel(m: string) {
-    if (imageMode) {
-      if (!wuwei) { setShowModelMenu(false); setShowLoginIntro(true); return; }
-      if (!imageCatalog.some(s=>s.sku_id===m)) return;
-      const r=await window.wuwei.getSettings();
-      window.wuwei.setSettings({...r.settings,imageMode:true,imageSku:m});
-      setImageSku(m);setShowModelMenu(false);return;
-    }
-    // 访客门禁：未登录时仅「免费体验(anon)」平台可切它自己的免费模型；其它一律引导登录
-    if (!wuwei && !curPreset?.anon) {
-      setShowModelMenu(false);
-      setShowLoginIntro(true);
-      return;
-    }
-    const r = await window.wuwei.getSettings();
-    const cur = r?.settings;
-    if (cur) {
-      markFirstAction("switch_model");
-      void window.wuwei.track?.("model_switch", { model: m });
-      // 关键：切模型时一并对齐当前平台的 kind/baseUrl/providerId/creds，避免 model 与 kind 脱钩。
-      // 曾出现 providerId=wuwei-free(免费/openai网关) 但 kind 停在 anthropic → 免费 deepseek 被当 anthropic 发、
-      // 报「Could not resolve authentication method」。这里以当前平台预设为准重新落实一遍配置，杜绝该类错配。
-      if (curPreset) {
-        const slot = ((cur.creds as Record<string, { apiKey?: string; oauthToken?: string; baseUrl?: string }>) || {})[curPreset.id] || {};
-        window.wuwei.setSettings({
-          ...cur,
-          model: m,
-          kind: curPreset.kind,
-          providerId: curPreset.id,
-          apiKey: slot.apiKey,
-          oauthToken: slot.oauthToken,
-          baseUrl: curPreset.fixedBaseUrl ? curPreset.baseUrl : slot.baseUrl || curPreset.baseUrl,
-        });
-      } else {
-        window.wuwei.setSettings({ ...cur, model: m });
-      }
-    }
-    setShowModelMenu(false);
-  }
-
   // 连通状态检测：更新状态灯（红/黄/绿）
   async function runConnCheck() {
     const seq = ++connCheckSeqRef.current;
@@ -4724,22 +4875,13 @@ export function App() {
     setApiKeyStep("awaiting");
   }
 
-  // 把拿到的 token 存进设置并切到 Claude 订阅后端
+  // Authorization saves credentials; it must not implicitly select a Claude model.
   async function saveClaudeToken(tok: string) {
     const r = await window.wuwei.getSettings();
     const s = r?.settings || {};
     const creds = { ...(s.creds || {}) };
     creds["claude-oauth"] = { ...(creds["claude-oauth"] || {}), oauthToken: tok };
-    window.wuwei.setSettings({
-      ...s,
-      kind: "anthropic-oauth",
-      providerId: "claude-oauth",
-      model: s.model || "claude-opus-4-8",
-      oauthToken: tok,
-      apiKey: undefined,
-      baseUrl: undefined,
-      creds,
-    });
+    window.wuwei.setSettings({ ...s, creds, ...(s.providerId === "claude-oauth" ? { oauthToken: tok } : {}) });
     push({ type: "notice", text: lang === "en" ? "✓ Claude subscription authorized — please resend your last message." : "✓ Claude 订阅已授权，请重新发送刚才的消息。" });
     setNeedAuth(false); // 授权完成，收起授权条
     setAuthDismissed(false);
@@ -4799,9 +4941,13 @@ export function App() {
     // 已经就是它 → 不重复切(避免 setSettings 抖动)
     if ((!providerId || cur.providerId === providerId) && (!model || cur.model === model)) return;
     if (providerId && cur.providerId !== providerId) {
-      const p = (PRESETS as any[]).find((x) => x.id === providerId);
+      const p = providerListRef.current.find(x => x.id === providerId);
       if (p) {
+        // A provider-only legacy binding is not an explicit premium choice.
+        if (p.hosted && !p.anon && !model) return;
         const slot = (cur.creds || {})[providerId] || {};
+        const boundModel = model || slot.model || defaultModelOf(p);
+        if (!boundModel) return;
         window.wuwei.setSettings({
           ...cur,
           kind: p.kind,
@@ -4809,16 +4955,17 @@ export function App() {
           apiKey: slot.apiKey,
           oauthToken: slot.oauthToken,
           baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
-          model: model || slot.model || defaultModelOf(p) || cur.model,
+          model: boundModel,
         });
         setCurProviderId(providerId);
         return;
       }
       // 平台不在预设(如自定义中转站)：连槽位一起带出，至少把 providerId/model/凭证换过去
       const slot = (cur.creds || {})[providerId] || {};
+      if (!model && !slot.model) return;
       markFirstAction("switch_platform");
       void window.wuwei.track?.("platform_switch", { providerId, model: model || slot.model || cur.model });
-      window.wuwei.setSettings({ ...cur, providerId, apiKey: slot.apiKey, oauthToken: slot.oauthToken, baseUrl: slot.baseUrl, model: model || slot.model || cur.model });
+      window.wuwei.setSettings({ ...cur, providerId, apiKey: slot.apiKey, oauthToken: slot.oauthToken, baseUrl: slot.baseUrl, model: model || slot.model });
       setCurProviderId(providerId);
       return;
     }
@@ -4829,9 +4976,10 @@ export function App() {
   // 切平台时该默认选哪个模型：未登录时跳过「需登录」的，选第一个免登录可用的。
   // 免费池顺序由后台 sort 决定，第一个未必 anon 可用(现在排头的 Nex N2.5 Pro 就需登录)——
   // 直接取 models[0] 会让未登录用户默认选中一个用不了的模型，发消息时才被自动切走，白多一次摩擦。
-  function defaultModelOf(p: { models: string[] }): string | undefined {
-    if (wuwei) return p.models[0];
-    return p.models.find((m) => !loginReqModelIds.has(m)) || p.models[0];
+  function defaultModelOf(p: { id?: string; hosted?: boolean; anon?: boolean; models: string[] }): string | undefined {
+    if (p.hosted && !p.anon) return recommendedValueModel(pickerChoicesRef.current.filter(c => c.providerId === p.id))?.modelId;
+    if (p.anon) return anonymousDefaultModel(pickerChoicesRef.current.filter(c => c.providerId === p.id))?.modelId ?? p.models.find(m => m === 'openrouter-auto-free');
+    return undefined;
   }
   // 快捷切换供应商：带出该平台已存的 key/baseUrl，默认用该平台第一个模型
   async function quickProvider(p: (typeof PRESETS)[number]) {
@@ -4841,18 +4989,22 @@ export function App() {
       setShowLoginIntro(true);
       return;
     }
+    if (p.id === "wuwei-image") {
+      setModelPickerCategory('images'); setShowModelMenu(false); setShowProviderMenu(true); return;
+    }
+    // Hosted platform lists can start with an expensive model. Use the same
+    // recommended choice as login, instead of treating models[0] as a default.
+    if (p.hosted && !p.anon) {
+      await switchToRecommendedValue();
+      return;
+    }
+    modelDefaultRef.current.handled.add(currentIdRef.current);
     const r = await window.wuwei.getSettings();
     const cur = r?.settings || {};
-    if (p.id === "wuwei-image") {
-      const rows=await window.wuwei.imageCatalog().catch(()=>[]);
-      setImageCatalog(rows);
-      if (!rows.length) { push({type:"notice",text:lang==="en"?"Image models are temporarily unavailable. Try again later.":"生图模型暂不可用，请稍后再试。"});setShowProviderMenu(false);return; }
-      const sku=rows.find(s=>s.sku_id===imageSku)?.sku_id || rows.find(s=>s.sku_id==="openai-gpt-image-2-medium")?.sku_id || rows[0].sku_id;
-      window.wuwei.setSettings({...cur,kind:"openai",providerId:"wuwei-free",baseUrl:WUWEI_GATEWAY_BASE,model:"glm-4.7-flash",apiKey:undefined,oauthToken:undefined,imageMode:true,imageSku:sku});
-      setCurProviderId("wuwei-free");setImageMode(true);setImageSku(sku);setShowProviderMenu(false);return;
-    }
     setImageMode(false);
     const slot = (cur.creds || {})[p.id] || {};
+    const targetModel = slot.model || defaultModelOf(p);
+    if (!targetModel) { setModelPickerCategory('connections'); setShowModelMenu(false); setShowProviderMenu(true); return; }
     window.wuwei.setSettings({
       ...cur,
       kind: p.kind,
@@ -4861,7 +5013,7 @@ export function App() {
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
       baseUrl: p.fixedBaseUrl ? p.baseUrl : slot.baseUrl || p.baseUrl,
-      model: defaultModelOf(p) || cur.model,
+      model: targetModel,
     });
     setRate(null); // 清掉上一个平台的订阅额度残留(余额类无 evt:ratelimits 不会覆盖)，新平台 emitAccount 会重推
     setCurProviderId(p.id);
@@ -4878,13 +5030,10 @@ export function App() {
   }
   // 一键切到指定托管平台+模型(和 quickProvider 同套配置，但指定具体 model)
   async function switchToHosted(prov: (typeof providerList)[number], model: string) {
-    const r = await window.wuwei.getSettings();
-    const cur = r?.settings || {};
-    const slot = (cur.creds || {})[prov.id] || {};
-    window.wuwei.setSettings({ ...cur, kind: prov.kind, providerId: prov.id, apiKey: slot.apiKey, oauthToken: slot.oauthToken, baseUrl: prov.fixedBaseUrl ? prov.baseUrl : slot.baseUrl || prov.baseUrl, model });
-    setRate(null);
-    setCurProviderId(prov.id);
-    void window.wuwei.track?.("free_cap_switch_hosted", { to: model, provider: prov.id });
+    const choice = pickerChoices.find(c => c.providerId === prov.id && c.modelId === model);
+    if (choice) { await selectModelChoice(choice); return; }
+    setModelPickerCategory('economy'); setShowModelMenu(false); setShowProviderMenu(true);
+    void refreshCatalog();
   }
 
   // 启动即把当前界面语言同步进主进程 settings.app.lang → WUWEI_LANG，
@@ -4937,7 +5086,7 @@ export function App() {
 
   // 定时刷新会员/余额(每90s + 窗口聚焦)：只在扣费时推送会导致免费模型使用期「本周额度%」长期显示旧值(不刷新)。
   useEffect(() => {
-    const refresh = () => { window.wuwei?.wuweiMe?.().then((m) => { if (m) setWuwei(m); }).catch(() => {}); };
+    const refresh = () => { void accountRefreshRef.current!.refresh(); };
     const iv = setInterval(refresh, 90_000);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
@@ -5100,6 +5249,7 @@ export function App() {
           break;
         case "evt:wuwei-me":
           setWuwei(payload); // 托管平台扣币后主进程推来的最新账号+余额
+          setWuweiReady(true);
           break;
         case "evt:tasks":
           setRunningSet(new Set<string>(payload.running || []));
@@ -5149,10 +5299,17 @@ export function App() {
           break;
         case "evt:tool-start":
           if (payload.sid !== currentIdRef.current) break;
+          if (payload.name === 'platform_imagegen' && payload.id) imageBillingToolsRef.current.set(payload.id, imageBillingScopeRef.current);
           push({ type: "tool", id: payload.id, name: payload.name, input: payload.input, status: "running" });
           break;
         case "evt:tool-end":
           if (payload.sid !== currentIdRef.current) break;
+          if (imageBillingToolsRef.current.get(payload.id) === imageBillingScopeRef.current) {
+            imageBillingToolsRef.current.delete(payload.id);
+            if (imageToolBalanceFailure('platform_imagegen', payload.result, payload.isError === true)) {
+              usageLimitHandlerRef.current('balance', lang === 'en' ? 'Not enough quota and coins to generate this image. Add funds to continue.' : '生图额度与无为币不足，请充值后继续。');
+            }
+          }
           setItems((p) => {
             // 优先按 id 精确匹配(并行时多个 running)；无 id 时回退到最后一个 running
             let real = payload.id
@@ -5192,7 +5349,7 @@ export function App() {
           break;
         }
         case 'evt:decision-request':
-          if (shouldAutoApproveToolPermission(payload, modeRef.current, alwaysAllowRef.current)) {
+          if (shouldAutoApproveToolPermission(payload, modeRef.current, alwaysAllowRef.current, defaultModeRef.current)) {
             window.wuwei.respondDecision(payload.permId, { action: 'allow' });
           } else {
             setToolDecisions(previous => ({ ...previous, [payload.permId]: payload }));
@@ -5213,7 +5370,7 @@ export function App() {
             if (sec <= 0) return;
             window.setTimeout(() => {
               setAsks((m) => {
-                if (m[askSid]?.id !== payload.id) return m; // 已被人回答/取消，别抢
+                if (modeOf(askSid) !== "cont" || m[askSid]?.id !== payload.id) return m; // 关闭继续/已被人回答时别抢
                 const qs = m[askSid].questions || [];
                 window.wuwei.answerAsk(payload.id, {
                   list: qs.map(() => ({ selected: [], text: lang === "en" ? "You decide based on the overall goal — pick the most reasonable option and keep going." : "这个你按总目标自己定，挑最合理的选项继续。" })),
@@ -5347,42 +5504,29 @@ export function App() {
           if (payload.sid && payload.sid !== currentIdRef.current) break;
           thinkStartRef.current = null;
           const rawMsg = String(payload.message ?? payload);
-          const friendly = friendlyError(rawMsg, t);
+          const friendly = friendlyError(rawMsg, t, quotaModelRef.current.free);
           // 产品行为埋点：用中报错/限额（报错原文进 detail，供后台诊断分析）
           void window.wuwei.track?.("error_shown", { friendly: friendly.slice(0, 100) }, rawMsg.slice(0, 2000));
           // 服务端报了真实上限就记下来，占用条改按它算(比客户端按模型名猜准)
           const realLimit = parseServerCtxLimit(rawMsg);
           // Agent 主进程已学习并同步预算；报错本身不再单独改 UI 窗口。
           void realLimit;
-          // 按场景分流（用 ref 取最新登录态，避免空依赖闭包里 wuwei 冻结在未登录）：
-          //  A. 免费模型今天次数用完 (free_daily_cap_reached / daily_cap_reached / free_quota_exhausted)
-          //     · 已登录：不是没币，是免费次数用完 → 明确文案(明天恢复 / 可切其他托管模型)，绝不弹「无为币用完」升级窗
-          //     · 未登录：弹登录引导(登录即解锁更高额度)
-          //  B. 无为币真不足 (insufficient_balance)：已登录→升级/充值窗；未登录→登录引导
-          //  C. 免费体验被关停/需登录：未登录→登录引导
           const loggedIn = !!wuweiRef.current;
-          const isFreeCap = /free_daily_cap_reached|daily_cap_reached|free_quota_exhausted/i.test(rawMsg);
-          const isCoinOut = /insufficient_balance/i.test(rawMsg);
+          const limitKind = usageLimitKind(rawMsg, quotaModelRef.current.free);
+          if (['invalid_token', 'no_token', 'anon_login_required', 'anon_not_allowed'].includes(gatewayCode(rawMsg))) {
+            usageLimitRequestRef.current = null;
+            wuweiRef.current = null; setWuwei(null);
+            setFreeCapModal(null); setCoinShortage(null); setQuotaWarn(null);
+            setNeedAuth(false); setUnavailModel(null);
+            requestModelLogin();
+            setConn({ status: 'yellow', reason: friendly });
+            break;
+          }
           let suppressInlineNotice = false;
-          if (isFreeCap && loggedIn) {
-            const bal = wuweiRef.current?.coin?.balance ?? 0;
-            const wq = wuweiRef.current?.membership?.weeklyQuota;
-            const hasQuota = !!wq?.active && (wq.remainingPct ?? 0) > 0;
-            if (bal <= 0 && !hasQuota) {
-              // 免费次数用完 且 无为币=0 且 无周额度 → 切托管也没币可用 → 直接弹付费窗(freecap 文案)
-              setShowAcctMenu(false);
-              setCoinShortage({ message: "freecap", balance: 0, freecap: true }); // 展示埋点由统一 effect 发
-              shortageShownAt.current = Date.now();
-            } else {
-              // 还有币/周额度 → 引导(明天继续 / 一键切托管付费模型)。展示埋点(free_cap_guide_shown)由统一 effect 发。
-              setFreeCapModal({ model: meta.model, balance: bal });
-            }
+          if (limitKind && loggedIn) {
+            usageLimitHandlerRef.current(limitKind, friendly);
             suppressInlineNotice = true;
-          } else if (isCoinOut && loggedIn) {
-            setShowAcctMenu(false);
-            void refreshWuweiForShortage(friendly); // 无为币真用完 → 升级/充值弹窗
-          } else if (!loggedIn && (isFreeCap || isCoinOut || /free_trial_disabled|anon_login_required/i.test(rawMsg))) {
-            // anon_login_required 必须在列：游客把需登录模型发出去时要弹登录卡（审计高危1）
+          } else if (!loggedIn && (limitKind || /free_trial_disabled|anon_login_required/i.test(rawMsg))) {
             setLoginIntroReason(
               /anon_login_required/i.test(rawMsg)
                 ? (lang === "en" ? "Sign in to use this model free" : "该模型登录后免费使用")
@@ -5391,7 +5535,7 @@ export function App() {
             setShowLoginIntro(true);
           }
           // 上游暂不可用(厂商抖动) → 记下当前模型，错误栏给「一键换到可用模型继续」，不让用户对着死路干等
-          setUnavailModel(/upstream_error/i.test(rawMsg) ? meta.model : null);
+          setUnavailModel(/upstream_error/i.test(rawMsg) ? quotaModelRef.current.model : null);
           // 去重：与上一条完全相同的出错提示不重复堆叠（免费次数用完已弹窗→不再叠 inline）
           if (!suppressInlineNotice) setItems((p) => {
             const last = p[p.length - 1];
@@ -5531,17 +5675,19 @@ export function App() {
 
   useEffect(() => {
     window.wuwei.getAccount().then(setAccount);
+    const revision = wuweiRevisionRef.current;
     window.wuwei
       .wuweiMe()
       .then((me) => {
-        setWuwei(me);
+        if (wuweiRevisionRef.current === revision) setWuwei(me);
         // 签到改为手动：点账号面板「签到」按钮才触发（见 doCheckin），登录不再自动签，
         // 这样点击时才真正到账并弹「+N credits」toast。
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (wuweiRevisionRef.current === revision) setWuweiReady(true); });
     // 主动拉取当前后端/模型，避免 evt:ready 推送早于订阅被丢导致显示「…」
     window.wuwei.getSettings().then((r: any) => {
-      if (r?.backend) setMeta((m) => ({ ...m, backend: r.backend, model: r.model || m.model }));
+      if (r?.backend) setMeta(m => m.model === '…' ? { ...m, backend: r.backend, model: r.model || m.model } : m);
     });
     // 主动拉取会话列表+当前会话，避免启动推送早于监听导致空白页(需发消息才加载的bug)
     window.wuwei.bootstrap().then((r) => {
@@ -5673,6 +5819,22 @@ export function App() {
 
   // 真正发送一条(立即入队跑)
   function doSend(text: string, imgs: string[]) {
+    const sid = currentIdRef.current;
+    const userId = wuweiRef.current?.user.id;
+    if (userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
+      if (modelDefaultSendRef.current) return;
+      const request = {};
+      modelDefaultSendRef.current = request;
+      void applyDefaultModel().then(() => {
+        if (currentIdRef.current !== sid || wuweiRef.current?.user.id !== userId) return;
+        if (modelDefaultRef.current.handled.has(sid)) doSend(text, imgs);
+        else { push({ type: 'notice', text: lang === 'en' ? 'Loading models. Please try again shortly.' : '正在加载模型，请稍后重试。' }); void refreshCatalog(); }
+      }).catch(() => {
+        push({ type: 'notice', text: lang === 'en' ? 'Could not load the recommended model. Please retry.' : '高性价比推荐模型加载失败，请重试。' });
+      }).finally(() => { if (modelDefaultSendRef.current === request) modelDefaultSendRef.current = null; });
+      return;
+    }
+    modelDefaultRef.current.handled.add(currentIdRef.current);
     setUnavailModel(null); // 新发/重发即清「上游不可用」提示
     markFirstAction("send_input");
     // 每次发消息都埋点(behavior)：字数/是否带图/平台·模型，供分析活跃与使用深度
@@ -5746,8 +5908,8 @@ export function App() {
       const now = Date.now();
       const modes = modeRef.current;
       const idleMs = Math.max(20, wdIdleRef.current) * 1000; // 判停阈值(可配)
-      for (const sid of Object.keys(modes)) {
-        if (modes[sid] !== "cont") continue; // 只兜「智能继续」的会话；用户点暂停/完成会切走该模式
+      for (const sid of new Set([...Object.keys(modes), ...lastActivityRef.current.keys()])) {
+        if (modeOf(sid) !== "cont") continue; // 只兜「智能继续」的会话；用户点暂停/完成会切走该模式
         const last = lastActivityRef.current.get(sid) ?? 0;
         if (last === 0) continue; // 从没跑过 → 不动
         const running = runningSetRef.current.has(sid);
@@ -6011,7 +6173,18 @@ export function App() {
   // override：不经过输入框直接发一句（如中断后点「继续」）。缺省仍用输入框内容。
   // 防御 typeof：万一哪个 onClick 直接写成 {submit}，传进来的是 MouseEvent，
   // 对它调 .trim() 会当场抛异常把整个界面炸成白屏——这里一律只认字符串。
-  function submit(override?: string, _afterAnonSwitch?: boolean) {
+  async function switchAnonymousAndRetry(text: string, images: string[]) {
+    const choice = anonymousDefaultModel(pickerChoicesRef.current);
+    if (!choice) { requestModelLogin(); return; }
+    const sid = currentIdRef.current;
+    try {
+      if (!await selectModelChoice(choice)) return;
+      if (sid !== currentIdRef.current || wuweiRef.current) return;
+      setPendingImages(images);
+      setModelRetry({ sid, userId: null, key: choice.key, text, images });
+    } catch { push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please retry.' : '切换模型失败，请重试。' }); }
+  }
+  function submit(override?: string) {
     const text = (typeof override === "string" ? override : input).trim();
     if (!text && pendingImages.length === 0) return;
     if (text === "/reset") {
@@ -6024,47 +6197,19 @@ export function App() {
     // 例外：选中的是 anon(免登录免费体验)平台 → 直接放行，让未登录用户零摩擦试用。
     // 双保险：未登录且当前非 anon 平台时，若存在 anon 免费体验平台，自动切过去(quickProvider 写 settings)
     // 并提示用户再发一次，而不是弹登录墙。仅当确实无任何 anon 平台可用才引导登录。
-    if (!wuwei && !curPreset?.anon && !_afterAnonSwitch) {
-      const anonP = providerList.find((p) => p.anon);
-      if (anonP) {
-        // 切到免费体验平台(写 settings + 更新 curProviderId)，待 state 生效后自动重发本次消息，
-        // 用户无感知、零摩擦。_afterAnonSwitch 防止重发再次进入本分支形成循环。
-        setInput(text);
-        void quickProvider(anonP as (typeof PRESETS)[number]);
-        setTimeout(() => submit(text, true), 80);
-        return;
-      }
-      setShowLoginIntro(true);
-      return;
-    }
-    // 匿名 + 当前不是「已确认免登录」的模型(需登录的 deepseek 免费档，或配置漂移/离线导致状态未知)
-    // → 绝不报死墙中断(新用户零信任，一发就断=当场劝退)。自动切到 glm-4.7-flash(免登录)继续跑，
-    // 温和提示登录可解锁更强模型。判定=「非 glm-4.7 且 不是(免费且非需登录)」，覆盖需登录+未知两态。
+    if (imageMode && !wuwei) { requestModelLogin(); return; }
     const anonUsable = freeModelIds.has(meta.model) && !loginReqModelIds.has(meta.model);
-    if (!wuwei && meta.model !== "glm-4.7-flash" && !anonUsable && !_afterAnonSwitch) {
-      setInput(text);
-      push({ type: "notice", text: lang === "en"
-        // 别在文案里点名具体模型：免费池后台随时增删(原文案点名的 DeepSeek V4 Flash 已下架)，点了名就会过时。
-        ? "This model needs sign-in. Switched to GLM-4.7-Flash (no login) so you can keep going. Sign in to unlock the full free lineup — including the stronger coding models."
-        : "当前模型需登录，已为你切到 GLM-4.7-Flash（免登录）继续。登录即可解锁全部免费模型，专攻代码的更强模型都在里面。" });
-      void (async () => {
-        const r = await window.wuwei.getSettings();
-        const cur = r?.settings || {};
-        window.wuwei.setSettings({ ...cur, kind: "openai", providerId: "wuwei-free", baseUrl: WUWEI_GATEWAY_BASE, apiKey: undefined, oauthToken: undefined, model: "glm-4.7-flash" });
-        setCurProviderId("wuwei-free");
-      })();
-      setTimeout(() => submit(text, true), 140);
+    if (!wuwei && (!curPreset?.anon || !anonUsable)) {
+      void switchAnonymousAndRetry(text, [...pendingImages]);
       return;
     }
     // 前置拦截仅针对「真的没额度可用」：余额≤0 且 会员周额度也没有(非会员/额度用尽)。
     // 会员本周订阅额度还有(remainingPct>0) → 放行，用量走周额度(服务端按额度扣，见网关预检)，
     // 否则付费会员余额为0会被客户端提前误拦、根本发不出请求。
-    const wq = wuwei?.membership?.weeklyQuota;
-    const hasWeeklyQuota = !!wq?.active && (wq.remainingPct ?? 0) > 0;
     // 免登录免费体验(anon)走网关匿名分支、不扣无为币 → 绝不做余额拦截(否则登录用户选免费模型、
     // 余额为0时会被误拦弹"无为币不足")。只对真正按量扣币的托管平台做前置拦截。
-    if (curPreset?.hosted && !curPreset?.anon && wuwei && wuwei.coin.balance <= 0 && !hasWeeklyQuota) {
-      void refreshWuweiForShortage(lang === "en" ? "Out of credits: top up to keep using Wuwei hosted models." : "无为币余额不足：请充值后再使用无为托管模型。");
+    if (curPreset?.hosted && !curPreset?.anon && wuwei && (imageMode || !freeModelIds.has(meta.model)) && !hasPaidAllowance(wuwei)) {
+      void refreshWuweiForShortage(imageMode ? (lang === 'en' ? 'Not enough quota and coins to generate this image. Add funds to continue.' : '生图额度与无为币不足，请充值后继续。') : (lang === "en" ? "Out of credits: top up to keep using Wuwei hosted models." : "无为币余额不足：请充值后再使用无为托管模型。"));
       return;
     }
     setSuggestion(""); // 发送后清掉旧的下一步建议(回复完会重新生成)
@@ -6106,6 +6251,14 @@ export function App() {
   }
 
   // 密钥确认弹窗：新密钥按勾选存入;重复项按三选一(新增/覆盖备注/忽略);再发送
+  useEffect(() => {
+    if (!modelRetry) return;
+    if (modelRetry.sid !== currentId || modelRetry.userId !== (wuwei?.user.id ?? null)) { setModelRetry(null); return; }
+    if (busy || selectedModelKey !== modelRetry.key) return;
+    setModelRetry(null);
+    submit(modelRetry.text);
+  }, [modelRetry, selectedModelKey, currentId, wuwei?.user.id, busy]);
+
   async function confirmSecretPrompt(store: boolean) {
     const sp = secretPrompt;
     if (!sp) return;
@@ -6536,22 +6689,6 @@ export function App() {
                 </>
               )}
             </div>
-            {!roomMode && !sessions.find((s) => s.id === currentId)?.employeeId /* 一人公司员工私聊会话也隐藏「自动/智能继续」档 */ && (
-            <div className="mode-mini" title={modeOf(currentId) === "manual" ? t("mode.manualTip") : modeOf(currentId) === "cont" ? (lang === "en" ? "Smart-continue: auto-approve + keep advancing toward the goal after each turn" : "智能继续：自动放行权限 + 跑完一轮自己朝目标接着推进") : t("mode.autoTip")}>
-              {(showManual || modeOf(currentId) === "manual") && (
-                <button className={modeOf(currentId) === "manual" ? "on" : ""} onClick={() => setMode(currentId, "manual")}>
-                  {t("mode.manual")}
-                </button>
-              )}
-              <button className={modeOf(currentId) === "auto" ? "on" : ""} onClick={() => setMode(currentId, "auto")}>
-                {t("mode.auto")}
-              </button>
-              <button className={modeOf(currentId) === "cont" ? "on" : ""} onClick={() => setMode(currentId, "cont")}>
-                {lang === "en" ? "Smart-continue" : "智能继续"}
-              </button>
-            </div>
-            )}
-
             {/* 脑网络后台进度：索引构建 / 概念抽取，实时可见，点击进设置查看 */}
             {(idxProg?.building || conProg?.running) && (
               <button
@@ -6593,32 +6730,13 @@ export function App() {
             )}
 
             <div className="model-quick">
-              <button
-                className="mq-btn mq-prov"
-                title={curPreset ? pLabel(curPreset, lang) : meta.backend}
-                onClick={(e) => {
-                  openMqMenu(e);
-                  if (!showProviderMenu) void window.wuwei.track?.("open_platform_menu", { provider: curProviderId });
-                  setShowProviderMenu((v) => !v);
-                }}
-              >
-                <span className="mq-txt">{(curPreset ? pLabel(curPreset, lang) : meta.backend).replace(/（.*$/, "").replace(/\s*\(.*$/, "")}</span>
-                <span className="mq-caret">▾</span>
-              </button>
-              <span className="mq-mid">·</span>
-              <button
-                className="mq-btn mq-mod"
-                title={imageMode ? imageLabel(imageSku) : meta.model}
-                onClick={(e) => {
-                  // 访客门禁：未登录且当前不是免费体验 → 点模型也引导登录
-                  if (!wuwei && !curPreset?.anon) { setShowLoginIntro(true); return; }
-                  // 打开切换器时重新拉一次后台目录：后台上新/下架模型(如豆包上线、牛来下架)即时可见，不用重启
-                  if (!showModelMenu) { if(imageMode) void refreshImageCatalog(); window.wuwei.wuweiCatalog?.().then((c) => setCatalog(c && c.length ? c : null)).catch(() => {}); void window.wuwei.track?.("open_model_menu", { provider: curProviderId, model: meta.model }); }
-                  openMqMenu(e);
-                  setShowModelMenu((v) => !v);
-                }}
-              >
-                <span className="mq-txt">{imageMode ? imageLabel(imageSku) : MODEL_LABEL_OVERRIDES[meta.model] || (lang === "en" && modelLabelsEn.get(meta.model)) || modelLabels.get(meta.model) || meta.model}</span>
+              <button className="mq-btn mq-select" title={`${lang === "en" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · ${imageMode ? imageLabel(imageSku) : selectedChoice ? (lang === "en" ? selectedChoice.labelEn : selectedChoice.label) : meta.model}`} onClick={(e) => {
+                openMqMenu(e);
+                setModelPickerCategory(undefined);
+                if (!showProviderMenu) { void refreshCatalog(); void refreshImageCatalog(); }
+                setShowModelMenu(false); setShowProviderMenu((value) => !value);
+              }}>
+                <span className="mq-txt"><span className="mq-category-name">{!selectedChoice && !imageMode ? (lang === "en" ? "Model" : "模型") : lang === "en" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · </span>{imageMode ? imageLabel(imageSku) : selectedChoice ? (lang === "en" ? selectedChoice.labelEn : selectedChoice.label) : modelLabelsEn.get(meta.model) || modelLabels.get(meta.model) || meta.model}</span>
                 <span className="mq-caret">▾</span>
               </button>
               {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
@@ -6667,155 +6785,13 @@ export function App() {
                   </div>
                 </>
               )}
-              {showProviderMenu && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowProviderMenu(false)} />
-                  <div className="mq-menu mq-menu-prov" style={{ left: mqMenuLeft }}>
-                    <div className="mq-head">{lang === "en" ? "Switch provider" : "切换平台"}</div>
-                    {providerList.map((p) => (
-                      <button
-                        key={p.id}
-                        className={"mq-item" + (p.id === displayProviderId ? " on" : "")}
-                        onClick={() => quickProvider(p)}
-                      >
-                        <span>{pLabel(p, lang)}</span>
-                        {p.id === displayProviderId && <span className="mq-check">✓</span>}
-                      </button>
-                    ))}
-                    <div className="mq-sep" />
-                    <button
-                      className="mq-item mq-more"
-                      onClick={() => {
-                        setShowProviderMenu(false);
-                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部供应商设置需登录
-                        setSettingsTab("platforms");
-                        setShowSettings(true);
-                      }}
-                    >
-                      {t("mq.allProviders", "全部供应商设置…")}
-                    </button>
-                  </div>
-                </>
-              )}
-              {showModelMenu && (
-                <>
-                  <div className="mq-overlay" onClick={() => setShowModelMenu(false)} />
-                  <div className="mq-menu" style={{ left: mqMenuLeft }}>
-                    <div
-                      className="mq-head"
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t("mq.switchModel", "切换模型")} · {curPreset ? pLabel(curPreset, lang) : meta.backend}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); if (imageMode) { push({type:"notice",text:lang === "en" ? "Image prices are estimates. The tool confirms the hold and maximum authorized fee before each generation; final billing uses the verified official cost." : "生图价格为预估。每次生成前会确认预占金额和授权上限，最终按核实的官方实费结算。"});return; } setShowModelPricing(true); void window.wuwei.track?.("open_model_pricing"); }}
-                        title={lang === "en" ? "Model pricing" : "模型费用说明"}
-                        style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 5, border: "none", cursor: "pointer", background: "transparent", color: "inherit", opacity: 0.65, fontSize: 11 }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 16v-5M12 8h.01" /></svg>
-                        {lang === "en" ? "Pricing" : "费用说明"}
-                      </button>
-                      {hasMoreModels && (
-                        <span style={{ display: "inline-flex", gap: 2, flex: "0 0 auto" }}>
-                          {[
-                            { k: false, t: lang === "en" ? "Common" : "常用" },
-                            { k: true, t: lang === "en" ? "All" : "全部" },
-                          ].map((o) => (
-                            <button
-                              key={o.t}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowAllModels(o.k);
-                              }}
-                              style={{
-                                padding: "1px 8px",
-                                borderRadius: 5,
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: 11,
-                                background: showAllModels === o.k ? "#274A63" : "transparent",
-                                color: showAllModels === o.k ? "#F4F6F8" : "inherit",
-                                opacity: showAllModels === o.k ? 1 : 0.55,
-                              }}
-                            >
-                              {o.t}
-                            </button>
-                          ))}
-                        </span>
-                      )}
-                    </div>
-                    {imageMode && <div className="mq-head">{lang === "en" ? "Fee confirmed before generation" : "生成前确认费用"}</div>}
-                    {shownModels.length === 0 && <div className="mq-empty">{lang === "en" ? "No preset models — add one in Settings" : "无预设模型，去设置里填"}</div>}
-                    {shownModels.map((m) => {
-                      const gated = !wuwei && loginReqModelIds.has(m); // 未登录 + 需登录模型 → 灰置引导
-                      return (
-                      <button
-                        key={m}
-                        data-image-sku={imageMode ? m : undefined}
-                        className={"mq-item" + (m === displayModel ? " on" : "")}
-                        style={gated ? { opacity: 0.5 } : undefined}
-                        title={gated ? (lang === "en" ? "Sign in to use free" : "登录后可免费使用") : undefined}
-                        onClick={() => { if (gated) { setShowModelMenu(false); setShowLoginIntro(true); return; } quickModel(m); }}
-                      >
-                        <span>
-                          {imageMode ? imageLabel(m) : MODEL_LABEL_OVERRIDES[m] || (lang === "en" && modelLabelsEn.get(m)) || modelLabels.get(m) || m}
-                          {imageMode && <span style={{marginLeft:8,fontSize:11,opacity:0.65}}>{(() => {
-                            const model = imageCatalog.find(s=>s.sku_id===m)?.model;
-                            const prices = imageCatalog.filter(s=>s.model===model).map(s=>s.coins_per_image);
-                            const varied = new Set(prices).size > 1;
-                            return lang === 'en' ? `${varied ? 'From ' : '≈'}${Math.min(...prices)} coins` : `≈${Math.min(...prices)} 无为币${varied ? '起' : ''}`;
-                          })()}</span>}
-                          {gated && (
-                            <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#6b7280", color: "#fff", verticalAlign: "middle" }}>
-                              {lang === "en" ? "Sign in" : "登录可用"}
-                            </span>
-                          )}
-                          {!gated && freeModelIds.has(m) && (
-                            <span
-                              style={{
-                                marginLeft: 6,
-                                fontSize: 10,
-                                padding: "1px 5px",
-                                borderRadius: 4,
-                                background: "#1f9d55",
-                                color: "#fff",
-                                verticalAlign: "middle",
-                              }}
-                            >
-                              {/* 免登录模型(anon)标「免登录」，登录版免费模型标「免费」，让用户一眼分清哪个要登录 */}
-                              {loginReqModelIds.has(m)
-                                ? (lang === "en" ? "Free" : "免费")
-                                : (lang === "en" ? "No login" : "免登录")}
-                            </span>
-                          )}
-                          {modelBadges.get(m) && modelBadges.get(m)!.toLowerCase() !== "free" && (
-                            <span
-                              style={{ marginLeft: 6, fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#e8722c", color: "#fff", verticalAlign: "middle" }}
-                            >
-                              {lang === "en" ? badgeEn(modelBadges.get(m)!) : badgeCn(modelBadges.get(m)!)}
-                            </span>
-                          )}
-                        </span>
-                        {m === displayModel && <span className="mq-check">✓</span>}
-                      </button>
-                      );
-                    })}
-                    <div className="mq-sep" />
-                    <button
-                      className="mq-item mq-more"
-                      onClick={() => {
-                        setShowModelMenu(false);
-                        if (!wuwei) { setShowLoginIntro(true); return; } // 访客：全部设置/换平台需登录
-                        setSettingsTab("model");
-                        setShowSettings(true);
-                      }}
-                    >
-                      {t("mq.allSettings", "全部设置 / 换平台…")}
-                    </button>
-                  </div>
-                </>
-              )}
+              {(showProviderMenu || showModelMenu) && <>
+                <div className="mq-overlay" onClick={closeModelPicker} />
+                <ModelPicker choices={pickerChoices} selectedKey={selectedModelKey} loggedIn={!!wuwei} lang={lang} loading={!catalogReady}
+                  initialCategory={modelPickerCategory}
+                  onRequireLogin={requestModelLogin}
+                  onChoose={async choice => { if (!await selectModelChoice(choice, false, choice.category === 'premium')) throw new Error('Model selection cancelled'); }} onClose={closeModelPicker} onConnections={() => { closeModelPicker(); setSettingsTab("platforms"); setShowSettings(true); }} />
+              </>}
             </div>
 
             <span className="foot-spacer" />
@@ -7828,12 +7804,7 @@ export function App() {
                   <span style={{ color: "#C05F3C" }}>✨</span> {lang === "en" ? "Subscription" : "订阅版"}
                 </button>
               )}
-              <button className="acct-btn" onClick={() => setShowAcctMenu((v) => {
-                const next = !v;
-                // 打开菜单时顺手拉一次最新账号/余额/会员/周额度（后台改了这里也能立刻看到）
-                if (next && wuwei) window.wuwei.wuweiMe().then((m) => { if (m) setWuwei(m); }).catch(() => {});
-                return next;
-              })}>
+              <button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
                 <div className={"acct-av" + (wuwei ? "" : " off")}>
                   {/* 未登录的头像首字也要跟语言：中文「游」/英文 G，别让英文界面里冒出个汉字 */}
                   <UserAvatar
@@ -7918,6 +7889,23 @@ export function App() {
 
                             {/* 无为币钱包卡 */}
                             <div className="acct-wallet">
+                              <button
+                                type="button"
+                                className={"acct-balance-refresh" + (balanceRefresh.busy ? " busy" : "")}
+                                disabled={balanceRefresh.busy}
+                                aria-label={lang === "en" ? "Refresh balance" : "刷新余额"}
+                                aria-busy={balanceRefresh.busy}
+                                title={balanceRefresh.busy ? (lang === "en" ? "Refreshing balance…" : "正在刷新余额…")
+                                  : balanceRefresh.error ? (lang === "en" ? "Refresh failed. Click to retry." : "刷新失败，点击重试")
+                                  : balanceRefresh.updatedAt ? (lang === "en" ? "Refresh balance · Updated " : "刷新余额 · 更新于 ") + new Date(balanceRefresh.updatedAt).toLocaleTimeString(lang === "en" ? "en-GB" : "zh-CN", { hour12: false })
+                                  : (lang === "en" ? "Refresh balance" : "刷新余额")}
+                                onClick={() => { void accountRefreshRef.current!.refresh(); }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M20 7v5h-5M4 17v-5h5" />
+                                  <path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17" />
+                                </svg>
+                              </button>
                               <div className="acct-wallet-row">
                                 <div>
                                   <div className="acct-wallet-lbl">
@@ -7933,6 +7921,7 @@ export function App() {
                                   </button>
                                 )}
                               </div>
+                              {balanceRefresh.error && <div className="acct-balance-refresh-error" role="status">{lang === "en" ? "Could not refresh. Try again." : "刷新失败，请重试"}</div>}
                               {/* 签到按钮永远显示：0 余额非会员反而最该签到领免费币，不能因 bal<=0 把它藏掉。
                                   0 余额非会员额外在下方追加充值引导。 */}
                               <button
@@ -8152,16 +8141,16 @@ export function App() {
                         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 7, lineHeight: 1.3, letterSpacing: 0.2, color: "var(--text)" }}>
                           {lang === "zh" ? (
                             <>
-                              <span style={{ color: "#C05F3C" }}>免费</span>使用最新顶级模型
+                              <span style={{ color: "#C05F3C" }}>登录</span>，解锁更多模型
                             </>
                           ) : (
                             <>
-                              Top-tier models, <span style={{ color: "#C05F3C" }}>free</span>
+                              <span style={{ color: "#C05F3C" }}>Sign in</span> to unlock more models
                             </>
                           )}
                         </div>
                         <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-                          {lang === "zh" ? "无需自备 API Key，登录即用" : "No API key needed — just sign in"}
+                          {lang === "zh" ? "免费模型有每日额度，付费模型按用量消耗无为币。" : "Free models have daily limits. Paid models use Wuwei coins based on usage."}
                         </div>
                         {/* 具体模型名，让「顶级」落地 */}
                         <div
@@ -8311,7 +8300,9 @@ export function App() {
                   en={lang === "en"}
                   onEmployees={setTeamEmployees}
                   onOpenChat={() => setAppView(null)}
-                  providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
+                  providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
+                  loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+                  onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
                 />
               ) : (
                 <RoomView
@@ -8837,7 +8828,7 @@ export function App() {
                 <div className="wc-feats">
                   {[
                     { zh: "免费开始", en: "Free to start", path: <><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" /><circle cx="7" cy="7" r="1.3" /></> },
-                    { zh: "切换顶级模型", en: "Switch top models", path: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></> },
+                    { zh: "高性价比模型", en: "Value models", path: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></> },
                     { zh: "秒级响应", en: "Instant responses", path: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" /> },
                     // 国内直连仅中文版显示（对海外用户无意义）
                     ...(lang === "en" ? [] : [{ zh: "国内直连", en: "Fast in China", path: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z" /></> }]),
@@ -9087,6 +9078,7 @@ export function App() {
         )}
 
         <div className="composer" ref={composerRef}>
+          {selectedChoice?.category === 'premium' && <PremiumModelNotice key={selectedModelKey} en={lang === 'en'} busy={busy} switching={valueSwitchBusy} onSwitch={()=>void switchToRecommendedValue()} />}
           {/* 鉴权提示条：检测到缺授权后常驻，直到授权成功或用户手动 × 关闭 */}
           {needAuth && !authDismissed && (
             <div className="err-fix err-auth">
@@ -9200,16 +9192,14 @@ export function App() {
               )}
             </div>
           )}
-          {/* 上游厂商暂不可用(upstream_error) → 一键换到可用模型继续(登录→DeepSeek 顶级；游客→另一免登录模型)+自动重发上一句。
+          {/* 上游厂商暂不可用(upstream_error) → 一键换到可用免费模型，并重试上一句。
               这类错误文案不以「出错/Error」开头，走不到下面那条栏，故单列。绝不让用户对着「不可用」干等。 */}
           {!busy && unavailModel && (() => {
             // 兜底模型只从后台下发的「免费池」里按序取第一个可用的，绝不硬编码具体模型名。
             // 曾硬编码 deepseek-v4-flash-free / glm-5.3-flash-free：这俩名字带 free、实际走厂商付费通道，
             // 后台下架(hidden)后老逻辑照推不误，用户点一下就在烧真金。付费模型一律只出现在无为托管里。
-            const fb = mergedPresets
-              .filter((p) => p.hosted)
-              .flatMap((p) => p.models)
-              .find((m) => m !== unavailModel && freeModelIds.has(m) && !(!wuwei && loginReqModelIds.has(m)));
+            const fallback = pickerChoices.find(c => c.free && c.modelId !== unavailModel && (wuwei || !c.needsLogin));
+            const fb = fallback?.modelId;
             if (!fb) return null;
             const fbLabel = MODEL_LABEL_OVERRIDES[fb] || (lang === "en" ? modelLabelsEn.get(fb) : undefined) || modelLabels.get(fb) || fb;
             return (
@@ -9217,13 +9207,21 @@ export function App() {
                 <span>{lang === "en" ? "This model is temporarily unavailable." : "当前模型暂时不可用。"}</span>
                 <button
                   className="primary"
-                  onClick={() => {
-                    const lastUser = [...items].reverse().find((it) => it.type === "user") as { text?: string } | undefined;
-                    const text = lastUser?.text || "";
-                    void quickModel(fb);
-                    setUnavailModel(null);
-                    void window.wuwei.undoLast?.();
-                    if (text) setTimeout(() => submit(text), 160);
+                  onClick={async () => {
+                    if (!fallback) return;
+                    const sid = currentIdRef.current;
+                    const userId = wuweiRef.current?.user.id ?? null;
+                    const lastUser = [...items].reverse().find(it => it.type === 'user') as { text?: string; images?: string[] } | undefined;
+                    try {
+                      if (!await selectModelChoice(fallback)) return;
+                      if (sid !== currentIdRef.current || userId !== (wuweiRef.current?.user.id ?? null)) return;
+                      setUnavailModel(null);
+                      await window.wuwei.undoLast?.();
+                      if (lastUser?.text && sid === currentIdRef.current) {
+                        setPendingImages(lastUser.images || []);
+                        setModelRetry({ sid, userId, key: fallback.key, text: lastUser.text, images: lastUser.images || [] });
+                      }
+                    } catch { push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please retry.' : '切换模型失败，请重试。' }); }
                   }}
                 >
                   {lang === "en" ? `Switch to ${fbLabel} and retry` : `换用 ${fbLabel} 继续`}
@@ -10123,8 +10121,23 @@ export function App() {
       {showSettings && (
         <SettingsModal
           onClose={() => setShowSettings(false)}
+          userId={wuwei?.user.id}
+          onHostedModels={providerId => {
+            setShowSettings(false);
+            setModelPickerCategory(pickerChoices.find(c => c.providerId === providerId)?.category ?? 'economy');
+            setShowModelMenu(false); setShowProviderMenu(true);
+          }}
+          catalog={catalog}
           liveModels={liveModels}
           initialTab={settingsTab}
+          executionMode={modeOf(currentId)}
+          onExecutionMode={(mode) => {
+            modeRef.current = sessionModesAfterSettingsChange(currentId, mode, sessions.map((session) => session.id), modeRef.current, defaultModeRef.current);
+            defaultModeRef.current = mode;
+            setDefaultMode(mode);
+            localStorage.setItem(DEFAULT_MODE_KEY, mode);
+            setMode(currentId, mode);
+          }}
           groupMode={groupMode}
           onGroupMode={changeGroupMode}
           streamMode={streamMode}
@@ -10276,13 +10289,8 @@ export function App() {
             // 继续免费体验：显式切到免登录免费模型(wuwei-free + glm-4.7-flash，唯一 anon 免登录)，
             // 保证关卡片后用户落在能直接用的免费模型上，而不是停在刚点的需登录模型上。
             setShowLoginIntro(false); setLoginIntroReason(null);
-            const freeP = PRESETS.find((x) => x.id === "wuwei-free");
-            if (freeP) {
-              const r = await window.wuwei.getSettings();
-              const cur = r?.settings || {};
-              window.wuwei.setSettings({ ...cur, kind: freeP.kind, providerId: freeP.id, baseUrl: freeP.baseUrl, apiKey: undefined, oauthToken: undefined, model: "glm-4.7-flash" });
-              setCurProviderId(freeP.id);
-            }
+            const choice = anonymousDefaultModel(pickerChoicesRef.current);
+            if (choice) await selectModelChoice(choice);
           }}
           onLogin={() => {
             setShowLoginIntro(false);
@@ -10378,33 +10386,20 @@ export function App() {
           />
         );
       })()}
-      {/* 免费模型当天次数用完(已登录)：弹窗引导——明天继续 / 一键切到对应托管付费模型。无为币再用完才走升级窗 */}
-      {freeCapModal && (() => {
-        const en = lang === "en";
-        const bal = freeCapModal.balance;
-        return (
-          <>
-            <div className="mq-overlay" style={{ zIndex: 200 }} onClick={() => setFreeCapModal(null)} />
-            <div className="freecap-modal">
-              <button className="freecap-x" title={en ? "Close" : "关闭"} onClick={() => setFreeCapModal(null)}>×</button>
-              <div className="freecap-title">{en ? "Today's free quota is used up" : "今天的免费次数用完啦"}</div>
-              <div className="freecap-sub">
-                {en
-                  ? `Your free quota resets tomorrow, so you can keep using it free then. In a hurry? Switch to a Wuwei-hosted model — billed by token from your credits. You still have ${bal} credits and can use it right away.`
-                  : `明天免费额度会重置，可以继续免费使用哦～ 如果着急使用，可以切换到无为托管模型，按 token 计费扣无为币，你当前还有 ${bal} 无为币，可以直接使用哦。`}
-              </div>
-              <div className="freecap-actions">
-                {/* 只开「无为托管」平台入口让用户自己挑，不再一键把人推到某个具体付费模型上：
-                    付费模型一律只在无为托管里，免费场景不替用户做付费决定(曾默认推 DeepSeek V4 Flash)。 */}
-                <button className="freecap-primary" onClick={() => { setShowProviderMenu(true); setFreeCapModal(null); }}>
-                  {en ? "Switch to a Wuwei-hosted model" : "换个无为托管模型继续用"}
-                </button>
-                <button className="freecap-ghost" onClick={() => setFreeCapModal(null)}>{en ? "Maybe tomorrow" : "明天再说"}</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
+      {freeCapModal && <FreeQuotaGuide
+        lang={lang}
+        balance={freeCapModal.balance}
+        hasMemberQuota={!!freeCapModal.hasMemberQuota}
+        recommendations={pickerChoices.filter((choice) => choice.category === 'economy' && choice.recommended).slice(0, 3).map((choice) => lang === 'en' ? choice.labelEn : choice.label)}
+        onClose={() => { usageLimitRequestRef.current = null; setFreeCapModal(null); }}
+        onChoose={() => {
+          usageLimitRequestRef.current = null;
+          setFreeCapModal(null); setModelPickerCategory('economy');
+          setShowModelMenu(false); setShowProviderMenu(true);
+          void refreshCatalog();
+          void window.wuwei.track?.('free_cap_choose_value_models', { model: freeCapModal.model, balance: freeCapModal.balance });
+        }}
+      />}
       {/* 高价模型烧周额度过快：建议一键切到更省的 DeepSeek V4 Flash / GLM-5.3 Flash；点「继续用」则不再打扰这档 */}
       {quotaWarn && (() => {
         const en = lang === "en";
@@ -10607,7 +10602,9 @@ export function App() {
       {editEmp && (
         <EmployeeEditModal
           en={lang === "en"}
-          providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[] }))}
+          providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
+          loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+          onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
           employee={editEmp}
           onClose={() => setEditEmp(null)}
         />
@@ -10796,6 +10793,7 @@ export function App() {
           redlineHit={redlineHit}
           judging={judging}
           onAuto={() => {
+            if (modeOf(currentId) !== "cont") return;
             // 倒计时到点：按总目标替你选(不勾具体项，让 AI 挑最合理的继续)
             window.wuwei.answerAsk(a.id, {
               list: (a.questions || []).map(() => ({ selected: [], text: lang === "en" ? "You decide based on the overall goal — pick the most reasonable option and keep going." : "这个你按总目标自己定，挑最合理的选项继续。" })),
@@ -10901,7 +10899,7 @@ function liveStatus(items: Item[], chars: number, elapsed: number): string {
   if (running.length > 1) return en ? `Running ${running.length} operations in parallel` : `正在并行执行 ${running.length} 个操作`;
   // 前缀「正在」占了 2 个字，标签本身再收紧一点，别顶到右侧的耗时/token
   if (running.length === 1) return (en ? "" : "正在") + oneLineLabel(toolMetaRaw(running[0]).label, 48);
-  if (chars === 0) return en ? (elapsed > 20 ? "Thinking deeply" : "Thinking") : (elapsed > 20 ? "深度思考中" : "思考中");
+  if (chars === 0) return en ? (elapsed > 20 ? "Still waiting for the model" : "Waiting for model response") : (elapsed > 20 ? "仍在等待模型响应" : "等待模型响应");
   return en ? "Generating reply" : "生成回复";
 }
 
@@ -12662,7 +12660,7 @@ const PRESETS: Preset[] = [
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
-    models: ["glm-4.7-flash", "glm-4-flash", "glm-z1-flash", "glm-4v-flash"],
+    models: ["openrouter-auto-free", "glm-4.7-flash", "glm-4-flash", "glm-z1-flash", "glm-4v-flash"],
     note: "免费体验：无需登录、无需 Key，直接试用智谱免费大模型（GLM-*-Flash）。每台设备每日有限次数，登录后可解锁更多模型与更高额度。",
     fixedBaseUrl: true,
     hosted: true,
@@ -13039,13 +13037,15 @@ const PRESET_EN: Record<string, { label?: string; note?: string; keyHint?: strin
   grok: { label: "Grok (xAI)", note: "grok-4.x is natively multimodal (text+image); grok-4.3 is the 1M-context flagship" },
   custom: { label: "Local / self-hosted endpoint (vLLM, Ollama, etc.)", keyHint: "Can be left blank locally", note: "Any OpenAI-compatible endpoint — just fill your Base URL + model name" },
 };
-// 英文标签优先级：PRESET_EN 硬编码覆盖(老平台专属文案) > 后台 label_en(catalog，新平台/后台改名) > 中文 label。
-const pLabel = (p: Preset, lang: Lang) => (lang === "en" && (PRESET_EN[p.id]?.label || p.labelEn)) || p.label;
+// Hosted entries use the catalog's primary model name in the selected language.
+const pLabel = (p: Preset, lang: Lang) => p.hosted && p.id !== "wuwei-free"
+  ? (lang === "en" ? p.labelEn || p.models[0] || "Model" : p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")
+  : (lang === "en" && (PRESET_EN[p.id]?.label || p.labelEn)) || p.label;
 const pKeyHint = (p: Preset, lang: Lang) => (lang === "en" && PRESET_EN[p.id]?.keyHint) || p.keyHint;
 const pNote = (p: Preset, lang: Lang) => (lang === "en" ? PRESET_EN[p.id]?.note ?? p.note : p.note);
 
 // 菜单/下拉里的展示顺序(不改 PRESETS 定义本身，PRESETS[0]=codex 仍作默认)
-// 默认平台顺序（无为托管整块置顶；后台 /api/catalog 会下发覆盖此默认序，用户本地拖动的顺序仍最优先）。
+// 后台目录可用时按后台顺序；离线时回退本地排序和此默认顺序。
 // 此常量是离线兜底：拉不到 catalog 时用它排。与后台迁移 ai_provider.sort 保持一致。
 const PROVIDER_ORDER = [
   "wuwei-free",
@@ -13113,16 +13113,19 @@ function mergeCatalogIntoPresets(
       if (labelEnMap) { const enLabel = m.labelEn || m.label_en; if (enLabel) labelEnMap.set(m.id, enLabel); }
     }
     const models = c.models.map((m) => m.id);
+    const primary = c.hosted && c.id !== "wuwei-free" ? c.models[0] : undefined;
+    const modelLabel = primary?.label || c.label;
+    const modelLabelEn = primary ? primary.labelEn || primary.label_en || primary.id : c.labelEn;
     const local = byId.get(c.id);
     if (local) {
       // 已知平台：保留本地元数据，模型用 catalog 覆盖；anon(未登录可见)由后台控制，跟随 catalog。
       // labelEn 跟随 catalog(后台 label_en)，让后台新增/改名的英文标签即时生效。
-      out.push({ ...local, ...(models.length ? { models } : {}), anon: c.anon, labelEn: c.labelEn ?? local.labelEn });
+      out.push({ ...local, ...(models.length ? { models } : {}), anon: c.anon, ...(primary ? { label: modelLabel } : {}), labelEn: modelLabelEn ?? local.labelEn });
     } else {
       out.push({
         id: c.id,
-        label: c.label,
-        labelEn: c.labelEn ?? undefined, // 后台英文名：英文界面下拉直接用，缺省再回退中文
+        label: modelLabel,
+        labelEn: modelLabelEn ?? undefined,
         kind: (c.kind as Kind) || "openai",
         baseUrl: c.baseUrl,
         keyUrl: c.keyUrl,
@@ -13150,21 +13153,9 @@ function arrangePresets(
   order: string[] | undefined,
   hidden: string[] | undefined,
   includeHidden: boolean,
-  defaultOrder?: string[], // 后台 catalog 下发的默认序；缺省用内置 PROVIDER_ORDER。用户 order 永远最优先。
+  defaultOrder?: string[], // 后台目录优先；本地排序只用于自定义平台和离线回退。
 ): Preset[] {
-  const userRank = new Map((order || []).map((id, i) => [id, i]));
-  const defRank = new Map((defaultOrder && defaultOrder.length ? defaultOrder : PROVIDER_ORDER).map((id, i) => [id, i]));
-  const rankOf = (id: string) => {
-    if (userRank.has(id)) return userRank.get(id)!; // 用户排过的：最优先
-    if (defRank.has(id)) return 1000 + defRank.get(id)!; // 内置但用户没排过：接在后面按默认序
-    return 2000; // 都不认识(自定义中转站)：垫底，靠原始序稳定排列
-  };
-  const sorted = [...all].sort((a, b) => {
-    const d = rankOf(a.id) - rankOf(b.id);
-    return d !== 0 ? d : all.indexOf(a) - all.indexOf(b);
-  });
-  const hide = new Set(hidden || []);
-  return includeHidden ? sorted : sorted.filter((p) => !hide.has(p.id));
+  return arrangeProviderEntries(all, order, hidden, includeHidden, PROVIDER_ORDER, defaultOrder);
 }
 
 type ModelCap = { noTools?: boolean; vision?: boolean };
@@ -13849,8 +13840,13 @@ function LockGlyph() {
 }
 function SettingsModal({
   onClose,
+  userId,
+  onHostedModels,
+  catalog,
   liveModels,
   initialTab,
+  executionMode,
+  onExecutionMode,
   groupMode,
   onGroupMode,
   streamMode,
@@ -13874,8 +13870,13 @@ function SettingsModal({
   onTeamEnabled,
 }: {
   onClose: () => void;
+  userId?: string;
+  onHostedModels: (providerId: string) => void;
+  catalog: CatalogProviderDto[] | null;
   liveModels: Record<string, string[]>;
   initialTab?: string;
+  executionMode: ExecutionMode;
+  onExecutionMode: (mode: ExecutionMode) => void;
   groupMode: "manual" | "date" | "project";
   onGroupMode: (m: "manual" | "date" | "project") => void;
   streamMode: "typewriter" | "stream" | "instant";
@@ -13911,13 +13912,14 @@ function SettingsModal({
   // 与模型/凭证的大配置(settings:set)分开落盘、互不覆盖。弹窗每次开都重新挂载,草稿从 props 初始化=最新已存值。
   const [toastAutoDraft, setToastAutoDraft] = useState(askToastAuto);
   const [toastSecDraft, setToastSecDraft] = useState(askToastSec);
-  const [pid, setPid] = useState("codex");
+  const [pid, setPid] = useState("wuwei-free");
   const [model, setModel] = useState(PRESETS[0].models[0]);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [oauthToken, setOauthToken] = useState("");
   const [nickname, setNickname] = useState("");
   const [customModel, setCustomModel] = useState(false);
+  const [modelError, setModelError] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [claudeBusy, setClaudeBusy] = useState(false); // Claude 一键授权进行中
   const [sCodexBusy, setSCodexBusy] = useState(false); // 设置里 Codex 一键授权进行中
@@ -14179,11 +14181,12 @@ function SettingsModal({
   }
   // 内置平台 + 中转站(合并成一份预设列表；下拉与查找都用它)
   const allPresets = applyProviderEdits(
-    [...PRESETS, ...stations.map(stationToPreset)],
+    [...mergeCatalogIntoPresets(PRESETS, catalog, new Set(), pid), ...stations.map(stationToPreset)],
     overrides,
     removed,
   );
-  const orderedPresets = arrangePresets(allPresets, order, hidden, true);
+  const settingsCatalogOrder = catalog?.slice().sort((a, b) => a.sort - b.sort).map(p => p.id);
+  const orderedPresets = arrangePresets(allPresets, order, hidden, true, settingsCatalogOrder);
   const preset = allPresets.find((p) => p.id === pid) ?? PRESETS[0];
   // 模型下拉：预设在前(旗舰置顶)+ 平台实时拉到的新模型(liveModels) + 该平台记住/当前选的模型(自建端点等
   // 没有预设列表时也能在下拉里看到并切换)，去重去空。
@@ -14220,7 +14223,7 @@ function SettingsModal({
     };
     credsRef.current = next;
     setCreds(next);
-    if (model === name) setModel(preset.models[0] || (next[pid].customModels || [])[0] || "");
+    if (model === name) setModel(preset.anon ? 'openrouter-auto-free' : '');
   }
   // 当前「模型」的能力开关(工具调用/看图)：按模型名存 modelCaps[model]，回退旧的平台级(迁移兼容)
   const curCaps: ModelCap =
@@ -14410,7 +14413,7 @@ function SettingsModal({
       const ovr = (s as any).providerOverrides || {};
       setOverrides(ovr);
       overridesRef.current = ovr;
-      const pool = [...PRESETS, ...sts.map(stationToPreset)];
+      const pool = applyProviderEdits([...mergeCatalogIntoPresets(PRESETS, catalog, new Set(), s.providerId), ...sts.map(stationToPreset)], ovr, rmv);
       const p =
         pool.find((x) => x.id === s.providerId) ??
         PRESETS.find((x) => x.kind === s.kind) ??
@@ -14425,7 +14428,7 @@ function SettingsModal({
       const f = slotFields(c, p.id, p);
       setPid(p.id);
       // 当前平台的模型：顶层 s.model(上次生效值) 优先，其次槽记住的，再回退预设默认
-      const curModel = s.model || f.model || p.models[0] || "";
+      const curModel = s.model || f.model || (p.anon ? 'openrouter-auto-free' : '');
       setModel(curModel);
       setApiKey(f.apiKey);
       setBaseUrl(f.baseUrl);
@@ -14475,8 +14478,9 @@ function SettingsModal({
   }, []);
 
   function changePreset(id: string) {
-    const p = [...PRESETS, ...stationsRef.current.map(stationToPreset)].find((x) => x.id === id) ??
+    const p = allPresets.find((x) => x.id === id) ??
       PRESETS[0];
+    if (p.hosted) { onHostedModels(p.id); return; }
     // 先把当前平台的凭证存回它自己的槽，再从「最新」creds(ref)带出目标平台的槽
     // 用 credsRef 而非闭包 creds：否则连续切换会读到过时值→目标 key 显示空→保存把空覆盖回去
     // 展开原槽保留 avatar/webToken 等本页不管的字段(别切平台就抹掉头像/登录态)
@@ -14497,7 +14501,7 @@ function SettingsModal({
     const f = slotFields(merged, id, p);
     setPid(id);
     // 优先用目标平台记住的模型，没有才回退到预设默认(不再无脑重置成默认，切回来模型还在)
-    const targetModel = f.model || p.models[0] || "";
+    const targetModel = f.model || (p.anon ? 'openrouter-auto-free' : '');
     setModel(targetModel);
     setApiKey(f.apiKey);
     setBaseUrl(f.baseUrl);
@@ -14621,6 +14625,11 @@ function SettingsModal({
 
   // 落库(可指定 key/token 覆盖，绕开 setState 异步)；close=false 时保存但不关闭弹窗
   async function persist(opts?: { apiKeyOverride?: string; oauthOverride?: string; close?: boolean }) {
+    if (preset.hosted && (pid !== loadedRef.current.providerId || model !== loadedRef.current.model)) {
+      onHostedModels(pid); return;
+    }
+    if (!model.trim()) { setModelError(lang === 'en' ? 'Choose a model before saving.' : '请先选择模型后再保存。'); return; }
+    setModelError('');
     const apiKind = preset.kind === "anthropic-apikey" || preset.kind === "openai";
     const prevSlot = credsRef.current[pid] || {};
     const slot: CredSlot = {
@@ -14657,6 +14666,10 @@ function SettingsModal({
       kind: preset.kind,
       providerId: pid,
       model: model || undefined,
+      ...(userId && model && (pid !== loadedRef.current.providerId || model !== loadedRef.current.model) ? {
+        modelChoiceExplicit: true,
+        modelPreferences: { ...(loadedRef.current.modelPreferences || {}), [userId]: { providerId: pid, modelId: model } },
+      } : {}),
       apiKey: slot.apiKey, // 顶层=当前生效平台的凭证(loadConfig 用)
       baseUrl: slot.baseUrl,
       oauthToken: slot.oauthToken,
@@ -14818,7 +14831,7 @@ function SettingsModal({
   }
   // 拖拽：把第 from 行插到第 to 行位置，得到新的全量顺序并落库
   function moveProvider(from: number, to: number) {
-    const ids = arrangePresets(allPresets, orderRef.current, hiddenRef.current, true).map((p) => p.id);
+    const ids = arrangePresets(allPresets, orderRef.current, hiddenRef.current, true, settingsCatalogOrder).map((p) => p.id);
     if (from < 0 || from >= ids.length || from === to) return;
     const [m] = ids.splice(from, 1);
     ids.splice(to, 0, m);
@@ -14871,7 +14884,7 @@ function SettingsModal({
           <button type="button" className={"set-tab" + (tab === "remote" ? " on" : "")} onClick={() => setTab("remote")}>
             {lang === "en" ? "Mobile remote" : "手机端远程"}
           </button>
-          <button type="button" className={"set-tab" + (tab === "model" ? " on" : "")} onClick={() => setTab("model")}>
+          <button type="button" data-testid="settings-tab-model" className={"set-tab" + (tab === "model" ? " on" : "")} onClick={() => setTab("model")}>
             {t("set.tab.model")}
           </button>
           <button type="button" className={"set-tab" + (tab === "platforms" ? " on" : "")} onClick={() => setTab("platforms")}>
@@ -15262,25 +15275,33 @@ function SettingsModal({
                 {t("set.d.outputHint")}
               </div>
 
-              {/* 智能继续：连推安全阀 + 自定义红线 */}
-              <div className="app-set-group">{lang === "en" ? "Smart-continue" : "智能继续（连推 / 自主推进）"}</div>
-              <div className="app-set-row" style={{ cursor: "default", marginBottom: "6px" }}>
+              <div className="app-set-group">{lang === "en" ? "Execution" : "运行模式"}</div>
+              <div className="app-set-hint" style={{ marginBottom: "10px" }}>
+                {lang === "en" ? "Both options are off by default. Changes apply to this chat and become the default for new chats." : "两项默认关闭。修改立即应用于当前对话，并作为新建对话的默认设置。"}
+              </div>
+              <label className="app-set-row" style={{ marginBottom: "6px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Show \"Manual\" mode (approve every tool step)" : "显示「手动」模式（每步都确认权限）"}</div>
+                  <div className="app-set-label">{lang === "en" ? "Auto" : "自动"}</div>
                   <div className="app-set-hint">
-                    {lang === "en" ? "Off by default — the bottom bar shows only Auto / Smart-continue. Turn on if you want to approve each tool call." : "默认关——底部只显示 自动 / 连推。想每一步都自己点确认再开。"}
+                    {lang === "en" ? "Approve tool permissions automatically. When off, tool permissions wait for your approval." : "自动放行工具权限；关闭后，需要你确认工具权限。"}
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  className="app-set-toggle"
-                  defaultChecked={localStorage.getItem("wuwei-show-manual") === "1"}
-                  onChange={(e) => {
-                    localStorage.setItem("wuwei-show-manual", e.target.checked ? "1" : "0");
-                    window.dispatchEvent(new CustomEvent("wuwei-show-manual", { detail: e.target.checked }));
-                  }}
-                />
-              </div>
+                <input type="checkbox" className="app-set-toggle" aria-label={lang === "en" ? "Auto" : "自动"}
+                  checked={executionMode !== "manual"}
+                  onChange={(e) => onExecutionMode(e.target.checked ? "auto" : "manual")} />
+              </label>
+              <label className="app-set-row" style={{ marginBottom: "10px" }}>
+                <div className="app-set-text">
+                  <div className="app-set-label">{lang === "en" ? "Smart-continue" : "智能继续"}</div>
+                  <div className="app-set-hint">
+                    {lang === "en" ? "Keep advancing after each turn. Enabling this also enables Auto." : "一轮结束后继续推进任务；开启时同时开启自动。"}
+                  </div>
+                </div>
+                <input type="checkbox" className="app-set-toggle" aria-label={lang === "en" ? "Smart-continue" : "智能继续"}
+                  checked={executionMode === "cont"}
+                  onChange={(e) => onExecutionMode(e.target.checked ? "cont" : "auto")} />
+              </label>
+              {executionMode === "cont" && <>
               <ContSettings lang={lang} />
               <div style={{ height: 8 }} />
               {/* 红线识别方式：智能识别(LLM判是否真危险) / 关键词匹配(选项含词即停) */}
@@ -15311,6 +15332,7 @@ function SettingsModal({
                   : "关键词匹配：选项文字里出现危险词就停（快，但偶尔误伤）。智能识别：让 AI 判断「自主选下去会不会真触发危险动作」（更少误停，每题多一次快速判定）。"}
               </div>
               <StopRulesSettings lang={lang} />
+              </>}
               <div className="app-set-hint" style={{ marginBottom: "16px" }} />
 
               {/* AGI 板块(实验性)：暂时隐藏（false 包裹，保留代码以便日后恢复） */}
@@ -15409,7 +15431,7 @@ function SettingsModal({
             <>
               <label className="field">
                 <span>{t("set.m.platform")}</span>
-                <select value={pid} onChange={(e) => changePreset(e.target.value)}>
+                <select data-testid="settings-provider" value={pid} onChange={(e) => changePreset(e.target.value)}>
                   {orderedPresets.map((p) => (
                     <option key={p.id} value={p.id}>
                       {pLabel(p, lang)}
@@ -15449,9 +15471,10 @@ function SettingsModal({
               <label className="field">
                 <span>{t("set.m.model")}</span>
                 {modelOptions.length > 0 && !customModel ? (
-                  <select
+                  <select data-testid="settings-model"
                     value={model}
                     onChange={(e) => {
+                      if (preset.hosted) { onHostedModels(pid); return; }
                       if (e.target.value === "__custom__") {
                         setCustomModel(true);
                         setModel("");
@@ -15460,6 +15483,7 @@ function SettingsModal({
                       }
                     }}
                   >
+                    {!model && <option value="" disabled>{lang === 'en' ? 'Choose a model' : '请选择模型'}</option>}
                     {modelOptions.map((m) => (
                       <option key={m} value={m}>
                         {m}
@@ -15470,11 +15494,12 @@ function SettingsModal({
                 ) : (
                   <input
                     value={model}
-                    onChange={(e) => setModel(e.target.value)}
+                    onChange={(e) => { if (preset.hosted) { onHostedModels(pid); return; } setModel(e.target.value); }}
                     placeholder={t("set.m.modelPlaceholder")}
                   />
                 )}
               </label>
+              {modelError && <p role="alert" style={{ color: 'var(--spark)' }}>{modelError}</p>}
               {preset.modelLabels?.[model] && <p className="model-sub">{preset.modelLabels[model]}</p>}
 
               {/* 模型列表管理：手动加/删该平台的模型(自定义加的可删，预设自带的不可删) */}
@@ -15486,7 +15511,7 @@ function SettingsModal({
                     const isCustom = (creds[pid]?.customModels || []).includes(m);
                     return (
                       <span key={m} className={"mlm-chip" + (m === model ? " on" : "")}>
-                        <button type="button" className="mlm-pick" title={t("set.m.pickTitle", "选用该模型")} onClick={() => { setModel(m); setCustomModel(false); }}>
+                        <button type="button" className="mlm-pick" title={t("set.m.pickTitle", "选用该模型")} onClick={() => { if (preset.hosted) { onHostedModels(pid); return; } setModel(m); setCustomModel(false); }}>
                           {m}
                         </button>
                         {isCustom && (
@@ -15659,7 +15684,7 @@ function SettingsModal({
                       setSCodexBusy(true);
                       try {
                         const ok = await window.wuwei.codexLogin();
-                        if (ok) onClose();
+                        if (ok) await persist({ close: true });
                         else alert(lang === "zh" ? "Codex 授权未完成（取消/超时/端口 1455 被占）。" : "Codex authorization failed (canceled/timeout/port 1455 busy).");
                       } finally {
                         setSCodexBusy(false);
@@ -17125,7 +17150,7 @@ function SettingsModal({
 
         <div className="btns">
           <button onClick={onClose}>{t("set.cancel")}</button>
-          <button className="allow" onClick={() => save()}>
+          <button data-testid="settings-save" className="allow" onClick={() => save()}>
             {tab === "model" ? t("set.save") : t("set.saveOnly")}
           </button>
         </div>

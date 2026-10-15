@@ -85,7 +85,8 @@ export function loadConfig(): Config {
   const oauthToken = pick("MINICC_OAUTH_TOKEN");
   const explicit = pick("MINICC_PROVIDER");
 
-  // 后端推断优先级：显式 > 本地端点 > 有 Claude 凭证 > 有 Codex 登录 > 默认 anthropic
+  // Backend inference never silently chooses a paid Claude model. Explicit
+  // Anthropic integrations must specify the model they intend to use.
   const hasClaudeCred = !!pick("ANTHROPIC_API_KEY") || !!oauthToken;
   const hasCodexAuth = existsSync(`${homedir()}/.codex/auth.json`);
   const provider: Config["provider"] =
@@ -107,10 +108,11 @@ export function loadConfig(): Config {
   const model =
     pick("MINICC_MODEL") ||
     (provider === "anthropic"
-      ? "claude-sonnet-5"
+      ? ""
       : provider === "codex"
-        ? "gpt-5.5"
+        ? ""
         : "qwen3-coder");
+  if (!model) throw new Error(`Select a model explicitly for the ${provider === 'codex' ? 'Codex' : 'Anthropic'} backend (MINICC_MODEL); no premium model is selected automatically.`);
 
   const apiKey =
     provider === "anthropic" ? pick("ANTHROPIC_API_KEY") : pick("MINICC_API_KEY", "not-needed");

@@ -7,7 +7,8 @@ test('employee PowerShell permissions advance in automatic and smart-continue mo
   for (const mode of ['auto', 'cont']) {
     assert.equal(shouldAutoApproveToolPermission(permission('employee-origin'), { 'employee-origin': mode }, new Set()), true);
   }
-  assert.equal(shouldAutoApproveToolPermission(permission('room-origin'), {}, new Set()), true);
+  assert.equal(shouldAutoApproveToolPermission(permission('room-origin'), {}, new Set()), false);
+  assert.equal(shouldAutoApproveToolPermission(permission('room-origin'), {}, new Set(), 'auto'), true);
 });
 test('manual origin remains manual even while another automatic conversation is selected', () => {
   const modes = { 'employee-origin': 'manual', 'selected-tab': 'auto' };

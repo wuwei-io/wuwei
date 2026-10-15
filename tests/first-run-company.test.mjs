@@ -10,6 +10,7 @@ test('new profile starts with free chat and company enabled; initialization runs
  const file=join(root,'config.json');assert.equal(initializeFirstRunSettings(file),true);
  const saved=readFileSync(file,'utf8'),settings=JSON.parse(saved);
  assert.equal(settings.providerId,'wuwei-free');assert.equal(settings.kind,'openai');
+  assert.equal(settings.model,'openrouter-auto-free');assert.equal(settings.modelChoiceExplicit,false);
  assert.equal(teamEnabled(settings),true);assert.equal(initializeFirstRunSettings(file),false);
  assert.equal(readFileSync(file,'utf8'),saved);
 });
