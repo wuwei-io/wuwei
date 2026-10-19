@@ -69,5 +69,19 @@
       "path": "tsconfig.desktop.json",
       "sha256": "ce2e9e7f0a64a42abe7732e43974ee22f35b03430b09a82b363fc5147f97ac6f"
     }
-  ]
+  ],
+  "gitIntegration": {
+    "base": "7d22596b4bc1491eda5f055ac0862c214a8b6dc3",
+    "upstreamCommit": "c378968f44d5b056c5c2d8f4125b7063a9f6b59c",
+    "backupBranch": "backup/pending-client-pre-crypto-20261019",
+    "backupCommit": "ec36503458b9df7eb4bb8d6a84f8821a8543c925",
+    "integrationBranch": "integration/pending-client-20261019",
+    "pushed": false,
+    "published": false,
+    "upstreamCryptoCommit": "9051cc3bcbe738d7a895ff5d0a0cb390b2a97168",
+    "preservedRepairsCommit": "4db084af53046d93280f16d3ac2e6cc742a2ea45",
+    "originalIntegrationContentPreserved": true,
+    "wholeOldBranchMerged": false,
+    "conflicts": false
+  }
 }
