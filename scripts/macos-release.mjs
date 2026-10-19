@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { createPrivateKey, X509Certificate } from 'node:crypto';
+import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -63,7 +63,7 @@ export function prepare(env = process.env, exec = run) {
     const certificatePem = exec('openssl', [...common, '-clcerts', '-nokeys'], { env });
     const privatePem = exec('openssl', [...common, '-nocerts', '-nodes'], { env });
     checkCertificate(certificatePem, privatePem, env.APPLE_TEAM_ID);
-    const additions = { CSC_LINK: certificate, WUWEI_MAC_SIGNING_DIR: directory };
+    const additions = { WUWEI_MAC_SIGNING_DIR: directory };
     let auth;
     if (config.useApi) {
       const key = join(directory, 'AuthKey.p8');
@@ -79,13 +79,31 @@ export function prepare(env = process.env, exec = run) {
       auth = ['--apple-id', env.APPLE_ID, '--password', env.APPLE_APP_SPECIFIC_PASSWORD, '--team-id', env.APPLE_TEAM_ID];
     }
     exec('xcrun', ['notarytool', 'history', ...auth, '--output-format', 'json'], { env });
+    // electron-builder 26.15.3 incorrectly passes the P12 password to
+    // set-key-partition-list instead of its generated keychain password. Import
+    // into our own disposable keychain and use the supported CSC_KEYCHAIN path.
+    const keychain = join(directory, 'signing.keychain-db');
+    const originalKeychains = [...exec('security', ['list-keychains', '-d', 'user']).matchAll(/"([^"]+)"/g)].map(match => match[1]);
+    writeFileSync(join(directory, 'keychains.json'), JSON.stringify(originalKeychains), { mode: 0o600 });
+    const keychainPassword = randomBytes(32).toString('hex');
+    exec('security', ['create-keychain', '-p', keychainPassword, keychain]);
+    exec('security', ['unlock-keychain', '-p', keychainPassword, keychain]);
+    exec('security', ['set-keychain-settings', '-lut', '21600', keychain]);
+    exec('security', ['import', certificate, '-k', keychain, '-P', env.MAC_CSC_KEY_PASSWORD, '-T', '/usr/bin/codesign', '-T', '/usr/bin/productbuild']);
+    exec('security', ['set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', keychainPassword, keychain]);
+    exec('security', ['list-keychains', '-d', 'user', '-s', keychain, ...originalKeychains]);
+    const identities = exec('security', ['find-identity', '-v', '-p', 'codesigning', keychain]);
+    if (!identities.includes('Developer ID Application: ') || !identities.includes(`(${env.APPLE_TEAM_ID})`)) {
+      throw new Error('The imported Developer ID identity is not trusted for code signing');
+    }
+    additions.CSC_KEYCHAIN = keychain;
     for (const [name, value] of Object.entries(additions)) {
       if (/[\r\n]/.test(value)) throw new Error('Invalid runner temporary path');
       appendFileSync(env.GITHUB_ENV, `${name}=${value}\n`);
     }
     console.log('Developer ID certificate and notarization authentication validated');
   } catch (error) {
-    rmSync(directory, { recursive: true, force: true });
+    cleanup({ ...env, WUWEI_MAC_SIGNING_DIR: directory }, exec);
     throw error;
   }
 }
@@ -145,12 +163,19 @@ export function verify(env = process.env, exec = run, project = process.cwd()) {
   }
 }
 
-export function cleanup(env = process.env) {
+export function cleanup(env = process.env, exec = run) {
   if (!env.WUWEI_MAC_SIGNING_DIR) return;
   const directory = resolve(env.WUWEI_MAC_SIGNING_DIR);
   const parent = resolve(env.RUNNER_TEMP || '');
   if (dirname(directory) !== parent || !directory.startsWith(`${parent}${sep}wuwei-macos-signing-`)) {
     throw new Error('Refusing to remove an unexpected signing directory');
+  }
+  const saved = join(directory, 'keychains.json');
+  if (existsSync(saved)) {
+    const originalKeychains = JSON.parse(readFileSync(saved, 'utf8'));
+    exec('security', ['list-keychains', '-d', 'user', '-s', ...originalKeychains]);
+    const keychain = join(directory, 'signing.keychain-db');
+    if (existsSync(keychain)) exec('security', ['delete-keychain', keychain]);
   }
   rmSync(directory, { recursive: true, force: true });
 }

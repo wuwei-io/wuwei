@@ -65,6 +65,8 @@ base64 < "$signing_dir/developer-id.p12" | tr -d '\n' | pbcopy
 
 P12 使用 Apple Keychain 兼容的 3DES / SHA-1 MAC 封装，避免 OpenSSL 3 默认导出格式导致 `SecKeychainItemImport: MAC verification failed`。这只影响私钥容器封装，不改变 Apple 签发证书及应用的代码签名算法。
 
+发布脚本自行创建临时钥匙串，将证书导入并设置非交互签名权限，再通过 `CSC_KEYCHAIN` 交给 electron-builder。钥匙串使用独立随机密码，避免 electron-builder 26.15.3 在 `set-key-partition-list` 中误用 P12 密码造成解锁失败；结束后恢复原钥匙串搜索列表并删除临时钥匙串。P12 包含经 Apple 官方 CA 校验的中间证书。
+
 本证书来自旧版 Developer ID G1 签发链，到期为 `2027-02-01 22:12:15 UTC`，即北京时间 `2027-02-02 06:12:15`。到期前应申请新版 G2 Developer ID Application 证书并更新这两个 Secrets；不要为此撤销仍在使用的证书。G1/G2 到期信息见 [Apple PKI](https://www.apple.com/certificateauthority/)。
 
 可在 GitHub Actions 手动运行 **Verify macOS signing (no release)**：复用正式签名及验收脚本，真实生成两种架构的签名、公证 DMG / ZIP，验证后保留 7 天 Actions 验证产物，不上传更新源或修改已有 Release。正式发版仍使用 `Release` 工作流。
