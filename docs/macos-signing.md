@@ -6,12 +6,12 @@
 
 - 复用手机端 Apple 团队 `R5AM5T3LFU`，不需要再次购买会员。
 - 从现有 Expo 手机端项目找到 App Store Connect 团队 API Key，已在 Mac 上实际调用 `notarytool history` 成功验证公证认证，然后写入桌面仓库的 GitHub Secrets。
-- 可访问的 Mac 钥匙串当前只有 Apple Development 身份。找到的 Sign in with Apple 密钥用于业务登录，不能代替公证密钥。尚未找到可用的 Developer ID Application 证书及私钥。
+- 已收到用户申请的 Developer ID Application 证书，确认属于同一团队且与原私钥匹配。P12 与密码已配置到 GitHub Secrets；已通过 Mac 钥匙串导入和带安全时间戳的实际代码签名测试。Sign in with Apple 业务登录密钥没有用于公证。
 - 已在原 Mac 生成申请所需 RSA 私钥和 CSR，私钥保留在权限受限的 `~/.config/wuwei-secrets/macos-developer-id/developer-id.key`；不要删除它，下载的 `.cer` 必须与该私钥配对。
 - CSR：同目录 `Wuwei-Developer-ID.certSigningRequest`，另有一份公开 CSR 交付给用户。
 - 当前已发布的 1.7.52 保持原产物，本配置用于包含本提交的后续新版本。
 
-## 申请缺少的桌面证书
+## 申请或更新桌面证书
 
 1. 打开 [Apple Certificates](https://developer.apple.com/account/resources/certificates/list)，选择团队 `R5AM5T3LFU`。
 2. 点 `+`，选择 **Developer ID Application**。它用于官网分发的 Mac 应用；不选 Apple Development、Apple Distribution 或 Developer ID Installer。已有开发者会员无需再次缴纳会员费。
@@ -21,14 +21,14 @@
 
 [Apple 的证书申请说明](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)。若改用钥匙串创建 CSR，必须用那份 CSR 对应的私钥导出 P12；不能与本次准备的私钥混用。
 
-## 只剩两个 GitHub Secrets 需要填写
+## GitHub Secrets 与团队变量
 
-仓库入口：[wuwei → Settings → Secrets and variables → Actions](https://github.com/wuwei-io/wuwei/settings/secrets/actions)，点 **New repository secret**。目前公证凭证已配置，无需重新下载或发送 API 私钥。
+仓库入口：[wuwei → Settings → Secrets and variables → Actions](https://github.com/wuwei-io/wuwei/settings/secrets/actions)，点 **New repository secret**。目前下表所有凭证均已配置，无需重新下载或发送私钥。
 
 | 类型 | 名称 | 内容 / 当前状态 |
 | --- | --- | --- |
-| Secret | `MAC_CSC_LINK` | **待填**：包含证书和对应私钥的 `.p12` 文件的 Base64 全文 |
-| Secret | `MAC_CSC_KEY_PASSWORD` | **待填**：导出该 `.p12` 时设置的密码 |
+| Secret | `MAC_CSC_LINK` | **已配置**：包含证书、对应私钥及 Apple 中间证书的 `.p12` 文件的 Base64 全文 |
+| Secret | `MAC_CSC_KEY_PASSWORD` | **已配置**：导出该 `.p12` 时设置的密码 |
 | Secret | `APPLE_API_KEY_P8` | **已配置并验证**：现有 App Store Connect API 私钥 PEM 全文 |
 | Secret | `APPLE_API_KEY_ID` | **已配置**：现有公证 API Key ID |
 | Secret | `APPLE_API_ISSUER` | **已配置**：对应的 Issuer ID |
@@ -41,7 +41,7 @@
 ```sh
 signing_dir="$HOME/.config/wuwei-secrets/macos-developer-id"
 openssl x509 -inform DER -in "$HOME/Downloads/developerID_application.cer" -out "$signing_dir/developer-id.pem"
-openssl pkcs12 -export -inkey "$signing_dir/developer-id.key" -in "$signing_dir/developer-id.pem" -out "$signing_dir/developer-id.p12"
+openssl pkcs12 -export -inkey "$signing_dir/developer-id.key" -in "$signing_dir/developer-id.pem" -out "$signing_dir/developer-id.p12" -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
 base64 < "$signing_dir/developer-id.p12" | tr -d '\n' | pbcopy
 ```
 
@@ -55,8 +55,18 @@ base64 < "$signing_dir/developer-id.p12" | tr -d '\n' | pbcopy
 
 上传前解开两种架构 ZIP，挂载两种 DMG，分别检查应用签名、Team ID、Bundle ID、CPU 架构、Hardened Runtime、时间戳、公证票据和 Gatekeeper 接受结果。任一失败都会阻断该 macOS job 的上传。凭证临时文件会清理；Windows/Linux 原有发布逻辑保留。
 
-本次已完成 Windows / Mac 流程回归和真实公证认证。没有 Developer ID Application 证书之前，无法完成真正的签名打包和 Gatekeeper 成品验收。测试用自签名夹具只验证 P12 解析与失败处理，不代表 Apple 签名成功。
+本次已完成 Windows / Mac 流程回归、真实公证认证、实际证书导入和代码签名。两种完整安装包的公证、票据和 Gatekeeper 成品验收以验证工作流的结果为准。单元测试用自签名夹具仅验证 P12 解析与失败处理，不代表 Apple 签名成功。
 
 不要重用 `v1.7.52` 标签或覆盖该版本已发布的文件。证书补齐后先在 Mac 构建包含本配置的新版本，验证通过再按既有新版本发版流程发布。
+
+## 证书补齐与成品验证（2026-10-20）
+
+已收到用户下载的 Developer ID Application 证书，确认 Team ID `R5AM5T3LFU` 且与原 Mac 私钥匹配，已导出 P12 并配置 `MAC_CSC_LINK`、`MAC_CSC_KEY_PASSWORD`。全部必需的 Secrets 与团队变量现已齐备。上述配置表已同步为当前状态。
+
+P12 使用 Apple Keychain 兼容的 3DES / SHA-1 MAC 封装，避免 OpenSSL 3 默认导出格式导致 `SecKeychainItemImport: MAC verification failed`。这只影响私钥容器封装，不改变 Apple 签发证书及应用的代码签名算法。
+
+本证书来自旧版 Developer ID G1 签发链，到期为 `2027-02-01 22:12:15 UTC`，即北京时间 `2027-02-02 06:12:15`。到期前应申请新版 G2 Developer ID Application 证书并更新这两个 Secrets；不要为此撤销仍在使用的证书。G1/G2 到期信息见 [Apple PKI](https://www.apple.com/certificateauthority/)。
+
+可在 GitHub Actions 手动运行 **Verify macOS signing (no release)**：复用正式签名及验收脚本，真实生成两种架构的签名、公证 DMG / ZIP，验证后保留 7 天 Actions 验证产物，不上传更新源或修改已有 Release。正式发版仍使用 `Release` 工作流。
 
 参考：[Apple Developer ID](https://developer.apple.com/developer-id/)、[electron-builder v26 macOS 配置](https://www.electron.build/v26/docs/mac/)、[GitHub Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)。
