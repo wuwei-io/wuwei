@@ -9,6 +9,12 @@ release-test/
 .DS_Store
 .env
 
+# Apple signing material stays in Keychain/GitHub Secrets, never in source.
+*.p12
+*.p8
+*.key
+credentials.json
+
 # 内部推广/营销资料，不进公开开源仓
 推广文案/
 推广_*

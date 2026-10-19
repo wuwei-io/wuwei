@@ -16,6 +16,8 @@ asarUnpack:
   - "**/node_modules/onnxruntime-node/**"
   - "**/node_modules/@xenova/**"
 mac:
+  hardenedRuntime: true
+  notarize: true # notarytool + automatic stapling; CI rejects missing credentials
   target:
     - target: dmg # 用户下载安装用
       arch: [x64, arm64]
@@ -24,6 +26,7 @@ mac:
   icon: build/icon.png
   category: public.app-category.developer-tools
 dmg:
+  sign: true
   title: "wuwei ${version}"
 linux:
   target:
