@@ -1,7 +1,7 @@
 export type ExecutionMode = 'manual' | 'auto' | 'cont';
 
-// New keys require explicit opt-in; legacy Auto / Smart-continue selections
-// must not silently enable the features after moving them into Settings.
+// Ordinary tools run without repeated approval by default. Smart-continue
+// remains an explicit choice; an explicitly selected manual mode is respected.
 export const DEFAULT_MODE_KEY = 'wuwei-default-execution-mode';
 export const SESSION_MODES_KEY = 'wuwei-execution-modes';
 
@@ -11,7 +11,7 @@ function isMode(value: unknown): value is ExecutionMode {
 
 export function readDefaultExecutionMode(storage: Pick<Storage, 'getItem'>): ExecutionMode {
   const value = storage.getItem(DEFAULT_MODE_KEY);
-  return isMode(value) ? value : 'manual';
+  return value === null ? 'auto' : isMode(value) ? value : 'manual';
 }
 
 export function readSessionExecutionModes(storage: Pick<Storage, 'getItem'>): Record<string, ExecutionMode> {
@@ -27,7 +27,7 @@ export function readSessionExecutionModes(storage: Pick<Storage, 'getItem'>): Re
 export function executionModeFor(
   sid: string,
   modes: Record<string, ExecutionMode>,
-  defaultMode: ExecutionMode = 'manual',
+  defaultMode: ExecutionMode = 'auto',
 ): ExecutionMode {
   return Object.hasOwn(modes, sid) && isMode(modes[sid]) ? modes[sid] : defaultMode;
 }

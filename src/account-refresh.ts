@@ -7,6 +7,7 @@ export function createAccountRefresher<T extends { user: { id: string } }>(
   publish: (value: T) => void,
   status: (value: AccountRefreshState) => void,
   timeoutMs = 15_000,
+  onSessionMissing?: () => void,
 ) {
   let generation = 0;
   let inFlight: Promise<void> | null = null;
@@ -25,6 +26,7 @@ export function createAccountRefresher<T extends { user: { id: string } }>(
       Promise.resolve().then(load).then(resolve, reject);
     }).then(value => {
       if (request !== generation || current()?.user.id !== userId) return;
+      if (!value) { onSessionMissing?.(); throw new Error('Sign-in required'); }
       if (!value || value.user.id !== userId) throw new Error('Account refresh failed');
       publish(value);
       update({ updatedAt: Date.now() });

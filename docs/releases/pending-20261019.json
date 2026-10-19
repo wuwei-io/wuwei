@@ -1,0 +1,73 @@
+{
+  "status": "held_for_remaining_changes",
+  "publicationAllowedThisTurn": false,
+  "currentPublicBaseVersion": "1.7.51",
+  "candidateVersion": "1.7.52",
+  "candidateDirectory": "D:\\Codex\\2026-10-19\\new-chat\\work\\login-client",
+  "paymentFixSource": "D:/Codex/2026-10-12/new-chat-2/work/releases/client",
+  "integratedChanges": [
+    "加密支付按当前订单立即查询，每4秒重试，paid触发到账结果及账号刷新",
+    "网络异常、等待超时和订单失效提示；手动查询复用原订单；关闭或切换网络清理轮询",
+    "登录网络异常保留凭证，真正失效提示重新登录",
+    "普通工具默认自动允许；智能继续保持独立开关"
+  ],
+  "validation": {
+    "relatedTestsPassed": 24,
+    "desktopTypecheckPassed": true,
+    "desktopTypecheckDependencySource": "existing full dependencies in E:/3.git/wuwei; candidate source checked with read-only resolver paths",
+    "desktopProductionBuildPassed": true,
+    "newRealPayments": 0,
+    "publicUpdateManifestChanged": false,
+    "newInstallerBuilt": false,
+    "runningClientReplaced": false
+  },
+  "backendFixes": {
+    "decimalPaymentAndNotificationFixes": "already_deployed_and_verified_in_previous_work"
+  },
+  "files": [
+    {
+      "path": "desktop/renderer/src/App.tsx",
+      "sha256": "40cc69be7089f8bbbafe4c3bb22d3168156fd8160f6bccbddf70a146d70dff49"
+    },
+    {
+      "path": "desktop/renderer/src/execution-mode.ts",
+      "sha256": "a0de82ae4f645136b7de8d7954da12c1709585e1eaa3551782673144230f2ec3"
+    },
+    {
+      "path": "desktop/renderer/src/tool-permission-policy.ts",
+      "sha256": "5e3c9433ff5476251135c337895852ce406a057d51a0e0870cf7d051577e29fe"
+    },
+    {
+      "path": "desktop/main/wuwei-auth.ts",
+      "sha256": "b3420911ad89bb23ef0292d35818460902d7ea5e985064597bc736766fd7a91f"
+    },
+    {
+      "path": "src/wuwei-refresh.ts",
+      "sha256": "f986b2f123d2daeb685e68d58619350449382badf3a1b7190ae4152f30912dfc"
+    },
+    {
+      "path": "src/wuwei-session-state.ts",
+      "sha256": "00cafd49c18185df2744d584ef67daad8b1bd5f6fc3e39e1146861037fc23f27"
+    },
+    {
+      "path": "tests/crypto-payment-polling.test.mjs",
+      "sha256": "9a838fcd2ab4411218ac202fdc363b35003748de4845316ad085d1dd45b6e0d1"
+    },
+    {
+      "path": "tests/execution-mode.test.mjs",
+      "sha256": "f0ae6574c40001289f24695e37ababdbe4614821d9e0f31fbc770ae2e5c6385d"
+    },
+    {
+      "path": "tests/employee-tool-permission.test.mjs",
+      "sha256": "e1bb2998b113ee1b84f99280b65e54babc85e0c4e21242a2e7cffbd7ac14e318"
+    },
+    {
+      "path": "tests/wuwei-session-recovery.test.mjs",
+      "sha256": "cf717d15834f24c2f2ebc466cce438c7f746b8795cf3fa90612513776a133f14"
+    },
+    {
+      "path": "tsconfig.desktop.json",
+      "sha256": "ce2e9e7f0a64a42abe7732e43974ee22f35b03430b09a82b363fc5147f97ac6f"
+    }
+  ]
+}

@@ -2908,6 +2908,7 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
 
 function WuweiLoginModal({
   incentive,
+  sessionExpired,
   lang,
   t,
   onClose,
@@ -2915,6 +2916,7 @@ function WuweiLoginModal({
   onLang,
 }: {
   incentive?: boolean;
+  sessionExpired?: boolean;
   lang: Lang;
   onLang: (l: Lang) => void;
   t: T;
@@ -3126,6 +3128,9 @@ function WuweiLoginModal({
                   : t("login.signin")}
             </div>
           </div>
+          {sessionExpired && <div className="session-expired-notice" role="alert">
+            {zh ? '登录已失效，请重新登录后继续使用。' : 'Your session has expired. Please sign in again to continue.'}
+          </div>}
           {incentive && (
             <div style={{ textAlign: "center", marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 3 }}>
@@ -3355,7 +3360,7 @@ function WuweiLoginModal({
 }
 
 // 加密「应用内收款」面板：直连后端 /v1/payment 拿收款地址+应付数量，自渲染二维码，
-// 绕开 NOWPayments 托管收银台(默认币 unavailable/锁币空白)。到账靠 pollPaymentArrival 轮询。
+// 绕开 NOWPayments 托管收银台(默认币 unavailable/锁币空白)。到账按当前订单号查单确认。
 const CRYPTO_CHAINS: { key: string; label: string; badge?: string }[] = [
   { key: "solana", label: "Solana", badge: "Low fee" },
   { key: "bsc", label: "BNB Chain" },
@@ -3547,7 +3552,7 @@ export function App() {
   }, [lightbox, imgMenu]);
   const [suggestion, setSuggestion] = useState(""); // 输入框幽灵提示：下一步动作建议(Tab 补全)
   const [interruptedSessions, setInterruptedSessions] = useState<{ id: string; title: string }[]>([]); // 上次被强杀、待恢复的任务
-  // 设置里显式开启才自动放行/继续；每个会话仍可单独暂停。
+  // 普通工具默认自动放行；智能继续需要显式开启，每个会话仍可单独暂停。
   const [defaultMode, setDefaultMode] = useState<ExecutionMode>(() => readDefaultExecutionMode(localStorage));
   const defaultModeRef = useRef(defaultMode);
   defaultModeRef.current = defaultMode;
@@ -4058,7 +4063,7 @@ export function App() {
   const [planOpen, setPlanOpen] = useState(false); // ③ 升级套餐弹窗
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
-  // 加密应用内收款面板：{sku, 显示名, 价格文案}。打开即轮询到账(pollPaymentArrival)，成功时置空关闭。
+  // 加密应用内收款面板：{sku, 显示名, 价格文案}。面板按订单号轮询到账，成功时置空关闭。
   const [cryptoPay, setCryptoPay] = useState<{ sku: string; name: string; price: string } | null>(null);
   const [roomSettings, setRoomSettings] = useState<{ id: string } | null>(null); // 群设置模态(改群名/最多唤醒/协调者)
   const [editEmp, setEditEmp] = useState<any | null>(null); // 右键员工「编辑」→ 在当前界面直接弹编辑框(不跳转到一人公司管理页)
@@ -4148,7 +4153,23 @@ export function App() {
   const accountRefreshRef = useRef<ReturnType<typeof createAccountRefresher<WuweiMe>> | null>(null);
   accountRefreshRef.current ??= createAccountRefresher<WuweiMe>(
     () => window.wuwei.wuweiMe(), () => wuweiRef.current,
-    (me) => setWuwei((current) => current?.user.id === me.user.id ? me : current), setBalanceRefresh);
+    (me) => setWuwei((current) => current?.user.id === me.user.id ? me : current), setBalanceRefresh,
+    15_000, () => handleWuweiSessionExpired());
+  const sessionExpiredPromptRef = useRef(false);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
+  function handleWuweiSessionExpired() {
+    if (sessionExpiredPromptRef.current) return;
+    sessionExpiredPromptRef.current = true;
+    ++connCheckSeqRef.current; // An older successful ping must not restore the green light.
+    accountRefreshRef.current?.cancel();
+    setWuwei(null);
+    setShowAcctMenu(false);
+    setCoinShortage(null); setFreeCapModal(null); setCryptoPay(null);
+    setShowLoginIntro(false);
+    setSessionExpiredNotice(true);
+    setShowLoginForm(true);
+    setConn({ status: 'red', reason: getLang() === 'en' ? 'Your session has expired. Please sign in again.' : '登录已失效，请重新登录。' });
+  }
   useEffect(() => {
     const refresh = accountRefreshRef.current!;
     refresh.reset();
@@ -4442,6 +4463,8 @@ export function App() {
   }
   // 应用内登录框成功回调：更新账号 + 关框 + (若从发送门槛来)续发刚才拦下的消息
   function onWuweiLoggedIn(me: WuweiMe, action?: "login" | "register" | "reset") {
+    sessionExpiredPromptRef.current = false;
+    setSessionExpiredNotice(false);
     setWuwei(me);
     setWuweiReady(true);
     setShowLoginForm(false);
@@ -5282,6 +5305,9 @@ export function App() {
           // 每会话绑定模型:切会话后主进程按会话切了平台→同步底栏当前平台(否则平台/模型下拉停在旧的)。
           // 值相同时 React 自动跳过，不会多余重渲染。
           if (payload?.providerId) setCurProviderId(payload.providerId);
+          break;
+        case "evt:wuwei-auth-expired":
+          handleWuweiSessionExpired();
           break;
         case "evt:wuwei-me":
           setWuwei(payload); // 托管平台扣币后主进程推来的最新账号+余额
@@ -10339,6 +10365,7 @@ export function App() {
       {/* 应用内登录框：邮箱/手机号/Google。未登录点发送(loginResume)或点账号登录时弹出 */}
       {showLoginForm && (
         <WuweiLoginModal
+          sessionExpired={sessionExpiredNotice}
           incentive={false} /* 激励已由前置的 LoginIntroModal 展示，登录框保持干净，避免重复。loginResume 仍用于登录后续发消息 */
           lang={lang}
           t={t}
@@ -10501,7 +10528,6 @@ export function App() {
             if (!wuwei?.user.id) { setShowLoginForm(true); return; }
             closeShortage("pay_crypto");
             setCryptoPay({ sku: opt.sku, name: lang === "en" ? opt.nameEn : opt.name, price: money(lang === "en", opt.price, opt.priceUsd) });
-            pollPaymentArrival(opt.sku); // 后台轮询到账→弹成功并关面板
           }}
           onContact={() => { closeShortage("contact"); setShowSupportChat(true); }}
           onFaq={() => { void window.wuwei.track?.("credits_shortage_action", { action: "faq" }); setPayFaqOpen(true); }}
@@ -15331,7 +15357,7 @@ function SettingsModal({
 
               <div className="app-set-group">{lang === "en" ? "Execution" : "运行模式"}</div>
               <div className="app-set-hint" style={{ marginBottom: "10px" }}>
-                {lang === "en" ? "Both options are off by default. Changes apply to this chat and become the default for new chats." : "两项默认关闭。修改立即应用于当前对话，并作为新建对话的默认设置。"}
+                {lang === "en" ? "Ordinary tools are allowed automatically by default. Smart-continue is off by default. Changes apply to this chat and become the default for new chats." : "普通工具默认自动允许，智能继续默认关闭。修改立即应用于当前对话，并作为新建对话的默认设置。"}
               </div>
               <label className="app-set-row" style={{ marginBottom: "6px" }}>
                 <div className="app-set-text">

@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { createAccountRefresher } from '../src/account-refresh.ts';
 const account=(id,balance)=>({user:{id},coin:{balance}});
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return{promise,resolve,reject}};
+
+test('missing credentials request sign-in, but temporary failures retain account without a prompt',async()=>{
+ for(const missing of [true,false]){
+  let value=account('a',10),prompts=0;
+  const refresh=createAccountRefresher(async()=>{if(missing)return null;throw Error('temporary network failure');},()=>value,v=>{value=v},()=>{},15000,()=>{prompts++;value=null;});
+  await refresh.refresh();assert.equal(prompts,missing?1:0);assert.equal(value?.coin.balance,missing?undefined:10);
+ }
+});
 test('closing/reopening while loading reuses the request and still publishes its result',async()=>{
  const pending=deferred();let value=account('a',555),calls=0;const states=[];
  const refresh=createAccountRefresher(()=>{calls++;return pending.promise},()=>value,v=>{value=v},s=>states.push(s));

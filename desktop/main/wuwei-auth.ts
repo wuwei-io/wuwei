@@ -10,6 +10,7 @@ import { shell, app } from "electron";
 import { randomBytes } from "node:crypto";
 import { log } from "./logger.js";
 import { getDeviceId } from "../../src/device-id.js";
+import { refreshHostedSession } from "../../src/wuwei-refresh.js";
 
 const SITE = process.env.WUWEI_SITE_URL ?? "https://wuweiai.io";
 
@@ -342,30 +343,9 @@ export async function reportExternalUsage(
   }
 }
 
-/** token 静默续期：走官网 /api/refresh。成功返回新会话，失败返回 null（需重新登录）。 */
+/** null 仅表示凭证确认失效；网络/服务错误抛出，调用方保留凭证。 */
 export async function wuweiRefresh(refreshToken: string): Promise<WuweiSession | null> {
-  if (!refreshToken) return null;
-  try {
-    const res = await fetch(`${SITE}/api/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) return null;
-    const j = (await res.json()) as {
-      access_token: string;
-      refresh_token: string;
-      expires_at: number | null;
-    };
-    return {
-      accessToken: j.access_token,
-      refreshToken: j.refresh_token,
-      expiresAt: (j.expires_at || 0) * 1000,
-    };
-  } catch (e) {
-    log("wuweiAuth", "refresh 异常", String(e));
-    return null;
-  }
+  return refreshHostedSession(SITE, refreshToken);
 }
 
 // —— 应用内登录（邮箱密码 / 手机验证码），不跳浏览器。后端契约见下，需 wuwei-site 实现 ——

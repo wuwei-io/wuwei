@@ -42,13 +42,15 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
     case 'bootstrap': return { currentId: 'qa-session', sessions: [{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }], groups: [], messages: clone(s.historyMessages) };
     case 'newSession': emit(s, 'evt:session-loaded', { id: 'qa-new-session', messages: [] }); return true;
-    case 'wuweiMe': { const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
+    case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(catalog);
     case 'imageCatalog': return clone(s.imageCatalog || []);
     case 'getModelPricing': return { providers: [] };
     case 'fetchModels': return [];
     case 'getAppVersion': return '1.7.49';
     case 'getEdition': return 'test';
+    case 'respondPermission': s.permissionReplies.push(clone(args)); return true;
+    case 'respondDecision': s.decisionReplies.push(clone(args)); return true;
     case 'checkConn': return { status: 'green', reason: 'Isolated stub' };
     case 'getAnnouncement': return { active: false, version: '' };
     case 'getMessages': return { messages: [], unread: 0 };
@@ -84,10 +86,10 @@ async function boot(options = {}) {
     if (!allow) blocked.push(details.url.split('?')[0]);
     callback({ cancel: !allow });
   });
-  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
+  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, offscreen: !!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
   // Existing flow fixtures represent a chat whose model has already been chosen.
   // Empty-chat/default tests explicitly supply historyMessages: [].
-  const state = { win, account: account(), settings: settings(), historyMessages: [{ role: 'user', content: [{ type: 'text', text: '已有对话，沿用明确选择的模型' }] }], calls: [], modelWrites: [], sent: [], orders: 0, orderSkus: [], defaults: new Set(), errors: [], messages: [], blocked, ...options };
+  const state = { win, account: account(), settings: settings(), historyMessages: [{ role: 'user', content: [{ type: 'text', text: '已有对话，沿用明确选择的模型' }] }], calls: [], modelWrites: [], sent: [], orders: 0, orderSkus: [], permissionReplies: [], decisionReplies: [], defaults: new Set(), errors: [], messages: [], blocked, ...options };
   states.set(win.webContents.id, state);
   win.webContents.on('console-message', event => { state.messages.push(event.message.slice(0, 500)); if (['error', 'warning'].includes(event.level) && !/ERR_BLOCKED_BY_CLIENT|favicon/.test(event.message)) state.errors.push(event.message.slice(0, 1000)); });
   const js = async code => { try { return await win.webContents.executeJavaScript(code, true); } catch (error) { throw Error(error.message + ' | expression=' + code.slice(0, 300) + ' | renderer=' + state.errors.join(';') + ' | defaults=' + [...state.defaults].join(',')); } };
@@ -102,12 +104,52 @@ async function boot(options = {}) {
   return { state, js, wait, click, fill, send, close: () => { states.delete(win.webContents.id); win.destroy(); } };
 }
 async function run(name, options, test) {
+  if (process.env.WUWEI_QA_FILTER && !name.includes(process.env.WUWEI_QA_FILTER)) return;
   let fixture;
   try { fixture = await boot(options); await test(fixture); const fatal = fixture.state.errors.filter(e => /renderer-fatal|Uncaught|Unhandled/.test(e)); assert.deepEqual(fatal, []); results.push({ name, passed: true, mockedOrders: fixture.state.orders, blockedExternalRequests: fixture.state.blocked.length }); console.log('PASS ' + name); }
   catch (error) { results.push({ name, passed: false, error: error.message, messages: fixture?.state.messages.slice(-15), calls: fixture?.state.calls.slice(-15) }); console.log('FAIL ' + name + ': ' + error.message); if (fixture) fs.writeFileSync(path.join(evidence, 'failure-' + results.length + '.png'), (await fixture.state.win.webContents.capturePage()).toPNG()); }
   finally { fixture?.close(); }
 }
 app.whenReady().then(async () => {
+  await run('工具权限：默认自动允许 bash，跨会话也不弹窗',{},async f=>{
+    for(const sid of ['qa-session','qa-background-session']) emit(f.state,'evt:permission-request',{id:sid==='qa-session'?901:902,name:'bash',input:{command:'echo isolated-fixture'},sid});
+    await delay(150);
+    assert.deepEqual(f.state.permissionReplies,[[901,'allow'],[902,'allow']]);
+    assert.equal(await f.js('!!document.querySelector(".perm-overlay,.perm-card")'),false);
+    assert.equal(f.state.sent.length,0);
+  });
+  await run('工具权限：新版普通工具确认自动放行',{},async f=>{
+    emit(f.state,'evt:decision-request',{permId:'qa-local-tool',risk:'high',title:'允许执行 powershell？',question:'fixture',options:[{label:'允许',value:'allow'}],toolPermission:{name:'powershell',sid:'qa-session'}});
+    await delay(150);assert.deepEqual(f.state.decisionReplies,[['qa-local-tool',{action:'allow'}]]);
+    assert.equal(await f.js('!!document.querySelector(".tool-decision-mask")'),false);
+    assert.equal(f.state.sent.length,0);
+  });
+  await run('登录恢复：失效事件清理旧账号并只弹出一次登录框',{},async f=>{
+    f.state.account=null;
+    emit(f.state,'evt:wuwei-auth-expired');
+    await f.wait('!!document.querySelector(".session-expired-notice") && !!document.querySelector("input[type=password]")');
+    assert.equal(await f.js('document.querySelector(".session-expired-notice").textContent.includes("登录已失效")'),true);
+    await delay(180); // Let Chromium paint the newly mounted modal before capture.
+    fs.writeFileSync(path.join(evidence,'session-expired-login-final.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await f.js(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='×'&&b.closest('div')?.querySelector('input[type=password]'))?.click()`);
+    await f.wait('!document.querySelector("input[type=password]")');
+    emit(f.state,'evt:wuwei-auth-expired');await delay(150);
+    assert.equal(await f.js('!!document.querySelector("input[type=password]")'),false);
+  });
+  await run('登录恢复：余额刷新遇到网络错误保留账号且不弹登录框',{},async f=>{
+    f.state.meError='temporary network failure';
+    await f.js(`[...document.querySelectorAll('button')].find(b=>b.className.includes('acct')&&!b.className.includes('refresh'))?.click()`);
+    await f.wait('!!document.querySelector(".acct-balance-refresh-error")');
+    assert.equal(await f.js('!!document.querySelector("input[type=password]")'),false);
+    assert.equal(await f.js('document.body.textContent.includes("QA 隔离用户")'),true);
+    f.state.meError=null;await f.click('.acct-balance-refresh');await f.wait('!document.querySelector(".acct-balance-refresh-error")');
+  });
+  await run('登录恢复：旧界面缓存仍显示账号但凭证已丢失时要求重登',{},async f=>{
+    f.state.account=null;
+    await f.js(`[...document.querySelectorAll('button')].find(b=>b.className.includes('acct')&&!b.className.includes('refresh'))?.click()`);
+    await f.wait('!!document.querySelector(".session-expired-notice") && !!document.querySelector("input[type=password]")');
+    assert.equal(f.state.orders,0);
+  });
   for(const loggedIn of [true,false]) await run('点击免费分类默认自动挑选，仍可手选其他模型，登录='+loggedIn,{account:loggedIn?account():null,settings:settings('wuwei-free','glm-4.7-flash')},async f=>{
     await f.click('.mq-select'); assert.equal(f.state.settings.model,'glm-4.7-flash');
     await f.click('.model-picker nav button:nth-child(1)'); await f.wait('!!document.querySelector(`[data-model-key="wuwei-free/openrouter-auto-free"].on:not(:disabled)`)');

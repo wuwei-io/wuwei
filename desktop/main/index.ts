@@ -159,6 +159,7 @@ import {
   type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
+import { createHostedSessionState } from "../../src/wuwei-session-state.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
 import { notifyRemote } from './remote-notify.js';
 import { runRemoteSessionTurn, waitForRemoteResult } from './remote-sessions.js';
@@ -3741,27 +3742,19 @@ function isAnonProvider(pid?: string): boolean {
 // 过去 injectWuwei / wuwei-me / pay:create / pay:status 各自独立 refresh，一旦并发（如启动拉 me 时点了充值），
 // 第二个用的就是已被轮换作废的旧 refresh_token → 后端 refresh_failed → 误清会话 → 表现为「登录莫名很快就过期」。
 // 这里用「在途 Promise 单飞」让并发只跑一次 refresh，并提前 90s 主动续期，access_token 永不踩着过期线用。
-let refreshInflight: Promise<WuweiSession | null> | null = null;
 // 显式登出标志：用户主动退出后置真，掐断一切后台 me 拉取/推送/续期回写(否则迟到的刷新会把登录态复活，需退两次)。
 // 任何一次成功登录都清零(见各登录 handler)。
-let wuweiLoggedOut = false;
-async function getFreshWuweiSession(): Promise<WuweiSession | null> {
-  if (wuweiLoggedOut) return null; // 已显式登出：一律当未登录，防迟到刷新复活
-  const sess = loadWuweiSession();
-  if (!sess) return null;
-  const BUFFER = 90 * 1000; // 距过期 <90s 就提前续
-  if (!sess.expiresAt || sess.expiresAt - Date.now() > BUFFER) return sess;
-  if (!refreshInflight) {
-    refreshInflight = (async () => {
-      const fresh = await wuweiRefresh(sess.refreshToken);
-      if (!fresh) { clearWuweiSession(); return null; }
-      if (wuweiLoggedOut) return null; // 续期期间用户登出了 → 不回写 session
-      saveWuweiSession(fresh);
-      return fresh;
-    })().finally(() => { refreshInflight = null; });
-  }
-  return refreshInflight;
-}
+const wuweiSessionState = createHostedSessionState({
+  load: loadWuweiSession, save: saveWuweiSession, clear: clearWuweiSession,
+  refresh: wuweiRefresh,
+  onExpired: () => {
+    loginReportedThisProc = false;
+    try { stopRelayClient(); } catch { /* ignore */ }
+    applyProFromMe(null);
+    send("evt:wuwei-auth-expired");
+  },
+});
+const getFreshWuweiSession = (rejectedAccessToken?: string) => wuweiSessionState.get(rejectedAccessToken);
 // 客户端登录埋点上报：登录成功即报；启动/运行期检测到有效会话每进程只报一次(loginReportedThisProc 节流)，
 // 避免 account:wuwei-me 被反复调用(启动拉账号、扣币刷余额)时重复上报把「登录数」灌水。显式登出后重置，重登会再报。
 let loginReportedThisProc = false;
@@ -3787,6 +3780,10 @@ async function ensureHostedProviderReady(targetSid?: string): Promise<void> {
   const effProviderId = meta?.providerId || st.providerId;
   if (!isHostedProvider(effProviderId)) return;
   const sess = await getFreshWuweiSession();
+  if (!sess && !isAnonProvider(effProviderId)) {
+    send("evt:wuwei-auth-expired");
+    throw new Error(tt("登录已失效，请重新登录。", "Your session has expired. Please sign in again."));
+  }
   const key = sess ? sess.accessToken : `anon-${getDeviceId()}`; // 未登录 → 匿名试用 token
   // 目标会话有自己完整身份 → 用它的身份 + 新鲜网关 token 重建「它自己的」provider，绝不动全局/别的会话
   if (targetSid && meta && meta.model && meta.providerId) {
@@ -3834,10 +3831,11 @@ function applyProFromMe(me: WuweiMe | null): void {
   for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格，不冲回"你是无为"
 }
 async function refreshWuweiMe(): Promise<void> {
-  const sess = await getFreshWuweiSession();
+  // Background refresh must not turn a temporary outage into an unhandled rejection.
+  const sess = await getFreshWuweiSession().catch(() => null);
   if (!sess) return;
   const me = await wuweiFetchMe(sess.accessToken);
-  if (me && me !== "unauthorized") {
+  if (me && me !== "unauthorized" && loadWuweiSession()?.accessToken === sess.accessToken) {
     applyProFromMe(me);
     send("evt:wuwei-me", me);
   }
@@ -3947,7 +3945,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
       const rd = lastRoundBySid.get(useId);
       if (rd && (rd.input > 0 || rd.output > 0)) {
         const c = loadConfig();
-        void getFreshWuweiSession().then((sess) =>
+        void getFreshWuweiSession().catch(() => null).then((sess) =>
           reportExternalUsage(
             { kind: stAfter?.kind || c.provider, providerId: stAfter?.providerId, model: c.model, inputTokens: rd.input, outputTokens: rd.output, cacheHitTokens: rd.cacheHit, steps: rd.steps, version: app.getVersion() },
             sess?.accessToken,
@@ -5200,11 +5198,10 @@ ipcMain.handle("account:codex-login", async () => {
 // —— 无为账号登录（B2：登录闭环，独立于 codex/claude 账号态，不动 account.ts）——
 // 登录 → 拿 /api/me(user+coin) → 明文持久化 ~/.wuwei/auth.json（B3 改 safeStorage 加密）。
 ipcMain.handle("account:wuwei-login", async () => {
-  // 之前显式退出过(wuweiLoggedOut) → 强制重新选账号(浏览器先 signOut)，避免复用残留旧会话跳回原账号
-  const sess = await wuweiLogin(wuweiLoggedOut);
+  // 显式退出后强制重新选账号，避免复用浏览器残留的旧会话。
+  const sess = await wuweiLogin(wuweiSessionState.isLoggedOut());
   if (!sess) return null;
-  wuweiLoggedOut = false; // 重新登录 → 解除登出封锁
-  saveWuweiSession(sess);
+  wuweiSessionState.accept(sess);
   try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
   reportLoginOnce();
@@ -5219,8 +5216,7 @@ async function finishWuweiSignin(
   action: "login" | "register" = "login",
 ): Promise<{ me?: unknown; error?: string }> {
   if (typeof r === "string") return { error: r };
-  wuweiLoggedOut = false; // 重新登录 → 解除登出封锁
-  saveWuweiSession(r);
+  wuweiSessionState.accept(r);
   try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
   reportLoginOnce();
@@ -5255,23 +5251,23 @@ ipcMain.handle("account:wuwei-me", async () => {
   let me = await wuweiFetchMe(sess.accessToken);
   if (me === "unauthorized") {
     // 提前续过还被拒(时钟偏差/刚好失效)：再强制续一次
-    const fresh = await wuweiRefresh(sess.refreshToken);
+    const fresh = await getFreshWuweiSession(sess.accessToken);
     if (!fresh) {
-      clearWuweiSession();
       return null;
     }
-    saveWuweiSession(fresh);
     me = await wuweiFetchMe(fresh.accessToken);
   }
-  const meVal = me === "unauthorized" || !me ? null : me;
+  if (!me || me === "unauthorized") {
+    // A failed account read is not proof that the refresh token is invalid.
+    throw new Error(tt("账号暂时无法刷新，请稍后重试。登录凭证已保留。", "Account refresh is temporarily unavailable. Your credentials have been kept; please retry."));
+  }
+  const meVal = me;
   applyProFromMe(meVal); // 同步会员态 → 脑网络可用性
   if (meVal) reportLoginOnce(); // 启动/运行期首次确认有效会话 → 上报一次登录(节流，本进程只报一次)
   return meVal;
 });
 ipcMain.handle("account:wuwei-logout", () => {
-  wuweiLoggedOut = true;      // 掐断后台刷新/推送，防"退一次又自动登回"
-  refreshInflight = null;     // 丢弃进行中的续期(其回写已被 wuweiLoggedOut 拦)
-  clearWuweiSession();
+  wuweiSessionState.logout(); // Invalidate every in-flight refresh before clearing storage.
   try { stopRelayClient(); } catch { /* 登出 → 断开 relay，把这台设备从旧账号名下摘掉 */ }
   loginReportedThisProc = false; // 登出 → 重置节流，下次重登会再上报一次登录
   applyProFromMe(null); // 退出 → 会员态清空 → 脑网络停用
@@ -5565,12 +5561,10 @@ ipcMain.handle("pay:create", async (_e, sku: string, channel: string) => {
   if (!sess) return { error: "not_logged_in" };
   let r = await wuweiPayCreate(sess.accessToken, sku, channel);
   if (r === "unauthorized") {
-    const fresh = await wuweiRefresh(sess.refreshToken);
+    const fresh = await getFreshWuweiSession(sess.accessToken);
     if (!fresh) {
-      clearWuweiSession();
       return { error: "not_logged_in" };
     }
-    saveWuweiSession(fresh);
     r = await wuweiPayCreate(fresh.accessToken, sku, channel);
   }
   return r === "unauthorized" ? { error: "not_logged_in" } : r;
@@ -5581,12 +5575,10 @@ ipcMain.handle("pay:crypto:create", async (_e, sku: string) => {
   if (!sess) return { error: "not_logged_in" };
   let r = await wuweiPayCryptoCreate(sess.accessToken, sku);
   if (r === "unauthorized") {
-    const fresh = await wuweiRefresh(sess.refreshToken);
+    const fresh = await getFreshWuweiSession(sess.accessToken);
     if (!fresh) {
-      clearWuweiSession();
       return { error: "not_logged_in" };
     }
-    saveWuweiSession(fresh);
     r = await wuweiPayCryptoCreate(fresh.accessToken, sku);
   }
   return r === "unauthorized" ? { error: "not_logged_in" } : r;
@@ -5597,12 +5589,10 @@ ipcMain.handle("pay:crypto:payment", async (_e, sku: string, chain: string) => {
   if (!sess) return { error: "not_logged_in" };
   let r = await wuweiPayCryptoPayment(sess.accessToken, sku, chain);
   if (r === "unauthorized") {
-    const fresh = await wuweiRefresh(sess.refreshToken);
+    const fresh = await getFreshWuweiSession(sess.accessToken);
     if (!fresh) {
-      clearWuweiSession();
       return { error: "not_logged_in" };
     }
-    saveWuweiSession(fresh);
     r = await wuweiPayCryptoPayment(fresh.accessToken, sku, chain);
   }
   return r === "unauthorized" ? { error: "not_logged_in" } : r;
@@ -5612,12 +5602,10 @@ ipcMain.handle("pay:status", async (_e, orderId: string) => {
   if (!sess) return null;
   let r = await wuweiPayStatus(sess.accessToken, orderId);
   if (r === "unauthorized") {
-    const fresh = await wuweiRefresh(sess.refreshToken);
+    const fresh = await getFreshWuweiSession(sess.accessToken);
     if (!fresh) {
-      clearWuweiSession();
       return null;
     }
-    saveWuweiSession(fresh);
     r = await wuweiPayStatus(fresh.accessToken, orderId);
   }
   return r === "unauthorized" ? null : r;

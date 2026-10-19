@@ -4,12 +4,12 @@ import { DEFAULT_MODE_KEY, SESSION_MODES_KEY, executionModeFor, readDefaultExecu
 
 const storage = entries => ({ getItem: key => entries[key] ?? null });
 
-test('fresh installs and legacy mode records leave Auto and Smart-continue disabled', () => {
+test('fresh installs allow ordinary tools without enabling smart-continue', () => {
   for (const entries of [{}, { 'wuwei-mode-by-sid': '{"old-chat":"cont"}', 'wuwei-show-manual': '0' }]) {
     const store = storage(entries);
-    assert.equal(readDefaultExecutionMode(store), 'manual');
+    assert.equal(readDefaultExecutionMode(store), 'auto');
     assert.deepEqual(readSessionExecutionModes(store), {});
-    assert.equal(executionModeFor('old-chat', readSessionExecutionModes(store), readDefaultExecutionMode(store)), 'manual');
+    assert.equal(executionModeFor('old-chat', readSessionExecutionModes(store), readDefaultExecutionMode(store)), 'auto');
   }
 });
 
@@ -30,7 +30,7 @@ test('corrupt settings fail closed instead of granting automatic permissions', (
   }
   assert.equal(readDefaultExecutionMode(storage({ [DEFAULT_MODE_KEY]: 'enabled' })), 'manual');
   assert.deepEqual(readSessionExecutionModes(storage({ [SESSION_MODES_KEY]: '{"a":"auto","b":"cont","c":true,"d":"bad"}' })), { a: 'auto', b: 'cont' });
-  assert.equal(executionModeFor('constructor', {}), 'manual');
+  assert.equal(executionModeFor('constructor', {}), 'auto');
 });
 
 test('changing this chat and future defaults leaves other existing chats unchanged', () => {
