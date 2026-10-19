@@ -439,7 +439,7 @@ function friendlyError(raw: string, t: T, freeModel = true): string {
   const r = raw || "";
   // 无为托管网关的业务错误 → 友好文案（优先，避免被下方通用 401/429 规则吃掉）
   if (/insufficient_balance/i.test(r)) return t("err.insufficientBalance", "无为币余额不足：请点账号头像「充值」后，再使用无为托管模型。");
-  if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota", "免费体验次数已用完：登录即可继续使用（注册送 100 无为币）。");
+  if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota", "免费体验次数已用完：登录即可继续使用（注册送 10 无为币，领取后 24 小时有效）。");
   if (/free_trial_disabled/i.test(r)) return t("err.freeDisabled", "免费体验暂未开放：请登录使用，或稍后再试。");
   if (/\bdaily_cap_reached\b/i.test(r) && !freeModel) return t("err.paidDailyCap", "已达今日付费使用上限，请明天再试或调整使用限额。");
   if (/daily_cap_reached/i.test(r)) return t("err.dailyCap", "今日免费额度已用完：明日自动恢复，登录可解锁更高额度。");
@@ -2773,7 +2773,7 @@ const EMAIL_SUFFIXES = [
 const PHONE_LOGIN_ENABLED = false;
 const WECHAT_LOGIN_ENABLED = false;
 
-// 登录激励卡（居中弹窗）：未登录发消息时先弹这张（免费顶级模型 + 注册得 100 无为币），
+// 登录激励卡（居中弹窗）：未登录发消息时先弹这张（更多模型 + 注册赠币 10 无为币（24 小时有效）），
 // 点「登录」再切到真正的登录表单。比一上来就甩登录框更干净、转化更好。
 function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang, showLangSwitch }: { lang: Lang; t: T; onClose: () => void; onLogin: () => void; onKeepFree?: () => void; reason?: string | null; onLang?: (l: Lang) => void; showLangSwitch?: boolean }) {
   const zh = lang === "zh";
@@ -2884,7 +2884,10 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
             }}
           >
             <CoinIcon size={12} />
-            {zh ? "新用户送 100 无为币" : "100 free credits"}
+            {t("login.signupGift")}
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4, marginTop: -10, marginBottom: 12 }}>
+            {t("login.signupGiftExpiry")}
           </div>
           <button
             onClick={onLogin}
@@ -3137,6 +3140,7 @@ function WuweiLoginModal({
                 {t("login.freeModels")}
               </div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{t("login.incentive")}</div>
+              <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 }}>{t("login.signupGiftExpiry")}</div>
             </div>
           )}
           {/* 邮箱/手机 切换：仅中文版有手机号（后端未接通时整块隐藏） */}
@@ -6254,7 +6258,7 @@ export function App() {
       setInput("");
       return;
     }
-    // 未登录发任何消息 → 先弹居中的登录激励卡(免费顶级模型 + 注册得 100 无为币)，
+    // 未登录发任何消息 → 先弹居中的登录激励卡(更多模型 + 注册赠币 10 无为币（24 小时有效）)，
     // 用户点「登录」再切到登录表单，比一上来就甩登录框干净、转化更好。
     // 例外：选中的是 anon(免登录免费体验)平台 → 直接放行，让未登录用户零摩擦试用。
     // 双保险：未登录且当前非 anon 平台时，若存在 anon 免费体验平台，自动切过去(quickProvider 写 settings)
@@ -8278,7 +8282,10 @@ export function App() {
                           }}
                         >
                           <CoinIcon size={12} />
-                          {lang === "zh" ? "新用户送 100 无为币" : "100 free credits"}
+                          {t("login.signupGift")}
+                        </div>
+                        <div style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4, marginTop: -10, marginBottom: 12 }}>
+                          {t("login.signupGiftExpiry")}
                         </div>
                         <button
                           onClick={() => {

@@ -60,6 +60,10 @@ jobs:
           npm run typecheck
           node scripts/test-release.mjs
 
+      - name: Repair electron-builder temporary keychain password
+        if: matrix.os == 'macos-latest'
+        run: node scripts/fix-macos-keychain.mjs
+
       - name: Build renderer/main
         run: npm run desktop:build
 

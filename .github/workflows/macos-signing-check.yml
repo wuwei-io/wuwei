@@ -33,6 +33,9 @@ jobs:
           npm run typecheck
           node scripts/test-release.mjs
           npm run desktop:build
+      - name: Repair electron-builder temporary keychain password
+        run: node scripts/fix-macos-keychain.mjs
+
       - name: Sign and notarize Intel and Apple Silicon packages
         run: npx electron-builder --mac --config electron-builder.wuwei.yml --publish never -c.forceCodeSigning=true
         env:
