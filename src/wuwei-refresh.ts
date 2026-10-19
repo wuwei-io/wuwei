@@ -27,10 +27,12 @@ export async function refreshHostedSession(
       body: JSON.stringify({ refresh_token: refreshToken }),
       signal: AbortSignal.timeout(12_000),
     });
-    const body = await response.json().catch(() => null);
+    const payload: unknown = await response.json().catch(() => null);
+    const body = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown> : null;
     if (!response.ok) {
       if ((response.status === 400 || response.status === 401 || response.status === 403)
-        && body && (body.reauth_required === true || invalidCodes.has(body.error))) return null;
+        && body && (body.reauth_required === true || (typeof body.error === 'string' && invalidCodes.has(body.error)))) return null;
       // Older backends used refresh_failed for both outages and expired tokens.
       // Preserve credentials until the server can identify the failure precisely.
       throw new SessionRefreshUnavailable();

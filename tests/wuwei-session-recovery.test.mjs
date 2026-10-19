@@ -59,3 +59,13 @@ test('missing refresh token needs login, while malformed success must keep the s
   await assert.rejects(refreshHostedSession('https://site.invalid','saved',async()=>Response.json(
     {access_token:'a',refresh_token:'b',expires_at:0})),SessionRefreshUnavailable);
 });
+
+test('non-object refresh payloads preserve saved credentials instead of authenticating or clearing them',async()=>{
+  for(const payload of [false,0,'offline',[],null]){
+    for(const status of [200,401]){
+      const f=fixture(token=>refreshHostedSession('https://site.invalid',token,async()=>Response.json(payload,{status})));
+      await assert.rejects(f.manager.get(),SessionRefreshUnavailable);
+      assert.deepEqual(f.state.session,saved());assert.equal(f.state.clears,0);assert.equal(f.state.prompts,0);
+    }
+  }
+});

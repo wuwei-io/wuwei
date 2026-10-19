@@ -1,9 +1,9 @@
 {
-  "status": "held_for_remaining_changes",
-  "publicationAllowedThisTurn": false,
+  "status": "release_authorized",
+  "publicationAllowedThisTurn": true,
   "currentPublicBaseVersion": "1.7.51",
   "candidateVersion": "1.7.52",
-  "candidateDirectory": "D:\\Codex\\2026-10-19\\new-chat\\work\\login-client",
+  "candidateDirectory": "D:\\Codex\\2026-10-19\\new-chat\\work\\release-1.7.52",
   "paymentFixSource": "D:/Codex/2026-10-12/new-chat-2/work/releases/client",
   "integratedChanges": [
     "加密支付按当前订单立即查询，每4秒重试，paid触发到账结果及账号刷新",
@@ -12,14 +12,16 @@
     "普通工具默认自动允许；智能继续保持独立开关"
   ],
   "validation": {
-    "relatedTestsPassed": 24,
+    "relatedTestsPassed": 263,
     "desktopTypecheckPassed": true,
     "desktopTypecheckDependencySource": "existing full dependencies in E:/3.git/wuwei; candidate source checked with read-only resolver paths",
     "desktopProductionBuildPassed": true,
     "newRealPayments": 0,
     "publicUpdateManifestChanged": false,
     "newInstallerBuilt": false,
-    "runningClientReplaced": false
+    "runningClientReplaced": false,
+    "isolatedRendererChecksPassed": 74,
+    "coreTypecheckPassed": true
   },
   "backendFixes": {
     "decimalPaymentAndNotificationFixes": "already_deployed_and_verified_in_previous_work"
@@ -43,11 +45,11 @@
     },
     {
       "path": "src/wuwei-refresh.ts",
-      "sha256": "f986b2f123d2daeb685e68d58619350449382badf3a1b7190ae4152f30912dfc"
+      "sha256": "49322fd07450811121bcafb07ec16817735a0c6e8337e13e6434afa319d1e85f"
     },
     {
       "path": "src/wuwei-session-state.ts",
-      "sha256": "00cafd49c18185df2744d584ef67daad8b1bd5f6fc3e39e1146861037fc23f27"
+      "sha256": "363ae24048d8582e88e1205bc88e241e1ff8bed7d8811e276e968aba496a591b"
     },
     {
       "path": "tests/crypto-payment-polling.test.mjs",
@@ -63,7 +65,7 @@
     },
     {
       "path": "tests/wuwei-session-recovery.test.mjs",
-      "sha256": "cf717d15834f24c2f2ebc466cce438c7f746b8795cf3fa90612513776a133f14"
+      "sha256": "89f8b456ee2468b8415513501409335f8bb830acc1a8848e405fb967b7f58491"
     },
     {
       "path": "tsconfig.desktop.json",
@@ -83,5 +85,11 @@
     "originalIntegrationContentPreserved": true,
     "wholeOldBranchMerged": false,
     "conflicts": false
+  },
+  "releaseAuthorization": {
+    "date": "2026-10-20",
+    "timezone": "Asia/Shanghai",
+    "request": "我觉得可以先发一版",
+    "version": "1.7.52"
   }
 }
