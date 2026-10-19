@@ -3366,10 +3366,16 @@ const CopyGlyph = () => (
     <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
   </svg>
 );
-function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
+function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onPaid }: {
   en: boolean; sku: string; planName: string; priceLabel: string;
+  onPaid: (balance: number | undefined, orderId: string) => void;
   onClose: () => void; onContact: () => void;
 }) {
+  const paidCallback = useRef(onPaid);
+  paidCallback.current = onPaid;
+  const [orderId, setOrderId] = useState("");
+  const [checkState, setCheckState] = useState<"waiting" | "slow" | "network" | "failed" | "expired">("waiting");
+  const [checkVersion, setCheckVersion] = useState(0);
   const [chain, setChain] = useState("solana");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<"min" | "login" | "fail" | null>(null);
@@ -3379,18 +3385,45 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setErr(null); setPay(null);
+    setLoading(true); setErr(null); setPay(null); setOrderId(""); setCheckState("waiting");
     void window.wuwei.payCryptoPayment(sku, chain).then((r) => {
       if (!alive) return;
       setLoading(false);
-      if (!r || r.error || !r.payAddress) {
+      if (!r || r.error || !r.payAddress || !r.orderId) {
         setErr(r?.error === "below_min" ? "min" : r?.error === "not_logged_in" ? "login" : "fail");
         return;
       }
+      setOrderId(r.orderId);
       setPay({ address: r.payAddress, amount: r.payAmount ?? 0, currency: r.payCurrency ?? "USDT", memo: r.payinExtraId ?? null });
+    }).catch(() => {
+      if (alive) { setLoading(false); setErr("fail"); }
     });
     return () => { alive = false; };
   }, [chain, sku]);
+
+  // 按当前订单查单，不用余额差猜测，避免其它充值/消费引发误报。
+  useEffect(() => {
+    if (!orderId || loading) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const started = Date.now();
+    const check = async () => {
+      const s = await window.wuwei.payStatus(orderId).catch(() => null);
+      if (!alive) return;
+      if (s?.status === "paid") {
+        paidCallback.current(s.balance, orderId);
+        return;
+      }
+      if (s?.status === "failed" || s?.status === "expired") {
+        setCheckState(s.status);
+        return;
+      }
+      setCheckState(!s ? "network" : Date.now() - started >= 5 * 60_000 ? "slow" : "waiting");
+      timer = setTimeout(() => { void check(); }, 4000);
+    };
+    void check();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [orderId, loading, checkVersion]);
 
   const copy = (text: string, which: "addr" | "amt") => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500); }).catch(() => {});
@@ -3432,7 +3465,14 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact }: {
               <span>{pay.address}</span><CopyGlyph />
             </button>
             {pay.memo && <div className="cpay-memo">⚠️ {en ? "Memo/Tag (required): " : "备注/Tag（必填）："}<b>{pay.memo}</b></div>}
-            <div className="cpay-status"><span className="cpay-spin" />{en ? "Waiting for payment — credited automatically after confirmation (~1-2 min). Keep this window open." : "等待付款 — 到账后自动发货（约 1-2 分钟），请保持窗口打开。"}</div>
+            <div className="cpay-status" role="status" aria-live="polite">
+              {checkState === "waiting" && <><span className="cpay-spin" />{en ? "Waiting for payment — checking this order automatically. Do not pay twice." : "等待付款，正在自动检测此订单。已转账请勿重复付款。"}</>}
+              {checkState === "slow" && (en ? "Still waiting for confirmation. Exchange withdrawals may take longer. Do not pay again; contact support if already sent." : "仍在等待到账确认，交易所出币可能较慢。已转账请勿重复付款，可联系客服核查。")}
+              {checkState === "network" && (en ? "Cannot check payment right now. Retrying automatically; this does not mean payment failed. Do not pay again." : "暂时无法查询，正在自动重试；不代表付款失败，请勿重复付款。")}
+              {(checkState === "failed" || checkState === "expired") && (en ? "Order is closed or expired. If you already sent funds, contact support with this order ID. Do not pay again." : "订单已关闭或失效。如果已经转账，请带订单号联系客服，勿重复付款。")}
+            </div>
+            <div className="cpay-sub">{en ? "Order: " : "订单号："}{orderId}</div>
+            <button className="cpay-howto-t" onClick={() => setCheckVersion((v) => v + 1)}>{en ? "I've paid — check again" : "我已付款，重新查询"}</button>
             {copied && <div className="cpay-copied">{copied === "addr" ? (en ? "Address copied ✓" : "地址已复制 ✓") : (en ? "Amount copied ✓" : "金额已复制 ✓")}</div>}
           </>
         )}
@@ -10572,6 +10612,24 @@ export function App() {
           sku={cryptoPay.sku}
           planName={cryptoPay.name}
           priceLabel={cryptoPay.price}
+          onPaid={(balance, orderId) => {
+            const sku = cryptoPay.sku;
+            setCryptoPay(null); setCoinShortage(null); setFreeCapModal(null);
+            if (balance !== undefined) setWuwei((me) => me ? { ...me, coin: { ...me.coin, balance } } : me);
+            const opt = [...buildPackOpts(), ...buildPayOpts(true)].find((o) => o.sku === sku);
+            if (opt?.kind === "pack") {
+              setPayResult({ kind: "coin", added: opt.coins, bonus: 0, balance: balance ?? 0, order: orderId });
+            } else if (opt) {
+              setPayResult({ kind: "pro", planName: lang === "en" ? opt.nameEn : opt.name,
+                expire: fmtDate(opt.kind === "trial" ? new Date(Date.now() + opt.days * 86400_000) : addMonths(new Date(), 1)),
+                giftCoins: opt.coins, signin: opt.signin,
+                perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt), order: orderId });
+            } else {
+              push({ type: "notice", text: lang === "en" ? "Payment received. Your account has been credited." : "付款成功，账户已到账。" });
+            }
+            void window.wuwei.wuweiMe().then((me) => { if (me) setWuwei(me); }).catch(() => {});
+            void runConnCheck();
+          }}
           onClose={() => setCryptoPay(null)}
           onContact={() => { setCryptoPay(null); setShowSupportChat(true); }}
         />
