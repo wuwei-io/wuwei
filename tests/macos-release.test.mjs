@@ -122,12 +122,23 @@ test('native macOS PKCS12 parsing validates identity, private key and exported b
     run('openssl', ['pkcs12', '-export', '-inkey', key, '-in', cert, '-out', p12, '-passout', 'env:MAC_CSC_KEY_PASSWORD'], { env });
     env.MAC_CSC_LINK = readFileSync(p12).toString('base64');
     let authenticated = false;
+    let keychainPassword;
     const exec = (command, args, options) => {
       if (command === 'xcrun') {
         assert.deepEqual(args.slice(0, 2), ['notarytool', 'history']);
         assert.equal(readFileSync(args[3], 'utf8'), pem);
         authenticated = true;
-        return '{}'; // Only the notary service is simulated; no submission is made.
+        return '{}'; // Notary/security commands are simulated; OpenSSL is real.
+      }
+      if (command === 'security') {
+        if (args[0] === 'create-keychain') keychainPassword = args[2];
+        if (args[0] === 'set-key-partition-list') {
+          assert.equal(args[args.indexOf('-k') + 1], keychainPassword);
+          assert.notEqual(keychainPassword, env.MAC_CSC_KEY_PASSWORD);
+        }
+        if (args[0] === 'find-identity') return `Developer ID Application: Test Fixture (${team})`;
+        if (args[0] === 'list-keychains' && !args.includes('-s')) return '"/test/login.keychain-db"';
+        return '';
       }
       return run(command, args, options);
     };
@@ -139,8 +150,10 @@ test('native macOS PKCS12 parsing validates identity, private key and exported b
     assert.equal(readFileSync(exported.APPLE_API_KEY, 'utf8'), pem);
     assert.equal(exported.APPLE_ID, '');
     assert.equal(exported.APPLE_APP_SPECIFIC_PASSWORD, '');
-    assert.equal(readFileSync(exported.CSC_LINK).toString('base64'), env.MAC_CSC_LINK);
-    cleanup({ ...env, ...exported });
+    assert.equal(exported.CSC_LINK, undefined);
+    assert.match(exported.CSC_KEYCHAIN, /signing\.keychain-db$/);
+    assert.equal(readFileSync(join(exported.WUWEI_MAC_SIGNING_DIR, 'developer-id.p12')).toString('base64'), env.MAC_CSC_LINK);
+    cleanup({ ...env, ...exported }, exec);
     assert.throws(() => prepare({ ...env, APPLE_TEAM_ID: 'WRONGTEAM1' }, exec), /does not belong/);
     run('openssl', ['req', '-x509', '-new', '-key', key, '-out', cert, '-days', '1', '-subj', `/CN=Apple Development: Test Fixture/OU=${team}`]);
     run('openssl', ['pkcs12', '-export', '-inkey', key, '-in', cert, '-out', p12, '-passout', 'env:MAC_CSC_KEY_PASSWORD'], { env });
