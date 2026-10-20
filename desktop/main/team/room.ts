@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 // AI 员工团队 · 群（多员工协作）
 //
 // 群独立于普通会话存储：~/.wuwei/team/rooms.json（元信息）+ rooms/<id>.json（消息流）。
@@ -47,7 +48,7 @@ export function saveRoomMessages(roomId: string, msgs: RoomMessage[]) {
 export function createRoom(name: string, members: string[], coordinator?: string): Room {
   const room: Room = {
     id: randomUUID(),
-    name: name || "新群",
+    name: name || tr("ui.app.new.group.f8ac38c"),
     members: [...new Set(members)],
     coordinator: coordinator && members.includes(coordinator) ? coordinator : undefined,
     createdAt: Date.now(),

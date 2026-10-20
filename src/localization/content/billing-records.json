@@ -1,0 +1,7 @@
+[
+  {"text":"免费模型 ","prefix":true,"key":"billing.record.freeModel"},
+  {"text":"无为托管模型调用","prefix":false,"key":"billing.record.hostedModel"},
+  {"text":"每日签到","prefix":false,"key":"billing.record.checkin"},
+  {"text":"注册赠送","prefix":false,"key":"billing.record.signup"},
+  {"text":"积分过期","prefix":false,"key":"billing.record.expired"}
+]

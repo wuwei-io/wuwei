@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 // 应用版本(edition) 解析 —— 必须在任何读数据目录的模块(sessions/settings/brain/…)之前 import，
 // 因为 ESM 按 import 顺序初始化模块：本模块顶层副作用会先把 WUWEI_DATA_DIR_NAME / WUWEI_EDITION 写进
 // process.env，之后那些模块顶层 `const DIR = homedir()/(env||".wuwei")` 求值时才能拿到正确目录名。
@@ -34,7 +35,7 @@ function resolveEdition(): Edition {
 export const EDITION: Edition = resolveEdition();
 export const IS_MINICC = EDITION === "minicc";
 export const IS_TEST = EDITION === "test";
-export const APP_NAME = IS_MINICC ? "minicc" : IS_TEST ? "wuwei-test" : "无为";
+export const APP_NAME = IS_MINICC ? "minicc" : IS_TEST ? "wuwei-test" : tr("splash.brand");
 export const APP_ID = IS_MINICC ? "com.minicc.app" : IS_TEST ? "com.wuwei.test" : "com.wuwei.app";
 export const DATA_DIR_NAME = IS_MINICC ? ".minicc" : IS_TEST ? ".wuwei-test" : ".wuwei";
 
@@ -56,6 +57,6 @@ try {
 // ⚠️ 只用于显示，绝不能拿去 app.setName()——那会改 userData 目录名，切个语言就把用户数据全丢了。
 export function appDisplayName(): string {
   if (IS_MINICC) return "minicc";
-  const base = process.env.WUWEI_LANG === "en" ? "Wuwei" : "无为";
+  const base = process.env.WUWEI_LANG === "en" ? "Wuwei" : tr("splash.brand");
   return IS_TEST ? `${base}[测试]` : base;
 }

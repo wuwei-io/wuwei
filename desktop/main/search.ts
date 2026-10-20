@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 // 全局对话搜索：跨所有会话搜正文（问题/回复），给前端做「标题 + 上下文摘要 + 跳转锚点」。
 //
 // 为什么要单独建索引：~/.wuwei/sessions 里工具结果占了绝大头（实测 326MB 原始 JSON 里
@@ -273,7 +274,7 @@ export function searchSessions(
       hitInThis++;
       hits.push({
         sid: meta.id,
-        title: meta.title || "新对话",
+        title: meta.title || tr("ui.app.new.chat.fca06b0"),
         updatedAt: meta.updatedAt,
         role: anchor === "u" ? "user" : "assistant",
         mi,

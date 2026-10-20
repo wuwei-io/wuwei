@@ -1,3 +1,4 @@
+import { normalizeLanguage } from "../../src/localization/index.js";
 // 用户设置持久化：模型后端(provider)与模型选择，存 ~/.wuwei/config.json。
 import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync } from "node:fs";
 import { homedir } from "node:os";
@@ -5,18 +6,10 @@ import { join, dirname } from "node:path";
 
 const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei");
 
-// 系统语言自动判定（用户没手动设过界面语言时用）：中国时区 → 中文；否则按系统 locale/LANG，
-// zh 开头 → 中文，其它 → 英文。不依赖 electron，CLI 侧同样可用。与 renderer i18n.getLang() 同逻辑。
-export function detectSysLang(): "zh" | "en" {
-  try {
-    const opt = Intl.DateTimeFormat().resolvedOptions();
-    const tz = (opt.timeZone || "").toLowerCase();
-    if (/shanghai|chongqing|harbin|urumqi|kashgar|hong_kong|macau|taipei/.test(tz)) return "zh";
-    const loc = (opt.locale || process.env.LC_ALL || process.env.LANG || "").toLowerCase();
-    return loc.startsWith("zh") ? "zh" : "en";
-  } catch {
-    return "zh"; // 兜底中文（主力用户群）
-  }
+// Resolve the user's locale independently of timezone; language packs own fallbacks.
+export function detectSysLang(): string {
+  try { return normalizeLanguage(process.env.LC_ALL || process.env.LANG?.split('.')[0] || Intl.DateTimeFormat().resolvedOptions().locale); }
+  catch { return 'en'; }
 }
 
 // 数据目录改名迁移：老版本存 ~/.minicc，改名后首启把老数据复制进 ~/.wuwei。
@@ -198,7 +191,7 @@ export interface CustomStation {
 
 // 应用级设置：放在专门的「设置」弹窗里，跨平台通用
 export interface AppSettings {
-  lang?: 'zh' | 'en'; // 已有桌面语言偏好
+  lang?: string; // 已有桌面语言偏好
   claudeAutoRefresh?: boolean; // Claude 订阅 token 快过期时用 refreshToken 自动续期(undefined=默认开；关掉可保护本机 claude CLI 登录不被顶掉)
   secretsDetect?: boolean; // 发送前扫描/拦截疑似新密钥(默认开=undefined 视为 true)；关掉后长 token 不再被切成一堆弹窗
   brainEnabled?: boolean; // 启用本地知识网络 Brain：注入系统提示 + 提供 brain_* 工具(默认开)
@@ -290,7 +283,7 @@ export function applyEnvFromSettings(s: Settings | null) {
   // 界面语言 → env，供 CLI 侧（mcp 状态、remember 的默认记忆头 # 记忆/# Memory）跟随。
   // 用户未手动设过 lang → 按系统语言自动判定（海外默认英文），与 renderer i18n getLang() 一致。
   process.env.WUWEI_LANG =
-    s?.app?.lang === "en" ? "en" : s?.app?.lang === "zh" ? "zh" : detectSysLang();
+    s?.app?.lang ? normalizeLanguage(s.app.lang) : detectSysLang();
   // Missing/unreadable/incomplete desktop settings must never infer a costly
   // backend from credentials installed on this computer. Login resolves the
   // recommended value model from the catalog; guests start with anonymous chat.

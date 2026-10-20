@@ -53,6 +53,8 @@ export interface CreditLedger {
   records: CreditRecord[];
   hasMore: boolean;
   offset: number;
+  total?: number;
+  limit?: number;
 }
 export interface BillingFailure { error: string; message?: string }
 export interface BillingOrder {

@@ -1,0 +1,419 @@
+[
+  {
+    "name": "read_file",
+    "descriptionKey": "tool.description.read_file",
+    "parameters": {
+      "path": "tool.parameter.read_file.path",
+      "offset": "tool.parameter.read_file.offset",
+      "limit": "tool.parameter.read_file.limit"
+    }
+  },
+  {
+    "name": "write_file",
+    "descriptionKey": "tool.description.write_file",
+    "parameters": {}
+  },
+  {
+    "name": "edit_file",
+    "descriptionKey": "tool.description.edit_file",
+    "parameters": {
+      "replace_all": "tool.parameter.edit_file.replace_all"
+    }
+  },
+  {
+    "name": "bash",
+    "descriptionKey": "tool.description.bash",
+    "parameters": {
+      "timeout_ms": "tool.parameter.bash.timeout_ms"
+    }
+  },
+  {
+    "name": "powershell",
+    "descriptionKey": "tool.description.powershell",
+    "parameters": {
+      "command": "tool.parameter.powershell.command",
+      "timeout_ms": "tool.parameter.powershell.timeout_ms"
+    }
+  },
+  {
+    "name": "glob",
+    "descriptionKey": "tool.description.glob",
+    "parameters": {
+      "path": "tool.parameter.glob.path"
+    }
+  },
+  {
+    "name": "grep",
+    "descriptionKey": "tool.description.grep",
+    "parameters": {
+      "path": "tool.parameter.grep.path",
+      "glob": "tool.parameter.grep.glob"
+    }
+  },
+  {
+    "name": "ask_decision",
+    "descriptionKey": "tool.description.ask_decision",
+    "parameters": {
+      "title": "tool.parameter.ask_decision.title",
+      "question": "tool.parameter.ask_decision.question",
+      "context": "tool.parameter.ask_decision.context",
+      "risk": "tool.parameter.ask_decision.risk",
+      "options": "tool.parameter.ask_decision.options",
+      "label": "tool.parameter.ask_decision.label",
+      "desc": "tool.parameter.ask_decision.desc",
+      "value": "tool.parameter.ask_decision.value",
+      "recommended": "tool.parameter.ask_decision.recommended",
+      "allowCustom": "tool.parameter.ask_decision.allowCustom",
+      "timeoutSec": "tool.parameter.ask_decision.timeoutSec",
+      "rawDetail": "tool.parameter.ask_decision.rawDetail"
+    }
+  },
+  {
+    "name": "remember",
+    "descriptionKey": "tool.description.remember",
+    "parameters": {
+      "text": "tool.parameter.remember.text"
+    }
+  },
+  {
+    "name": "web_search",
+    "descriptionKey": "tool.description.web_search",
+    "parameters": {
+      "query": "tool.parameter.web_search.query"
+    }
+  },
+  {
+    "name": "web_fetch",
+    "descriptionKey": "tool.description.web_fetch",
+    "parameters": {
+      "url": "tool.parameter.web_fetch.url"
+    }
+  },
+  {
+    "name": "brain_recall",
+    "descriptionKey": "tool.description.brain_recall",
+    "parameters": {
+      "query": "tool.parameter.brain_recall.query",
+      "limit": "tool.parameter.brain_recall.limit"
+    }
+  },
+  {
+    "name": "brain_learn",
+    "descriptionKey": "tool.description.brain_learn",
+    "parameters": {
+      "name": "tool.parameter.brain_learn.name",
+      "type": "tool.parameter.brain_learn.type",
+      "summary": "tool.parameter.brain_learn.summary",
+      "aliases": "tool.parameter.brain_learn.aliases",
+      "attrs": "tool.parameter.brain_learn.attrs"
+    }
+  },
+  {
+    "name": "brain_link",
+    "descriptionKey": "tool.description.brain_link",
+    "parameters": {
+      "from": "tool.parameter.brain_link.from",
+      "relation": "tool.parameter.brain_link.relation",
+      "to": "tool.parameter.brain_link.to"
+    }
+  },
+  {
+    "name": "brain_forget",
+    "descriptionKey": "tool.description.brain_forget",
+    "parameters": {
+      "name": "tool.parameter.brain_forget.name"
+    }
+  },
+  {
+    "name": "brain_read_doc",
+    "descriptionKey": "tool.description.brain_read_doc",
+    "parameters": {
+      "ref": "tool.parameter.brain_read_doc.ref"
+    }
+  },
+  {
+    "name": "chrome_status",
+    "descriptionKey": "tool.description.chrome_status",
+    "parameters": {}
+  },
+  {
+    "name": "chrome_tabs",
+    "descriptionKey": "tool.description.chrome_tabs",
+    "parameters": {}
+  },
+  {
+    "name": "chrome_read",
+    "descriptionKey": "tool.description.chrome_read",
+    "parameters": {
+      "tab": "tool.parameter.chrome_read.tab",
+      "selector": "tool.parameter.chrome_read.selector",
+      "max_chars": "tool.parameter.chrome_read.max_chars"
+    }
+  },
+  {
+    "name": "chrome_navigate",
+    "descriptionKey": "tool.description.chrome_navigate",
+    "parameters": {
+      "url": "tool.parameter.chrome_navigate.url",
+      "tab": "tool.parameter.chrome_navigate.tab"
+    }
+  },
+  {
+    "name": "chrome_click",
+    "descriptionKey": "tool.description.chrome_click",
+    "parameters": {
+      "selector": "tool.parameter.chrome_click.selector",
+      "text": "tool.parameter.chrome_click.text",
+      "tab": "tool.parameter.chrome_click.tab"
+    }
+  },
+  {
+    "name": "chrome_fill",
+    "descriptionKey": "tool.description.chrome_fill",
+    "parameters": {
+      "selector": "tool.parameter.chrome_fill.selector",
+      "value": "tool.parameter.chrome_fill.value",
+      "tab": "tool.parameter.chrome_fill.tab"
+    }
+  },
+  {
+    "name": "chrome_eval",
+    "descriptionKey": "tool.description.chrome_eval",
+    "parameters": {
+      "expression": "tool.parameter.chrome_eval.expression",
+      "tab": "tool.parameter.chrome_eval.tab"
+    }
+  },
+  {
+    "name": "chrome_screenshot",
+    "descriptionKey": "tool.description.chrome_screenshot",
+    "parameters": {
+      "tab": "tool.parameter.chrome_screenshot.tab",
+      "full_page": "tool.parameter.chrome_screenshot.full_page"
+    }
+  },
+  {
+    "name": "computer_screenshot",
+    "descriptionKey": "tool.description.computer_screenshot",
+    "parameters": {}
+  },
+  {
+    "name": "computer_click",
+    "descriptionKey": "tool.description.computer_click",
+    "parameters": {
+      "x": "tool.parameter.computer_click.x",
+      "y": "tool.parameter.computer_click.y",
+      "button": "tool.parameter.computer_click.button"
+    }
+  },
+  {
+    "name": "computer_move",
+    "descriptionKey": "tool.description.computer_move",
+    "parameters": {}
+  },
+  {
+    "name": "computer_type",
+    "descriptionKey": "tool.description.computer_type",
+    "parameters": {
+      "text": "tool.parameter.computer_type.text"
+    }
+  },
+  {
+    "name": "computer_key",
+    "descriptionKey": "tool.description.computer_key",
+    "parameters": {
+      "keys": "tool.parameter.computer_key.keys"
+    }
+  },
+  {
+    "name": "codex_imagegen",
+    "descriptionKey": "tool.description.codex_imagegen",
+    "parameters": {
+      "prompt": "tool.parameter.codex_imagegen.prompt",
+      "out": "tool.parameter.codex_imagegen.out",
+      "references": "tool.parameter.codex_imagegen.references",
+      "transparent_background": "tool.parameter.codex_imagegen.transparent_background",
+      "timeout_ms": "tool.parameter.codex_imagegen.timeout_ms"
+    }
+  },
+  {
+    "name": "platform_imagegen",
+    "descriptionKey": "tool.description.platform_imagegen",
+    "parameters": {
+      "recovery_key": "tool.parameter.platform_imagegen.recovery_key"
+    }
+  },
+  {
+    "name": "browser_open",
+    "descriptionKey": "tool.description.browser_open",
+    "parameters": {}
+  },
+  {
+    "name": "browser_read",
+    "descriptionKey": "tool.description.browser_read",
+    "parameters": {}
+  },
+  {
+    "name": "browser_click",
+    "descriptionKey": "tool.description.browser_click",
+    "parameters": {
+      "selector": "tool.parameter.browser_click.selector"
+    }
+  },
+  {
+    "name": "ask_user",
+    "descriptionKey": "tool.description.ask_user",
+    "parameters": {
+      "questions": "tool.parameter.ask_user.questions",
+      "question": "tool.parameter.ask_user.question",
+      "header": "tool.parameter.ask_user.header",
+      "multiSelect": "tool.parameter.ask_user.multiSelect",
+      "options": "tool.parameter.ask_user.options",
+      "label": "tool.parameter.ask_user.label",
+      "description": "tool.parameter.ask_user.description"
+    }
+  },
+  {
+    "name": "dm_teammate",
+    "descriptionKey": "tool.description.dm_teammate",
+    "parameters": {
+      "name": "tool.parameter.dm_teammate.name",
+      "message": "tool.parameter.dm_teammate.message"
+    }
+  },
+  {
+    "name": "assign_task",
+    "descriptionKey": "tool.description.assign_task",
+    "parameters": {
+      "name": "tool.parameter.assign_task.name",
+      "task": "tool.parameter.assign_task.task",
+      "priority": "tool.parameter.assign_task.priority"
+    }
+  },
+  {
+    "name": "search_sop",
+    "descriptionKey": "tool.description.search_sop",
+    "parameters": {
+      "query": "tool.parameter.search_sop.query"
+    }
+  },
+  {
+    "name": "read_sop",
+    "descriptionKey": "tool.description.read_sop",
+    "parameters": {
+      "id": "tool.parameter.read_sop.id"
+    }
+  },
+  {
+    "name": "list_sops",
+    "descriptionKey": "tool.description.list_sops",
+    "parameters": {}
+  },
+  {
+    "name": "write_sop",
+    "descriptionKey": "tool.description.write_sop",
+    "parameters": {
+      "id": "tool.parameter.write_sop.id",
+      "taskKey": "tool.parameter.write_sop.taskKey",
+      "title": "tool.parameter.write_sop.title",
+      "category": "tool.parameter.write_sop.category",
+      "content": "tool.parameter.write_sop.content",
+      "summary": "tool.parameter.write_sop.summary",
+      "note": "tool.parameter.write_sop.note"
+    }
+  },
+  {
+    "name": "create_employee",
+    "descriptionKey": "tool.description.create_employee",
+    "parameters": {
+      "name": "tool.parameter.create_employee.name",
+      "title": "tool.parameter.create_employee.title",
+      "blurb": "tool.parameter.create_employee.blurb",
+      "persona": "tool.parameter.create_employee.persona",
+      "soul": "tool.parameter.create_employee.soul",
+      "aboutUser": "tool.parameter.create_employee.aboutUser",
+      "memory": "tool.parameter.create_employee.memory",
+      "icon": "tool.parameter.create_employee.icon"
+    }
+  },
+  {
+    "name": "update_employee",
+    "descriptionKey": "tool.description.update_employee",
+    "parameters": {
+      "name": "tool.parameter.update_employee.name",
+      "newName": "tool.parameter.update_employee.newName"
+    }
+  },
+  {
+    "name": "delete_employee",
+    "descriptionKey": "tool.description.delete_employee",
+    "parameters": {
+      "name": "tool.parameter.delete_employee.name",
+      "confirm": "tool.parameter.delete_employee.confirm"
+    }
+  },
+  {
+    "name": "manage_department",
+    "descriptionKey": "tool.description.manage_department",
+    "parameters": {
+      "action": "tool.parameter.manage_department.action",
+      "name": "tool.parameter.manage_department.name",
+      "newName": "tool.parameter.manage_department.newName",
+      "head": "tool.parameter.manage_department.head",
+      "members": "tool.parameter.manage_department.members"
+    }
+  },
+  {
+    "name": "manage_group",
+    "descriptionKey": "tool.description.manage_group",
+    "parameters": {
+      "action": "tool.parameter.manage_group.action",
+      "name": "tool.parameter.manage_group.name",
+      "newName": "tool.parameter.manage_group.newName",
+      "members": "tool.parameter.manage_group.members",
+      "coordinator": "tool.parameter.manage_group.coordinator",
+      "maxWake": "tool.parameter.manage_group.maxWake"
+    }
+  },
+  {
+    "name": "create_schedule",
+    "descriptionKey": "tool.description.create_schedule",
+    "parameters": {
+      "employeeName": "tool.parameter.create_schedule.employeeName",
+      "name": "tool.parameter.create_schedule.name",
+      "trigger": "tool.parameter.create_schedule.trigger",
+      "sopId": "tool.parameter.create_schedule.sopId",
+      "doc": "tool.parameter.create_schedule.doc",
+      "enabled": "tool.parameter.create_schedule.enabled"
+    }
+  },
+  {
+    "name": "list_schedules",
+    "descriptionKey": "tool.description.list_schedules",
+    "parameters": {
+      "employeeName": "tool.parameter.list_schedules.employeeName"
+    }
+  },
+  {
+    "name": "delete_schedule",
+    "descriptionKey": "tool.description.delete_schedule",
+    "parameters": {
+      "id": "tool.parameter.delete_schedule.id"
+    }
+  },
+  {
+    "name": "send_image",
+    "descriptionKey": "tool.description.send_image",
+    "parameters": {
+      "path": "tool.parameter.send_image.path",
+      "caption": "tool.parameter.send_image.caption"
+    }
+  },
+  {
+    "name": "send_file",
+    "descriptionKey": "tool.description.send_file",
+    "parameters": {
+      "path": "tool.parameter.send_file.path"
+    }
+  }
+]

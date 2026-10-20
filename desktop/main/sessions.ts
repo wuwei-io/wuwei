@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // 会话持久化：会话列表 + 每会话消息存到 ~/.wuwei/。
 import {
   readFileSync,
@@ -23,7 +24,7 @@ const TRASH_TTL = 7 * 24 * 3600 * 1000; // 回收站保留 7 天,过期自动彻
 
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入）。修历史时注入的占位文案会显示在对话里，得跟界面语言走。
 // 语言可运行时切换，所以只在调用时求值，不做模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 export interface SessionMeta {
   id: string;
@@ -305,11 +306,11 @@ function isValidHistory(msgs: any[]): boolean {
 function repairHistory(msgs: any[]): any[] {
   const out: any[] = [];
   const ph = (t: string) => ({ type: "text", text: t });
-  const stopped = tt("(已停止)", "(stopped)");
+  const stopped = tr("ui.sessions.stopped.e649f93");
   for (const m of msgs) {
     const prev = out[out.length - 1];
     if (m.role === "assistant") {
-      if (prev && prev.role === "assistant") out.push({ role: "user", content: [ph(tt("继续", "continue"))] });
+      if (prev && prev.role === "assistant") out.push({ role: "user", content: [ph(tr("ui.sessions.continue.a316794"))] });
       out.push(m);
       continue;
     }
@@ -555,5 +556,5 @@ export function deriveTitle(messages: Message[]): string {
       }
     }
   }
-  return process.env.WUWEI_LANG === "en" ? "New chat" : "新对话"; // 会话默认标题也跟随界面语言
+  return getCurrentLanguage() !== "zh" ? "New chat" : tr("ui.app.new.chat.fca06b0"); // 会话默认标题也跟随界面语言
 }

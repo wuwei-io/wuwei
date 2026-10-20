@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import React, { useEffect, useId, useMemo, useRef } from "react";
 import { AnnouncementMarkdown } from "./AnnouncementMarkdown.js";
 import { parseAnnouncementBody, splitAnnouncementHeading, type AnnouncementCard } from "./announcementContent.js";
@@ -23,7 +24,7 @@ function FeatureIcon({ kind }: { kind: AnnouncementCard["icon"] }) {
 }
 
 export function AnnouncementModal({ version, title, body, lang, onClose, onAcknowledge, onOpenManual }: Props) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const titleId = useId();
 
   const dialogRef = useRef<HTMLElement>(null);
@@ -31,7 +32,7 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const heading = useMemo(() => splitAnnouncementHeading(title || (en ? "Product updates" : "产品更新"), version), [title, version, en]);
+  const heading = useMemo(() => splitAnnouncementHeading(title || (tr("ui.announcementmodal.product.updates.6ebbd9e")), version), [title, version, en]);
   const content = useMemo(() => parseAnnouncementBody(body), [body]);
 
   useEffect(() => {
@@ -71,16 +72,16 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
         aria-labelledby={titleId}
 
       >
-        <button className="announce-close" type="button" aria-label={en ? "Close announcement" : "关闭公告"} title={en ? "Close" : "关闭"} onClick={onClose}>
+        <button className="announce-close" type="button" aria-label={tr("ui.announcementmodal.close.announcement.fc11055")} title={tr("msg.close")} onClick={onClose}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
         </button>
 
         <header className="announce-header">
-          <div className="announce-eyebrow">{en ? "WHAT’S NEW" : "产品更新"}{heading.version && <span className="announce-version">{heading.version}</span>}</div>
+          <div className="announce-eyebrow">{tr("ui.announcementmodal.what.new.3d27833")}{heading.version && <span className="announce-version">{heading.version}</span>}</div>
           <div className="announce-heading-row"><h2 id={titleId}>{heading.title}</h2></div>
         </header>
 
-        <div className="announce-content" tabIndex={0} aria-label={en ? "Announcement details" : "公告详情"}>
+        <div className="announce-content" tabIndex={0} aria-label={tr("ui.announcementmodal.announcement.details.02ea311")}>
           {content.kind === "cards" ? (
             <div className="announce-cards">
               {content.intro && <AnnouncementMarkdown>{content.intro}</AnnouncementMarkdown>}
@@ -90,10 +91,10 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
                   <div className="announce-card-copy">
                     <div className="announce-card-title">
                       <h3>{card.title}</h3>
-                      <span className="announce-new">{en ? "NEW" : "新增"}</span>
+                      <span className="announce-new">{tr("ui.announcementmodal.new.7a90e30")}</span>
                     </div>
                     <AnnouncementMarkdown>{card.summary}</AnnouncementMarkdown>
-                    {card.details && <details className="announce-details"><summary>{en ? "Details" : "详细说明"}</summary><AnnouncementMarkdown>{card.details}</AnnouncementMarkdown></details>}
+                    {card.details && <details className="announce-details"><summary>{tr("ui.announcementmodal.details.f6a9d6d")}</summary><AnnouncementMarkdown>{card.details}</AnnouncementMarkdown></details>}
                   </div>
                 </article>
               ))}
@@ -107,8 +108,8 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
         </div>
 
         <footer className="announce-footer">
-          {onOpenManual && <button className="announce-secondary" type="button" onClick={onOpenManual}>{en ? "View guide" : "查看使用手册"}</button>}
-          <button ref={primaryRef} className="announce-primary" type="button" onClick={onAcknowledge ?? onClose}>{en ? "Mark as read" : "已读"}</button>
+          {onOpenManual && <button className="announce-secondary" type="button" onClick={onOpenManual}>{tr("ui.announcementmodal.view.guide.6929c02")}</button>}
+          <button ref={primaryRef} className="announce-primary" type="button" onClick={onAcknowledge ?? onClose}>{tr("ui.announcementmodal.mark.as.read.e3863de")}</button>
         </footer>
       </section>
     </div>

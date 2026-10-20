@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 import type { Message } from '../../src/types.js';
 import type { SessionMeta } from './sessions.js';
 import type { Room, RoomMessage } from '../../src/team/types.js';
@@ -41,14 +42,14 @@ export function remoteTaskDetail(meta: SessionMeta, messages: Message[], running
         logs.push({ id: `r_${start + index}_${bi}`, time, text: text.slice(0, 3000) });
         for (const part of parts) if (part.type === 'image' && typeof part.dataUrl === 'string' && !images.has(part.dataUrl)) {
           images.add(part.dataUrl);
-          outputs.push({ id: `image_${outputs.length}`, name: `图片 ${outputs.length + 1}`, kind: 'image', uri: part.dataUrl, meta: '电脑执行结果' });
+          outputs.push({ id: `image_${outputs.length}`, name: tr("ui.remote-task-detail.message.fbb3e2cf53", {p0: outputs.length + 1}), kind: 'image', uri: part.dataUrl, meta: tr("ui.remote-task-detail.message.05d5e876c6") });
         }
       }
     });
   });
   const last = messages.at(-1);
   const completed = !meta.interrupted && !meta.running && [...calls.values()].every(s => s.status !== 'unknown') && last?.role === 'assistant' && last.content.some(b => b.type === 'text' && b.text.trim());
-  return { id: meta.id, title: meta.title || '任务', employee, sessionId: meta.id,
+  return { id: meta.id, title: meta.title || tr("ui.index.message.b094e4ee0b"), employee, sessionId: meta.id,
     status: running ? 'running' : stopped ? 'stopped' : failed ? 'error' : completed ? 'done' : 'unknown',
     steps: [...calls.values()], logs: logs.slice(-60), outputs, updatedAt: meta.updatedAt };
 }
@@ -71,7 +72,7 @@ export function remoteRoomTaskDetail(room: Room, messages: RoomMessage[], runnin
     // Keep the actual speaker reply after its tool evidence, just as a completed Agent turn.
     if (message.speaker.kind === 'agent') normalized.push({ role: 'assistant', ts: message.ts, content: [{ type: 'text', text: message.text }] });
   }
-  const result = remoteTaskDetail({ id: room.id, title: room.name, updatedAt: room.updatedAt || 0 }, normalized, running, '群成员');
+  const result = remoteTaskDetail({ id: room.id, title: room.name, updatedAt: room.updatedAt || 0 }, normalized, running, tr("ui.app.members.0c73770"));
   return { ...result, roomId: room.id, status: !running && messages.some(m => !m.ack && m.error) ? 'error' : result.status };
 }
 
@@ -79,11 +80,11 @@ export function remoteBatchTaskDetail(batch: TaskBatchSnapshot) {
   const active = batch.phase === 'working' || batch.phase === 'reporting';
   const failed = batch.phase === 'error' || batch.results.some(r => r.status === 'failed');
   const origin = batch.scope.origin;
-  return { id: batch.scope.turnId, title: `${batch.scope.ownerName} · 员工任务与汇报`, employee: batch.scope.ownerName,
+  return { id: batch.scope.turnId, title: tr("ui.index.message.db6a515b77", {p0: batch.scope.ownerName}), employee: batch.scope.ownerName,
     sessionId: origin.id, ...(origin.kind === 'room' ? { roomId: origin.id } : {}),
     status: active ? 'running' : batch.phase === 'interrupted' ? 'unknown' : failed ? 'error' : batch.cancelled ? 'stopped' : 'done', canStop: batch.phase === 'working', updatedAt: batch.updatedAt,
     steps: [...batch.results.map(r => ({ id: r.id, title: `${r.employeeName} · ${r.task.slice(0, 160)}`, desc: r.text.slice(0, 400),
       status: ({ completed: 'done', failed: 'error', cancelled: 'stopped', queued: 'todo', running: 'running' } as const)[r.status] })),
-      { id: 'report', title: '负责人统一汇报', status: ({ working: 'todo', reporting: 'running', done: 'done', error: 'error', interrupted: 'unknown' } as const)[batch.phase] }],
+      { id: 'report', title: tr("ui.remote-task-detail.message.661581aa0a"), status: ({ working: 'todo', reporting: 'running', done: 'done', error: 'error', interrupted: 'unknown' } as const)[batch.phase] }],
     logs: batch.results.filter(r => r.text).map(r => ({ id: r.id, time: '', text: `${r.employeeName}：${r.text.slice(0, 3000)}` })), outputs: [] };
 }

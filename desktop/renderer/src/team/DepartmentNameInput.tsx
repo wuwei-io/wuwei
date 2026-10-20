@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import React, { useRef, useState } from "react";
 import { departmentLabel, departmentNameFromInput, type TeamDepartment } from "../../../../src/team/default-departments.js";
 import type { TeamLanguage } from "../../../../src/team/default-localization.js";
@@ -15,7 +16,7 @@ export function DepartmentNameInput({ department, language, onSave }: {
     onChange={e => setDraft(e.target.value)}
     onBlur={e => {
       const original = focused.current;
-      const name = departmentNameFromInput(original, e.target.value.trim(), original.language) || (language === "en" ? "Department" : "部门");
+      const name = departmentNameFromInput(original, e.target.value.trim(), original.language) || (tr("ui.departmentnameinput.department.134874f"));
       if (name !== department.name) onSave(name);
       setDraft(null);
     }} />;

@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../localization/index.js";
 // 文档冷存储层：把知识宫殿等大文本目录分块 + 本地向量化，按需路由读原文。
 // 概念网络（graph）负责"高价值概念点"的热索引；本层负责"需要细节时按需路由过去读的原文"。
 //
@@ -35,7 +36,7 @@ export const DOCS_META = join(BRAIN_DIR, "docs.meta.json");
 
 // brain_read_doc 的返回会显示在工具卡片里并进模型上下文，占位/截断提示要跟界面语言。
 // 语言可运行时切换，所以调用时才求值，别固化成模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 const MAX_CHARS = 1100; // 单块目标上限：太长稀释语义、太短割裂上下文
 const MIN_CHARS = 60; // 太短的碎块（单标题行等）并入相邻，不单独成块
@@ -407,7 +408,7 @@ export async function searchDocs(query: string, limit = 4, preVec?: number[]): P
 // 读原文：按 chunkId 或文件相对路径，返回整块/整文件（供 brain_read_doc 按需路由）
 export function readDoc(idOrFile: string): string {
   const idx = loadDocIndex();
-  if (!idx.dir) return tt("(尚未建立文档索引)", "(no document index built yet)");
+  if (!idx.dir) return tr("ui.docs.no.document.index.built.yet.b595507");
   // 优先当 chunkId
   const chunk = idx.chunks.find((c) => c.id === idOrFile);
   if (chunk) {
@@ -418,7 +419,7 @@ export function readDoc(idOrFile: string): string {
   // 当文件路径
   const byFile = readFullFile(idx.dir, idOrFile);
   if (byFile != null) return byFile;
-  return tt(`(未找到：${idOrFile})`, `(not found: ${idOrFile})`);
+  return tr("ui.docs.not.found.e3fbcf5", { p0: idOrFile });
 }
 
 function readFullFile(dir: string, relPath: string): string | null {
@@ -431,10 +432,7 @@ function readFullFile(dir: string, relPath: string): string | null {
     const MAX = 16000;
     return raw.length > MAX
       ? raw.slice(0, MAX) +
-          tt(
-            `\n…(已截断，全文 ${raw.length} 字符，路径 ${relPath})`,
-            `\n…(truncated — full text is ${raw.length} chars, at ${relPath})`,
-          )
+          tr("ui.docs.truncated.full.text.is.chars.at.6693cfd", { p0: raw.length, p1: relPath })
       : raw;
   } catch {
     return null;

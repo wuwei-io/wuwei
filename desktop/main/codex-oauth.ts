@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // Codex 订阅一键授权：app 内直接跑 Codex CLI 的 ChatGPT OAuth(PKCE + 本地 1455 回环)流程，
 // 免去本机安装 codex CLI + `codex login`。产出 access_token + account_id，写入 ~/.codex/auth.json，
 // 与 provider.ts 的 CodexProvider(Bearer access_token + chatgpt-account-id 头)完全对应。
@@ -25,7 +26,7 @@ const SCOPES = "openid profile email offline_access";
 
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入）。回调页 HTML 是用户在浏览器里看的，得跟界面语言走。
 // 语言可运行时切换，所以只在调用时求值，不做模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -85,7 +86,7 @@ function writeAuthJson(tokens: { id_token: string; access_token: string; refresh
     last_refresh: new Date().toISOString(),
   };
   writeFileSync(join(dir, "auth.json"), JSON.stringify(data, null, 2), { mode: 0o600 });
-  log("codexOAuth", "✓ 写入 ~/.codex/auth.json account_id=", accountId ? accountId.slice(0, 8) + "…" : "无");
+  log("codexOAuth", "✓ 写入 ~/.codex/auth.json account_id=", accountId ? accountId.slice(0, 8) + "…" : tr("acct.userInitial"));
 }
 
 // 跑完整登录：起本地 1455 回环服务器 → 开系统浏览器授权 → 收 code → 换 token → 写 auth.json。
@@ -134,10 +135,7 @@ export async function codexOAuthLogin(): Promise<CodexOAuthResult | null> {
         const st = u.searchParams.get("state") || "";
         if (!code || st !== state) {
           res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" }).end(
-            tt(
-              "<h2>授权失败</h2><p>state 不匹配或缺少 code，请回到 minicc 重试。</p>",
-              "<h2>Authorization failed</h2><p>The state didn't match or the code was missing. Head back to the app and try again.</p>",
-            ),
+            tr("ui.codex.oauth.authorization.failed.the.state.didn.match.84a4da4"),
           );
           finish(null);
           return;
@@ -145,10 +143,7 @@ export async function codexOAuthLogin(): Promise<CodexOAuthResult | null> {
         const tok = await exchangeCode(code, verifier);
         if (!tok) {
           res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" }).end(
-            tt(
-              "<h2>换取令牌失败</h2><p>请回到 minicc 重试。</p>",
-              "<h2>Couldn't get a token</h2><p>Head back to the app and try again.</p>",
-            ),
+            tr("ui.codex.oauth.couldn.get.token.head.back.to.13aabbc"),
           );
           finish(null);
           return;
@@ -156,10 +151,7 @@ export async function codexOAuthLogin(): Promise<CodexOAuthResult | null> {
         const { accountId, planType } = tok.id_token ? parseIdToken(tok.id_token) : {};
         writeAuthJson(tok, accountId);
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(
-          tt(
-            "<h2>✓ 授权成功</h2><p>已完成 Codex(ChatGPT) 登录，可以关闭此页，回到 minicc 使用。</p>",
-            "<h2>✓ You're authorized</h2><p>Codex (ChatGPT) sign-in is done. You can close this page and head back to the app.</p>",
-          ),
+          tr("ui.codex.oauth.you.re.authorized.codex.chatgpt.sign.cc98384"),
         );
         finish({ accountId, planType });
       } catch (e) {

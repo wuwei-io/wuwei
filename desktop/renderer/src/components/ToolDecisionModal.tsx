@@ -1,11 +1,12 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import React, { useEffect, useState } from 'react';
 import type { Decision, DecisionResponse } from '../../../../src/types.js';
 
 /** Human-only approval; custom answers are shown only when the decision allows them. */
 export function ToolDecisionModal({ decision, lang, onRespond }: {
-  decision: Decision; lang: 'zh' | 'en'; onRespond: (response: DecisionResponse) => void;
+  decision: Decision; lang: string; onRespond: (response: DecisionResponse) => void;
 }) {
-  const text = decision.i18n?.[lang];
+  const text = decision.i18n?.[lang] ?? decision.i18n?.en;
   const [submitted, setSubmitted] = useState(false);
   const [custom, setCustom] = useState('');
   const respond = (response: DecisionResponse) => {
@@ -32,11 +33,11 @@ export function ToolDecisionModal({ decision, lang, onRespond }: {
           {option.desc && <span className="ask-opt-desc">{option.desc}</span>}
         </button>)}</div>
       {decision.allowCustom && <div className="ask-custom">
-        <textarea aria-label={lang === 'en' ? 'Custom reply' : '自定义回复'} value={custom}
+        <textarea aria-label={tr("ui.tooldecisionmodal.custom.reply.38882df")} value={custom}
           disabled={submitted} onChange={event => setCustom(event.target.value)} />
         <button type="button" disabled={submitted || !custom.trim()}
           onClick={() => respond({ action: 'reply', text: custom.trim() })}>
-          {lang === 'en' ? 'Send reply' : '发送回复'}
+          {tr("ui.tooldecisionmodal.send.reply.44c9f62")}
         </button>
       </div>}
     </div>

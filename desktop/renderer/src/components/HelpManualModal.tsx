@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import React, { useState } from "react";
 import type { Lang } from "../i18n.js";
 import { GuideScreenshot } from "./GuideScreenshot.js";
@@ -21,9 +22,7 @@ import imageModelsEn from "../assets/guide/image-models-en.png";
 type Props = { lang: Lang; onClose: () => void };
 
 // 双语小工具：英文为主。
-function useL(lang: Lang) {
-  return (en: string, zh: string) => (lang === "en" ? en : zh);
-}
+
 
 // —— 章节图标（统一 18px 线性 currentColor）——
 const IconStart = (
@@ -83,28 +82,25 @@ function FeatRow({ badge, title, desc }: { badge: React.ReactNode; title: string
 }
 
 export function HelpManualModal({ lang, onClose }: Props) {
-  const L = useL(lang);
+
   const [active, setActive] = useState("start");
 
   const sections: { id: string; icon: React.ReactNode; label: string; body: React.ReactNode }[] = [
     {
       id: "start",
       icon: IconStart,
-      label: L("Getting started", "快速上手"),
+      label: tr("ui.helpmanualmodal.getting.started.debb2ba"),
       body: (
         <>
           <p className="guide-lead">
-            {L(
-              "Wuwei is an AI agent that doesn't just chat — it reads your files, runs commands, searches the web, and carries out real multi-step tasks. This guide takes you from zero to power user.",
-              "无为不只是聊天，它是一个能读文件、跑命令、联网搜索、真正一步步替你干活的 AI 智能体。这份手册带你从零变成高手。",
-            )}
+            {tr("ui.helpmanualmodal.wuwei.is.an.ai.agent.that.a051b0b")}
           </p>
-          <h4>{L("First 3 steps", "开头三步")}</h4>
-          <FeatRow badge={<span className="guide-num">1</span>} title={L("Sign in", "登录")} desc={L("Click your avatar at the bottom-left to sign in — you get free hosted quota to try any model right away.", "点左下角头像登录，登录即送托管额度，任意模型都能马上试。")} />
-          <FeatRow badge={<span className="guide-num">2</span>} title={L("Pick a model", "选模型")} desc={L("Use the model picker in the input bar. Hosted models (Claude / GPT / Gemini / GLM …) work out of the box. You can also plug in your own Claude subscription or API key.", "在输入栏下方选模型。托管模型（Claude / GPT / Gemini / GLM…）开箱即用；也可接你自己的 Claude 订阅或 API Key。")} />
-          <FeatRow badge={<span className="guide-num">3</span>} title={L("Describe the task", "描述任务")} desc={L("Type what you want — plain language. You can paste images too. Then let it run.", "用大白话说你想要什么，也能直接粘贴图片，然后让它跑。")} />
+          <h4>{tr("ui.helpmanualmodal.first.steps.6c3baff")}</h4>
+          <FeatRow badge={<span className="guide-num">1</span>} title={tr("login.signin")} desc={tr("ui.helpmanualmodal.click.your.avatar.at.the.bottom.885baf6")} />
+          <FeatRow badge={<span className="guide-num">2</span>} title={tr("ui.helpmanualmodal.pick.model.f0a0929")} desc={tr("ui.helpmanualmodal.use.the.model.picker.in.the.ba3dcf6")} />
+          <FeatRow badge={<span className="guide-num">3</span>} title={tr("ui.helpmanualmodal.describe.the.task.330849f")} desc={tr("ui.helpmanualmodal.type.what.you.want.plain.language.e6c45c6")} />
           <Tip>
-            {L("Not sure what to ask? Try: “Look through this folder and tell me what this project does”, or paste a screenshot of an error and ask it to fix it.", "不知道问啥？试试：「看下这个文件夹，告诉我这个项目是干嘛的」，或者粘贴一张报错截图让它修。")}
+            {tr("ui.helpmanualmodal.not.sure.what.to.ask.try.8017f59")}
           </Tip>
         </>
       ),
@@ -112,113 +108,113 @@ export function HelpManualModal({ lang, onClose }: Props) {
     {
       id: "company",
       icon: <IconGroup />,
-      label: L("My Company", "一人公司"),
+      label: tr("ui.app.my.company.05b42c6"),
       body: (
         <>
-          <p className="guide-lead">{L("Build a team of AI teammates with their own roles. Chat with one teammate, delegate work, or bring several into a group.", "给 AI 员工分配不同职责，既能单独私聊、安排任务，也能建群一起协作。")}</p>
-          <GuideScreenshot src={lang === "en" ? companyEn : companyZh} lang={lang} alt={L("Company sidebar, Add teammate button, teammate cards and Groups tab", "一人公司侧栏入口、添加员工按钮、员工卡片及群入口")} caption={L("1 Open My Company → 2 Add teammate. 3 Click a teammate card for private chat, or the Groups tab for group chat.", "1 点侧栏一人公司 → 2 添加员工。3 点员工卡片进入私聊，或点顶部「群」进入群聊列表。")} marks={[{n:1,x:3,y:4},{n:2,x:90,y:18},{n:3,x:23,y:47}]} />
-          <h4>{L("Install your team", "安装团队")}</h4>
-          <GuideScreenshot src={lang === "en" ? teamEn : teamZh} lang={lang} alt={L("Add teammates dialog: six-person team already installed", "添加员工弹窗：六人团队已安装状态")} caption={L("Team pack after installation. Disable / Uninstall are management actions, not installation steps. No team data was changed for this capture.", "团队已安装后的真实界面。「停用／卸载」是管理操作，不是安装步骤；截图未改动团队数据。")} />
-          <FeatRow badge={<span className="guide-num">1</span>} title={L("Open My Company", "打开一人公司")} desc={L("New users have My Company enabled, with its sidebar menu collapsed. Click the menu title to open the company page; the arrow expands or collapses Contacts and Groups. Existing users can enable it in Settings → Company.", "新用户默认开启一人公司，侧栏菜单初始收起。点菜单标题进入操作页，点箭头展开或收起通讯录和群聊。已有用户可在「设置 → 一人公司」开启。")} />
-          <FeatRow badge={<span className="guide-num">2</span>} title={L("Choose a team pack", "选择团队安装")} desc={L("No teammates are installed automatically. On the Teammates page, click Add teammate. Under Team packs, choose Wuwei One-Person Company and click Install. You can also import teammates from openclaw here.", "员工不会自动安装。在「员工」页点「添加员工」，在「可安装的团队」中选择「无为一人公司」，点击「安装」。这里也可以从 openclaw 导入员工。")} />
-          <FeatRow badge={<span className="guide-num">3</span>} title={L("Start working", "开始使用")} desc={L("The default team includes six teammates in CEO Office, Engineering, Design and General Affairs. Click a teammate card or a name in Contacts to start a private chat. Tell Ben your goal and ask him to coordinate the relevant teammates.", "默认团队包含六位员工，分属 CEO办公室、技术部、设计部和综合部。点员工卡片或通讯录中的姓名开始私聊，也可以把目标交给小笨，让他协调相关员工完成。")} />
-          <h4>{L("Manage teammates and departments", "管理员工与部门")}</h4>
-          <FeatRow badge={<IconGroup />} title={L("Ask AI to manage teammates", "直接让 AI 管理员工")} desc={L("In a chat, describe the teammate's name and responsibilities, for example: “Add a teammate named Alex to write and review product copy.” You can also ask AI to change responsibilities or remove a teammate. Right-click a teammate to edit or delete them yourself.", "在对话中说清姓名和职责，例如：「添加一名叫小营的员工，负责产品文案和内容审核。」也可以让 AI 修改员工职责、删除不需要的员工；手动管理时，右键员工可编辑或删除。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Organize departments", "组织部门")} desc={L("Ask AI: “Create a Marketing department, make Alex its head, and add Wendy.” Ask it to update the head or members, or remove a department. You can also manage departments in Settings → Company. Each teammate belongs to one department; adding someone moves them from their previous department.", "可以说：「创建运营部，由小营担任负责人，把小文加入运营部。」再让 AI 调整负责人、成员或删除部门。也可在「设置 → 一人公司」手动管理。每位员工只属于一个部门，添加到新部门会移出原部门。")} />
-          <h4>{L("Create groups and collaborate", "建群协作")}</h4>
-          <FeatRow badge={<IconGroup />} title={L("Bring the right people together", "把相关员工拉进群")} desc={L("Open My Company → Groups → New group, name it and choose its members. Or ask AI: “Create a Website Launch group with Ben, Cody and Mia; let Ben coordinate.” In the group, @ a teammate to involve them, or @ everyone for a team discussion. Without a mention, a configured coordinator replies.", "进入「一人公司 → 群 → 新建群」，填写群名并选择成员。也可以说：「建一个官网上线群，把小笨、小码、小美拉进来，由小笨协调。」群里 @员工让他参与，@所有人一起讨论；未 @任何人时，由已设置的协调者应答。")} />
-          <Tip>{L("Give the team a concrete goal and deliverables. For example: “Mia designs the landing page, Cody implements it, and Ben reviews the result. Report the files and checks when finished.” Teammates can delegate and hand off work; you can adjust their roles and group membership as the project changes.", "说清目标和交付要求，例如：「小美设计首页，小码实现，小笨验收，完成后汇报文件和验证结果。」员工可分派任务、转交工作，项目变化时再调整职责和群成员。")}</Tip>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.build.team.of.ai.teammates.with.a340ee0")}</p>
+          <GuideScreenshot src={lang !== "zh" ? companyEn : companyZh} lang={lang} alt={tr("ui.helpmanualmodal.company.sidebar.add.teammate.button.teammate.dc0bf8d")} caption={tr("ui.helpmanualmodal.open.my.company.add.teammate.click.5755824")} marks={[{n:1,x:3,y:4},{n:2,x:90,y:18},{n:3,x:23,y:47}]} />
+          <h4>{tr("ui.helpmanualmodal.install.your.team.4850c12")}</h4>
+          <GuideScreenshot src={lang !== "zh" ? teamEn : teamZh} lang={lang} alt={tr("ui.helpmanualmodal.add.teammates.dialog.six.person.team.cdf9758")} caption={tr("ui.helpmanualmodal.team.pack.after.installation.disable.uninstall.5b1a6bf")} />
+          <FeatRow badge={<span className="guide-num">1</span>} title={tr("ui.helpmanualmodal.open.my.company.4a1620b")} desc={tr("ui.helpmanualmodal.new.users.have.my.company.enabled.7b90548")} />
+          <FeatRow badge={<span className="guide-num">2</span>} title={tr("ui.helpmanualmodal.choose.team.pack.caf61fc")} desc={tr("ui.helpmanualmodal.no.teammates.are.installed.automatically.on.60279dc")} />
+          <FeatRow badge={<span className="guide-num">3</span>} title={tr("ui.helpmanualmodal.start.working.85c2c51")} desc={tr("ui.helpmanualmodal.the.default.team.includes.six.teammates.ed1fda8")} />
+          <h4>{tr("ui.helpmanualmodal.manage.teammates.and.departments.9d86574")}</h4>
+          <FeatRow badge={<IconGroup />} title={tr("ui.helpmanualmodal.ask.ai.to.manage.teammates.8e69ab1")} desc={tr("ui.helpmanualmodal.in.chat.describe.the.teammate.name.7fa16ff")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.organize.departments.96d2e9e")} desc={tr("ui.helpmanualmodal.ask.ai.create.marketing.department.make.49373c6")} />
+          <h4>{tr("ui.helpmanualmodal.create.groups.and.collaborate.ad7c34a")}</h4>
+          <FeatRow badge={<IconGroup />} title={tr("ui.helpmanualmodal.bring.the.right.people.together.0269a80")} desc={tr("ui.helpmanualmodal.open.my.company.groups.new.group.9b17973")} />
+          <Tip>{tr("ui.helpmanualmodal.give.the.team.concrete.goal.and.17b8535")}</Tip>
         </>
       ),
     },
     {
       id: "images",
       icon: IconStart,
-      label: L("Image generation", "生图模型"),
+      label: tr("ui.helpmanualmodal.image.generation.060603e"),
       body: (
         <>
-          <p className="guide-lead">{L("Generate images in the conversation with hosted image models. No API key setup is needed.", "使用无为托管的生图模型，在对话中直接生成图片，无需配置 API Key。")}</p>
-          <GuideScreenshot src={lang === "en" ? platformEn : platformZh} lang={lang} alt={L("Platform menu showing Wuwei hosted · Image models", "平台菜单中的无为托管·生图模型入口")} caption={L("1 Open the platform switcher below the input; find Wuwei hosted · Image models. This capture shows the entry, not a selected model or a paid generation.", "1 打开输入框下方的平台菜单，找到「无为托管 · 生图模型」。实图仅展示入口，不表示已选模型或付费生成。")} />
-          <GuideScreenshot src={lang === "en" ? imageModelsEn : imageModelsZh} lang={lang} alt={L("Image model menu showing GPT Image 2, Nano Banana 2, Nano Banana and GPT Image 1", "生图模型菜单：GPT Image 2、Nano Banana 2、Nano Banana、GPT Image 1")} caption={L("2 Choose an image model from the model menu. Actual test-client capture; listed prices are references, not an order. Prices are subject to the final confirmation.", "2 在模型菜单选择生图模型。测试客户端实截；列表价格为参考，不是订单，价格以实际确认为准。")} />
+          <p className="guide-lead">{tr("ui.helpmanualmodal.generate.images.in.the.conversation.with.166f645")}</p>
+          <GuideScreenshot src={lang !== "zh" ? platformEn : platformZh} lang={lang} alt={tr("ui.helpmanualmodal.platform.menu.showing.wuwei.hosted.image.ad07963")} caption={tr("ui.helpmanualmodal.open.the.platform.switcher.below.the.2799e45")} />
+          <GuideScreenshot src={lang !== "zh" ? imageModelsEn : imageModelsZh} lang={lang} alt={tr("ui.helpmanualmodal.image.model.menu.showing.gpt.image.fc18c44")} caption={tr("ui.helpmanualmodal.choose.an.image.model.from.the.5e3d12f")} />
 
-          <FeatRow badge={<span className="guide-num">1</span>} title={L("Sign in and choose a model", "登录并选择模型")} desc={L("Click the platform below the message box and choose Wuwei hosted · Image models. Select GPT Image 2, Nano Banana 2, Nano Banana or GPT Image 1.", "登录后，点击输入框下方的平台，选择「无为托管 · 生图模型」，再选择 GPT Image 2、Nano Banana 2、Nano Banana 或 GPT Image 1。")} />
-          <FeatRow badge={<span className="guide-num">2</span>} title={L("Describe your image", "描述图片")} desc={L("Describe the subject, setting, style and intended use, then send. For example: “Create a warm, minimalist illustration of a coffee shop for a website banner.” You can request a supported size or quality in the prompt; the model picker selects the model itself.", "说清主体、场景、风格和用途后发送，例如：「生成一张咖啡店网站横幅，温暖色调，简约插画风。」需要尺寸或画质时可在描述中提出，具体选项以模型支持为准；模型列表只选择模型。")} />
-          <FeatRow badge={<span className="guide-num">3</span>} title={L("Confirm the cost", "确认费用")} desc={L("The confirmation dialog shows the estimated coin reservation and maximum authorization. Check these before confirming. The model list shows a reference price; quality and size can change the quote. GPT Image 1 uses low quality by default and also supports medium quality in this release.", "确认弹窗会显示预计预占的无为币和最高授权额度，核对后再确认。模型列表是参考价格，画质和尺寸会影响报价。当前版本 GPT Image 1 默认低画质，也支持中画质。")} />
-          <FeatRow badge={<span className="guide-num">4</span>} title={L("View the result", "查看结果")} desc={L("When generation finishes, the image appears directly in the conversation. Click it to view it larger. There is no need to ask AI to send the same image again.", "生成完成后，图片直接显示在对话中，点击可放大查看，不必再让 AI 发送同一张图片。")} />
-          <Tip>{L("If the result is unknown or the connection is interrupted, ask AI to check the original order. Avoid placing another order until its status is clear, to prevent duplicate generations and charges.", "若提示结果不明或连接中断，让 AI 查询原订单。确认原订单状态后再决定是否重新生成，避免重复下单和扣费。")}</Tip>
+          <FeatRow badge={<span className="guide-num">1</span>} title={tr("ui.helpmanualmodal.sign.in.and.choose.model.c254045")} desc={tr("ui.helpmanualmodal.click.the.platform.below.the.message.0d0a7d0")} />
+          <FeatRow badge={<span className="guide-num">2</span>} title={tr("ui.helpmanualmodal.describe.your.image.26fb713")} desc={tr("ui.helpmanualmodal.describe.the.subject.setting.style.and.8f4bd58")} />
+          <FeatRow badge={<span className="guide-num">3</span>} title={tr("ui.helpmanualmodal.confirm.the.cost.c33d3c3")} desc={tr("ui.helpmanualmodal.the.confirmation.dialog.shows.the.estimated.a6f9341")} />
+          <FeatRow badge={<span className="guide-num">4</span>} title={tr("ui.helpmanualmodal.view.the.result.21459e9")} desc={tr("ui.helpmanualmodal.when.generation.finishes.the.image.appears.95db343")} />
+          <Tip>{tr("ui.helpmanualmodal.if.the.result.is.unknown.or.42e386f")}</Tip>
         </>
       ),
     },
     {
       id: "modes",
       icon: IconModes,
-      label: L("Run modes & depth", "运行模式与深度"),
+      label: tr("ui.helpmanualmodal.run.modes.depth.a58654a"),
       body: (
         <>
-          <p className="guide-lead">{L("Three run modes decide how much freedom the agent has. Switch them per-conversation in the input bar.", "输入栏里的三个运行模式决定放多少权给智能体，每个会话各记各的。")}</p>
-          <FeatRow badge={<span className="guide-chip">{L("Manual", "手动")}</span>} title={L("Approve each step", "每步确认")} desc={L("It asks permission before every tool call or command. Maximum control — good for sensitive work.", "每次调工具/跑命令前都问你。掌控最强，适合敏感操作。")} />
-          <FeatRow badge={<span className="guide-chip">{L("Auto", "自动")}</span>} title={L("Auto-approve", "自动放行")} desc={L("Permissions auto-granted so it runs the whole task without stopping to ask.", "自动放行权限，一口气把任务跑完，不再逐步打断你。")} />
-          <FeatRow badge={<span className="guide-chip guide-chip--on">{L("Smart-continue", "智能继续")}</span>} title={L("Runs, then keeps going", "跑完还自己接着推进")} desc={L("Auto-approves AND, after finishing a round, works out the next step and continues on its own — great for long autonomous work (even overnight).", "自动放行 + 跑完一轮后自己算出下一步接着推进，适合长时间自主干活（半夜也能跑）。")} />
-          <h4>{L("Thinking depth", "思考档位")}</h4>
-          <p>{L("The depth picker trades speed for rigor:", "档位在快和深之间取舍：")}</p>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.three.run.modes.decide.how.much.70d18c4")}</p>
+          <FeatRow badge={<span className="guide-chip">{tr("mode.manual")}</span>} title={tr("ui.helpmanualmodal.approve.each.step.84ac07d")} desc={tr("ui.helpmanualmodal.it.asks.permission.before.every.tool.04cb61b")} />
+          <FeatRow badge={<span className="guide-chip">{tr("mode.auto")}</span>} title={tr("ui.helpmanualmodal.auto.approve.e97abb3")} desc={tr("ui.helpmanualmodal.permissions.auto.granted.so.it.runs.1113375")} />
+          <FeatRow badge={<span className="guide-chip guide-chip--on">{tr("ui.app.smart.continue.269f877")}</span>} title={tr("ui.helpmanualmodal.runs.then.keeps.going.413a34a")} desc={tr("ui.helpmanualmodal.auto.approves.and.after.finishing.round.4bd5bc1")} />
+          <h4>{tr("ui.helpmanualmodal.thinking.depth.05161de")}</h4>
+          <p>{tr("ui.helpmanualmodal.the.depth.picker.trades.speed.for.79104d5")}</p>
           <div className="guide-scale">
-            <span>{L("Fast", "快")}</span>
-            <span className="guide-scale__on">{L("Balanced ·rec.", "平衡·推荐")}</span>
-            <span>{L("Deep", "深入")}</span>
-            <span>{L("Deeper", "很深")}</span>
-            <span>{L("Max", "极致")}</span>
+            <span>{tr("ui.helpmanualmodal.fast.d56d4ff")}</span>
+            <span className="guide-scale__on">{tr("ui.helpmanualmodal.balanced.rec.7b14236")}</span>
+            <span>{tr("ui.helpmanualmodal.deep.cb03d15")}</span>
+            <span>{tr("ui.helpmanualmodal.deeper.96029be")}</span>
+            <span>{tr("ui.helpmanualmodal.max.70a555c")}</span>
           </div>
-          <Tip>{L("Keep Balanced for most work. Bump to Deep / Max only for hard refactors or tricky debugging — they're slower and can time out.", "多数活儿用「平衡」就够。只有硬骨头（大重构、疑难排查）才上「深入/极致」，它们更慢、也更容易超时。")}</Tip>
+          <Tip>{tr("ui.helpmanualmodal.keep.balanced.for.most.work.bump.74ab54b")}</Tip>
         </>
       ),
     },
     {
       id: "sessions",
       icon: IconSessions,
-      label: L("Sessions & hidden tricks", "会话与隐藏秘技"),
+      label: tr("ui.helpmanualmodal.sessions.hidden.tricks.c673abb"),
       body: (
         <>
-          <p className="guide-lead">{L("The real power is in the right-click menu. Right-click any conversation in the left list to reveal it.", "真正的威力藏在右键菜单里。在左侧列表右键任意一个对话就能打开。")}</p>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.the.real.power.is.in.the.62a5466")}</p>
           <figure className="guide-shot">
             <div className="gm-stage">
               <div className="gm-menu">
-                <div className="gm-item"><IconHandoff /><span>{L("Summarize and hand off to a new chat", "总结并交接到新对话")}</span></div>
+                <div className="gm-item"><IconHandoff /><span>{tr("ctx.handoff")}</span></div>
                 <div className="gm-sep" />
-                <div className="gm-item"><IconGoal2 /><span>{L("Set overall goal…", "设置总目标…")}</span></div>
-                <div className="gm-item"><IconHist /><span>{L("View full history…", "查看完整历史…")}</span></div>
+                <div className="gm-item"><IconGoal2 /><span>{tr("ui.app.set.overall.goal.846f9cb")}</span></div>
+                <div className="gm-item"><IconHist /><span>{tr("ui.app.view.full.history.17b4cd4")}</span></div>
                 <div className="gm-sep" />
-                <div className="gm-item gm-done"><IconCheck /><span>{L("Mark done", "标记完成")}</span></div>
-                <div className="gm-item"><IconDiscuss /><span>{L("Mark to discuss", "标记待讨论")}</span></div>
+                <div className="gm-item gm-done"><IconCheck /><span>{tr("ctx.markDone")}</span></div>
+                <div className="gm-item"><IconDiscuss /><span>{tr("ctx.markDiscuss")}</span></div>
                 <div className="gm-sep" />
-                <div className="gm-head">{L("Move to group", "移动到分组")}</div>
-                <div className="gm-item"><IconPlusSm /><span>{L("New group…", "新建分组…")}</span></div>
+                <div className="gm-head">{tr("ctx.moveToGroup")}</div>
+                <div className="gm-item"><IconPlusSm /><span>{tr("ctx.newGroup")}</span></div>
                 <div className="gm-sep" />
-                <div className="gm-head">{L("Priority", "优先级")}</div>
+                <div className="gm-head">{tr("ctx.priority")}</div>
                 <div className="gm-chips">
-                  <span className="gm-chip gm-chip--on">{L("None", "无")}</span>
-                  <span className="gm-chip">{L("High", "高")}</span>
-                  <span className="gm-chip">{L("Medium", "中")}</span>
-                  <span className="gm-chip">{L("Low", "低")}</span>
+                  <span className="gm-chip gm-chip--on">{tr("ctx.prioNone")}</span>
+                  <span className="gm-chip">{tr("ui.helpmanualmodal.high.29b7559")}</span>
+                  <span className="gm-chip">{tr("ui.helpmanualmodal.medium.c3c3788")}</span>
+                  <span className="gm-chip">{tr("ui.helpmanualmodal.low.1638d14")}</span>
                 </div>
-                <div className="gm-head">{L("Quadrants (importance/urgency)", "四象限（重要/紧急）")}</div>
+                <div className="gm-head">{tr("ctx.quadrant")}</div>
                 <div className="gm-quad">
-                  <span className="gm-qb">{L("Urgent & important", "紧急重要")}</span>
-                  <span className="gm-qb">{L("Important, not urgent", "不紧急重要")}</span>
-                  <span className="gm-qb">{L("Urgent, not important", "紧急不重要")}</span>
-                  <span className="gm-qb">{L("Neither", "不紧急不重要")}</span>
+                  <span className="gm-qb">{tr("ui.helpmanualmodal.urgent.important.eab7d5f")}</span>
+                  <span className="gm-qb">{tr("ui.helpmanualmodal.important.not.urgent.7c78c1e")}</span>
+                  <span className="gm-qb">{tr("ui.helpmanualmodal.urgent.not.important.003cf85")}</span>
+                  <span className="gm-qb">{tr("ui.helpmanualmodal.neither.ea42932")}</span>
                 </div>
               </div>
             </div>
-            <figcaption>{L("The actual right-click menu, reproduced item by item", "真实的右键菜单，逐项 1:1 还原")}</figcaption>
+            <figcaption>{tr("ui.helpmanualmodal.the.actual.right.click.menu.reproduced.bfe67ee")}</figcaption>
           </figure>
-          <FeatRow badge={<IconGoal2 />} title={L("Summarize & hand off to a new chat", "总结并交接到新对话")} desc={L("Distills what matters from a long, messy chat and opens a clean new one to continue — beats a polluted context. If the chat has an overall goal, it carries over and auto-resumes.", "把又长又乱的对话里有价值的东西提炼出来，开一个干净的新对话接着做，解决上下文被污染。若原对话设了总目标，会一并带过去并自动续跑。")} />
-          <FeatRow badge={<IconGoal2 />} title={L("Set overall goal", "设置总目标")} desc={L("Give the chat one big goal; it self-decomposes and drives step by step until done. Pair with Smart-continue for hands-off progress.", "给对话定一个大目标，它自己拆解、一步步推进，做完为止。配「智能继续」即可放手让它跑。")} />
-          <FeatRow badge={<IconHist />} title={L("View full history", "查看完整历史")} desc={L("See the original exchanges from before context compaction — nothing is lost even after long autonomous runs.", "查看上下文压缩之前的原始交流，跑再久也能回看，什么都不丢。")} />
-          <FeatRow badge={<IconCheck />} title={L("Mark done / for discussion", "标记完成 / 待讨论")} desc={L("Flag a conversation as finished, or as something to revisit. Keeps a long list organized.", "把对话标成已完成，或标成待回头讨论，长列表也井井有条。")} />
-          <FeatRow badge={<IconPrio />} title={L("Priority & Eisenhower quadrants", "优先级与四象限")} desc={L("Tag High / Medium / Low, or use the Important×Urgent quadrants. Tagged chats sort to the top.", "打 高/中/低，或用「重要×紧急」四象限。打过标的对话会排到前面。")} />
-          <FeatRow badge={<IconGroup />} title={L("Groups", "分组")} desc={L("Move conversations into custom groups, or create a new group on the fly.", "把对话移进自定义分组，也能随手新建分组。")} />
+          <FeatRow badge={<IconGoal2 />} title={tr("ui.helpmanualmodal.summarize.hand.off.to.new.chat.579e94a")} desc={tr("ui.helpmanualmodal.distills.what.matters.from.long.messy.7cce538")} />
+          <FeatRow badge={<IconGoal2 />} title={tr("ui.helpmanualmodal.set.overall.goal.8da8d13")} desc={tr("ui.helpmanualmodal.give.the.chat.one.big.goal.4399035")} />
+          <FeatRow badge={<IconHist />} title={tr("ui.helpmanualmodal.view.full.history.e5cf91c")} desc={tr("ui.helpmanualmodal.see.the.original.exchanges.from.before.369a84a")} />
+          <FeatRow badge={<IconCheck />} title={tr("ui.helpmanualmodal.mark.done.for.discussion.db10247")} desc={tr("ui.helpmanualmodal.flag.conversation.as.finished.or.as.2bf3d63")} />
+          <FeatRow badge={<IconPrio />} title={tr("ui.helpmanualmodal.priority.eisenhower.quadrants.81301d7")} desc={tr("ui.helpmanualmodal.tag.high.medium.low.or.use.3e6d813")} />
+          <FeatRow badge={<IconGroup />} title={tr("ui.helpmanualmodal.groups.86fbe0c")} desc={tr("ui.helpmanualmodal.move.conversations.into.custom.groups.or.a9a6ab9")} />
           <Tip>
-            {L("Search everything with ", "全局搜索用 ")}<Kbd>{L("Ctrl / ⌘ + F", "Ctrl / ⌘ + F")}</Kbd>{L(" — it searches inside all conversation content, not just titles. Drag the sidebar edge to widen it; click « to collapse.", " —— 它搜的是所有对话的正文内容，不只是标题。拖侧栏右缘可加宽，点 « 收起。")}
+            {tr("ui.helpmanualmodal.search.everything.with.33130b1")}<Kbd>{tr("ui.helpmanualmodal.ctrl.618e43f")}</Kbd>{tr("ui.helpmanualmodal.it.searches.inside.all.conversation.content.bf5d076")}
           </Tip>
         </>
       ),
@@ -226,31 +222,31 @@ export function HelpManualModal({ lang, onClose }: Props) {
     {
       id: "goals",
       icon: IconGoal,
-      label: L("Goals & autonomy", "总目标与自主推进"),
+      label: tr("ui.helpmanualmodal.goals.autonomy.ff607ab"),
       body: (
         <>
-          <p className="guide-lead">{L("This is what makes Wuwei an agent, not a chatbot: set a goal, walk away, come back to results.", "这正是无为区别于聊天机器人的地方：设个目标、走开、回来看结果。")}</p>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.this.is.what.makes.wuwei.an.d03a2fd")}</p>
           <div className="guide-flow">
-            <div className="guide-flow__step"><span>1</span>{L("Right-click a chat → Set overall goal", "右键对话 → 设置总目标")}</div>
+            <div className="guide-flow__step"><span>1</span>{tr("ui.helpmanualmodal.right.click.chat.set.overall.goal.b8c6a4c")}</div>
             <div className="guide-flow__arrow">→</div>
-            <div className="guide-flow__step"><span>2</span>{L("Turn on Smart-continue", "打开智能继续")}</div>
+            <div className="guide-flow__step"><span>2</span>{tr("ui.helpmanualmodal.turn.on.smart.continue.bd3913b")}</div>
             <div className="guide-flow__arrow">→</div>
-            <div className="guide-flow__step"><span>3</span>{L("It self-decomposes & runs to completion", "它自拆解、自推进到完成")}</div>
+            <div className="guide-flow__step"><span>3</span>{tr("ui.helpmanualmodal.it.self.decomposes.runs.to.completion.1aaab75")}</div>
           </div>
-          <p>{L("Under the hood it plans the goal into steps, executes each, checks its own progress, and keeps going until the goal is met — approving its own routine permissions along the way.", "内部它会把目标拆成若干步，逐步执行、自查进度，一路自动放行常规权限，直到达成目标为止。")}</p>
-          <Tip>{L("When a long run has bloated the context, use “Summarize & hand off” — it carries the goal into a fresh chat and resumes automatically, so momentum isn't lost.", "跑久了上下文变臃肿时，用「总结并交接」——它会把目标带进一个干净的新对话并自动续跑，势头不断。")}</Tip>
+          <p>{tr("ui.helpmanualmodal.under.the.hood.it.plans.the.f27a5aa")}</p>
+          <Tip>{tr("ui.helpmanualmodal.when.long.run.has.bloated.the.f08ab83")}</Tip>
         </>
       ),
     },
     {
       id: "brain",
       icon: IconBrain,
-      label: L("Brain Network", "脑网络"),
+      label: tr("ui.helpmanualmodal.brain.network.dcc051f"),
       body: (
         <>
           <div className="guide-protag">Pro</div>
-          <p className="guide-lead">{L("The Brain Network is Wuwei's long-term memory. It quietly distills valuable concepts and experience from your chats, so you never have to re-explain your preferences and projects.", "脑网络是无为的长期记忆。它悄悄把对话里有价值的概念与经验沉淀下来，你不必反复交代自己的偏好和项目。")}</p>
-          <Shot caption={L("Two views: the concept graph, and the knowledge pyramid", "两种视图：概念网络图 · 知识金字塔")}>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.the.brain.network.is.wuwei.long.f1763d8")}</p>
+          <Shot caption={tr("ui.helpmanualmodal.two.views.the.concept.graph.and.259e1d0")}>
             <svg viewBox="0 0 320 150" width="100%" fill="none" stroke="currentColor">
               <g strokeWidth="1.3" opacity="0.7">
                 <circle cx="70" cy="75" r="10" /><circle cx="40" cy="40" r="6" /><circle cx="42" cy="112" r="7" /><circle cx="105" cy="48" r="6" /><circle cx="110" cy="108" r="7" />
@@ -263,100 +259,100 @@ export function HelpManualModal({ lang, onClose }: Props) {
               </g>
             </svg>
           </Shot>
-          <FeatRow badge={<IconBrain2 />} title={L("Learns continuously", "持续学习")} desc={L("Turns meaningful moments in conversation into durable memory — automatically.", "把对话里有意义的片段自动变成可长期保存的记忆。")} />
-          <FeatRow badge={<IconBrain2 />} title={L("Recalls across chats", "跨对话回忆")} desc={L("Next time it pulls in your past experience and preferences without you repeating them.", "下次自动调用你过去的经验与偏好，不用你再说一遍。")} />
-          <FeatRow badge={<IconBrain2 />} title={L("Gets richer with use", "越用越丰富")} desc={L("Memory isn't capped by a single conversation's length — the more you use it, the more it understands you.", "记忆不受单次对话长度限制，用得越久越懂你。")} />
-          <Tip tone="pro">{L("Brain Network is a Pro feature. Open it from the left panel; free users see an intro. Background learning progress shows in the status bar at the bottom.", "脑网络是 Pro 功能。从左侧面板进入，免费用户会看到介绍页。后台学习进度在底部状态栏实时显示。")}</Tip>
+          <FeatRow badge={<IconBrain2 />} title={tr("ui.helpmanualmodal.learns.continuously.235af69")} desc={tr("ui.helpmanualmodal.turns.meaningful.moments.in.conversation.into.4cfbc2b")} />
+          <FeatRow badge={<IconBrain2 />} title={tr("ui.helpmanualmodal.recalls.across.chats.b99a5d3")} desc={tr("ui.helpmanualmodal.next.time.it.pulls.in.your.cfe2980")} />
+          <FeatRow badge={<IconBrain2 />} title={tr("ui.helpmanualmodal.gets.richer.with.use.ff687a3")} desc={tr("ui.helpmanualmodal.memory.isn.capped.by.single.conversation.3cabd10")} />
+          <Tip tone="pro">{tr("ui.helpmanualmodal.brain.network.is.pro.feature.open.429f9a6")}</Tip>
         </>
       ),
     },
     {
       id: "palace",
       icon: IconPalace,
-      label: L("Knowledge Palace", "知识宫殿"),
+      label: tr("ui.helpmanualmodal.knowledge.palace.cefdce2"),
       body: (
         <>
           <div className="guide-protag">Pro</div>
-          <p className="guide-lead">{L("Point Wuwei at a folder of your own documents — notes, an Obsidian vault, specs, past write-ups — and it becomes a searchable Knowledge Palace. The AI pulls the exact relevant passages on demand instead of you pasting everything in.", "把无为指向一个你自己的文档文件夹——笔记、Obsidian 库、规范、过往文稿——它就变成一座可检索的「知识宫殿」。需要时 AI 只捞出真正相关的段落，你不用再把一堆东西整段贴进去。")}</p>
-          <h4>{L("Set it up", "怎么建")}</h4>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.point.wuwei.at.folder.of.your.b9e50ae")}</p>
+          <h4>{tr("ui.helpmanualmodal.set.it.up.5f8b381")}</h4>
           <div className="guide-flow">
-            <div className="guide-flow__step"><span>1</span>{L("Settings → Brain Network → Document library", "设置 → 脑网络 → 文档库")}</div>
+            <div className="guide-flow__step"><span>1</span>{tr("ui.helpmanualmodal.settings.brain.network.document.library.dadbbfd")}</div>
             <div className="guide-flow__arrow">→</div>
-            <div className="guide-flow__step"><span>2</span>{L("Browse to your folder, click Build index", "选到你的文件夹，点建索引")}</div>
+            <div className="guide-flow__step"><span>2</span>{tr("ui.helpmanualmodal.browse.to.your.folder.click.build.866ec6f")}</div>
             <div className="guide-flow__arrow">→</div>
-            <div className="guide-flow__step"><span>3</span>{L("Rebuild whenever the docs change", "文档有变就重建一次")}</div>
+            <div className="guide-flow__step"><span>3</span>{tr("ui.helpmanualmodal.rebuild.whenever.the.docs.change.138a9c3")}</div>
           </div>
-          <FeatRow badge={<IconPalace2 />} title={L("Indexing (scan + vectorize)", "建索引（扫描 + 向量化）")} desc={L("It scans every document and builds a semantic index. Big libraries take a moment the first time; after that it's instant.", "它扫描每个文档、建立语义索引。第一次库大会花点时间，之后就是秒回。")} />
-          <FeatRow badge={<IconPalace2 />} title={L("Concept extraction (optional)", "概念抽取（可选）")} desc={L("Pull concepts and relations out of the indexed docs into the Brain graph — so your knowledge shows up as a connected map, not just loose text. Runs per-document to save tokens, and can be stopped anytime.", "从已索引文档里抽出概念和关系，填进脑网络图谱——你的知识就成了一张连起来的图，而不只是散落的文本。按文档逐个跑、省 token，随时可停。")} />
-          <FeatRow badge={<IconPalace2 />} title={L("Scan related docs on recall", "检索时扫描相关文档")} desc={L("Keep this sub-toggle on: when the AI recalls memory, it also returns the most relevant original fragments from your Palace — with their file paths.", "保持这个子开关开着：AI 检索记忆时，会连带返回宫殿里最相关的原文片段——并附上文件路径。")} />
-          <Tip tone="pro">{L("At work time it stays lean: recall returns a summary + path, and the AI reads the full document only when it actually needs it (via brain_read_doc). Your whole knowledge base is available without burning tokens on what isn't relevant.", "干活时很省：检索只给「摘要 + 路径」，AI 真正需要时才去读整篇原文（brain_read_doc）。整座知识库随取随用，又不会为无关内容白烧 token。")}</Tip>
+          <FeatRow badge={<IconPalace2 />} title={tr("ui.helpmanualmodal.indexing.scan.vectorize.271c65f")} desc={tr("ui.helpmanualmodal.it.scans.every.document.and.builds.ad2e0d2")} />
+          <FeatRow badge={<IconPalace2 />} title={tr("ui.helpmanualmodal.concept.extraction.optional.d622644")} desc={tr("ui.helpmanualmodal.pull.concepts.and.relations.out.of.1c45441")} />
+          <FeatRow badge={<IconPalace2 />} title={tr("set.brain.scanDocsTitle")} desc={tr("ui.helpmanualmodal.keep.this.sub.toggle.on.when.f4bd455")} />
+          <Tip tone="pro">{tr("ui.helpmanualmodal.at.work.time.it.stays.lean.da2d17c")}</Tip>
         </>
       ),
     },
     {
       id: "coins",
       icon: IconCoins,
-      label: L("Coins & membership", "无为币与会员"),
+      label: tr("ui.helpmanualmodal.coins.membership.6d03059"),
       body: (
         <>
-          <p className="guide-lead">{L("Hosted models run on coins. You get coins from membership, daily check-in, and top-ups.", "托管模型消耗无为币。币来自会员、每日签到、充值三处。")}</p>
-          <FeatRow badge={<IconCheck />} title={L("Daily check-in", "每日签到")} desc={L("Open the account panel and check in every day for free coins — higher tiers earn more per day.", "在账号面板每天签到领币，等级越高每日领得越多。")} />
+          <p className="guide-lead">{tr("ui.helpmanualmodal.hosted.models.run.on.coins.you.7c376ef")}</p>
+          <FeatRow badge={<IconCheck />} title={tr("ui.helpmanualmodal.daily.check.in.8f1db86")} desc={tr("ui.helpmanualmodal.open.the.account.panel.and.check.59a3a1a")} />
           <div className="guide-plans">
-            <div className="guide-plan"><b>Pro</b><span>¥29 · $6.99/mo</span><em>{L("Monthly quota · 20/day check-in", "包月额度 · 签到 20/日")}</em></div>
-            <div className="guide-plan guide-plan--rec"><b>Plus</b><span>¥99 · $19.99/mo</span><em>{L("5× quota · 40/day", "5× 额度 · 签到 40/日")}</em></div>
-            <div className="guide-plan"><b>Max</b><span>¥899 · $199/mo</span><em>{L("50× quota · 100/day", "50× 额度 · 签到 100/日")}</em></div>
+            <div className="guide-plan"><b>Pro</b><span>¥29 · $6.99/mo</span><em>{tr("ui.helpmanualmodal.monthly.quota.day.check.in.d96f21e")}</em></div>
+            <div className="guide-plan guide-plan--rec"><b>Plus</b><span>¥99 · $19.99/mo</span><em>{tr("ui.helpmanualmodal.quota.day.2649c39")}</em></div>
+            <div className="guide-plan"><b>{tr("ui.helpmanualmodal.max.70a555c")}</b><span>¥899 · $199/mo</span><em>{tr("ui.helpmanualmodal.quota.day.8837799")}</em></div>
           </div>
-          <Tip>{L("Membership also unlocks the Brain Network and every hosted model (Claude / GPT / Gemini / GLM …). Running low mid-task pops a top-up so you're never blocked.", "会员还解锁脑网络和全部托管模型（Claude / GPT / Gemini / GLM…）。任务途中缺币会弹充值，不会把你卡死。")}</Tip>
+          <Tip>{tr("ui.helpmanualmodal.membership.also.unlocks.the.brain.network.edc977f")}</Tip>
         </>
       ),
     },
     {
       id: "help",
       icon: IconHelp,
-      label: L("Messages · Support · Feedback", "消息 · 客服 · 反馈"),
+      label: tr("ui.helpmanualmodal.messages.support.feedback.f0ee650"),
       body: (
         <>
-          <p className="guide-lead">{L("Everything lives in the account menu (click your avatar, bottom-left).", "这些都在账号菜单里（点左下角头像）。")}</p>
-          <FeatRow badge={<IconBell />} title={L("Message Center", "消息中心")} desc={L("Rewards, activities, system notices and replies to your feedback — a red badge shows unread count.", "奖励到账、活动、系统通知、反馈回复都在这，未读会亮红点数字。")} />
-          <FeatRow badge={<IconHelp2 />} title={L("Contact support", "联系客服")} desc={L("Opens a live chat window — send and receive in real time. Or scan the WeChat QR to add support.", "打开在线对话窗，实时收发；也可扫微信二维码加客服。")} />
-          <FeatRow badge={<IconChat />} title={L("Feedback for rewards", "反馈有奖")} desc={L("Leave a suggestion or bug report. If it's adopted, we send you coins and membership as a thank-you.", "留个建议或报个 bug。被采纳的话，我们送你无为币和会员作为感谢。")} />
-          <Tip>{L("Adopted feedback really does get rewarded and you'll get an email plus a Message Center notice when it lands.", "被采纳的反馈是真发奖的，到账时你会收到邮件和消息中心通知。")}</Tip>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.everything.lives.in.the.account.menu.3ccb862")}</p>
+          <FeatRow badge={<IconBell />} title={tr("ui.app.message.center.914789a")} desc={tr("ui.helpmanualmodal.rewards.activities.system.notices.and.replies.805ac45")} />
+          <FeatRow badge={<IconHelp2 />} title={tr("pay.support.title")} desc={tr("ui.helpmanualmodal.opens.live.chat.window.send.and.51416b0")} />
+          <FeatRow badge={<IconChat />} title={tr("ui.helpmanualmodal.feedback.for.rewards.7926022")} desc={tr("ui.helpmanualmodal.leave.suggestion.or.bug.report.if.e35679a")} />
+          <Tip>{tr("ui.helpmanualmodal.adopted.feedback.really.does.get.rewarded.3fc592b")}</Tip>
         </>
       ),
     },
     {
       id: "settings",
       icon: IconSettings,
-      label: L("Settings walkthrough", "设置逐栏详解"),
+      label: tr("ui.helpmanualmodal.settings.walkthrough.c994daf"),
       body: (
         <>
-          <p className="guide-lead">{L("Open Settings from the account menu. The left menu has ten tabs — here's what each one is for.", "从账号菜单打开设置。左侧有十个分栏，这里逐个说清用途。")}</p>
+          <p className="guide-lead">{tr("ui.helpmanualmodal.open.settings.from.the.account.menu.5d65172")}</p>
 
-          <h4>{L("General", "通用")}</h4>
-          <FeatRow badge={<IconSettings2 />} title={L("Language", "语言")} desc={L("Switch the whole app between English and 中文 anytime.", "随时在英文和中文之间切换整个界面。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Session grouping", "会话分组")} desc={L("Manual (drag & right-click into groups), by-date, or by-project (AI auto-buckets chats by their content).", "手动（拖拽 / 右键归组）、按日期、或按项目（AI 按对话内容自动归类）。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Context compaction", "上下文压缩")} desc={L("When a chat gets long, older messages are summarized to fit the model's window. Set how many recent messages to keep verbatim, plus the token threshold and message-count threshold that trigger it (either one fires it; blank token = auto 80% of the model's context).", "对话变长时，较旧消息被摘要以塞进模型窗口。可设保留多少条最近原文，外加触发压缩的 Token 阈值和消息条数阈值（任一命中即压；Token 留空=自动取模型上下文 80%）。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Full history archive", "完整历史归档")} desc={L("Pre-compaction originals are archived (right-click a chat → View full history). Set retention days; 0 = keep forever.", "压缩前的原文会归档（右键会话 → 查看完整历史）。可设保留天数；填 0 = 永久保留。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Thinking-depth picker", "思考档位选择器")} desc={L("Toggle the Fast / Balanced / Deep selector under the input bar. Lower a notch if tasks keep timing out mid-run.", "开关输入框下方的「快/平衡/深入」档位选择器。任务老在半路超时就调低一档。")} />
+          <h4>{tr("set.tab.general")}</h4>
+          <FeatRow badge={<IconSettings2 />} title={tr("acct.language")} desc={tr("ui.helpmanualmodal.switch.the.whole.app.between.english.48e02ab")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("set.g.grouping")} desc={tr("ui.helpmanualmodal.manual.drag.right.click.into.groups.d64e347")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("set.g.compaction")} desc={tr("ui.helpmanualmodal.when.chat.gets.long.older.messages.5e321f4")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.full.history.archive.b3bbaac")} desc={tr("ui.helpmanualmodal.pre.compaction.originals.are.archived.right.b354ad7")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.thinking.depth.picker.3adaaa3")} desc={tr("ui.helpmanualmodal.toggle.the.fast.balanced.deep.selector.945b44e")} />
 
-          <h4>{L("Appearance", "外观")}</h4>
-          <FeatRow badge={<IconSettings2 />} title={L("Output style", "输出方式")} desc={L("Choose how replies appear: Stream (shown in batches as they arrive), Typewriter (steady char-by-char, smoothest), or All-at-once (nothing shows until the reply is fully done).", "选回复怎么呈现：流式（收到即整批显示）、打字机（匀速逐字，最丝滑）、回完一次性（回复期间不显示，完成后一次性给出）。")} />
+          <h4>{tr("set.tab.display")}</h4>
+          <FeatRow badge={<IconSettings2 />} title={tr("set.d.output")} desc={tr("ui.helpmanualmodal.choose.how.replies.appear.stream.shown.3ba9535")} />
 
-          <h4>{L("Model & Platforms", "模型与平台")}</h4>
-          <FeatRow badge={<IconSettings2 />} title={L("Model", "模型")} desc={L("Pick the active provider & model, and enter your own API key / base URL / subscription token and thinking depth if you use your own account.", "选当前用哪个供应商和模型；用自己账号时在这填 API Key / Base URL / 订阅令牌和思考档位。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Platform management", "平台管理")} desc={L("Reorder, edit, delete or hide any provider (the eye icon). Add a custom provider or relay. Hidden ones only disappear from the bottom “switch platform” menu — they stay usable here.", "拖动排序、编辑、删除或隐藏任意供应商（眼睛图标），也能添加自定义供应商/中转站。隐藏只影响底部「切换平台」菜单，此处仍可用。")} />
+          <h4>{tr("ui.helpmanualmodal.model.platforms.e473354")}</h4>
+          <FeatRow badge={<IconSettings2 />} title={tr("set.m.model")} desc={tr("ui.helpmanualmodal.pick.the.active.provider.model.and.f4a668e")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.platform.management.e2c38bd")} desc={tr("ui.helpmanualmodal.reorder.edit.delete.or.hide.any.99c8853")} />
 
-          <h4>{L("Personalization", "个性化")}</h4>
-          <FeatRow badge={<IconSettings2 />} title={L("System prompt — you're in full control", "系统提示词 —— 完全由你掌控")} desc={L("A global instruction that shapes how the AI behaves in every chat — its tone, rules, what to always do or avoid. Tools like Claude Code and Codex ship a built-in system prompt of tens of thousands of tokens, so even a plain “hello” burns that much before you've started. In Wuwei it's fully yours to edit — you decide exactly what the AI is told, and keep it as lean as you want.", "一段全局指令，塑造 AI 在每个对话里的风格、规则、该做/该避免什么。像 Claude Code、Codex 这类工具，内置系统提示词动辄几万 token——你只发一句「哈喽」，一开口就先烧掉几万 token。无为这里完全交给你自定义：AI 被告知什么、留多精简，全由你说了算，真正完全掌控 AI。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Memory", "记忆")} desc={L("Facts you want it to always know (your stack, names, preferences). Simpler than the Brain Network — it's a plain always-on note you edit by hand.", "你想让它始终记得的事实（技术栈、名字、偏好）。比脑网络简单，就是一段手动编辑、始终生效的备忘。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Brain Network (Pro)", "脑网络（Pro）")} desc={L("The auto-learning long-term memory — graph & pyramid views plus its learning prompt. See the Brain Network section for details.", "自动学习的长期记忆——网络图/金字塔视图 + 学习提示词。详见「脑网络」一节。")} />
+          <h4>{tr("ui.helpmanualmodal.personalization.9d1124b")}</h4>
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.system.prompt.you.re.in.full.ba94e6b")} desc={tr("ui.helpmanualmodal.global.instruction.that.shapes.how.the.7147516")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("set.tab.memory")} desc={tr("ui.helpmanualmodal.facts.you.want.it.to.always.466aa54")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.brain.network.pro.c646a6b")} desc={tr("ui.helpmanualmodal.the.auto.learning.long.term.memory.f915691")} />
 
-          <h4>{L("Power tools", "进阶能力")}</h4>
-          <FeatRow badge={<IconSettings2 />} title={L("MCP", "MCP")} desc={L("Connect MCP servers to extend what the agent can do (files, knowledge-graph memory, and more). Install from the built-in catalog in one click, or add your own.", "接入 MCP 服务器扩展智能体能力（文件、知识图谱记忆等）。可从内置目录一键安装，也能自定义添加。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Tools", "工具")} desc={L("Turn built-in tools on/off (web search, running commands, file edits …) and search the full list.", "开关内置工具（联网搜索、执行命令、改文件…），可搜索整个列表。")} />
-          <FeatRow badge={<IconSettings2 />} title={L("Secrets / Keys", "密钥")} desc={L("A local secret manager. It can detect a new key before you send and, once stored, auto-replaces secrets with placeholders so they never reach the AI in plain text.", "本地密钥管理器。发送前可检测疑似新密钥；入库后会自动用占位符替换敏感信息，绝不明文发给 AI。")} />
+          <h4>{tr("ui.helpmanualmodal.power.tools.e2c2702")}</h4>
+          <FeatRow badge={<IconSettings2 />} title={tr("set.tools.badgeMcp")} desc={tr("ui.helpmanualmodal.connect.mcp.servers.to.extend.what.cd8d8b8")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("set.tab.tools")} desc={tr("ui.helpmanualmodal.turn.built.in.tools.on.off.221bcb4")} />
+          <FeatRow badge={<IconSettings2 />} title={tr("ui.helpmanualmodal.secrets.keys.691b847")} desc={tr("ui.helpmanualmodal.local.secret.manager.it.can.detect.ac4d70b")} />
 
-          <Tip>{L("On a Claude subscription the usable context is capped lower than the API's 1M — so compaction may kick in earlier than the “/1M” display suggests. For the largest context, use an API key.", "用 Claude 订阅时，可用上下文比 API 的 1M 低（有封顶），所以压缩可能比「/1M」显示的更早触发。要最大上下文请用 API Key。")}</Tip>
+          <Tip>{tr("ui.helpmanualmodal.on.claude.subscription.the.usable.context.ed2766d")}</Tip>
         </>
       ),
     },
@@ -370,8 +366,8 @@ export function HelpManualModal({ lang, onClose }: Props) {
         {/* 左：导航 */}
         <aside className="guide-nav">
           <div className="guide-nav__brand">
-            <div className="guide-nav__brandttl">{L("User Guide", "使用手册")}</div>
-            <div className="guide-nav__brandsub">{L("Master Wuwei from zero", "从零把无为玩透")}</div>
+            <div className="guide-nav__brandttl">{tr("ui.app.user.guide.f2562f4")}</div>
+            <div className="guide-nav__brandsub">{tr("ui.helpmanualmodal.master.wuwei.from.zero.cb74ee0")}</div>
           </div>
           <nav className="guide-nav__list">
             {sections.map((s) => (
@@ -387,7 +383,7 @@ export function HelpManualModal({ lang, onClose }: Props) {
           <header className="guide-body__head">
             <span className="guide-body__ico">{cur.icon}</span>
             <h3>{cur.label}</h3>
-            <button className="guide-x" onClick={onClose} aria-label={L("Close", "关闭")}>
+            <button className="guide-x" onClick={onClose} aria-label={tr("msg.close")}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </header>

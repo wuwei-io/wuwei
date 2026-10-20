@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // 精简 MCP(Model Context Protocol) stdio 客户端：spawn 服务器进程，JSON-RPC over stdio(换行分隔)，
 // 握手 → tools/list → 把每个 MCP 工具包成 minicc Tool 代理 tools/call。无重依赖，自研。
 import { spawn, type ChildProcess } from "node:child_process";
@@ -56,9 +57,9 @@ class McpClient {
       setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
-          reject(new Error(process.env.WUWEI_LANG === "en"
+          reject(new Error(getCurrentLanguage() !== "zh"
             ? "MCP request timed out: " + method + " (the first npx/uvx run downloads deps and can be slow; or the command/args are wrong)"
-            : "MCP 请求超时: " + method + "（首次 npx/uvx 会下载依赖，可能较慢；或命令/参数不对）"));
+            : tr("ui.mcp.message.a83326fca4") + method + tr("ui.mcp.message.374b7c4920")));
         }
       }, 60000); // 首次 npx 下载包可能慢，给足 60s
     });
@@ -97,22 +98,18 @@ class McpClient {
           p.reject(new Error(this.error || msg));
         }
       };
-      const enMsg = process.env.WUWEI_LANG === "en";
+      const enMsg = getCurrentLanguage() !== "zh";
       this.proc.on("error", (e: any) => {
         failAll(
           e?.code === "ENOENT"
-            ? enMsg
-              ? `Command not found: ${this.cfg.command} (install it first, e.g. uvx needs uv)`
-              : `命令不存在：${this.cfg.command}（需先安装它，如 uvx 要装 uv）`
-            : e?.message || (enMsg ? "spawn failed" : "spawn 失败"),
+            ? tr("ui.mcp.command.not.found.install.it.first.33da5cb", { p0: this.cfg.command })
+            : e?.message || (tr("ui.mcp.spawn.failed.7158fce")),
         );
       });
       // 进程提前退出(如 npx 拉不到包/命令报错)→立即失败，不再干等超时
       this.proc.on("exit", (code) => {
         failAll(
-          enMsg
-            ? `Process exited (code ${code}): the command or package name may be invalid, or a dependency is missing`
-            : `进程已退出(code ${code})：命令或包名可能无效、或依赖缺失`,
+          tr("ui.mcp.process.exited.code.the.command.or.74259b7", { p0: code }),
         );
       });
       this.proc.stdout!.setEncoding("utf8");
@@ -151,15 +148,15 @@ class McpClient {
       inputSchema: t.inputSchema || { type: "object", properties: {} },
       async run(input): Promise<ToolResult> {
         // 这两条会进工具卡片和模型上下文 → 跟随界面语言（在调用处判定，切语言即时生效）
-        const en = process.env.WUWEI_LANG === "en";
+        const en = getCurrentLanguage() !== "zh";
         try {
           const r = await client.request("tools/call", { name: t.name, arguments: input });
           const content = (r?.content || [])
             .map((c: any) => (c.type === "text" ? c.text : JSON.stringify(c)))
             .join("\n");
-          return { content: content || (en ? "(no output)" : "(无输出)"), isError: !!r?.isError };
+          return { content: content || (tr("ui.mcp.no.output.5b6d486")), isError: !!r?.isError };
         } catch (e: any) {
-          return { content: `${en ? "MCP call failed:" : "MCP 调用失败:"} ${e.message}`, isError: true };
+          return { content: `${tr("ui.mcp.mcp.call.failed.68579d8")} ${e.message}`, isError: true };
         }
       },
     };
@@ -222,9 +219,9 @@ export async function connectMcp(onChange?: () => void): Promise<void> {
       // 含 <占位> 的配置(如 <目录路径>/<token>)先别连，避免用无效参数启动服务器→30s 超时假失败
       if (JSON.stringify(c.cfg).includes("<")) {
         c.status = "needs-config";
-        c.error = process.env.WUWEI_LANG === "en"
+        c.error = getCurrentLanguage() !== "zh"
           ? "Config still has <placeholders> to fill in (click “Advanced: edit JSON”, replace them, then save)"
-          : "配置里还有 <占位> 待填写（点「高级：编辑 JSON」替换后再保存）";
+          : tr("ui.mcp.message.d65b76f947");
         return Promise.resolve();
       }
       return c.connect().then(() => onChange?.());

@@ -1,3 +1,5 @@
+import systemData from "../../../../src/localization/content/system-data.json";
+import { tr } from "../../../../src/localization/index.js";
 // 数字婴儿 · 形象与状态机
 // 一个纯 SVG 婴儿：头大身小、眼睛低位、腮红——婴儿的比例特征。
 // 它此刻在干嘛(后端 activity) → 9 种状态，每种换一套眼睛/嘴/配件/动画；
@@ -19,15 +21,7 @@ export type BabyState =
 /** 后端 activity 文案 → 状态。文案在 baby_life.py/baby_server.py 的 set_activity()。 */
 export function inferBabyState(activity: string, alive: boolean): BabyState {
   const t = activity || "";
-  if (t.includes("睡着") || t.includes("做梦")) return "sleep";
-  if (t.includes("上网") || t.includes("搜索")) return "search";
-  if (t.includes("知识宫殿") || t.includes("翻资料")) return "read";
-  if (t.includes("消化") || t.includes("理解")) return "think";
-  if (t.includes("猜猜") || t.includes("学点什么") || t.includes("接下来")) return "wonder";
-  if (t.includes("聊天") || t.includes("陪主人")) return "talk";
-  if (t.includes("听")) return "listen";
-  if (t.includes("发呆") || t.includes("发会儿")) return "daydream";
-  if (t.includes("歇着")) return "rest";
+  for (const [state, aliases] of Object.entries(systemData.babyStateAliases)) if (aliases.some(alias => t.toLowerCase().includes(alias))) return state as BabyState;
   return alive ? "think" : "rest";
 }
 
@@ -38,15 +32,15 @@ export function stripActivityEmoji(s: string): string {
 
 /** 状态 → 一句中文说明(activity 为空时的兜底文案)。 */
 export const STATE_LABEL: Record<BabyState, string> = {
-  sleep: "睡着了，正在做梦整理知识",
-  search: "上网找资料中",
-  read: "在知识宫殿里翻书",
-  think: "正在消化刚学的东西",
-  wonder: "在想接下来学点什么",
-  talk: "正在跟你说话",
-  listen: "竖起耳朵在听",
-  daydream: "发会儿呆",
-  rest: "歇着呢",
+  get sleep() { return tr("ui.babyavatar.message.6dc20c7a5e"); },
+  get search() { return tr("ui.babyavatar.message.c48c82ae15"); },
+  get read() { return tr("ui.babyavatar.message.b2b493d919"); },
+  get think() { return tr("ui.babyavatar.message.99bd911c8b"); },
+  get wonder() { return tr("ui.babyavatar.message.8f31147be1"); },
+  get talk() { return tr("ui.babyavatar.message.afccc4fc95"); },
+  get listen() { return tr("ui.babyavatar.message.8932f83216"); },
+  get daydream() { return tr("ui.babyavatar.message.75f27d2c0d"); },
+  get rest() { return tr("ui.babyavatar.message.bb6257b62a"); },
 };
 
 type Props = {
@@ -100,7 +94,7 @@ export function BabyAvatar({
       height={size}
       viewBox="0 0 160 160"
       role="img"
-      aria-label={`数字婴儿：${STATE_LABEL[state]}`}
+      aria-label={tr("ui.babyavatar.message.48a92939ea", {p0: STATE_LABEL[state]})}
     >
       {!minimal && (
         <g className="bb-halo-g">

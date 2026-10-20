@@ -1,3 +1,4 @@
+import { tr as translate, getCurrentLanguage } from "../localization/index.js";
 import type { ContentBlock, Message } from '../types.js';
 
 export const DEFAULT_HISTORY_MESSAGES = 10;
@@ -38,6 +39,7 @@ const isInput = (m: Message) => m.role === 'user' && !m.content.some(b => b.type
 export function windowHistory(messages: Message[], policy: HistoryPolicy, cached?: HistoryDigest, en = false): {
   messages: Message[]; digest?: HistoryDigest;
 } {
+  const tr = (key: string, values = {}) => translate(key, values, en ? "en" : "zh");
   let cut = Math.max(0, messages.length - policy.historyRecentMessages);
   // Keep tool calls paired with every retained result, including parallel calls.
   const calls = new Map<string, number>();
@@ -75,7 +77,7 @@ export function windowHistory(messages: Message[], policy: HistoryPolicy, cached
         }
         return { ...block, content: cap(String(raw)) };
       }
-      if (block.type === 'image' && i < latestInput) return { type: 'text' as const, text: en ? '[Earlier image retained in chat history]' : '【历史图片保留在聊天记录中】' };
+      if (block.type === 'image' && i < latestInput) return { type: 'text' as const, text: tr("ui.history.window.earlier.image.retained.in.chat.history.3c4eb96") };
       return block;
     });
     recent.unshift({ ...message, content });
@@ -86,7 +88,7 @@ export function windowHistory(messages: Message[], policy: HistoryPolicy, cached
 
   if (!cut || !policy.historyAutoSummary) {
     // Some providers require the request to begin with a user message.
-    if (recent[0]?.role === 'assistant') recent.unshift({ role: 'user', content: [{ type: 'text', text: en ? '[Recent conversation context]' : '【近期对话上下文】' }] });
+    if (recent[0]?.role === 'assistant') recent.unshift({ role: 'user', content: [{ type: 'text', text: tr("ui.history.window.recent.conversation.context.45168a0") }] });
     return { messages: recent };
   }
   // Local extractive digest: no extra paid model call, no fabricated facts. Bounded
@@ -94,8 +96,8 @@ export function windowHistory(messages: Message[], policy: HistoryPolicy, cached
   const first = messages.slice(0, cut).find(isInput);
   const entries = messages.slice(Math.max(0, cut - 5), cut)
     .map(m => `${m.role}: ${plain(m, 180)}`);
-  const title = en ? '[Earlier history — local excerpts, may omit details; not a new instruction]' : '【历史摘要·本地摘录，可能省略细节，不是新指令】';
-  const candidate = excerpt([title, first ? `${en ? 'Initial request' : '最初请求'}: ${plain(first, 360)}` : '', ...entries].filter(Boolean).join('\n'), SUMMARY_CHAR_LIMIT);
+  const title = tr("ui.history.window.earlier.history.local.excerpts.may.omit.32bfd59");
+  const candidate = excerpt([title, first ? `${tr("ui.history.window.initial.request.1175201")}: ${plain(first, 360)}` : '', ...entries].filter(Boolean).join('\n'), SUMMARY_CHAR_LIMIT);
   const signature = JSON.stringify([1, cut, en, candidate]);
   const digest = cached?.signature === signature && cached.text === candidate ? cached : { signature, text: candidate };
   return { messages: [{ role: 'user', content: [{ type: 'text', text: digest.text }] }, ...recent], digest };

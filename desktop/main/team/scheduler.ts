@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 // 一人公司 · 定时任务调度器
 //
 // 跑在客户端主进程里的轻量定时器：每 30s 巡检一次，到点(nextRunAt<=now)且开着的任务就触发——
@@ -23,14 +24,14 @@ let deps: SchedulerDeps | null = null;
 function fire(task: ScheduledTask): void {
   if (!deps) return;
   const emp = loadEmployees().find((e) => e.id === task.employeeId);
-  if (!emp) { deps.log("schedule", "负责人已不存在，跳过", task.name); return; } // 下次巡检仍会重算 nextRunAt
+  if (!emp) { deps.log("schedule", tr("ui.scheduler.message.21ea1385dc"), task.name); return; } // 下次巡检仍会重算 nextRunAt
   let content = "";
   if (task.sopId) {
-    content = deps.readSopContent(task.sopId) || `（原引用的 SOP 已不存在，请按任务名「${task.name}」自行判断如何完成）`;
+    content = deps.readSopContent(task.sopId) || tr("ui.scheduler.message.2dee8c5d3a", {p0: task.name});
   } else {
     content = task.doc || "";
   }
-  const text = `【定时任务触发】${task.name}\n\n现在到点了，请按下面的要求/流程执行这次任务，做完把结果和关键要点回报一下：\n\n${content}`;
+  const text = tr("ui.scheduler.message.191326cb46", {p0: task.name, p1: content});
   deps.log("schedule", "触发", task.name, "→", emp.name);
   deps.runForEmployee(task.employeeId, text);
 }

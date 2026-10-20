@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../localization/index.js";
 import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
 import { withImageToolInstructions } from './prompt.js';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +15,7 @@ import type {
 
 // 会显示给用户的文案跟随界面语言(WUWEI_LANG 由桌面端 applyEnvFromSettings 写入，CLI 侧同样可用)。
 // ⚠ 必须在「调用时」求值，绝不能把 tt(...) 的结果存进模块顶层 const——那会在模块加载那刻把语言焊死，切语言不生效。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 // 工具输出封顶：单条工具结果过大(训练日志/大文件 dump)原样堆进历史会撑爆上下文——保留最近几条原文时
 // 这几条本身就超限，且大到连"压缩总结"这步都超限、压缩放弃 → 死结(会话再也发不出请求)。
@@ -25,10 +26,7 @@ function capToolResult(content: string): string {
   const omitted = content.length - 60000;
   return (
     content.slice(0, 20000) +
-    tt(
-      `\n\n[…… 中间省略 ${omitted} 字符：工具输出过长，已只保留头尾以免撑爆上下文 ……]\n\n`,
-      `\n\n[…… ${omitted} chars omitted: tool output too long, kept head+tail to avoid blowing the context ……]\n\n`,
-    ) +
+    tr("ui.loop.chars.omitted.tool.output.too.long.e683336", { p0: omitted }) +
     content.slice(-40000)
   );
 }
@@ -226,7 +224,7 @@ export class Agent {
       this.messages[this.messages.length - 1] = {
         role: "assistant",
         // 占位符跟随界面语言，且字面量与 desktop/main/sessions.ts 修复历史时注入的完全一致(半角括号)，两边才对得上
-        content: hasText ? kept : [{ type: "text", text: tt("(已停止)", "(stopped)") }], // 极少数「纯工具无正文」才占位，但这是完整边界非截断
+        content: hasText ? kept : [{ type: "text", text: tr("ui.sessions.stopped.e649f93") }], // 极少数「纯工具无正文」才占位，但这是完整边界非截断
         ts: last.ts,
         usage: last.usage,
       };
@@ -370,7 +368,7 @@ export class Agent {
   async sendImage(prompt: string, sku: string, hooks: AgentHooks, signal?: AbortSignal): Promise<void> {
     const turnId = randomUUID();
     const tool = this.toolMap.get('platform_imagegen');
-    if (!tool || !this.provider.platformImage) throw new Error(tt('请先登录并选择托管生图。','Sign in and select hosted image generation first.'));
+    if (!tool || !this.provider.platformImage) throw new Error(tr("ui.loop.sign.in.and.select.hosted.image.e79a6e5"));
     signal?.throwIfAborted();
     this.ensureCanAcceptUser();
     this.messages.push({role:'user',content:[{type:'text',text:prompt}],ts:Date.now()});
@@ -384,7 +382,7 @@ export class Agent {
       this.messages.push({role:'user',content:[{type:'tool_result',tool_use_id:id,content,is_error:!!out.isError} as any],ts:Date.now()});
       let result: any;
       try { result=JSON.parse(out.content); } catch { /* Cancellation text. */ }
-      const reply = result?.displayed === true ? tt('图片已生成。','Image generated.')
+      const reply = result?.displayed === true ? tr("ui.loop.image.generated.59a71fd")
         : result?.message || out.content;
       this.messages.push({role:'assistant',content:[{type:'text',text:reply}],ts:Date.now()});
       hooks.onText?.(reply);
@@ -420,7 +418,7 @@ export class Agent {
         const last = this.messages[this.messages.length - 1];
         if (last && last.role === "user") {
           // 同上：与 sessions.ts 的占位字面量保持一致，并跟随界面语言
-          this.messages.push({ role: "assistant", content: [{ type: "text", text: tt("(已停止)", "(stopped)") }], ts: Date.now() });
+          this.messages.push({ role: "assistant", content: [{ type: "text", text: tr("ui.sessions.stopped.e649f93") }], ts: Date.now() });
           hooks.onStep?.();
         }
         hooks.onAssistantDone?.();
@@ -569,7 +567,7 @@ export class Agent {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
-            content: tt(`未知工具: ${call.name}`, `Unknown tool: ${call.name}`), // 会显示在工具卡片里，跟随界面语言
+            content: tr("ui.loop.unknown.tool.c9bb36d", { p0: call.name }), // 会显示在工具卡片里，跟随界面语言
             is_error: true,
           };
           continue;
@@ -579,14 +577,14 @@ export class Agent {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: call.id,
-            content: tt("(已停止)", "(stopped)"), // 会显示在工具卡片里，跟随界面语言
+            content: tr("ui.sessions.stopped.e649f93"), // 会显示在工具卡片里，跟随界面语言
             is_error: true,
           };
           continue;
         }
 
         if (call.name === 'send_image' && typeof call.input.path === 'string' && displayedImagePaths.has(call.input.path)) {
-          resultsBlocks[idx] = { type:'tool_result',tool_use_id:call.id,content:tt('图片已经在本轮展示，无需重复发送。','This image is already displayed in this turn. Do not send it again.') };
+          resultsBlocks[idx] = { type:'tool_result',tool_use_id:call.id,content:tr("ui.loop.this.image.is.already.displayed.in.42d61c2") };
           continue;
         }
 
@@ -596,7 +594,7 @@ export class Agent {
             resultsBlocks[idx] = {
               type: "tool_result",
               tool_use_id: call.id,
-              content: tt("用户拒绝了该操作。", "The user denied this action."), // 手动模式下高频出现，跟随界面语言
+              content: tr("ui.loop.the.user.denied.this.action.3f90056"), // 手动模式下高频出现，跟随界面语言
               is_error: true,
             };
             continue;
@@ -644,7 +642,7 @@ export class Agent {
           resultsBlocks[idx] = {
             type: "tool_result",
             tool_use_id: toolUses[idx].id,
-            content: tt("(已停止)", "(stopped)"),
+            content: tr("ui.sessions.stopped.e649f93"),
             is_error: true,
           };
         }
@@ -671,22 +669,16 @@ export class Agent {
             if (b.type === "text") return b.text;
             // 摘录标签也跟随界面语言：喂给模型的原文全英，产出的英文摘要/交接文档才不会中英夹杂
             if (b.type === "tool_use")
-              return tt(
-                `[调用 ${b.name}: ${JSON.stringify(b.input).slice(0, 300)}]`,
-                `[call ${b.name}: ${JSON.stringify(b.input).slice(0, 300)}]`,
-              );
+              return tr("ui.loop.call.35017e4", { p0: b.name, p1: JSON.stringify(b.input).slice(0, 300) });
             if (b.type === "tool_result")
-              return tt(
-                `[结果: ${String(b.content).slice(0, 500)}]`,
-                `[result: ${String(b.content).slice(0, 500)}]`,
-              );
-            if (b.type === "image") return tt("[图片]", "[image]");
+              return tr("ui.loop.result.fdc4564", { p0: String(b.content).slice(0, 500) });
+            if (b.type === "image") return tr("ui.loop.image.411d8f1");
             return "";
           })
           .filter(Boolean)
           .join("\n");
         return parts
-          ? tt(`${m.role === "user" ? "用户" : "助手"}：${parts}`, `${m.role === "user" ? "User" : "Assistant"}: ${parts}`)
+          ? tr("ui.loop.text.86bd23f", { v0: (getCurrentLanguage() !== 'zh' ? undefined : m.role === "user" ? "用户" : "助手"), v1: parts, v2: (getCurrentLanguage() !== 'zh' ? m.role === "user" ? "User" : "Assistant" : undefined) })
           : "";
       })
       .filter((s) => s.length > 3)
@@ -697,47 +689,19 @@ export class Agent {
     if (transcript.length > MAX) {
       transcript =
         transcript.slice(0, 6000) +
-        tt("\n\n…(中间大段略去)…\n\n", "\n\n…(large middle section omitted)…\n\n") +
+        tr("ui.loop.large.middle.section.omitted.4d4fa71") +
         transcript.slice(-(MAX - 6000));
     }
     // 交接文档正文整篇会作为新会话的第一条消息显示给用户 → 必须跟随界面语言(中英各小节一一对应)
     const res = await this.provider.complete(
-      tt(
-        "你是「工作交接文档」整理器。下面是一段可能很长、甚至跑题或被无关内容污染的工作对话。" +
-          "请只抽取真正有价值的信息，产出一份结构清晰的中文交接文档，让接手者(另一个 AI 助手)不看原对话也能直接继续干活。" +
-          "务必分节输出：\n" +
-          "1) 目标/任务：用户到底要做什么；\n" +
-          "2) 关键背景与决策：涉及的项目/仓库/机器/服务/文件路径/命令/参数/配置，已敲定的方案及理由；\n" +
-          "3) 已完成：具体做了什么、改了哪些文件、验证结果；\n" +
-          "4) 当前进展 / 未完成：正卡在哪、还差什么；\n" +
-          "5) 下一步：接手者应立刻执行的具体动作(有序列出)；\n" +
-          "6) 坑与注意事项：踩过的坑、红线、易错点。\n" +
-          "要求：条目式、带具体名字(别泛泛而谈)、剔除跑题闲聊与噪音、不要复述无关内容。只输出交接文档本身。",
-        "You turn messy work sessions into a handoff document. Below is a work conversation that may be very long, " +
-          "off-topic, or polluted with unrelated content. Pull out only what actually matters and write a clearly " +
-          "structured handoff document **in English**, so whoever picks this up (another AI assistant) can keep working " +
-          "without ever reading the original conversation. " +
-          "You must output these sections:\n" +
-          "1) Goal / task: what the user is actually trying to get done;\n" +
-          "2) Key context & decisions: the projects/repos/machines/services/file paths/commands/flags/config involved, " +
-          "plus what has already been decided and why;\n" +
-          "3) Done: what was actually built or changed, which files, and how it was verified;\n" +
-          "4) Current state / not done: where it is stuck, what is still missing;\n" +
-          "5) Next steps: the concrete actions whoever takes over should run right now (numbered, in order);\n" +
-          "6) Gotchas & warnings: traps already hit, hard limits, easy mistakes.\n" +
-          "Rules: use bullet points, name real things (no vague hand-waving), drop the off-topic chatter and noise, " +
-          "don't restate anything irrelevant. Output only the handoff document itself.",
-      ),
+      tr("ui.loop.you.turn.messy.work.sessions.into.cba126b"),
       [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: tt(
-                `工作对话原文：\n${transcript}\n\n请输出交接文档：`,
-                `Raw conversation:\n${transcript}\n\nNow write the handoff document:`,
-              ),
+              text: tr("ui.loop.raw.conversation.now.write.the.handoff.0a3c376", { p0: transcript }),
             },
           ],
         },
@@ -763,13 +727,13 @@ export class Agent {
         const keptText = last.content.filter((b) => b.type === "text" && (b as any).text?.trim());
         this.messages[this.messages.length - 1] = {
           role: "assistant",
-          content: keptText.length ? keptText : [{ type: "text", text: tt("(已停止)", "(stopped)") }],
+          content: keptText.length ? keptText : [{ type: "text", text: tr("ui.sessions.stopped.e649f93") }],
         };
       }
       return;
     }
     // 末尾是 user(被中断未应答 / tool_result 结尾)→ 补一条占位 assistant 维持 user/assistant 交替
-    this.messages.push({ role: "assistant", content: [{ type: "text", text: tt("(已停止)", "(stopped)") }] });
+    this.messages.push({ role: "assistant", content: [{ type: "text", text: tr("ui.sessions.stopped.e649f93") }] });
   }
 
   // 硬清理历史：丢掉旧史，只留最近 keepRecent 条(设置"保留最近N条"可调，且把其中巨型工具输出截断)，
@@ -792,10 +756,7 @@ export class Agent {
       content: Array.isArray(m.content) ? (m.content as any[]).map((b) => (b && b.type === "tool_result" ? { ...b, content: capToolResult(b.content) } : b)) : m.content,
     });
     this.messages = [
-      { role: "user", content: [{ type: "text", text: tt(
-        "【历史已精简】早期对话历史因过长已整体清理(防止撑爆上下文)。如需早期背景/进展，请去读你之前用 write_file 沉淀的文档(知识宫殿等知识库)再继续，别凭空假设。总目标与最近进展见下方。",
-        "[History trimmed] The earlier conversation history was cleared (it grew too large and would overflow the context). If you need earlier background/progress, read the docs you previously saved with write_file (your knowledge base) before continuing — don't assume. The overall goal and recent progress are below.",
-      ) }] },
+      { role: "user", content: [{ type: "text", text: tr("ui.loop.history.trimmed.the.earlier.conversation.history.cb43bed") }] },
       ...recent.map(capMsg),
     ];
     this.usage.lastInput = 0;
@@ -832,22 +793,16 @@ export class Agent {
             if (b.type === "text") return b.text;
             // 摘录标签也跟随界面语言：喂给模型的原文全英，产出的英文摘要/交接文档才不会中英夹杂
             if (b.type === "tool_use")
-              return tt(
-                `[调用 ${b.name}: ${JSON.stringify(b.input).slice(0, 300)}]`,
-                `[call ${b.name}: ${JSON.stringify(b.input).slice(0, 300)}]`,
-              );
+              return tr("ui.loop.call.35017e4", { p0: b.name, p1: JSON.stringify(b.input).slice(0, 300) });
             if (b.type === "tool_result")
-              return tt(
-                `[结果: ${String(b.content).slice(0, 500)}]`,
-                `[result: ${String(b.content).slice(0, 500)}]`,
-              );
-            if (b.type === "image") return tt("[图片]", "[image]");
+              return tr("ui.loop.result.fdc4564", { p0: String(b.content).slice(0, 500) });
+            if (b.type === "image") return tr("ui.loop.image.411d8f1");
             return "";
           })
           .filter(Boolean)
           .join("\n");
         return parts
-          ? tt(`${m.role === "user" ? "用户" : "助手"}：${parts}`, `${m.role === "user" ? "User" : "Assistant"}: ${parts}`)
+          ? tr("ui.loop.text.86bd23f", { v0: (getCurrentLanguage() !== 'zh' ? undefined : m.role === "user" ? "用户" : "助手"), v1: parts, v2: (getCurrentLanguage() !== 'zh' ? m.role === "user" ? "User" : "Assistant" : undefined) })
           : "";
       })
       .filter((s) => s.length > 3)
@@ -857,26 +812,14 @@ export class Agent {
     try {
       // 摘要会在会话切换/重启后作为一条用户消息重新显示 → 跟随界面语言
       const res = await this.provider.complete(
-        tt(
-          "你是对话摘要器。把下面这段对话历史压缩成简洁但具体的中文要点摘要，务必保留：用户目标、" +
-            "已完成的关键操作、涉及的文件/命令/参数/机器、关键结论与数据、当前进展、未决事项与下一步。" +
-            "条列式，带上具体名字(别泛泛而谈)。只输出摘要本身。",
-          "You are a conversation summarizer. Compress the conversation history below into a short but specific " +
-            "bullet-point summary **in English**. You must keep: the user's goal, the key actions already taken, " +
-            "the files/commands/flags/machines involved, key conclusions and numbers, where things stand now, " +
-            "open questions and next steps. Use bullets and name real things (no vague hand-waving). " +
-            "Output only the summary itself.",
-        ),
+        tr("ui.loop.you.are.conversation.summarizer.compress.the.78b584e"),
         [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: tt(
-                  `对话历史：\n${transcript}\n\n请输出要点摘要：`,
-                  `Conversation history:\n${transcript}\n\nNow write the bullet-point summary:`,
-                ),
+                text: tr("ui.loop.conversation.history.now.write.the.bullet.f5e33cf", { p0: transcript }),
               },
             ],
           },
@@ -921,7 +864,7 @@ export class Agent {
         content: [
           {
             type: "text",
-            text: tt(`【之前对话摘要】\n${summaryText}`, `[Summary of earlier conversation]\n${summaryText}`),
+            text: tr("ui.loop.summary.of.earlier.conversation.5993379", { p0: summaryText }),
           },
         ],
       },

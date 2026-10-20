@@ -26,6 +26,8 @@ const model = (id, free, anon, selection, price) => ({ id, label: id, labelEn: i
 const provider = (id, anon, models) => ({ id, label: id, labelEn: id, kind: 'openai', baseUrl: 'https://qa.invalid/api/gateway/v1', hosted: true, custom: false, anon, sort: 0, models });
 const catalog = [provider('wuwei-free', true, [model('openrouter-auto-free', true, true), model('glm-4.7-flash', true, true), model('nemotron-super-free', true, false)]), provider('wuwei-mimo', false, [model('mimo-v2.6-flash', false, false, { category: 'economy', recommended: true, defaultForNewUsers: true, rank: 1 }, { input: 87.23, output: 187.88, cache: 10 })]), provider('wuwei-claude', false, [model('claude-opus-4-8', false, false, { category: 'premium', rank: 2 }, { input: 3038.4, output: 15192, cache: 303.84 })])];
 catalog.push({ ...provider('anthropic',false,[model('claude-opus-4-8',false,false)]),hosted:false,kind:'anthropic-apikey' });
+const billingProviders=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-model-catalog.json'),'utf8'));
+const billingModelCatalog=[...catalog.filter(p=>!billingProviders.some(b=>b.id===p.id)),...billingProviders];
 const settings = (providerId = 'wuwei-free', model = 'nemotron-super-free') => ({ providerId, model, kind: 'openai', baseUrl: 'https://qa.invalid/api/gateway/v1', creds: {}, modelChoiceExplicit: true, theme: 'light', streamMode: 'instant', app: { teamEnabled: false, lang: 'zh' } });
 function emit(state, channel, payload) { if (!state.win.isDestroyed()) state.win.webContents.send('qa:event', channel, payload); }
 function ready(state) {
@@ -43,7 +45,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'bootstrap': return { currentId: 'qa-session', sessions: [{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }], groups: [], messages: clone(s.historyMessages) };
     case 'newSession': emit(s, 'evt:session-loaded', { id: 'qa-new-session', messages: [] }); return true;
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
-    case 'wuweiCatalog': return clone(catalog);
+    case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
     case 'getModelPricing': return { providers: [] };
     case 'fetchModels': return [];
@@ -64,13 +66,42 @@ ipcMain.handle('qa:api', async (event, method, args) => {
       else setTimeout(() => { emit(s, 'evt:done', { sid: 'qa-session' }); emit(s, 'evt:tasks', { running: [] }); }, 20);
       return true;
     case 'stop': emit(s, 'evt:stopped', { sid: 'qa-session' }); emit(s, 'evt:tasks', { running: [] }); return true;
+    case 'billingRequest': {
+      const req=clone(args[0]);(s.billingCalls??=[]).push(req);
+      const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
+      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {version:'qa-v2',products,member:false,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
+      if(req.action==='quote'){
+        if(s.quoteDelay)await delay(s.quoteDelay);
+        if(s.quoteError)return {error:'network'};
+        const p=products.find(p=>p.sku===req.sku);return {catalogVersion:'qa-v2',...p,currency:req.currency,amountMinor:req.currency==='USD'?p.usdMinor:p.cnyMinor,creditsPerGrant:p.credits,grantCount:p.period==='annual'?12:1,expiryMonths:p.kind==='pack'?6:1,memberBonus:false,autoRenew:false};
+      }
+      if(req.action==='create-order'){
+        if(s.createError)return {error:'network'};
+        s.orders++;s.billingOrder={id:'qa-billing-order-'+s.orders,sku:req.sku,currency:req.currency,amountMinor:req.expected.amountMinor,channel:req.channel,status:'pending',expiresAt:new Date(Date.now()+600000).toISOString(),...(req.channel==='alipay'?{qr:'https://qa.invalid/qr'}:req.channel==='paddle'?{checkoutUrl:'https://wuweiai.io/en/billing-checkout?order=qa'}:{crypto:{network:'Solana',currency:'USDT',address:'qa-isolated-address',amount:'40.0001'}})};return clone(s.billingOrder);
+      }
+      if(req.action==='order'){if(s.billingPaid){s.billingOrder={...s.billingOrder,status:'paid',creditsGranted:2000,balance:3578.362704};}return clone(s.billingOrder);}
+      if(req.action==='ledger')return {balance:1578.362704,total:101,limit:50,offset:req.offset||0,hasMore:(req.offset||0)<100,records:[{id:'record-'+(req.offset||0),type:'spend',source:'model_usage',description:'无为托管模型调用',createdAt:'2026-10-20T15:14:12Z',amount:-0.03039,balanceAfter:1578.362704,model:'mimo-v2.6-flash',parameters:{turn_kind:'tool_cont',input_tokens:100}},{id:'free-record',type:'spend',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-20T15:05:49Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]};
+      return {error:'unknown_action'};
+    }
     case 'payCreate': s.orders++; s.orderSkus.push(args[0]); return s.payError ? { error: s.payError } : { orderId: 'qa-order-' + s.orders, qr: 'https://qa.invalid/fake-payment-' + s.orders };
     case 'payStatus': if (s.paid) { s.account = account(500); return { status: 'paid', balance: 500 }; } return { status: 'pending' };
+    case 'openExternal': (s.externalURLs??=[]).push(args[0]);return true;
     case 'checkUpdate': return { available: false };
     case 'isRunning': return false;
-    case 'getTools': return { tools: [], disabled: [], groups: [], total: 0 };
+    case 'getTools': {
+      const pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/zh.json'),'utf8')).messages;
+      const entries=s.allToolMessages?JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/builtin-tool-messages.json'),'utf8')):[];
+      const tools=entries.map(row=>({name:row.name,description:pack[row.descriptionKey],readOnly:true,inputSchema:{type:'object',properties:Object.fromEntries(Object.entries(row.parameters).map(([name,key])=>[name,{type:'string',description:pack[key]}]))}}));
+      return {tools,disabled:[],groups:[{source:'内置工具',kind:'builtin',tools}],total:tools.length};
+    }
     case 'getMcp': return { config: '', status: [] };
     case 'brainGraph': return { nodes: [], edges: [] };
+    case 'brainStats': return {nodes:0,edges:0,embedded:0};
+    case 'brainDocStats': return {chunks:0,files:0,dir:'',builtAt:0};
+    case 'brainEmbedReady': return false;
+    case 'brainDocProgress': return {building:false,phase:'idle',files:0,total:0,done:0};
+    case 'brainConceptProgress': return {running:false,phase:'idle',total:0,done:0,created:0,skipped:0};
+    case 'secretsList': return {entries:[],available:true};
     case 'getMemory': case 'stopRulesGet': return '';
     case 'track': case 'rememberSet': case 'draftSet': return true;
     default: s.defaults.add(method); return [];
@@ -86,7 +117,7 @@ async function boot(options = {}) {
     if (!allow) blocked.push(details.url.split('?')[0]);
     callback({ cancel: !allow });
   });
-  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, offscreen: !!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
+  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, additionalArguments: ['--qa-lang='+(options.lang||'zh')], offscreen: !!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
   // Existing flow fixtures represent a chat whose model has already been chosen.
   // Empty-chat/default tests explicitly supply historyMessages: [].
   const state = { win, account: account(), settings: settings(), historyMessages: [{ role: 'user', content: [{ type: 'text', text: '已有对话，沿用明确选择的模型' }] }], calls: [], modelWrites: [], sent: [], orders: 0, orderSkus: [], permissionReplies: [], decisionReplies: [], defaults: new Set(), errors: [], messages: [], blocked, ...options };
@@ -111,6 +142,127 @@ async function run(name, options, test) {
   finally { fixture?.close(); }
 }
 app.whenReady().then(async () => {
+  const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
+
+  const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
+  const openBilling=async(f,ledger=false)=>{await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(ledger?(f.state.lang==='en'?'Credit details':'积分明细'):(f.state.lang==='en'?'Top up':'充值'))+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
+  await run('账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Credit details',icon:true},{text:'Top up',icon:true},{text:'Settings',icon:true}]);await f.click('.acct-btn');
+    await openBilling(f);await f.wait('document.querySelector(".billing-selector-option") && document.querySelector(".billing-plan-buy")?.disabled===false');
+    await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'billing-selector-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button")');await delay(150);fs.writeFileSync(path.join(evidence,'billing-methods-en.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.equal(f.state.orders,0);await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.externalURLs.length,1);
+    assert.equal(f.state.orders,1);assert.equal(f.state.billingCalls.find(r=>r.action==='quote').currency,'USD');assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').channel,'paddle');
+    assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/[\u3400-\u9fff]/);await delay(250);fs.writeFileSync(path.join(evidence,'billing-checkout-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+  await run('账单新版：中文自动显示付款二维码且不重复下单', {account:clone(billingAccount)},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');
+    assert.equal(f.state.orders,1);await delay(200);fs.writeFileSync(path.join(evidence,'billing-qr-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').currency,'CNY');await uiLanguage(f,'en');await delay(250);assert.equal(f.state.orders,1);assert.match(await f.js('document.querySelector(".billing-live-order").textContent'),/Alipay/);
+  });
+  await run('账单新版：英文加密付款自动显示地址和二维码', {account:clone(billingAccount),cryptoOnly:true,lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button:last-child")');await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').channel,'crypto');assert.equal(f.state.orders,1);
+  });
+  await run('账单新版：付款失败可重试且复用订单幂等键', {account:clone(billingAccount),createError:true},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-error") && !document.querySelector(".billing-checkout .billing-primary").disabled');f.state.createError=false;await f.click('.billing-checkout .billing-primary');await f.wait('!!document.querySelector(".billing-live-order")');const reqs=f.state.billingCalls.filter(r=>r.action==='create-order');assert.equal(reqs.length,2);assert.equal(reqs[0].requestId,reqs[1].requestId);assert.equal(f.state.orders,1);
+  });
+  await run('账单新版：报价失败解除加载可再次购买', {account:clone(billingAccount),quoteError:true},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-error") && document.querySelector(".billing-plan-buy")?.disabled===false');f.state.quoteError=false;await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,1);
+  });
+  await run('账单新版：加载付款目录不阻止免费体验', {account:clone(billingAccount),billingDelay:1500},async f=>{
+    await openBilling(f);await f.click('.billing-selector-free button');await f.wait('!!document.querySelector(".billing-subdialog")');assert.equal(await f.js('document.querySelector(".billing-subdialog .billing-primary").disabled'),false);await f.click('.billing-subdialog .billing-primary');await f.wait('!document.querySelector(".billing-panel")');assert.equal(f.state.orders,0);
+  });
+  await run('账单新版：明细三位小数24小时分页和多语言日历', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await openBilling(f,true);await f.wait('!!document.querySelector(".billing-credit-record")');const text=await f.js('document.querySelector(".billing-ledger").textContent');assert.match(text,/1,578\.363/);assert.match(text,/-0\.03/);assert.doesNotMatch(text,/AM|PM|[\u3400-\u9fff]/);assert.match(text,/101 records · 3 pages/);assert.match(text,/Continuation after tool execution/);
+    await f.click('.billing-date-trigger');await f.wait('!!document.querySelector(".billing-calendar")');assert.doesNotMatch(await f.js('document.querySelector(".billing-calendar").textContent'),/[\u3400-\u9fff]/);assert.match(await f.js('document.querySelector(".billing-calendar").textContent'),/Today/);await uiLanguage(f,'zh');await f.wait('document.querySelector(".billing-calendar")?.textContent.includes("今天")');await uiLanguage(f,'en');await f.click('.billing-calendar-actions button');
+    await f.click('.billing-pagination button[aria-label="Page 3"]');await f.wait('document.querySelector(".billing-pagination [aria-current=page]")?.textContent==="3"');await f.wait('document.querySelector(".billing-credit-record")?.textContent.includes("Wuwei hosted")');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).offset,100);
+    await delay(250);fs.writeFileSync(path.join(evidence,'billing-ledger-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+  await run('账单新版：套餐比较一屏显示并展示不同厂商', {account:clone(billingAccount)},async f=>{
+    f.state.win.setContentSize(1200,735);await openBilling(f);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    await f.js('document.fonts.ready');await delay(250);fs.writeFileSync(path.join(evidence,'billing-comparison-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    const layout=await f.js('({viewport:innerHeight,scroll:document.querySelector(".billing-panel").scrollHeight,client:document.querySelector(".billing-panel").clientHeight})');assert.ok(layout.scroll<=layout.client+2,JSON.stringify(layout));assert.equal(await f.js('document.querySelectorAll(".billing-card-benefits").length'),0);
+  });
+
+  await run('账单新版：网页和加密支付可切换，切回复用待付款订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button")');await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,1);
+    await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.orders,2);
+    await f.click('.billing-pay-methods button:first-child');await f.wait('document.querySelector(".billing-live-order")?.textContent.includes("Card / PayPal")');assert.equal(f.state.orders,2);assert.equal(f.state.externalURLs.length,2);
+  });
+  await run('账单新版：完成付款后再次购买可新建订单', {account:clone(billingAccount)},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');assert.equal(await f.js('Array.from(document.querySelectorAll(".billing-pay-methods button")).every(button=>button.disabled)'),true);f.state.billingPaid=false;
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.orders,2);const ids=f.state.billingCalls.filter(r=>r.action==='create-order').map(r=>r.requestId);assert.notEqual(ids[0],ids[1]);
+  });
+  await run('账单新版：关闭后迟到的报价不创建订单或重开付款页', {account:clone(billingAccount),quoteDelay:900},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.click('.billing-close');await delay(1050);assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
+  });
+
+  await run('账单新版：切换月付年付积分包，按选中套餐准确报价', {account:clone(billingAccount)},async f=>{
+    await openBilling(f);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');await f.click('.billing-selector-periods button:nth-child(2)');await f.wait('document.querySelector(".billing-selector-option")?.textContent.includes("67")');await f.click('.billing-selector-option:last-child');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');let req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_plan_max_annual');assert.equal(req.expected.amountMinor,321600);assert.equal(req.expected.creditsPerGrant,10000);
+    await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_3000');assert.equal(req.expected.amountMinor,33400);assert.equal(req.expected.creditsPerGrant,3000);
+  });
+  await run('多语言：已打开额度登录卡和历史系统提示同步切换', {account:null,settings:settings('wuwei-free','glm-4.7-flash'),nextError:'[[gw:free_daily_cap_reached]] 今日免费额度已用完：明日自动恢复，登录可解锁更高额度。'}, async f=>{
+    await f.send();await f.wait('!!document.querySelector(".login-intro-reason")');
+    assert.match(await f.js('document.querySelector(".login-intro-reason").textContent'),/今日/);
+    await changeLanguage(f,'en');await f.wait('document.querySelector(".login-intro-reason")?.textContent.includes("Guest free quota")');
+    assert.doesNotMatch(await f.js('Array.from(document.querySelectorAll(".notice,.login-intro-reason")).map(n=>n.textContent).join(" ")'),/[\u3400-\u9fff]/);
+    await delay(250);fs.writeFileSync(path.join(evidence,'language-quota-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await changeLanguage(f,'zh');await f.wait('document.querySelector(".login-intro-reason")?.textContent.includes("今日")');
+    await changeLanguage(f,'en');await f.click('.language-switcher + button');
+    emit(f.state,'evt:error',{sid:'qa-session',message:'[[gw:anon_login_required]] 该模型登录后免费使用'});
+    await f.wait('!!document.querySelector("input[type=password]")');
+    assert.doesNotMatch(await f.js('Array.from(document.querySelectorAll(".notice,.login-intro-reason")).map(n=>n.textContent).join(" ")'),/[\u3400-\u9fff]/);
+  });
+  await run('多语言：英文首次启动免费额度错误和登录表单无中文', {lang:'en',account:null,settings:settings('wuwei-free','glm-4.7-flash'),nextError:'[[gw:free_daily_cap_reached]] 今日免费额度已用完'},async f=>{
+    await f.send();await f.wait('!!document.querySelector(".login-intro-reason")');
+    assert.doesNotMatch(await f.js('(()=>{const n=document.querySelector(".login-intro-reason").parentElement.cloneNode(true);n.querySelectorAll("select").forEach(s=>s.remove());return n.textContent;})()'),/[\u3400-\u9fff]/);
+    await f.js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Sign in")?.click()');
+    await f.wait('!!document.querySelector("input[type=password]")');
+    assert.doesNotMatch(await f.js('(()=>{const n=document.querySelector("input[type=password]").closest("form")?.cloneNode(true);n?.querySelectorAll("select").forEach(s=>s.remove());return n?.textContent||"";})()'),/[\u3400-\u9fff]/);
+    await changeLanguage(f,'zh');await f.wait('document.querySelector("input[type=password]")?.placeholder.includes("密码")');
+  });
+  await run('多语言：英文模型选择和支付页面无中文系统文案', {lang:'en',account:account(0),nextError:'[[gw:free_daily_cap_reached]] exhausted'},async f=>{
+    await f.click('.mq-select');await f.wait('!!document.querySelector(".model-picker")');
+    assert.doesNotMatch(await f.js('document.querySelector(".model-picker").textContent'),/[\u3400-\u9fff]/);
+    await f.click('.model-picker-header button');await f.send();await f.wait('!!document.querySelector(".trial-plans")');
+    assert.doesNotMatch(await f.js('document.querySelector(".pay-card").textContent'),/[\u3400-\u9fff]/);
+    await uiLanguage(f,'zh');await f.wait('document.querySelector(".pay-card")?.textContent.includes("支付")');
+    await uiLanguage(f,'en');await f.wait('document.querySelector(".pay-card")?.textContent.includes("Pay")');
+    assert.doesNotMatch(await f.js('document.querySelector(".pay-card").textContent'),/[\u3400-\u9fff]/);
+    await delay(250);fs.writeFileSync(path.join(evidence,'language-payment-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+
+
+  await run('多语言：设置所有页面和帮助所有章节英文检查', {lang:'en',allToolMessages:true,account:null,settings:settings('wuwei-free','glm-4.7-flash')},async f=>{
+    const systemText=selector=>`(()=>{const n=document.querySelector(${JSON.stringify(selector)}).cloneNode(true);n.querySelectorAll('textarea,input,option,select,[data-language-name]').forEach(x=>x.remove());return n.textContent;})()`;
+    await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');
+    const tabs=await f.js('document.querySelectorAll(".set-tabs button").length');
+    for(let i=0;i<tabs;i++){
+      await f.js(`document.querySelectorAll('.set-tabs button')[${i}].click()`);await delay(80);
+      const name=await f.js('document.querySelector(".set-tabs button.on").textContent');
+      assert.doesNotMatch(await f.js(systemText('.settings')),/[\u3400-\u9fff]/,'Settings tab: '+name);
+    }
+    await uiLanguage(f,'zh');await delay(100);assert.match(await f.js('document.querySelector(".set-side-title").textContent'),/设置/);
+    await uiLanguage(f,'en');await delay(100);await f.click('.set-win-btn:last-child');await f.wait('!document.querySelector(".settings")');
+    await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==="User Guide")?.click()');await f.wait('!!document.querySelector(".guide-modal")');
+    const sections=await f.js('document.querySelectorAll(".guide-nav__it").length');
+    for(let i=0;i<sections;i++){
+      await f.js(`document.querySelectorAll('.guide-nav__it')[${i}].click()`);await delay(50);
+      assert.doesNotMatch(await f.js(systemText('.guide-modal')),/[\u3400-\u9fff]/,'Help section '+i);
+    }
+    await uiLanguage(f,'zh');await delay(100);assert.match(await f.js('document.querySelector(".guide-modal").textContent'),/使用手册/);
+    await uiLanguage(f,'en');await delay(250);assert.doesNotMatch(await f.js(systemText('.guide-modal')),/[\u3400-\u9fff]/);
+    fs.writeFileSync(path.join(evidence,'language-help-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+
+  await run('多语言：中文服务端登录错误映射为英文且已显示错误随语言切换', {lang:'en',account:null,settings:settings('wuwei-free','glm-4.7-flash'),loginError:'邮箱或密码错误'}, async f=>{
+    await f.click('.mq-select');await f.click('[data-model-key="wuwei-free/nemotron-super-free"]');await f.wait('!!document.querySelector("input[type=password]")');
+    await f.fill('input[placeholder="Email"]','language-test@example.invalid');await f.fill('input[type=password]','isolated-test-password');
+    await f.js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Sign in"&&!b.disabled)?.click()');
+    await f.wait('document.body.textContent.includes("Wrong email or password")');
+    await changeLanguage(f,'zh');await f.wait('!document.body.textContent.includes("Wrong email or password")');
+    await changeLanguage(f,'en');await f.wait('document.body.textContent.includes("Wrong email or password")');
+    assert.equal(f.state.orders,0);
+  });
   await run('工具权限：默认自动允许 bash，跨会话也不弹窗',{},async f=>{
     for(const sid of ['qa-session','qa-background-session']) emit(f.state,'evt:permission-request',{id:sid==='qa-session'?901:902,name:'bash',input:{command:'echo isolated-fixture'},sid});
     await delay(150);

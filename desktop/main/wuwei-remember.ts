@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 // 记住登录账号密码（多账号）：safeStorage/DPAPI 加密落盘 ~/.wuwei/login-remember.json。
 // 与登录 token(auth.json) 同级加密保护，不明文存密码。
 // 数据形态：
@@ -39,7 +40,7 @@ function write(data: RememberData): void {
       : plain;
     writeFileSync(FILE, out, "utf8");
   } catch (e) {
-    log("wuweiRemember", "写入失败", String(e));
+    log("wuweiRemember", tr("ui.wuwei-remember.message.78180dd964"), String(e));
   }
 }
 
@@ -57,7 +58,7 @@ export function loadRemember(): RememberData {
     }
     return { last: parsed.last, accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [] };
   } catch (e) {
-    log("wuweiRemember", "读取失败", String(e));
+    log("wuweiRemember", tr("ui.wuwei-remember.message.1f7118a41a"), String(e));
     return { accounts: [] };
   }
 }

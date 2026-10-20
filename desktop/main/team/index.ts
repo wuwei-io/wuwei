@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 // AI 员工团队 · 主进程模块唯一入口
 //
 // ⭐ 可插拔契约：主进程只有一处调用 `registerTeam(...)`，且被 `teamEnabled` 包着。
@@ -242,7 +243,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
   // 扫描本机可导入的员工来源（openclaw 的 IDENTITY.md）。纯读文件，不需要 openclaw 在运行。
   ipcMain.handle("team:import:scan", () => {
     const sources = detectSources();
-    deps.log("team", "扫描导入源", `${sources.length} 个`, sources.map((s) => `${s.kind}:${s.candidates.length}名`).join(" "));
+    deps.log("team", "扫描导入源", tr("ui.index.message.7eede5b0f0", {p0: sources.length}), sources.map((s) => `${s.kind}:${s.candidates.length}名`).join(" "));
     return { sources };
   });
 
@@ -269,7 +270,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
 
   ipcMain.handle("team:room:create", (_e, name: string, members: string[], coordinator?: string) => {
     const r = createRoom(String(name || ""), Array.isArray(members) ? members.map(String) : [], coordinator);
-    deps.log("team", "建群", r.name, `${r.members.length} 名成员`);
+    deps.log("team", tr("ui.app.new.group.e0bb42b"), r.name, `${r.members.length} 名成员`);
     deps.send("evt:team-rooms", rooms());
     return { ok: true, room: r, ...rooms() };
   });
@@ -354,7 +355,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
 
   ipcMain.handle("sop:create", (_e, kind: "category" | "sop", name: string, parentId?: string, opts?: { taskKey?: string; summary?: string }) => {
     const r = sopCreateNode(kind === "sop" ? "sop" : "category", String(name || ""), parentId ? String(parentId) : undefined, opts || undefined);
-    deps.log("sop", "新建", kind, r.node.name, r.exists ? "(已存在,去重)" : "");
+    deps.log("sop", tr("ui.index.message.cc5618e8f9"), kind, r.node.name, r.exists ? "(已存在,去重)" : "");
     sopPush();
     return { ok: true, node: r.node, exists: r.exists, tree: sopLoadTree() };
   });
@@ -373,7 +374,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
 
   ipcMain.handle("sop:delete", (_e, id: string) => {
     sopDeleteNode(String(id || ""));
-    deps.log("sop", "删除", id);
+    deps.log("sop", tr("set.st.delShort"), id);
     sopPush();
     return { ok: true, tree: sopLoadTree() };
   });
@@ -403,7 +404,7 @@ export function registerTeam(ipcMain: IpcMain, deps: TeamDeps) {
     let files: string[] = [];
     try { files = readdirSync(d).filter((f) => extname(f).toLowerCase() === ".md"); } catch { return { ok: false, error: "read_failed" }; }
     // 给这次导入建一个类别，避免污染顶层
-    const catName = basename(d) || "导入";
+    const catName = basename(d) || tr("set.sec.import");
     const catId = sopCreateNode("category", catName).node.id;
     let added = 0;
     for (const f of files) {

@@ -1,0 +1,112 @@
+[
+  {
+    "sku": "v2_plan_pro_monthly",
+    "kind": "plan",
+    "name": "Pro",
+    "period": "monthly",
+    "usdMinor": 2000,
+    "cnyMinor": 13400,
+    "credits": 2000,
+    "memberCredits": 2000,
+    "recommended": false
+  },
+  {
+    "sku": "v2_plan_pro_annual",
+    "kind": "plan",
+    "name": "Pro",
+    "period": "annual",
+    "usdMinor": 12000,
+    "cnyMinor": 80400,
+    "credits": 2000,
+    "memberCredits": 2000,
+    "recommended": false
+  },
+  {
+    "sku": "v2_plan_plus_monthly",
+    "kind": "plan",
+    "name": "Plus",
+    "period": "monthly",
+    "usdMinor": 4000,
+    "cnyMinor": 26800,
+    "credits": 5000,
+    "memberCredits": 5000,
+    "recommended": true
+  },
+  {
+    "sku": "v2_plan_plus_annual",
+    "kind": "plan",
+    "name": "Plus",
+    "period": "annual",
+    "usdMinor": 24000,
+    "cnyMinor": 160800,
+    "credits": 5000,
+    "memberCredits": 5000,
+    "recommended": true
+  },
+  {
+    "sku": "v2_plan_max_monthly",
+    "kind": "plan",
+    "name": "Max",
+    "period": "monthly",
+    "usdMinor": 8000,
+    "cnyMinor": 53600,
+    "credits": 10000,
+    "memberCredits": 10000,
+    "recommended": false
+  },
+  {
+    "sku": "v2_plan_max_annual",
+    "kind": "plan",
+    "name": "Max",
+    "period": "annual",
+    "usdMinor": 48000,
+    "cnyMinor": 321600,
+    "credits": 10000,
+    "memberCredits": 10000,
+    "recommended": false
+  },
+  {
+    "sku": "v2_pack_1500",
+    "kind": "pack",
+    "name": "1500",
+    "period": "pack",
+    "usdMinor": 2990,
+    "cnyMinor": 20000,
+    "credits": 1500,
+    "memberCredits": 2250,
+    "recommended": false
+  },
+  {
+    "sku": "v2_pack_3000",
+    "kind": "pack",
+    "name": "3000",
+    "period": "pack",
+    "usdMinor": 4990,
+    "cnyMinor": 33400,
+    "credits": 3000,
+    "memberCredits": 4500,
+    "recommended": true
+  },
+  {
+    "sku": "v2_pack_5000",
+    "kind": "pack",
+    "name": "5000",
+    "period": "pack",
+    "usdMinor": 6990,
+    "cnyMinor": 46800,
+    "credits": 5000,
+    "memberCredits": 7500,
+    "recommended": false
+  },
+  {
+    "sku": "v2_pack_8000",
+    "kind": "pack",
+    "name": "8000",
+    "period": "pack",
+    "usdMinor": 9990,
+    "cnyMinor": 66900,
+    "credits": 8000,
+    "memberCredits": 12000,
+    "recommended": false
+  }
+]

@@ -1,0 +1,202 @@
+{
+  "goalPlaceholder": "{目标}",
+  "departments": [
+    {
+      "id": "wj-dept-ceo",
+      "name": "CEO办公室",
+      "en": "CEO Office",
+      "headId": "wj-ceo",
+      "memberIds": [
+        "wj-ceo"
+      ]
+    },
+    {
+      "id": "wj-dept-tech",
+      "name": "技术部",
+      "en": "Engineering",
+      "headId": "wj-code",
+      "memberIds": [
+        "wj-code"
+      ]
+    },
+    {
+      "id": "wj-dept-design",
+      "name": "设计部",
+      "en": "Design",
+      "headId": "wj-design",
+      "memberIds": [
+        "wj-design",
+        "wj-mobile"
+      ]
+    },
+    {
+      "id": "wj-dept-general",
+      "name": "综合部",
+      "en": "General Affairs",
+      "memberIds": [
+        "wj-copy",
+        "wj-data"
+      ]
+    }
+  ],
+  "DEFAULT_TEAM_DESCRIPTION": "一套开箱即用的 AI 团队：CEO 小笨统管全局，文案小文 / 代码小码 / 数据小数 / 设计小美 / 移动端小移各司其职。装上即可分别私聊，员工请示先由 CEO 把关。每人自带头像、职责边界与系统提示词。",
+  "EN_TEAM_DESCRIPTION": "A ready-to-use AI team: Ben coordinates the company as CEO, with Wendy for copywriting, Cody for software, Dana for data, Mia for design and Ivy for mobile design. Chat with each teammate individually; the CEO reviews decisions before escalation. Each teammate includes an avatar, clear responsibilities and a dedicated system prompt.",
+  "teamToolEnglish": {
+    "dm_teammate": "Send a direct message to a teammate and wait for the reply.",
+    "assign_task": "Delegate a task asynchronously; review the returned result before reporting completion.",
+    "create_employee": "Create a teammate with a clear role and responsibilities. Do not edit team files directly.",
+    "update_employee": "Update only the specified teammate fields. Preserve unspecified fields.",
+    "delete_employee": "Permanently delete a teammate only with confirm=true.",
+    "manage_department": "Create, update, list or delete departments. Head and members accept teammate references; member lists replace the previous list.",
+    "manage_group": "Create, update, list or delete groups. Member lists replace the previous list; coordinator is a teammate reference.",
+    "create_schedule": "Create a scheduled task for a teammate using the existing trigger and SOP or document fields.",
+    "list_schedules": "List scheduled tasks, optionally filtering by teammate reference.",
+    "delete_schedule": "Delete a scheduled task by its stable task ID."
+  },
+  "teamName": "无为一人公司",
+  "modelBadges": {
+    "new": "model.badge.0",
+    "hot": "model.badge.1",
+    "top": "model.badge.2",
+    "free": "model.badge.5",
+    "限免": "model.badge.4",
+    "免费": "model.badge.5",
+    "快": "model.badge.6",
+    "省": "model.badge.7",
+    "更强": "model.badge.8",
+    "深度思考": "model.badge.9",
+    "识图": "model.badge.10",
+    "推荐": "model.badge.11",
+    "最新": "model.badge.0",
+    "热门": "model.badge.1",
+    "popular": "model.badge.1",
+    "顶级": "model.badge.2",
+    "free offer": "model.badge.4",
+    "fast": "model.badge.6",
+    "value": "model.badge.7",
+    "stronger": "model.badge.8",
+    "reasoning": "model.badge.9",
+    "vision": "model.badge.10",
+    "recommended": "model.badge.11"
+  },
+  "priorityTags": [
+    "高",
+    "中",
+    "低",
+    "重急",
+    "重",
+    "急",
+    "缓"
+  ],
+  "badgeHints": [
+    "限免",
+    "免费",
+    "快",
+    "更强",
+    "深度思考",
+    "识图"
+  ],
+  "modelCapabilityAliases": [
+    "图片",
+    "识图",
+    "支持图片",
+    "Image",
+    "Vision",
+    "Image input",
+    "文本",
+    "仅文本",
+    "Text",
+    "Text only"
+  ],
+  "nodeColors": {
+    "网络学的": "#6f9fad",
+    "聊天学的": "#c05f3c",
+    "知识宫殿": "#5c8a73",
+    "天生好奇": "#c8933f",
+    "睡梦里涌现的": "#9a7fbe",
+    "好奇待学": "#8b949c",
+    "概念": "#8b949c"
+  },
+  "babyStateAliases": {
+    "sleep": [
+      "睡着",
+      "做梦",
+      "sleep",
+      "dream"
+    ],
+    "search": [
+      "上网",
+      "搜索",
+      "search"
+    ],
+    "read": [
+      "知识宫殿",
+      "翻资料",
+      "reading"
+    ],
+    "think": [
+      "消化",
+      "理解",
+      "processing"
+    ],
+    "wonder": [
+      "猜猜",
+      "学点什么",
+      "接下来",
+      "wonder"
+    ],
+    "talk": [
+      "聊天",
+      "陪主人",
+      "talk"
+    ],
+    "listen": [
+      "听",
+      "listen"
+    ],
+    "daydream": [
+      "发呆",
+      "发会儿",
+      "daydream"
+    ],
+    "rest": [
+      "歇着",
+      "rest"
+    ]
+  },
+  "memoryHeaderZh": "# 记忆$1",
+  "toolSources": {
+    "内置工具": "Built-in tools",
+    "浏览器": "Browser"
+  },
+  "authErrorAliases": {
+    "invalid_credentials": [
+      "邮箱或密码错误",
+      "账号或密码错误",
+      "密码错误"
+    ],
+    "email_exists": [
+      "邮箱已注册",
+      "账号已存在"
+    ],
+    "invalid_code": [
+      "验证码错误",
+      "验证码不正确"
+    ],
+    "code_expired": [
+      "验证码已过期"
+    ],
+    "rate_limited": [
+      "操作频繁",
+      "发送频繁"
+    ],
+    "network": [
+      "网络异常",
+      "网络错误"
+    ]
+  },
+  "secretDelimiters": {
+    "open": "⟦secret:",
+    "close": "⟧"
+  }
+}

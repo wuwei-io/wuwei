@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import { localizeEmployee, localizeTeamApp, editLocalizedEmployeeField } from "../../../../src/team/default-localization.js";
 // 应用中心 · 面板
 //
@@ -85,7 +86,7 @@ function AvatarCropper({ file, en, onCancel, onDone }: { file: File; en: boolean
     <div className="tc-modal-mask" style={{ zIndex: 70 }} onClick={onCancel}>
       <div className="tc-modal tc-crop" onClick={(e) => e.stopPropagation()}>
         <div className="tc-modal-head">
-          <span>{en ? "Crop avatar" : "裁剪头像"}</span>
+          <span>{tr("ui.appstore.crop.avatar.3902951")}</span>
           <button className="tc-modal-x" onClick={onCancel}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
         </div>
         <div
@@ -123,10 +124,10 @@ function AvatarCropper({ file, en, onCancel, onDone }: { file: File; en: boolean
           value={scale}
           onChange={(e) => setScale(Number(e.target.value))}
         />
-        <div className="tc-crop-hint">{en ? "Drag to reposition · slide to zoom" : "拖动定位 · 滑动缩放"}</div>
+        <div className="tc-crop-hint">{tr("ui.appstore.drag.to.reposition.slide.to.zoom.3c5e3b3")}</div>
         <div className="tc-modal-foot">
-          <button className="tc-btn-ghost" onClick={onCancel}>{en ? "Cancel" : "取消"}</button>
-          <button className="tc-btn" onClick={confirm}>{en ? "Use this" : "用这张"}</button>
+          <button className="tc-btn-ghost" onClick={onCancel}>{tr("set.st.cancel")}</button>
+          <button className="tc-btn" onClick={confirm}>{tr("ui.appstore.use.this.8f35442")}</button>
         </div>
       </div>
     </div>
@@ -158,7 +159,7 @@ export function EmployeeEditModal({
   const api = (window as any).wuwei?.team;
   // Canonical draft is storage-facing; presentation is derived for the active language.
   const [edit, setEdit] = useState<Employee>(employee);
-  const display = localizeEmployee(edit, en ? "en" : "zh");
+  const display = localizeEmployee(edit, (getCurrentLanguage()));
   const saveText = (field: "name" | "title" | "blurb" | "persona") =>
     edit[field] === employee[field] ? employee[field] : (edit[field] || "").trim();
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -171,59 +172,59 @@ export function EmployeeEditModal({
       <div className="tc-modal-mask" onClick={onClose}>
         <div className="tc-modal" onClick={(ev) => ev.stopPropagation()}>
           <div className="tc-modal-head">
-            <span>{en ? "Edit teammate" : "编辑员工"}</span>
-            <button className="tc-modal-x" onClick={onClose} title={en ? "Close" : "关闭"}>
+            <span>{tr("ui.appstore.edit.teammate.09f3802")}</span>
+            <button className="tc-modal-x" onClick={onClose} title={tr("msg.close")}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
 
           <div className="tc-field">
-            <label>{en ? "Avatar" : "头像"}</label>
+            <label>{tr("ui.appstore.avatar.8f6f49e")}</label>
             <div className="tc-ava-row">
               <span className="tc-ava-preview">
                 <EmployeeAvatar icon={edit.icon} avatarData={edit.avatarData} name={display.name} />
               </span>
               <div className="tc-ava-actions">
                 <label className="tc-btn-ghost tc-upload">
-                  {en ? "Upload image" : "上传图片"}
+                  {tr("ui.appstore.upload.image.28a325f")}
                   <input type="file" accept="image/*" style={{ display: "none" }} onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ""; if (f) setCropFile(f); }} />
                 </label>
                 {edit.avatarData && (
-                  <button className="tc-btn-ghost danger" onClick={() => setEdit({ ...edit, avatarData: undefined })}>{en ? "Remove photo" : "移除照片"}</button>
+                  <button className="tc-btn-ghost danger" onClick={() => setEdit({ ...edit, avatarData: undefined })}>{tr("ui.appstore.remove.photo.09cfbf1")}</button>
                 )}
               </div>
             </div>
             <div className="tc-icon-grid" style={{ marginTop: 10, opacity: edit.avatarData ? 0.45 : 1 }}>
               {ICON_CHOICES.map((ic) => (
-                <button key={ic || "_txt"} className={"tc-icon-opt" + (!edit.avatarData && (edit.icon || "") === ic ? " on" : "")} title={ic || (en ? "Initial" : "首字")} onClick={() => setEdit({ ...edit, icon: ic || undefined, avatarData: undefined })}>
-                  {ic ? <EmployeeAvatar icon={ic} name={display.name} /> : <span className="team-avatar-txt">{display.name.slice(0, 1) || (en ? "T" : "员")}</span>}
+                <button key={ic || "_txt"} className={"tc-icon-opt" + (!edit.avatarData && (edit.icon || "") === ic ? " on" : "")} title={ic || (tr("ui.appstore.initial.9fdc60d"))} onClick={() => setEdit({ ...edit, icon: ic || undefined, avatarData: undefined })}>
+                  {ic ? <EmployeeAvatar icon={ic} name={display.name} /> : <span className="team-avatar-txt">{display.name.slice(0, 1) || (tr("ui.appstore.text.d51d079"))}</span>}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="tc-field">
-            <label>{en ? "Name" : "名字"}</label>
-            <input className="tc-input" value={display.name} maxLength={12} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "name", ev.target.value, en ? "en" : "zh"))} />
+            <label>{tr("ui.appstore.name.9ebe8e4")}</label>
+            <input className="tc-input" value={display.name} maxLength={12} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "name", ev.target.value, (getCurrentLanguage())))} />
           </div>
           <div className="tc-field">
-            <label>{en ? "Title" : "职位"}</label>
-            <input className="tc-input" value={display.title || ""} maxLength={80} placeholder={en ? "e.g. Copywriter" : "如：文案"} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "title", ev.target.value, en ? "en" : "zh"))} />
+            <label>{tr("ui.appstore.title.8cf3891")}</label>
+            <input className="tc-input" value={display.title || ""} maxLength={80} placeholder={tr("ui.appstore.copywriter.2a155f3")} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "title", ev.target.value, (getCurrentLanguage())))} />
           </div>
           <div className="tc-field">
-            <label>{en ? "One-liner" : "简介"}</label>
-            <input className="tc-input" value={display.blurb || ""} maxLength={160} placeholder={en ? "A short line under the name" : "名字下方的一句话"} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "blurb", ev.target.value, en ? "en" : "zh"))} />
+            <label>{tr("ui.appstore.one.liner.6b0027c")}</label>
+            <input className="tc-input" value={display.blurb || ""} maxLength={160} placeholder={tr("ui.appstore.short.line.under.the.name.ab7356a")} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "blurb", ev.target.value, (getCurrentLanguage())))} />
           </div>
 
           {providers && providers.length > 0 && (
             <div className="tc-field">
-              <label>{en ? "Model" : "模型"}<em>{en ? "which platform & model this teammate uses" : "这名员工用哪个平台和模型"}</em></label>
+              <label>{tr("set.m.model")}<em>{tr("ui.appstore.which.platform.model.this.teammate.uses.951c92e")}</em></label>
               {choices.length > 0 ? <div className="tc-model-row">
-                <button type="button" className="tc-btn-ghost" data-testid="employee-model-picker" onClick={() => setShowModelPicker(true)}>{selectedModel ? (en ? selectedModel.labelEn : selectedModel.label) : edit.model?.model || (en ? 'Follow current chat' : '跟随当前会话')}</button>
-                {edit.model && <button type="button" className="tc-btn-ghost" onClick={() => setEdit({ ...edit, model: undefined })}>{en ? 'Follow current chat' : '跟随当前会话'}</button>}
+                <button type="button" className="tc-btn-ghost" data-testid="employee-model-picker" onClick={() => setShowModelPicker(true)}>{selectedModel ? (en ? selectedModel.labelEn : selectedModel.label) : edit.model?.model || (tr("ui.appstore.follow.current.chat.d11d408"))}</button>
+                {edit.model && <button type="button" className="tc-btn-ghost" onClick={() => setEdit({ ...edit, model: undefined })}>{tr("ui.appstore.follow.current.chat.d11d408")}</button>}
               </div> : <div className="tc-model-row">
                 <select className="tc-input tc-select" value={edit.model?.providerId || ""} onChange={(ev) => { const pid = ev.target.value; setEdit({ ...edit, model: pid ? { providerId: pid, model: '' } : undefined }); }}>
-                  <option value="">{en ? "Follow current chat" : "跟随当前会话"}</option>
+                  <option value="">{tr("ui.appstore.follow.current.chat.d11d408")}</option>
                   {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 {edit.model?.providerId && (() => {
@@ -231,39 +232,39 @@ export function EmployeeEditModal({
                   const models = p?.models || [];
                   return models.length > 0 ? (
                     <select className="tc-input tc-select" value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })}>
-                      <option value="" disabled>{en ? 'Choose a model' : '请选择模型'}</option>
+                      <option value="" disabled>{tr("ui.app.choose.model.0d10839")}</option>
                       {models.map((m) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   ) : (
-                    <input className="tc-input" placeholder={en ? "model id" : "模型名"} value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })} />
+                    <input className="tc-input" placeholder={tr("ui.appstore.model.id.7f1e587")} value={edit.model.model || ""} onChange={(ev) => setEdit({ ...edit, model: { providerId: edit.model!.providerId, model: ev.target.value } })} />
                   );
                 })()}
               </div>}
             </div>
           )}
 
-          <div className="tc-divider"><span>{en ? "Persona files" : "人格定义"}</span></div>
+          <div className="tc-divider"><span>{tr("ui.appstore.persona.files.85ab855")}</span></div>
           <div className="tc-field">
-            <label>{en ? "Identity & duties" : "身份与职责"}<em>{en ? "who they are, what they own, what they don't" : "他是谁、负责什么、不做什么"}</em></label>
-            <textarea className="tc-textarea" rows={5} value={display.persona || ""} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "persona", ev.target.value, en ? "en" : "zh"))} />
+            <label>{tr("ui.appstore.identity.duties.0fbd372")}<em>{tr("ui.appstore.who.they.are.what.they.own.e41914e")}</em></label>
+            <textarea className="tc-textarea" rows={5} value={display.persona || ""} onChange={(ev) => setEdit(editLocalizedEmployeeField(employee, edit, "persona", ev.target.value, (getCurrentLanguage())))} />
           </div>
           <div className="tc-field">
-            <label>{en ? "Personality & voice" : "性格与说话风格"}<em>{en ? "tone, temperament, how they talk" : "语气、脾气、表达习惯"}</em></label>
-            <textarea className="tc-textarea" rows={3} value={edit.soul || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, soul: ev.target.value })} />
+            <label>{tr("ui.appstore.personality.voice.a1eea25")}<em>{tr("ui.appstore.tone.temperament.how.they.talk.a1827d9")}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.soul || ""} placeholder={tr("ui.appstore.optional.00a972f")} onChange={(ev) => setEdit({ ...edit, soul: ev.target.value })} />
           </div>
           <div className="tc-field">
-            <label>{en ? "About the boss" : "关于老板"}<em>{en ? "who they serve, preferences, projects" : "服务的人是谁、偏好、在做的项目"}</em></label>
-            <textarea className="tc-textarea" rows={3} value={edit.aboutUser || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, aboutUser: ev.target.value })} />
+            <label>{tr("ui.appstore.about.the.boss.691a3b2")}<em>{tr("ui.appstore.who.they.serve.preferences.projects.276a33a")}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.aboutUser || ""} placeholder={tr("ui.appstore.optional.00a972f")} onChange={(ev) => setEdit({ ...edit, aboutUser: ev.target.value })} />
           </div>
           <div className="tc-field">
-            <label>{en ? "Long-term memory" : "长期记忆"}<em>{en ? "background & conclusions to always remember" : "需长期记住的背景、约定、结论"}</em></label>
-            <textarea className="tc-textarea" rows={3} value={edit.memory || ""} placeholder={en ? "Optional" : "选填"} onChange={(ev) => setEdit({ ...edit, memory: ev.target.value })} />
+            <label>{tr("ui.appstore.long.term.memory.6ca42b4")}<em>{tr("ui.appstore.background.conclusions.to.always.remember.0504ea1")}</em></label>
+            <textarea className="tc-textarea" rows={3} value={edit.memory || ""} placeholder={tr("ui.appstore.optional.00a972f")} onChange={(ev) => setEdit({ ...edit, memory: ev.target.value })} />
           </div>
 
           <div className="tc-modal-foot">
-            <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(en ? `Delete "${display.name}"? This can't be undone.` : `删除员工「${display.name}」？此操作不可撤销。`)) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{en ? "Delete" : "删除员工"}</button>
+            <button className="tc-btn-ghost danger tc-del-emp" onClick={async () => { if (!confirm(tr("ui.appstore.delete.this.can.be.undone.3ad6bdb", { p0: display.name }))) return; const r = await api.removeEmployee(edit.id); onSaved?.(r || {}); onClose(); }}>{tr("ui.appstore.delete.02958b2")}</button>
             <span style={{ flex: 1 }} />
-            <button className="tc-btn-ghost" onClick={onClose}>{en ? "Cancel" : "取消"}</button>
+            <button className="tc-btn-ghost" onClick={onClose}>{tr("set.st.cancel")}</button>
             <button className="tc-btn" disabled={!edit.name.trim() || !edit.persona.trim() || !!(edit.model?.providerId && !edit.model.model.trim())} onClick={async () => {
               const r = await api.updateEmployee(edit.id, {
                 name: saveText("name"),
@@ -279,12 +280,12 @@ export function EmployeeEditModal({
               });
               onSaved?.(r || {});
               onClose();
-            }}>{en ? "Save" : "保存"}</button>
+            }}>{tr("set.st.save")}</button>
           </div>
         </div>
       </div>
       {showModelPicker && <div className="team-model-picker" onClick={() => setShowModelPicker(false)}><div onClick={event => event.stopPropagation()}>
-        <ModelPicker choices={choices} selectedKey={selectedKey} loggedIn={loggedIn} lang={en ? 'en' : 'zh'} loading={false}
+        <ModelPicker choices={choices} selectedKey={selectedKey} loggedIn={loggedIn} lang={(getCurrentLanguage())} loading={false}
           onChoose={async choice => { setEdit({ ...edit, model: { providerId: choice.providerId, model: choice.modelId } }); }}
           onClose={() => setShowModelPicker(false)}
           onRequireLogin={() => { setShowModelPicker(false); onClose(); onRequireLogin?.(); }}
@@ -344,9 +345,9 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
   };
 
   const kw = q.trim().toLowerCase();
-  const apps = state.apps.map(a => localizeTeamApp(a, en ? "en" : "zh")); // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
+  const apps = state.apps.map(a => localizeTeamApp(a, (getCurrentLanguage()))); // 团队包在「添加员工」弹窗里全量展示，不受主搜索框影响
   // 主搜索框过滤「我的员工」：按名字/职位/简介匹配
-  const hired = state.employees.map(e => localizeEmployee(e, en ? "en" : "zh")).filter(
+  const hired = state.employees.map(e => localizeEmployee(e, (getCurrentLanguage()))).filter(
     (e) =>
       !kw ||
       (state.employees.find(original => original.id === e.id)?.name || "").toLowerCase().includes(kw) ||
@@ -362,46 +363,46 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
         <div className="tc-search-wrap">
           <input
             className="tc-search"
-            placeholder={en ? "Search teammates" : "搜索员工"}
+            placeholder={tr("ui.appstore.search.teammates.b2a5c15")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
           {q && (
-            <button className="tc-search-x" onClick={() => setQ("")} title={en ? "Clear" : "清空"}>
+            <button className="tc-search-x" onClick={() => setQ("")} title={tr("ui.app.clear.c69ad09")}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           )}
         </div>
         <button className="tc-add" onClick={() => setShowAdd(true)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-          {en ? "Add teammate" : "添加员工"}
+          {tr("ui.appstore.add.teammate.3e6e84b")}
         </button>
       </div>
 
       {/* 我的员工 */}
       <div className="tc-sec">
-        <h3>{en ? "My teammates" : "我的员工"}</h3>
+        <h3>{tr("ui.appstore.my.teammates.b200126")}</h3>
         <span className="tc-count">{hired.length}</span>
-        {hired.length > 0 && <span className="tc-hint">{en ? "click a card to chat" : "点头像卡即可私聊"}</span>}
+        {hired.length > 0 && <span className="tc-hint">{tr("ui.appstore.click.card.to.chat.3b31129")}</span>}
       </div>
       {state.employees.length === 0 ? (
         <div className="tc-empty-hero">
           <span className="tc-empty-ic">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="9.5" cy="7" r="3.2" /><path d="M17 11l2 2 3.5-3.5" /></svg>
           </span>
-          <div className="tc-empty-t">{en ? "No teammates yet" : "还没有员工"}</div>
-          <div className="tc-empty-d">{en ? "Install a team pack, or import your teammates from openclaw." : "装一个团队包，或从 openclaw 导入你的员工。"}</div>
-          <button className="tc-btn" onClick={() => setShowAdd(true)}>{en ? "Add teammates" : "添加员工"}</button>
+          <div className="tc-empty-t">{tr("ui.appstore.no.teammates.yet.e02635b")}</div>
+          <div className="tc-empty-d">{tr("ui.appstore.install.team.pack.or.import.your.afa834a")}</div>
+          <button className="tc-btn" onClick={() => setShowAdd(true)}>{tr("ui.appstore.add.teammates.43594c5")}</button>
         </div>
       ) : hired.length === 0 ? (
-        <div className="tc-empty">{en ? `No teammate matches "${q}"` : `没有匹配「${q}」的员工`}</div>
+        <div className="tc-empty">{tr("ui.appstore.no.teammate.matches.f27319c", { p0: q })}</div>
       ) : (
         <div className="tc-emps">
           {hired.map((e) => (
             <div className="tc-emp-wrap" key={e.id}>
               <button
                 className="tc-emp"
-                title={en ? `Chat with ${e.name}` : `和${e.name}私聊`}
+                title={tr("ui.app.chat.with.e3dbfcc", { p0: e.name })}
                 onClick={() => { void api.chat(e.id); onOpenChat?.(); }}
               >
                 <span className="tc-ava">
@@ -422,7 +423,7 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
               </button>
               <button
                 className="tc-emp-edit"
-                title={en ? "Edit" : "编辑"}
+                title={tr("set.st.editShort")}
                 onClick={() => setEdit({ ...state.employees.find(original => original.id === e.id)! })}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -440,15 +441,15 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
         <div className="tc-modal-mask" onClick={() => setShowAdd(false)}>
           <div className="tc-modal tc-add-modal" onClick={(ev) => ev.stopPropagation()}>
             <div className="tc-modal-head">
-              <span>{en ? "Add teammates" : "添加员工"}</span>
-              <button className="tc-modal-x" onClick={() => setShowAdd(false)} title={en ? "Close" : "关闭"}>
+              <span>{tr("ui.appstore.add.teammates.43594c5")}</span>
+              <button className="tc-modal-x" onClick={() => setShowAdd(false)} title={tr("msg.close")}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
               </button>
             </div>
 
       {/* 从别处导入 —— 轻量一条 */}
       <div className="tc-sec" style={{ marginTop: 4 }}>
-        <h3>{en ? "Import from elsewhere" : "从别处导入"}</h3>
+        <h3>{tr("ui.appstore.import.from.elsewhere.be18176")}</h3>
       </div>
       <div className="tc-import">
         <span className="tc-import-ic">
@@ -458,11 +459,9 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
           </svg>
         </span>
         <span className="tc-import-t">
-          <b>{en ? "Import teammates from openclaw" : "从 openclaw 导入员工"}</b>
+          <b>{tr("ui.appstore.import.teammates.from.openclaw.cc81bf8")}</b>
           <p>
-            {en
-              ? "Finds agent personas on this machine (incl. inside WSL). openclaw doesn't need to be running."
-              : "在本机（含 WSL 内）查找已配好的员工人格 · 不需要 openclaw 正在运行"}
+            {tr("ui.appstore.finds.agent.personas.on.this.machine.6b035f3")}
           </p>
         </span>
         <button
@@ -481,10 +480,10 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
             }
           }}
         >
-          {busy === "scan" ? (en ? "Scanning…" : "扫描中…") : en ? "Scan" : "扫描本机"}
+          {busy === "scan" ? (tr("ui.appstore.scanning.985f769")) : tr("ui.appstore.scan.677912c")}
         </button>
       </div>
-      {scan?.length === 0 && <div className="tc-note">{en ? "Nothing found on this machine." : "本机没找到可导入的来源。"}</div>}
+      {scan?.length === 0 && <div className="tc-note">{tr("ui.appstore.nothing.found.on.this.machine.5a873c6")}</div>}
       {imported && <div className="tc-note ok">{imported}</div>}
       {scan?.map((s) => (
         <div className="tc-import-result" key={s.path}>
@@ -514,7 +513,7 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
                       <b title={c.name}>{c.name}</b>
                       {c.title && <span className="tc-role" title={c.title}>{c.title}</span>}
                     </span>
-                    <span className="tc-emp-desc" title={c.blurb || c.sourceId}>{dup ? (en ? "Already imported" : "已导入") : c.blurb || c.sourceId}</span>
+                    <span className="tc-emp-desc" title={c.blurb || c.sourceId}>{dup ? (tr("ui.appstore.already.imported.b88fce0")) : c.blurb || c.sourceId}</span>
                   </span>
                 </label>
               );
@@ -530,20 +529,20 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
                 const ids = [...picked].filter((id) => !state.employees.some((e) => e.id === `oc-${id}`));
                 const r = await api.importApply(s.path, ids);
                 if (r?.apps) setState({ apps: r.apps, employees: r.employees });
-                setImported(en ? `Imported ${r?.added ?? 0} teammate(s).` : `已导入 ${r?.added ?? 0} 名员工，可以直接私聊了。`);
+                setImported(tr("ui.appstore.imported.teammate.b35218a", { p0: r?.added ?? 0 }));
               } finally {
                 setBusy(null);
               }
             }}
           >
-            {busy === "imp" ? (en ? "Importing…" : "导入中…") : en ? `Import selected (${picked.size})` : `导入选中的 ${picked.size} 名`}
+            {busy === "imp" ? (tr("ui.appstore.importing.91f7249")) : tr("ui.appstore.import.selected.ff28c9e", { p0: picked.size })}
           </button>
         </div>
       ))}
 
       {/* 可安装的应用 */}
       <div className="tc-sec">
-        <h3>{en ? "Team packs" : "可安装的团队"}</h3>
+        <h3>{tr("ui.appstore.team.packs.8c1b7f5")}</h3>
       </div>
       {apps.map((a) => (
         <div className={"tc-app" + (a.installed && !a.disabled ? " on" : "")} key={a.id}>
@@ -558,23 +557,23 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
             <span className="tc-app-h">
               <span className="tc-app-nm">{a.name}</span>
               <span className="tc-app-c">
-                {a.employees.length} {en ? "teammates" : "名员工"}
-                {a.installed && (a.disabled ? (en ? " · disabled" : " · 已停用") : en ? " · installed" : " · 已安装")}
+                {a.employees.length} {tr("ui.appstore.teammates.1a12afc")}
+                {a.installed && (a.disabled ? (tr("ui.appstore.disabled.019c80b")) : tr("ui.appstore.installed.1e1a5c9"))}
               </span>
             </span>
             <span className="tc-app-act">
               {a.installed ? (
                 <>
                   <button type="button" className="tc-btn-ghost" disabled={busy === a.id} onClick={() => run(a.id, () => api.toggle(a.id))}>
-                    {a.disabled ? (en ? "Enable" : "启用") : en ? "Disable" : "停用"}
+                    {a.disabled ? (tr("set.mcp.enable")) : tr("ui.appstore.disable.5dac4e9")}
                   </button>
                   <button type="button" className="tc-btn-ghost danger" disabled={busy === a.id} onClick={() => run(a.id, () => api.uninstall(a.id))}>
-                    {en ? "Uninstall" : "卸载"}
+                    {tr("ui.appstore.uninstall.2188190")}
                   </button>
                 </>
               ) : (
                 <button type="button" className="tc-btn" disabled={busy === a.id} onClick={() => run(a.id, () => api.install(a.id))}>
-                  {busy === a.id ? (en ? "Installing…" : "安装中…") : en ? "Install" : "安装"}
+                  {busy === a.id ? (tr("ui.appstore.installing.f04fe00")) : tr("set.mcp.dInstall")}
                 </button>
               )}
             </span>

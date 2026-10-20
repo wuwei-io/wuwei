@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 import { employeeMentionTargets, employeeLabel, employeeRoster } from "../../../src/team/default-localization.js";
 // AI 员工团队 · 群编排器
 //
@@ -82,7 +83,7 @@ function enqueueTurn(key: string, task: () => Promise<void>): { queued: boolean;
   let fail!: (error: unknown) => void;
   const completion = new Promise<void>((resolve, reject) => { complete = resolve; fail = reject; });
   const execute = Object.assign(async () => { try { await task(); complete(); } catch (error) { fail(error); } },
-    { cancel: () => fail(new Error('排队任务已停止')) });
+    { cancel: () => fail(new Error(tr("ui.orchestrator.message.9a51c9304e"))) });
   const existing = turnQueue.get(key);
   if (existing) { existing.push(execute); return { queued: true, completion }; } // 忙：排队尾
   const q: QueuedTurn[] = [];
@@ -134,11 +135,11 @@ export function enqueueEmpTask(empId: string, task: () => Promise<void>, opts?: 
   const urgent = !!opts?.urgent;
   return new Promise<void>((resolve, reject) => {
     const signal = opts?.signal;
-    if (signal?.aborted) { reject(new DOMException('排队任务已停止', 'AbortError')); return; }
+    if (signal?.aborted) { reject(new DOMException(tr("ui.orchestrator.message.9a51c9304e"), 'AbortError')); return; }
     const cancelQueued = () => {
       const q = empQueue.get(empId);
       const index = q?.indexOf(item) ?? -1;
-      if (index >= 0) { q!.splice(index, 1); reject(new DOMException('排队任务已停止', 'AbortError')); }
+      if (index >= 0) { q!.splice(index, 1); reject(new DOMException(tr("ui.orchestrator.message.9a51c9304e"), 'AbortError')); }
       signal?.removeEventListener('abort', cancelQueued);
     };
     const item: EmpTask = { run: async () => {
@@ -169,7 +170,7 @@ export function enqueueEmpTask(empId: string, task: () => Promise<void>, opts?: 
 }
 
 /** 员工被唤醒后先落的「收到」应答文案。跑完才落正式回复(带 steps)。 */
-const ACK_TEXT = "收到，正在处理…";
+const ACK_TEXT = tr("ui.orchestrator.message.46af4a3636");
 
 /**
  * dm_teammate 转派链最大深度(responder 深度 ≥ 此值时剔除 dm_teammate、不能再往下转)。
@@ -274,7 +275,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     room.maxWake ?? 3,
   );
   pushAndBroadcast(deps, roomId, {
-    speaker: { id: "me", name: "我", kind: "human" },
+    speaker: { id: "me", name: tr("ui.index.me.d269d05"), kind: "human" },
     text,
     mentions: responders,
     images: options.images,
@@ -285,7 +286,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
     deps.send("evt:team-room-hint", {
       roomId,
       code: "no-responders", // 前端据此渲染双语文案(英文界面也能看懂「为什么没人应答」)
-      hint: "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。",
+      hint: tr("ui.roomview.no.one.was.called.on.an.a66af92"),
     });
     return;
   }
@@ -294,7 +295,7 @@ export async function runRoomTurn(roomId: string, userText: string, deps: Orches
   const snapshot = loadRoomMessages(roomId);
   const queued = enqueueTurn(roomId, () => runRoomResponders(roomId, room, members, responders, deps, snapshot));
   if (queued.queued) {
-    deps.send("evt:team-room-hint", { roomId, code: "queued", hint: "正在处理上一条，这条已排队，稍后自动接上。" });
+    deps.send("evt:team-room-hint", { roomId, code: "queued", hint: tr("ui.roomview.still.on.the.previous.message.this.6b478d8") });
   }
   await queued.completion;
 }
@@ -358,7 +359,7 @@ async function runRoomResponders(
           deps.send("evt:team-room-progress", { roomId, empId: emp.id, done: true }); // 该员工干完，界面清掉他的进度块
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
-            text: (out || "").trim() || (turnImages.length ? "" : "（没有输出）"),
+            text: (out || "").trim() || (turnImages.length ? "" : tr("ui.orchestrator.message.b9d0137d9c")),
             steps: snap.steps.length ? snap.steps : undefined, // 执行明细随消息落库，永久可展开回看
             thought: snap.thought || undefined,
             images: turnImages.length ? turnImages : undefined,
@@ -368,7 +369,7 @@ async function runRoomResponders(
           deps.log("team", "群成员出错", emp.name, String(e?.message || e).slice(0, 200));
           pushAndBroadcast(deps, roomId, {
             speaker: { id: emp.id, name: emp.name, kind: "agent" },
-            text: `出错了：${String(e?.message || e).slice(0, 300)}`,
+            text: tr("ui.orchestrator.message.bfac65b05f", {p0: String(e?.message || e).slice(0, 300)}),
             error: true,
           });
         }
@@ -413,7 +414,7 @@ export async function runDmTurn(
       const done = () => { options.signal?.removeEventListener('abort', abort); resolve(); };
       const abort = () => {
         const index = waiting.indexOf(done); if (index >= 0) waiting.splice(index, 1);
-        reject(new DOMException('任务已取消', 'AbortError'));
+        reject(new DOMException(tr("ui.orchestrator.message.a811875243"), 'AbortError'));
       };
       waiting.push(done); roomWaiters.set(dmId, waiting);
       options.signal?.addEventListener('abort', abort, { once: true });
@@ -422,17 +423,17 @@ export async function runDmTurn(
   options.signal?.throwIfAborted();
   if (running.has(dmId)) {
     // 同一私聊正在跑上一轮：不并发，直接告诉发起方对方在忙，避免消息流错位
-    return "（对方正在处理上一条消息，稍后再试。）";
+    return tr("ui.orchestrator.message.fb332490f1");
   }
   const room = loadRooms().find((r) => r.id === dmId);
-  if (!room) { if (options.strict) throw new Error('任务私聊已不存在。'); return ""; }
+  if (!room) { if (options.strict) throw new Error(tr("ui.orchestrator.message.b9b0c3d09c")); return ""; }
   const emp = loadEmployees().find((e) => e.id === responderId);
-  if (!emp) { if (options.strict) throw new Error('任务员工已不存在。'); return ""; }
+  if (!emp) { if (options.strict) throw new Error(tr("ui.orchestrator.message.5e602123cd")); return ""; }
 
   // 私聊里「另一位」= 发起方，用于场景提示词里点名「你在和 X 私聊」
   const otherId = (room.members || []).find((id) => id !== responderId);
   const other = otherId ? loadEmployees().find((e) => e.id === otherId) : null;
-  const otherName = other?.name || otherId || "对方";
+  const otherName = other?.name || otherId || tr("ui.orchestrator.message.a524b95af1");
 
   const ac = new AbortController();
   const abortOwned = () => ac.abort();
@@ -481,17 +482,17 @@ export async function runDmTurn(
       dmDepth: depth, // 透传深度：本轮员工若再调 dm_teammate，工具据此 +1
       onProgress: (ev) => { if (ev.kind === "image") { turnImages.push(ev.dataUrl); return; } applyProg(dmId, emp.id, emp.name, ev); deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, empName: emp.name, ...ev }); },
     });
-    if (ac.signal.aborted) { if (options.strict) throw new DOMException('任务已取消。', 'AbortError'); return ""; }
+    if (ac.signal.aborted) { if (options.strict) throw new DOMException(tr("ui.orchestrator.message.cd5493e2aa"), 'AbortError'); return ""; }
     const snap = snapshotEmp(dmId, emp.id); // 落库前取执行明细
     applyProg(dmId, emp.id, emp.name, { kind: "done" });
     deps.send("evt:team-room-progress", { roomId: dmId, empId: emp.id, done: true });
-    const text = (out || "").trim() || (turnImages.length ? "" : "（没有输出）");
+    const text = (out || "").trim() || (turnImages.length ? "" : tr("ui.orchestrator.message.b9d0137d9c"));
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined, images: turnImages.length ? turnImages : undefined });
-    return text || (turnImages.length ? `已交付${turnImages.length}张图片，见员工私聊中的产物。` : '');
+    return text || (turnImages.length ? tr("ui.orchestrator.message.3afef113ca", {p0: turnImages.length}) : '');
   } catch (e: any) {
-    if (ac.signal.aborted) { if (options.strict) throw new DOMException('任务已取消。', 'AbortError'); return ""; }
+    if (ac.signal.aborted) { if (options.strict) throw new DOMException(tr("ui.orchestrator.message.cd5493e2aa"), 'AbortError'); return ""; }
     deps.log("team", "私聊出错", emp.name, String(e?.message || e).slice(0, 200));
-    const errText = `出错了：${String(e?.message || e).slice(0, 300)}`;
+    const errText = tr("ui.orchestrator.message.bfac65b05f", {p0: String(e?.message || e).slice(0, 300)});
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text: errText, error: true });
     if (options.strict) throw e;
     return errText;
@@ -529,14 +530,14 @@ export async function runDmHumanTurn(
   // 1. 人类这句话先落库并广播——speaker.kind="human" 让界面靠右显示，
   //    投影层 projectFor 里 id≠responderId 会当作对方发来的 user 输入喂给响应员工。
   //    不管忙不忙都立刻落，用户即时看到自己发的话(旧代码在此之前就 running.has→return 把整条吞了)。
-  pushAndBroadcast(deps, dmId, { speaker: { id: "me", name: "我", kind: "human" }, text });
+  pushAndBroadcast(deps, dmId, { speaker: { id: "me", name: tr("ui.index.me.d269d05"), kind: "human" }, text });
 
   // 2. 唤醒「对方」回一句走【员工级】串行队列：他手上别的活没干完就排队、干完自动接上，不丢这条。
   //    用员工 id 作 key（而非私聊 id），这样他在别处（别人派的活/别的私聊）忙着时，这条也会乖乖排队，
   //    不会让同一个员工同时开两轮串台。复用 runDmTurn，投影把人类这句当 input、防递归照旧。
   const wasBusy = empIsBusy(responderId);
   if (wasBusy) {
-    deps.send("evt:team-room-hint", { roomId: dmId, code: "queued", hint: "对方正忙于手头的活，这条已排队，轮到就处理。" });
+    deps.send("evt:team-room-hint", { roomId: dmId, code: "queued", hint: tr("ui.orchestrator.message.8e371def26") });
   }
   void enqueueEmpTask(responderId, () => runDmTurn(dmId, responderId, text, deps).then(() => undefined)).catch(() => {});
 }

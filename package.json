@@ -1,6 +1,6 @@
 {
   "name": "wuwei",
-  "version": "1.7.54",
+  "version": "1.7.55",
   "description": "无为 · AI 助手（CLI + 桌面版）。本质 = LLM + 工具执行循环 + 终端/GUI。",
   "license": "MIT",
   "homepage": "https://wuweiai.io",
@@ -26,7 +26,16 @@
     "desktop:pack": "electron-vite build && electron-builder --mac",
     "pack:wuwei": "electron-vite build && electron-builder --win --config electron-builder.wuwei.yml",
     "pack:minicc": "electron-vite build && electron-builder --win --config electron-builder.minicc.yml",
-    "pack:wuwei-test": "electron-vite build && electron-builder --win --config electron-builder.wuwei-test.yml"
+    "pack:wuwei-test": "electron-vite build && electron-builder --win --config electron-builder.wuwei-test.yml",
+    "i18n:generate": "node scripts/i18n-generate.mjs",
+    "i18n:check": "node scripts/i18n-generate.mjs && node scripts/i18n-check.mjs",
+    "predesktop:dev": "npm run i18n:check",
+    "predesktop:dev:test": "npm run i18n:check",
+    "predesktop:build": "npm run i18n:check",
+    "predesktop:pack": "npm run i18n:check",
+    "prepack:wuwei": "npm run i18n:check",
+    "prepack:minicc": "npm run i18n:check",
+    "prepack:wuwei-test": "npm run i18n:check"
   },
   "engines": {
     "node": ">=20"

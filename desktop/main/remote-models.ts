@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 import type { Settings, ProviderKind } from './settings.js';
 
 export interface RemoteChannel {
@@ -25,11 +26,11 @@ export function configuredRemoteChannels(s: Settings | null, share: boolean): Re
       providerKind: kind, defaultModel: model, models });
   };
   if (share && (s.kind === 'anthropic-oauth' || s.creds?.['claude-oauth']?.oauthToken))
-    add('claude-code-subscription', 'Claude Code 订阅', 'claude-oauth', 'anthropic-oauth', true);
+    add('claude-code-subscription', tr("ui.remote-models.message.4978ea9fca"), 'claude-oauth', 'anthropic-oauth', true);
   if (share && (s.kind === 'codex' || s.creds?.codex?.model))
-    add('codex-subscription', 'Codex 订阅', 'codex', 'codex', true);
+    add('codex-subscription', tr("ui.index.codex.subscription.9022217"), 'codex', 'codex', true);
   if (s.kind === 'anthropic-apikey' || s.kind === 'openai')
-    add('api-key', '本机 API Key', s.providerId || (s.kind === 'openai' ? 'openai' : 'anthropic'), s.kind, false);
+    add('api-key', tr("ui.remote-models.message.7a041f7d5f"), s.providerId || (s.kind === 'openai' ? 'openai' : 'anthropic'), s.kind, false);
   for (const [pid, slot] of Object.entries(s.creds || {})) {
     if (!slot.model || !slot.apiKey || out.some(ch => ch.providerId === pid) || ['codex', 'claude-oauth'].includes(pid)) continue;
     add(`api-key:${pid}`, slot.nickname || pid, pid, providerKindForId(pid, s), false);
@@ -42,12 +43,12 @@ export function resolveRemoteSelection(channels: RemoteChannel[], channelId?: st
   const legacy = !channelId && channels.some(ch => ch.id === model);
   const id = channelId || (legacy ? model : null);
   if (!id) {
-    if (model) throw new Error('请选择模型所属的电脑渠道');
+    if (model) throw new Error(tr("ui.remote-models.message.00a03c6479"));
     return null; // continue the original session's persisted binding
   }
   const channel = channels.find(ch => ch.id === id);
-  if (!channel) throw new Error('该渠道不属于这台电脑当前共享的渠道');
+  if (!channel) throw new Error(tr("ui.remote-models.message.a7265b9794"));
   const selected = legacy || !model ? channel.defaultModel : model;
-  if (!channel.models.includes(selected)) throw new Error('所选模型未在电脑渠道中配置，请刷新模型列表');
+  if (!channel.models.includes(selected)) throw new Error(tr("ui.remote-models.message.dabaea51e8"));
   return { channel, model: selected };
 }

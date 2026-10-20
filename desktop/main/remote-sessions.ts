@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 import { randomUUID } from 'node:crypto';
 import type { Agent, AgentHooks } from '../../src/agent/loop.js';
 
@@ -19,7 +20,7 @@ interface SessionDependencies {
 
 export function waitForRemoteResult<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
-    const abort = () => reject(new Error('已停止'));
+    const abort = () => reject(new Error(tr("set.brain.exStopped")));
     signal.addEventListener('abort', abort, { once: true });
     pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     if (signal.aborted) abort();
@@ -29,9 +30,9 @@ export function waitForRemoteResult<T>(pending: Promise<T>, signal: AbortSignal)
 /** Use the desktop's actual Agent and running lock, so phone messages share history and stop behavior. */
 export async function runRemoteSessionTurn(turn: SessionTurn, deps: SessionDependencies) {
   const id = turn.sessionId || randomUUID();
-  if (turn.sessionId && !deps.exists(id)) throw new Error('这台电脑不存在该会话，请重新选择会话');
-  if (deps.running.has(id)) throw new Error('该会话正在执行，请先停止或等当前任务完成');
-  if (turn.signal.aborted) throw new Error('已停止');
+  if (turn.sessionId && !deps.exists(id)) throw new Error(tr("ui.remote-sessions.message.95903256d8"));
+  if (deps.running.has(id)) throw new Error(tr("ui.remote-sessions.message.8dcdd32bd8"));
+  if (turn.signal.aborted) throw new Error(tr("set.brain.exStopped"));
   const controller = new AbortController();
   const abort = () => controller.abort();
   turn.signal.addEventListener('abort', abort, { once: true });
@@ -39,7 +40,7 @@ export async function runRemoteSessionTurn(turn: SessionTurn, deps: SessionDepen
   let agent: Agent | undefined;
   try {
     agent = await deps.prepare(id);
-    if (controller.signal.aborted) throw new Error('已停止');
+    if (controller.signal.aborted) throw new Error(tr("set.brain.exStopped"));
     turn.onSession(id);
     const requestDecision: AgentHooks['requestDecision'] = turn.hooks.requestDecision
       ? decision => waitForRemoteResult(turn.hooks.requestDecision!(decision), controller.signal) : undefined;
@@ -55,7 +56,7 @@ export async function runRemoteSessionTurn(turn: SessionTurn, deps: SessionDepen
     deps.persist(id); // User input is already in Agent history, even if the model hasn't answered yet.
     deps.changed(id, agent);
     await execution;
-    if (controller.signal.aborted) throw new Error('已停止');
+    if (controller.signal.aborted) throw new Error(tr("set.brain.exStopped"));
     const last = [...agent.getMessages()].reverse().find(m => m.role === 'assistant');
     const text = last?.content.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     return { sessionId: id, text };

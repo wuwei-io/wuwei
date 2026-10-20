@@ -17,6 +17,6 @@ test('language can be changed before signing in from both login surfaces',()=>{
  const source=readFileSync('desktop/renderer/src/App.tsx','utf8');
  const intro=source.slice(source.indexOf('function LoginIntroModal'),source.indexOf('function WuweiLoginModal'));
  const form=source.slice(source.indexOf('function WuweiLoginModal'),source.indexOf('function WuweiLoginModal')+23000);
- assert.match(intro,/aria-label="Language \/ 语言"/);assert.match(form,/aria-label="Language \/ 语言"/);
+ assert.match(intro,/<LanguageSwitcher language=\{lang\} onChange=\{onLang\}/);assert.match(form,/<LanguageSwitcher language=\{lang\} onChange=\{onLang\}/);
  assert.match(source,/<WuweiLoginModal[\s\S]*?onLang=\{changeLang\}/);
 });

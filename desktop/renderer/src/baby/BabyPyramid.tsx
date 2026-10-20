@@ -1,3 +1,4 @@
+import { tr } from "../../../../src/localization/index.js";
 // 数字婴儿 · 知识金字塔
 // 后端睡觉时会把概念自组织成一座塔：底层是它一个个学来的具体概念，
 // 往上每层都是聚类涌现出来的抽象认知，塔尖是"道"。这里把整座塔摊开：
@@ -76,9 +77,9 @@ export function BabyPyramid({ data }: { data: Data | null }) {
     return s;
   }, [sel, byName]);
 
-  if (!data) return <div className="byp"><div className="byp-empty">正在读取它的知识金字塔…</div></div>;
+  if (!data) return <div className="byp"><div className="byp-empty">{tr("ui.babypyramid.message.630f5e0353")}</div></div>;
   if (!layers.length)
-    return <div className="byp"><div className="byp-empty">它还没学到东西，塔还没开始长。</div></div>;
+    return <div className="byp"><div className="byp-empty">{tr("ui.babypyramid.message.0a98cb788d")}</div></div>;
 
   const top = layers[0];
   const maxDepth = Number(stats.depth || 0);
@@ -90,21 +91,21 @@ export function BabyPyramid({ data }: { data: Data | null }) {
   return (
     <div className={"byp zoom-" + zoom}>
       <div className="byp-sum">
-        <span className="byp-sum-k">各层数量</span>
+        <span className="byp-sum-k">{tr("ui.babypyramid.message.6bfa4ec8a2")}</span>
         {layers.filter((L) => L.depth > 0).map((L) => (
-          <span key={L.depth}>第{L.depth}层 <b>{L.nodes.length}</b></span>
+          <span key={L.depth}>{tr("ui.babypyramid.message.365809ca60")}{L.depth}{tr("ui.app.message.b03601ce3f")}<b>{L.nodes.length}</b></span>
         ))}
-        <span>地基 <b>{leafCount}</b></span>
+        <span>{tr("ui.babypyramid.message.5bf5586980")}<b>{leafCount}</b></span>
         <span className="byp-sum-eq">
-          合计 <b>{sum}</b> / 它学过 <b>{stats.total ?? sum}</b>
-          {stats.total != null && sum !== stats.total ? "（对不上）" : "（对得上）"}
+          {tr("ui.babypyramid.message.2c4e661eb2")}<b>{sum}</b> {tr("ui.babypyramid.message.0e32be3d89")}<b>{stats.total ?? sum}</b>
+          {stats.total != null && sum !== stats.total ? tr("ui.babypyramid.message.2ea7f0f47a") : tr("ui.babypyramid.message.11250e4584")}
         </span>
-        <span className="byp-sum-loose">还没固化 <b>{stats.loose ?? 0}</b></span>
+        <span className="byp-sum-loose">{tr("ui.babypyramid.message.e8d94c901a")}<b>{stats.loose ?? 0}</b></span>
         <div className="byp-find">
           <Ic.IcSearch size={13} />
           <input
             value={q}
-            placeholder="搜一个概念，看它的整条脉络"
+            placeholder={tr("ui.babypyramid.message.665e712d2c")}
             onChange={(e) => { setQ(e.target.value); setHitIdx(0); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && hits.length) setHitIdx((i) => (i + 1) % hits.length);
@@ -113,21 +114,21 @@ export function BabyPyramid({ data }: { data: Data | null }) {
           />
           {!!q && (
             <>
-              <span className="byp-find-n">{hits.length ? `${Math.min(hitIdx, hits.length - 1) + 1}/${hits.length}` : "没找到"}</span>
+              <span className="byp-find-n">{hits.length ? `${Math.min(hitIdx, hits.length - 1) + 1}/${hits.length}` : tr("ui.babypyramid.message.d9a3be873c")}</span>
               {hits.length > 1 && (
                 <>
-                  <button onClick={() => setHitIdx((i) => (i - 1 + hits.length) % hits.length)} title="上一个">↑</button>
-                  <button onClick={() => setHitIdx((i) => (i + 1) % hits.length)} title="下一个 (Enter)">↓</button>
+                  <button onClick={() => setHitIdx((i) => (i - 1 + hits.length) % hits.length)} title={tr("ui.babypyramid.message.cb985d9470")}>↑</button>
+                  <button onClick={() => setHitIdx((i) => (i + 1) % hits.length)} title={tr("ui.babypyramid.message.34b92cd61a")}>↓</button>
                 </>
               )}
-              <button onClick={() => { setQ(""); setSel(null); }} title="清空">×</button>
+              <button onClick={() => { setQ(""); setSel(null); }} title={tr("ui.app.clear.c69ad09")}>×</button>
             </>
           )}
         </div>
         <div className="by-seg byp-zoom">
           {(["sm", "md", "lg"] as const).map((z) => (
             <button key={z} className={zoom === z ? "on" : ""} onClick={() => setZ(z)}>
-              {z === "sm" ? "紧凑" : z === "md" ? "标准" : "放大"}
+              {z === "sm" ? tr("ui.babypyramid.message.b50c49bb52") : z === "md" ? tr("ui.babypyramid.message.bf14d2e583") : tr("ui.babypyramid.message.1b55585293")}
             </button>
           ))}
         </div>
@@ -135,8 +136,7 @@ export function BabyPyramid({ data }: { data: Data | null }) {
 
       {!stats.abstract && (
         <div className="byp-empty" style={{ padding: "10px 0 18px" }}>
-          它还没把知识整理成塔——点右上角「整理知识」，让它把学过的东西自己理一遍。
-        </div>
+          {tr("ui.babypyramid.message.70689a211a")}</div>
       )}
 
       {layers.map((L) => {
@@ -149,18 +149,18 @@ export function BabyPyramid({ data }: { data: Data | null }) {
             <div className="byp-layer-h">
               <span className="byp-layer-n">
                 {isLeaf
-                  ? "地基 · 它一个个学来的概念"
+                  ? tr("ui.babypyramid.message.574dbf2e74")
                   : L.depth === maxDepth
                     ? top.nodes.some((n) => n.isDao)
-                      ? "塔尖 · 万物归一"
-                      : `第 ${L.depth} 层 · 最高层认知`
-                    : `第 ${L.depth} 层抽象`}
+                      ? tr("ui.app.message.13cc2df711")
+                      : tr("ui.babypyramid.message.7698b6c1aa", {p0: L.depth})
+                    : tr("ui.babypyramid.message.3a5ee605d6", {p0: L.depth})}
               </span>
-              <span className="byp-layer-d">{ns.length} 个</span>
+              <span className="byp-layer-d">{ns.length} {tr("ui.babypyramid.message.1a334c9815")}</span>
               <span className="byp-layer-line" />
               {isLeaf && (
                 <button className="byp-more" onClick={() => setLooseOnly((v) => !v)}>
-                  {looseOnly ? "看全部" : `只看还没固化的（${stats.loose || 0}）`}
+                  {looseOnly ? tr("ui.babypyramid.message.fd86c7730b") : tr("ui.babypyramid.message.5554beae23", {p0: stats.loose || 0})}
                 </button>
               )}
             </div>
@@ -208,18 +208,18 @@ export function BabyPyramid({ data }: { data: Data | null }) {
             </button>
           </div>
           <div className="bbg-detail-row">
-            <b>它的理解</b>
+            <b>{tr("ui.app.message.48f1e8870b")}</b>
             <div>{byName.get(sel)!.desc}</div>
           </div>
           {!!byName.get(sel)!.parent && (
             <div className="bbg-detail-row">
-              <b>被抽象进</b>
+              <b>{tr("ui.babypyramid.message.a82be09bac")}</b>
               <div>{byName.get(sel)!.parent}</div>
             </div>
           )}
           {!!byName.get(sel)!.children?.length && (
             <div className="bbg-detail-row">
-              <b>由这些收敛而来（{byName.get(sel)!.children!.length}）</b>
+              <b>{tr("ui.app.message.a8fdd5411e")}{byName.get(sel)!.children!.length}）</b>
               <div>{byName.get(sel)!.children!.join("、")}</div>
             </div>
           )}
@@ -228,15 +228,12 @@ export function BabyPyramid({ data }: { data: Data | null }) {
 
       <div className="byp-foot">
         <span className="byp-legend">
-          <span className="byp-swatch dao" />塔尖（万物归一）
-        </span>
+          <span className="byp-swatch dao" />{tr("ui.babypyramid.message.ab6e8557d0")}</span>
         <span className="byp-legend">
-          <span className="byp-swatch" />睡梦里涌现的抽象层
-        </span>
+          <span className="byp-swatch" />{tr("ui.babypyramid.message.1804fb390b")}</span>
         <span className="byp-legend">
-          <span className="byp-swatch loose" />还没固化的碎知识
-        </span>
-        <span className="byp-legend">点一个节点看它的血脉：往上归到哪、往下由谁收敛而来</span>
+          <span className="byp-swatch loose" />{tr("ui.babypyramid.message.e6a46f6d23")}</span>
+        <span className="byp-legend">{tr("ui.babypyramid.message.0d61e1cfaa")}</span>
       </div>
     </div>
   );

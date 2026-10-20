@@ -5,11 +5,11 @@ export type AnnouncementSource = {
 // Choose a complete language pair, never mix a translated title with another language's body.
 // If the requested translation is incomplete, use the other complete pair and its UI language.
 export function selectAnnouncementLocale(source: AnnouncementSource, requested: string) {
-  const preferred = requested === "en" ? "en" : "zh";
+  const preferred = requested === "zh" ? "zh" : "en";
   const pair = (lang: "en" | "zh") => ({
     lang,
-    title: (lang === "en" ? source.titleEn : source.titleZh) || "",
-    body: (lang === "en" ? source.bodyEn : source.bodyZh) || "",
+    title: (lang !== "zh" ? source.titleEn : source.titleZh) || "",
+    body: (lang !== "zh" ? source.bodyEn : source.bodyZh) || "",
   });
   const first = pair(preferred);
   const other = pair(preferred === "en" ? "zh" : "en");

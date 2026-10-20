@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../localization/index.js";
 import {platformImageTool} from './platform-imagegen.js';
 // 工具集：每个工具 = JSON Schema（给模型）+ 本地执行函数。
 // P1 版：Read / Write / Edit / Bash / Glob / Grep —— 覆盖"读代码、改文件、跑命令、搜索"。
@@ -20,7 +21,7 @@ const pexecFile = promisify(execFile);
 
 // 工具结果文案跟随界面语言（WUWEI_LANG 由桌面端设置写入环境变量；CLI 同样可用）。
 // ⚠️ 必须在调用时求值：绝不能把 tt(...) 的结果放进模块顶层常量，否则加载那一刻语言就被焊死，切换语言不生效。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 // 跨平台 shell 解析：POSIX 用 /bin/bash；Windows 优先 Git Bash（自带 grep/head/find，能原样兼容工具的 bash 语法与管道）。
 // ⚠️ 绝不能用 System32\bash.exe（那是 WSL，Windows 路径映射会乱、cwd 也不对），故从 PATH 上的 git 反推 Git 根目录定位。
@@ -102,17 +103,17 @@ function abs(ctx: ToolContext, p: string): string {
 // ---- Read ----
 const readTool: Tool = {
   name: "read_file",
-  description: "读取文本文件内容，返回带行号的内容。用于查看代码/文件。",
+  get description() { return tr("tool.description.read_file"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      path: { type: "string", description: "文件路径（相对或绝对）" },
-      offset: { type: "number", description: "起始行(1基)，可选" },
-      limit: { type: "number", description: "读取行数，默认 2000" },
+      path: { type: "string", description: tr("tool.parameter.read_file.path") },
+      offset: { type: "number", description: tr("tool.parameter.read_file.offset") },
+      limit: { type: "number", description: tr("tool.parameter.read_file.limit") },
     },
     required: ["path"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const raw = await fs.readFile(abs(ctx, String(input.path)), "utf8");
@@ -125,9 +126,9 @@ const readTool: Tool = {
         .join("\n");
       // 空文件的兜底要看 raw：""  split 出的是 [""]，加完行号变成 "     1\t"，body 并不为空，
       // 原来的 `body ||` 永远命中不了，空文件一直显示成一个孤零零的行号。
-      return { content: raw === "" || !body ? tt("(空文件)", "(empty file)") : body };
+      return { content: raw === "" || !body ? tr("ui.index.empty.file.627c9ab") : body };
     } catch (e: any) {
-      return { content: tt(`读取失败: ${e.message}`, `Read failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.read.failed.b9c5f8d", { p0: e.message }), isError: true };
     }
   },
 };
@@ -135,7 +136,7 @@ const readTool: Tool = {
 // ---- Write ----
 const writeTool: Tool = {
   name: "write_file",
-  description: "写入/覆盖文件（不存在则创建，含父目录）。",
+  get description() { return tr("tool.description.write_file"); },
   readOnly: false,
   inputSchema: {
     type: "object",
@@ -150,9 +151,9 @@ const writeTool: Tool = {
       const target = abs(ctx, String(input.path));
       await fs.mkdir(resolve(target, ".."), { recursive: true });
       await fs.writeFile(target, String(input.content), "utf8");
-      return { content: tt(`已写入 ${target}`, `Wrote ${target}`) };
+      return { content: tr("ui.index.wrote.c98fa27", { p0: target }) };
     } catch (e: any) {
-      return { content: tt(`写入失败: ${e.message}`, `Write failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.write.failed.66f9135", { p0: e.message }), isError: true };
     }
   },
 };
@@ -160,18 +161,18 @@ const writeTool: Tool = {
 // ---- Edit（精确字符串替换）----
 const editTool: Tool = {
   name: "edit_file",
-  description: "对文件做精确字符串替换。old_string 必须在文件中唯一出现，否则报错。",
+  get description() { return tr("tool.description.edit_file"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
       path: { type: "string" },
       old_string: { type: "string" },
       new_string: { type: "string" },
-      replace_all: { type: "boolean", description: "替换全部出现，默认 false" },
+      replace_all: { type: "boolean", description: tr("tool.parameter.edit_file.replace_all") },
     },
     required: ["path", "old_string", "new_string"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const target = abs(ctx, String(input.path));
@@ -180,13 +181,10 @@ const editTool: Tool = {
       const newStr = String(input.new_string);
       const count = raw.split(oldStr).length - 1;
       if (count === 0)
-        return { content: tt("未找到 old_string，未修改", "old_string not found; no changes made"), isError: true };
+        return { content: tr("ui.index.old.string.not.found.no.changes.ba1991c"), isError: true };
       if (count > 1 && !input.replace_all)
         return {
-          content: tt(
-            `old_string 出现 ${count} 次不唯一；请加长上下文或设 replace_all`,
-            `old_string occurs ${count} times (not unique); add more context or set replace_all`,
-          ),
+          content: tr("ui.index.old.string.occurs.times.not.unique.1c1e57b", { p0: count }),
           isError: true,
         };
       const next = input.replace_all
@@ -194,9 +192,9 @@ const editTool: Tool = {
         : raw.replace(oldStr, newStr);
       await fs.writeFile(target, next, "utf8");
       const n = input.replace_all ? count : 1;
-      return { content: tt(`已编辑 ${target}（替换 ${n} 处）`, `Edited ${target} (${n} replacement(s))`) };
+      return { content: tr("ui.index.edited.replacement.900b494", { p0: target, p1: n }) };
     } catch (e: any) {
-      return { content: tt(`编辑失败: ${e.message}`, `Edit failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.edit.failed.e6686a7", { p0: e.message }), isError: true };
     }
   },
 };
@@ -204,16 +202,16 @@ const editTool: Tool = {
 // ---- Bash ----
 const bashTool: Tool = {
   name: "bash",
-  description: "在工作目录执行 shell 命令（bash；Windows 走 Git Bash），返回 stdout+stderr。默认超时 120s。",
+  get description() { return tr("tool.description.bash"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
       command: { type: "string" },
-      timeout_ms: { type: "number", description: "超时毫秒，默认 120000" },
+      timeout_ms: { type: "number", description: tr("tool.parameter.bash.timeout_ms") },
     },
     required: ["command"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const { stdout, stderr } = await pexec(String(input.command), {
@@ -226,10 +224,10 @@ const bashTool: Tool = {
         env: ctx.env ? { ...process.env, ...ctx.env } : process.env,
       });
       const out = [stdout, stderr].filter(Boolean).join("\n").trim();
-      return { content: out || tt("(无输出)", "(no output)") };
+      return { content: out || tr("ui.mcp.no.output.5b6d486") };
     } catch (e: any) {
       const out = [e.stdout, e.stderr, e.message].filter(Boolean).join("\n").trim();
-      return { content: out || tt(`执行失败: ${e.message}`, `Command failed: ${e.message}`), isError: true };
+      return { content: out || tr("ui.index.command.failed.99fb353", { p0: e.message }), isError: true };
     }
   },
 };
@@ -239,17 +237,16 @@ const bashTool: Tool = {
 // 本工具直接调 PowerShell（成功率高），失败/不可用再回退 cmd.exe。非 Windows 直接回退 bash。
 const powershellTool: Tool = {
   name: "powershell",
-  description:
-    "在 Windows 上执行原生命令（首选 PowerShell，失败自动回退 cmd）。适合建 junction/符号链接、改注册表、管理服务/进程、WMI 等 Windows 原生操作——比在 bash 里套 cmd 更稳、成功率更高。非 Windows 会退回普通 shell。",
+  get description() { return tr("tool.description.powershell"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      command: { type: "string", description: "要执行的命令（PowerShell 语法；回退时按 cmd 语法执行同一字符串）" },
-      timeout_ms: { type: "number", description: "超时毫秒，默认 120000" },
+      command: { type: "string", description: tr("tool.parameter.powershell.command") },
+      timeout_ms: { type: "number", description: tr("tool.parameter.powershell.timeout_ms") },
     },
     required: ["command"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const command = String(input.command);
     const timeout = Number(input.timeout_ms ?? 120000);
@@ -267,10 +264,10 @@ const powershellTool: Tool = {
       try {
         const { stdout, stderr } = await pexec(command, { ...baseOpts, shell: resolveShell() });
         const out = [stdout, stderr].filter(Boolean).join("\n").trim();
-        return { content: out || tt("(无输出)", "(no output)") };
+        return { content: out || tr("ui.mcp.no.output.5b6d486") };
       } catch (e: any) {
         const out = [e.stdout, e.stderr, e.message].filter(Boolean).join("\n").trim();
-        return { content: out || tt(`执行失败: ${e.message}`, `Command failed: ${e.message}`), isError: true };
+        return { content: out || tr("ui.index.command.failed.99fb353", { p0: e.message }), isError: true };
       }
     }
 
@@ -285,12 +282,12 @@ const powershellTool: Tool = {
           baseOpts,
         );
         const out = [stdout, stderr].filter(Boolean).join("\n").trim();
-        return { content: out || tt("(无输出)", "(no output)") };
+        return { content: out || tr("ui.mcp.no.output.5b6d486") };
       } catch (e: any) {
         // 被用户主动中止：直接抛，不做无谓回退。
         if (e?.name === "AbortError" || ctx.signal?.aborted) {
           return {
-            content: [e.stdout, e.stderr, tt("已中止", "Aborted")].filter(Boolean).join("\n").trim(),
+            content: [e.stdout, e.stderr, tr("ui.index.aborted.4b52e56")].filter(Boolean).join("\n").trim(),
             isError: true,
           };
         }
@@ -306,13 +303,13 @@ const powershellTool: Tool = {
         baseOpts,
       );
       const out = [stdout, stderr].filter(Boolean).join("\n").trim();
-      const prefix = ps ? tt("(PowerShell 失败，已回退 cmd)\n", "(PowerShell failed, fell back to cmd)\n") : "";
-      return { content: (prefix + (out || tt("(无输出)", "(no output)"))).trim() };
+      const prefix = ps ? tr("ui.index.powershell.failed.fell.back.to.cmd.c0fb93c") : "";
+      return { content: (prefix + (out || tr("ui.mcp.no.output.5b6d486"))).trim() };
     } catch (e: any) {
       const psDetail = psErr ? [psErr.stdout, psErr.stderr, psErr.message].filter(Boolean).join(" ") : "";
-      const psPart = psErr ? tt(`PowerShell 失败: ${psDetail}\n`, `PowerShell failed: ${psDetail}\n`) : "";
+      const psPart = psErr ? tr("ui.index.powershell.failed.c6dbdee", { p0: psDetail }) : "";
       const cmdPart = [e.stdout, e.stderr, e.message].filter(Boolean).join("\n").trim();
-      return { content: (psPart + tt(`cmd 也失败: ${cmdPart}`, `cmd also failed: ${cmdPart}`)).trim(), isError: true };
+      return { content: (psPart + tr("ui.index.cmd.also.failed.8723c80", { p0: cmdPart })).trim(), isError: true };
     }
   },
 };
@@ -320,16 +317,16 @@ const powershellTool: Tool = {
 // ---- Glob（文件名匹配，借 bash+find/ripgrep 更稳，这里用简单 find）----
 const globTool: Tool = {
   name: "glob",
-  description: "按 glob 模式查找文件（如 '**/*.ts'），返回匹配路径列表。",
+  get description() { return tr("tool.description.glob"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
       pattern: { type: "string" },
-      path: { type: "string", description: "搜索根目录，默认工作目录" },
+      path: { type: "string", description: tr("tool.parameter.glob.path") },
     },
     required: ["pattern"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const root = input.path ? abs(ctx, String(input.path)) : ctx.cwd;
@@ -341,9 +338,9 @@ const globTool: Tool = {
         .map((p) => p.slice(root.length + 1))
         .filter((rel) => rx.test(rel))
         .slice(0, 500);
-      return { content: matched.join("\n") || tt("(无匹配)", "(no matches)") };
+      return { content: matched.join("\n") || tr("ui.index.no.matches.986b411") };
     } catch (e: any) {
-      return { content: tt(`glob 失败: ${e.message}`, `glob failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.glob.failed.dde2162", { p0: e.message }), isError: true };
     }
   },
 };
@@ -351,17 +348,17 @@ const globTool: Tool = {
 // ---- Grep（内容搜索，优先用系统 grep -r）----
 const grepTool: Tool = {
   name: "grep",
-  description: "在文件内容中搜索正则/字符串，返回命中行（文件:行号:内容）。",
+  get description() { return tr("tool.description.grep"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
       pattern: { type: "string" },
-      path: { type: "string", description: "搜索目录/文件，默认工作目录" },
-      glob: { type: "string", description: "限定文件类型，如 '*.ts'（可选）" },
+      path: { type: "string", description: tr("tool.parameter.grep.path") },
+      glob: { type: "string", description: tr("tool.parameter.grep.glob") },
     },
     required: ["pattern"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const target = input.path ? abs(ctx, String(input.path)) : ctx.cwd;
     const include = input.glob ? `--include='${String(input.glob)}'` : "";
@@ -374,11 +371,11 @@ const grepTool: Tool = {
         shell: resolveShell(),
         signal: ctx.signal, // 用户停止→杀子进程
       });
-      return { content: stdout.trim() || tt("(无命中)", "(no matches)") };
+      return { content: stdout.trim() || tr("set.brain.noHit") };
     } catch (e: any) {
       // grep 无命中返回码 1，不算错误
-      if (e.code === 1 && !e.stderr) return { content: tt("(无命中)", "(no matches)") };
-      return { content: e.stderr || tt(`grep 失败: ${e.message}`, `grep failed: ${e.message}`), isError: true };
+      if (e.code === 1 && !e.stderr) return { content: tr("set.brain.noHit") };
+      return { content: e.stderr || tr("ui.index.grep.failed.1b8425b", { p0: e.message }), isError: true };
     }
   },
 };
@@ -422,46 +419,42 @@ function shellQuote(s: string): string {
 // schema 强约束 + 运行期二次校验：permId 唯一、value 非空组内唯一且不占 allow/deny、options 1~3、high 时 timeoutSec 强制 null。
 const askDecisionTool: Tool = {
   name: "ask_decision",
-  description:
-    "当你推进到一个【需要用户来选方向】的岔路口时调用：把情况用一句白话问句 + 2~3 个结构化选项抛给用户，等他拍板后再继续。用于「有多条合理路径、该由人决定走哪条」的场景（如：要不要先备份再改表、三种实现选哪种、删不删某数据）。不要用它来替代普通确认（危险命令放行由系统另一套权限机制处理）。每个选项的 value 必须是稳定的英文机器 key（如 backup_first），你会在用户选择后原样收到它来决定分支。重要/不可逆的决策把 risk 设 high（系统会一直等用户、不计时）。",
+  get description() { return tr("tool.description.ask_decision"); },
   readOnly: true, // 不直接改本机，只发起一次人机决策交互
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      title: { type: "string", description: "简短徽章文案，如「需要你决定」" },
-      question: { type: "string", description: "给用户看的白话问句（不是命令/代码）" },
-      context: { type: "string", description: "当前任务背景和不同选择的影响，用白话说明（可选）" },
-      risk: { type: "string", enum: ["high", "low"], description: "high=重要/不可逆(系统不计时一直等)；low=小事(可配倒计时)" },
+      title: { type: "string", description: tr("tool.parameter.ask_decision.title") },
+      question: { type: "string", description: tr("tool.parameter.ask_decision.question") },
+      context: { type: "string", description: tr("tool.parameter.ask_decision.context") },
+      risk: { type: "string", enum: ["high", "low"], description: tr("tool.parameter.ask_decision.risk") },
       options: {
         type: "array",
         minItems: 2,
         maxItems: 3,
-        description: "2~3 个选项；每项 value 为稳定英文 key，勿占用 allow/deny",
+        description: tr("tool.parameter.ask_decision.options"),
         items: {
           type: "object",
           properties: {
-            label: { type: "string", description: "按钮文案" },
-            desc: { type: "string", description: "一行说明(可选)" },
-            value: { type: "string", description: "稳定机器 key(英文)，用户选后原样回传给你" },
-            recommended: { type: "boolean", description: "是否推荐项(高亮/超时默认)" },
+            label: { type: "string", description: tr("tool.parameter.ask_decision.label") },
+            desc: { type: "string", description: tr("tool.parameter.ask_decision.desc") },
+            value: { type: "string", description: tr("tool.parameter.ask_decision.value") },
+            recommended: { type: "boolean", description: tr("tool.parameter.ask_decision.recommended") },
             tone: { type: "string", enum: ["safe", "danger", "neutral"] },
           },
           required: ["label", "value"],
         },
       },
-      allowCustom: { type: "boolean", description: "是否允许用户不选预设、自己打字回复你(默认 false)" },
-      timeoutSec: { type: "number", description: "low 决策可设倒计时秒数；重要决策不要设(留空=一直等)" },
-      rawDetail: { type: "string", description: "「查看具体会执行什么」的原文(可选)，用户展开才看，不解析" },
+      allowCustom: { type: "boolean", description: tr("tool.parameter.ask_decision.allowCustom") },
+      timeoutSec: { type: "number", description: tr("tool.parameter.ask_decision.timeoutSec") },
+      rawDetail: { type: "string", description: tr("tool.parameter.ask_decision.rawDetail") },
     },
     required: ["title", "question", "risk", "options"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     if (!ctx.requestDecision)
       return {
-        content: tt(
-          "当前环境不支持交互式决策（无决策通道）。请改用直接执行或文本说明。",
-          "Interactive decision is not available in this environment. Proceed directly or explain in text instead.",
-        ),
+        content: tr("ui.index.interactive.decision.is.not.available.in.df09a7e"),
         isError: true,
       };
     // ---- 运行期强校验（schema 之外的语义约束）----
@@ -469,12 +462,12 @@ const askDecisionTool: Tool = {
     const question = String(input.question || "").trim();
     const risk = input.risk === "high" ? "high" : input.risk === "low" ? "low" : null;
     if (!title || !question)
-      return { content: tt("决策缺少 title 或 question", "Decision missing title or question"), isError: true };
+      return { content: tr("ui.index.decision.missing.title.or.question.29e476e"), isError: true };
     if (!risk)
-      return { content: tt("risk 必须为 high 或 low", "risk must be 'high' or 'low'"), isError: true };
+      return { content: tr("ui.index.risk.must.be.high.or.low.90d0ca8"), isError: true };
     const rawOpts = Array.isArray(input.options) ? input.options : [];
     if (rawOpts.length < 2 || rawOpts.length > 3)
-      return { content: tt("options 必须 2~3 项", "options must have 2 to 3 items"), isError: true };
+      return { content: tr("ui.index.options.must.have.to.items.3f279d6"), isError: true };
     const seen = new Set<string>();
     const options: import("../types.js").DecisionOption[] = [];
     for (const o of rawOpts) {
@@ -482,11 +475,11 @@ const askDecisionTool: Tool = {
       const label = String(oo.label || "").trim();
       const value = String(oo.value || "").trim();
       if (!label || !value)
-        return { content: tt("每个选项必须含非空 label 和 value", "Each option needs non-empty label and value"), isError: true };
+        return { content: tr("ui.index.each.option.needs.non.empty.label.6fbd398"), isError: true };
       if (value === "allow" || value === "deny")
-        return { content: tt(`选项 value 不得占用保留值 "${value}"`, `Option value must not use reserved "${value}"`), isError: true };
+        return { content: tr("ui.index.option.value.must.not.use.reserved.f17abfa", { p0: value }), isError: true };
       if (seen.has(value))
-        return { content: tt(`选项 value 组内重复: "${value}"`, `Duplicate option value: "${value}"`), isError: true };
+        return { content: tr("ui.index.duplicate.option.value.edf218a", { p0: value }), isError: true };
       seen.add(value);
       const opt: import("../types.js").DecisionOption = { label, value };
       if (oo.desc) opt.desc = String(oo.desc);
@@ -515,46 +508,45 @@ const askDecisionTool: Tool = {
       const resp = await ctx.requestDecision(decision);
       // 把三态回批翻成给模型的自然语言结果
       if (resp.action === "allow")
-        return { content: tt("用户选择：同意/放行。", "User chose: allow.") };
+        return { content: tr("ui.index.user.chose.allow.24c3d77") };
       if (resp.action === "deny")
-        return { content: tt("用户选择：拒绝。请停止该方向或换方案。", "User chose: deny. Stop this path or propose an alternative.") };
+        return { content: tr("ui.index.user.chose.deny.stop.this.path.2f1f173") };
       // reply：带选项 value（业务分支 key）或自定义文本
       if (resp.value) {
         const picked = options.find((o) => o.value === resp.value);
         const lbl = picked ? picked.label : resp.value;
-        return { content: tt(`用户选择了选项「${lbl}」(value=${resp.value})。请据此继续。`, `User picked option "${lbl}" (value=${resp.value}). Continue accordingly.`) };
+        return { content: tr("ui.index.user.picked.option.value.continue.accordingly.b83ef7a", { p0: lbl, p1: resp.value }) };
       }
       if (resp.text)
-        return { content: tt(`用户自定义回复：${resp.text}`, `User replied: ${resp.text}`) };
-      return { content: tt("用户已回复但内容为空。", "User responded with empty content."), isError: true };
+        return { content: tr("ui.index.user.replied.0b7d11d", { p0: resp.text }) };
+      return { content: tr("ui.index.user.responded.with.empty.content.7ff9a85"), isError: true };
     } catch (e: any) {
       const msg = String(e?.message || e);
       if (/abort|stop/i.test(msg))
-        return { content: tt("决策被中断（用户停止）。", "Decision aborted (user stopped)."), isError: true };
+        return { content: tr("ui.index.decision.aborted.user.stopped.28b6232"), isError: true };
       if (/timeout/i.test(msg))
-        return { content: tt("决策超时，按默认处理。", "Decision timed out; handled by default."), isError: true };
-      return { content: tt(`决策通道出错: ${msg}`, `Decision channel error: ${msg}`), isError: true };
+        return { content: tr("ui.index.decision.timed.out.handled.by.default.48c0ae2"), isError: true };
+      return { content: tr("ui.index.decision.channel.error.6d6a814", { p0: msg }), isError: true };
     }
   },
 };
 
 const rememberTool: Tool = {
   name: "remember",
-  description:
-    "把用户希望长期记住的信息（个人偏好、习惯、事实、项目背景、称呼等）追加到全局记忆，之后每次对话都会自动记得。当用户说“记住…/以后…/我喜欢…”等，或出现明显值得长期保留的信息时调用。每条一句、简洁、独立可理解。",
+  get description() { return tr("tool.description.remember"); },
   readOnly: true, // 只写 minicc 自己的记忆文件，安全，不需要权限确认
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      text: { type: "string", description: "要长期记住的一句话（简洁、自足）" },
+      text: { type: "string", description: tr("tool.parameter.remember.text") },
     },
     required: ["text"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const text = String(input.text || "").trim();
       if (!text)
-        return { content: tt("记忆内容为空，未写入", "Memory text is empty; nothing written"), isError: true };
+        return { content: tr("ui.index.memory.text.is.empty.nothing.written.0823840"), isError: true };
       // 员工私聊会话 → 写到该员工专属记忆文件(ctx.memoryFile)；否则写全局 memory.md。
       const file = ctx.memoryFile || MEMORY_FILE;
       await fs.mkdir(dirname(file), { recursive: true });
@@ -565,12 +557,12 @@ const rememberTool: Tool = {
         /* 首次 */
       }
       const line = "- " + text;
-      const seedHeader = process.env.WUWEI_LANG === "en" ? "# Memory" : "# 记忆";
+      const seedHeader = getCurrentLanguage() !== "zh" ? "# Memory" : "# 记忆";
       const next = cur.trim() ? cur.trimEnd() + "\n" + line + "\n" : seedHeader + "\n\n" + line + "\n";
       await fs.writeFile(file, next, "utf8");
-      return { content: tt("已记住：" + text, "Remembered: " + text) };
+      return { content: tr("ui.index.remembered.d1a5e38", { v0: text }) };
     } catch (e: any) {
-      return { content: tt(`写入记忆失败: ${e.message}`, `Failed to save memory: ${e.message}`), isError: true };
+      return { content: tr("ui.index.failed.to.save.memory.8178c9f", { p0: e.message }), isError: true };
     }
   },
 };
@@ -717,7 +709,7 @@ async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: R
   const headers: Record<string, string> = {
     "User-Agent": UA,
     "Accept": isJson ? "application/json,text/plain,*/*" : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": tt("zh-CN,zh;q=0.9,en;q=0.8", "en-US,en;q=0.9"),
+    "Accept-Language": (getCurrentLanguage() === "zh" ? "zh-CN,zh;q=0.9,en;q=0.8" : "en-US,en;q=0.9"),
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "none",
@@ -760,30 +752,29 @@ function looksRelevant(query: string, results: { title: string; url: string; sni
 
 const webSearchTool: Tool = {
   name: "web_search",
-  description:
-    "在互联网搜索，返回相关网页的标题/链接/摘要。用于查最新信息、找资料、找文档。拿到链接后可用 web_fetch 读全文。",
+  get description() { return tr("tool.description.web_search"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { query: { type: "string", description: "搜索关键词" } },
+    properties: { query: { type: "string", description: tr("tool.parameter.web_search.query") } },
     required: ["query"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const q = String(input.query || "").trim();
-      if (!q) return { content: tt("搜索词为空", "Search query is empty"), isError: true };
+      if (!q) return { content: tr("ui.index.search.query.is.empty.c5bc0d7"), isError: true };
       const eq = encodeURIComponent(q);
       // 多个独立搜索源，逐个尝试(每个都带指数退避重试)，第一个拿到结果的胜出。
       // 顺序按「实测可达+稳定」排：Bing 命中率最高(补了浏览器头后 202 明显减少)；SearXNG 元搜索
       // 走 JSON、独立于 DDG/Bing，多个公共实例互为备份；DDG 部分网络连不上(返回 000)故垫底。
-      const sx = (host: string) => `https://${host}/search?q=${eq}&format=json&language=` + tt("zh-CN", "en-US");
+      const sx = (host: string) => `https://${host}/search?q=${eq}&format=json&language=` + getCurrentLanguage();
       const sources: { name: string; url: string; parse: (h: string) => { title: string; url: string; snippet: string }[]; headers?: Record<string, string> }[] = [];
       // 主力源：无为网关搜索代理(服务器端转发自建 SearXNG，聚合 Google/Bing/Brave)。仅登录用户有 token。
       // token 由主进程挂在 globalThis.wuweiGwToken()(永远最新)；CLI 等无此桥则回落 env。
       const tokFn = (globalThis as unknown as { wuweiGwToken?: () => string }).wuweiGwToken;
       const gwTok = (typeof tokFn === "function" ? tokFn() : (process.env.WUWEI_GW_TOKEN || "")).trim();
       if (gwTok && !gwTok.startsWith("anon-")) {
-        sources.push({ name: "Wuwei-search", url: `${WUWEI_SEARCH_URL}?q=${eq}&format=json&language=` + tt("zh-CN", "en-US"), parse: parseSearxng, headers: { Authorization: "Bearer " + gwTok } });
+        sources.push({ name: "Wuwei-search", url: `${WUWEI_SEARCH_URL}?q=${eq}&format=json&language=` + getCurrentLanguage(), parse: parseSearxng, headers: { Authorization: "Bearer " + gwTok } });
       }
       // 兜底：公开源(未登录、或网关不可用时用)。
       // ⚠️ Bing 垫底：实测它会返回「200 + 结构完整 + 内容与查询无关」的反爬缓存页(见 looksRelevant)，
@@ -792,7 +783,7 @@ const webSearchTool: Tool = {
         { name: "SearXNG", url: sx("searx.be"), parse: parseSearxng }, // 元搜索公共实例备份(偶尔限流)
         { name: "DuckDuckGo", url: "https://lite.duckduckgo.com/lite/?q=" + eq, parse: parseLite },
         { name: "DuckDuckGo-html", url: "https://html.duckduckgo.com/html/?q=" + eq, parse: parseDDG },
-        { name: "Bing", url: "https://www.bing.com/search?q=" + eq + "&setlang=" + tt("zh-CN", "en-US"), parse: parseBing },
+        { name: "Bing", url: "https://www.bing.com/search?q=" + eq + "&setlang=" + getCurrentLanguage(), parse: parseBing },
       );
       let results: { title: string; url: string; snippet: string }[] = [];
       const tried: string[] = [];
@@ -803,54 +794,51 @@ const webSearchTool: Tool = {
           // 网关源鉴权失败(token 过期)会回 {"error":"invalid_token","results":[]}，parseSearxng 解出空数组，
           // 原来只会记成「空」，跟"这词没搜到"混为一谈 → 静默降级到公开源。这里单独点名，好定位。
           if (s.headers?.Authorization && /"error"\s*:\s*"(invalid_token|auth_required)"/.test(raw)) {
-            tried.push(tt(`${s.name}(登录态失效)`, `${s.name}(auth expired)`));
+            tried.push(tr("ui.index.auth.expired.ccde558", { p0: s.name }));
             continue;
           }
           const r = s.parse(raw);
           if (r.length && !looksRelevant(q, r)) {
             // 拿到了结果但跟查询八竿子打不着 → 反爬缓存页，弃掉换下一个源，绝不喂给模型
-            tried.push(tt(`${s.name}(返回无关内容)`, `${s.name}(irrelevant results)`));
+            tried.push(tr("ui.index.irrelevant.results.1c6ca9a", { p0: s.name }));
             continue;
           }
           if (r.length) { results = r; break; }
-          tried.push(tt(`${s.name}(空)`, `${s.name}(empty)`));
+          tried.push(tr("ui.index.empty.2ac3244", { p0: s.name }));
         } catch (e: any) {
           if (ctx.signal?.aborted) break;
-          tried.push(`${s.name}(${e?.message || tt("失败", "failed")})`);
+          tried.push(`${s.name}(${e?.message || tr("ui.index.failed.28363f6")})`);
         }
       }
       results = results.slice(0, 8);
       if (!results.length)
         return {
-          content: tt(
-            `(搜索源暂时都不可用：${tried.join("、") || "无"}。已自动重试退避仍失败，可改用 web_fetch 直接抓已知 URL)`,
-            `(All search sources unavailable: ${tried.join(", ") || "none"}. Already retried with backoff; try web_fetch on a known URL instead)`,
-          ),
+          content: tr("ui.index.all.search.sources.unavailable.already.retried.a581bda", { p0: (getCurrentLanguage() !== 'zh' ? tried.join(", ") || "none" : tried.join("、") || tr("acct.userInitial")) }),
         };
       return {
         content: results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join("\n\n"),
       };
     } catch (e: any) {
-      return { content: tt(`搜索失败: ${e.message}`, `Search failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.search.failed.4482818", { p0: e.message }), isError: true };
     }
   },
 };
 
 const webFetchTool: Tool = {
   name: "web_fetch",
-  description: "抓取一个网页 URL 的正文（去 HTML 标签返回纯文本）。用于阅读文档、文章、API 页面等。",
+  get description() { return tr("tool.description.web_fetch"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { url: { type: "string", description: "网页 URL（http/https）" } },
+    properties: { url: { type: "string", description: tr("tool.parameter.web_fetch.url") } },
     required: ["url"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     try {
       const url = String(input.url || "");
       if (!/^https?:\/\//i.test(url))
         return {
-          content: tt("URL 必须以 http:// 或 https:// 开头", "URL must start with http:// or https://"),
+          content: tr("ui.index.url.must.start.with.http.or.b689f63"),
           isError: true,
         };
       const res = await fetch(url, {
@@ -863,12 +851,12 @@ const webFetchTool: Tool = {
       if (/html|xml/i.test(ct) || /^\s*</.test(body)) body = htmlToText(body);
       else body = body.trim();
       const max = 12000;
-      const tail = tt(`\n…(已截断，共 ${body.length} 字符)`, `\n…(truncated, ${body.length} chars total)`);
+      const tail = tr("ui.index.truncated.chars.total.13a3349", { p0: body.length });
       const text = body.length > max ? body.slice(0, max) + tail : body;
-      const head = tt(`# ${url}（HTTP ${res.status}）`, `# ${url} (HTTP ${res.status})`);
-      return { content: `${head}\n\n${text || tt("(空)", "(empty)")}` };
+      const head = tr("ui.index.http.a232bda", { v0: url, v1: res.status });
+      return { content: `${head}\n\n${text || tr("ui.index.empty.285fa8b")}` };
     } catch (e: any) {
-      return { content: tt(`抓取失败: ${e.message}`, `Fetch failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.fetch.failed.af5e208", { p0: e.message }), isError: true };
     }
   },
 };
@@ -878,54 +866,49 @@ const webFetchTool: Tool = {
 // 开工前先 brain_recall 取相关子图，避免每次全量扫文档、省 token。
 const brainRecallTool: Tool = {
   name: "brain_recall",
-  description:
-    "从本地知识网络检索与当前任务相关的概念子图（项目背景、部署脚本位置、服务器分布、注意事项等结构化信息）。**每次开始一个涉及具体项目/部署/环境的任务前，先调用它**，按返回的结构化信息行动，不要凭空猜或去全量翻文档。返回为空说明网络里还没这块知识。",
+  get description() { return tr("tool.description.brain_recall"); },
   readOnly: true, // 只读+轻量强化，安全，免权限确认，可并行
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      query: { type: "string", description: "要检索的主题/概念，如 'figcheck 部署' 'fig07 服务器'" },
-      limit: { type: "number", description: "返回概念数上限，默认 6" },
+      query: { type: "string", description: tr("tool.parameter.brain_recall.query") },
+      limit: { type: "number", description: tr("tool.parameter.brain_recall.limit") },
     },
     required: ["query"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       const r = await brain.recall(String(input.query || ""), Number(input.limit) || 6);
       return {
         content:
           r.text ||
-          tt(
-            "(知识网络中暂无相关概念；可用 brain_learn 记住新发现的知识)",
-            "(No related concepts in the knowledge graph yet; use brain_learn to record new findings)",
-          ),
+          tr("ui.index.no.related.concepts.in.the.knowledge.df690fe"),
       };
     } catch (e: any) {
-      return { content: tt(`检索失败: ${e.message}`, `Recall failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.recall.failed.57d652d", { p0: e.message }), isError: true };
     }
   },
 };
 
 const brainLearnTool: Tool = {
   name: "brain_learn",
-  description:
-    "把一个高价值概念记进本地知识网络，或更新已有概念（同名自动合并、纠正旧信息）。用于沉淀固定不变的知识：项目是什么、git 路径、测试/线上环境、部署脚本位置、踩坑注意事项等。attrs 存结构化键值（如 {git:'~/...', 测试环境:'fig01'}）。发现旧记忆有误时，用同名 name 覆盖更新。",
+  get description() { return tr("tool.description.brain_learn"); },
   readOnly: true, // 只写 minicc 自己的知识库，安全
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "概念主名，如 'figcheck'、'deploy_view_prod.sh'" },
-      type: { type: "string", description: "类型：项目/服务器/脚本/注意事项/命令/概念…" },
-      summary: { type: "string", description: "一句话摘要" },
-      aliases: { type: "array", items: { type: "string" }, description: "别名，可选" },
+      name: { type: "string", description: tr("tool.parameter.brain_learn.name") },
+      type: { type: "string", description: tr("tool.parameter.brain_learn.type") },
+      summary: { type: "string", description: tr("tool.parameter.brain_learn.summary") },
+      aliases: { type: "array", items: { type: "string" }, description: tr("tool.parameter.brain_learn.aliases") },
       attrs: {
         type: "object",
         additionalProperties: { type: "string" },
-        description: "结构化属性键值对，如 {git路径:'...', 测试环境:'fig01', 部署脚本:'...'}",
+        description: tr("tool.parameter.brain_learn.attrs"),
       },
     },
     required: ["name"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       const r = await brain.learn({
@@ -936,81 +919,76 @@ const brainLearnTool: Tool = {
         attrs: (input.attrs as Record<string, string>) || undefined,
       });
       return {
-        content: tt(
-          `${r.created ? "已记住新概念" : "已更新概念"}：${r.name}`,
-          `${r.created ? "Learned new concept" : "Updated concept"}: ${r.name}`,
-        ),
+        content: tr("ui.loop.text.86bd23f", { v0: (getCurrentLanguage() !== 'zh' ? undefined : r.created ? "已记住新概念" : "已更新概念"), v1: r.name, v2: (getCurrentLanguage() !== 'zh' ? r.created ? "Learned new concept" : "Updated concept" : undefined) }),
       };
     } catch (e: any) {
-      return { content: tt(`写入失败: ${e.message}`, `Write failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.write.failed.66f9135", { p0: e.message }), isError: true };
     }
   },
 };
 
 const brainLinkTool: Tool = {
   name: "brain_link",
-  description:
-    "在两个概念间建立/强化一条有向关系，把知识串成网络。如 brain_link('figcheck','部署脚本','deploy_view_prod.sh')、('figcheck','线上服务器','fig03')。两端概念若不存在会自动占位创建。",
+  get description() { return tr("tool.description.brain_link"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      from: { type: "string", description: "源概念名" },
-      relation: { type: "string", description: "关系名：部署脚本/测试环境/线上服务器/包含服务/注意事项/关联…" },
-      to: { type: "string", description: "目标概念名" },
+      from: { type: "string", description: tr("tool.parameter.brain_link.from") },
+      relation: { type: "string", description: tr("tool.parameter.brain_link.relation") },
+      to: { type: "string", description: tr("tool.parameter.brain_link.to") },
     },
     required: ["from", "relation", "to"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       const r = await brain.link(String(input.from), String(input.relation), String(input.to));
       return { content: r.msg, isError: !r.ok };
     } catch (e: any) {
-      return { content: tt(`建立关系失败: ${e.message}`, `Link failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.link.failed.6f1b383", { p0: e.message }), isError: true };
     }
   },
 };
 
 const brainForgetTool: Tool = {
   name: "brain_forget",
-  description: "从知识网络删除一个错误/过时的概念（连带其所有关系）。仅在确认某概念确实错误时使用。",
+  get description() { return tr("tool.description.brain_forget"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { name: { type: "string", description: "要删除的概念名" } },
+    properties: { name: { type: "string", description: tr("tool.parameter.brain_forget.name") } },
     required: ["name"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       const ok = brain.forget(String(input.name));
       return {
         content: ok
-          ? tt(`已忘记：${input.name}`, `Forgot: ${input.name}`)
-          : tt(`未找到概念：${input.name}`, `Concept not found: ${input.name}`),
+          ? tr("ui.index.forgot.47c067e", { p0: input.name })
+          : tr("ui.index.concept.not.found.d5b1cee", { p0: input.name }),
       };
     } catch (e: any) {
-      return { content: tt(`删除失败: ${e.message}`, `Delete failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.delete.failed.571122f", { p0: e.message }), isError: true };
     }
   },
 };
 
 const brainReadDocTool: Tool = {
   name: "brain_read_doc",
-  description:
-    "读取知识宫殿等文档库里某文件/文档块的原文。brain_recall 返回的『相关文档』只给摘要+路径；需要完整细节时用它按 file 路径读全文（长期大文本按需路由，不必全量扫）。",
+  get description() { return tr("tool.description.brain_read_doc"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      ref: { type: "string", description: "文档相对路径或块 id（brain_recall 返回的 file 值）" },
+      ref: { type: "string", description: tr("tool.parameter.brain_read_doc.ref") },
     },
     required: ["ref"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       return { content: brain.readDoc(String(input.ref || "")) };
     } catch (e: any) {
-      return { content: tt(`读取失败: ${e.message}`, `Read failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.read.failed.b9c5f8d", { p0: e.message }), isError: true };
     }
   },
 };

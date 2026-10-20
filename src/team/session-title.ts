@@ -17,5 +17,5 @@ export function employeeSessionTitle(session: EmployeeSessionTitle, employee: Em
   // Unchanged built-in employees alone have distinct localized names.
   if (zh === en) return session.title;
   if (session.title !== zh && !(session.titleSource === 'employee-default' && session.title === en)) return session.title;
-  return lang === 'en' ? en : zh;
+  return lang !== "zh" ? en : zh;
 }

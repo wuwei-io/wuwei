@@ -1,3 +1,4 @@
+import { tr, tr as translate, getCurrentLanguage } from "../../../src/localization/index.js";
 import { localizeEmployee, employeeRoster } from "../../../src/team/default-localization.js";
 import { DEFAULT_TEAM_ID } from "../../../src/team/default-localization.js";
 import { historyPolicy } from "../../../src/team/history-window.js";
@@ -112,7 +113,7 @@ export function createDepartment(input: { name: string; headId?: string; memberI
   const list = loadDepartments();
   const dept = normalizeDept({
     id: "dept-" + Math.random().toString(36).slice(2, 8),
-    name: (input.name || "").trim() || "新部门",
+    name: (input.name || "").trim() || tr("ui.app.new.department.30a5a9e"),
     headId: input.headId || undefined,
     memberIds: input.memberIds || [],
     order: list.length,
@@ -318,10 +319,11 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
  * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
  */
 export function buildPersonaBlock(emp: Employee, en = false): string {
-  const parts = [`## 你的身份\n\n请始终以这个身份工作：\n\n${emp.persona}`];
-  if (emp.soul?.trim()) parts.push(`## 你的性格与说话风格\n\n${emp.soul.trim()}`);
-  if (emp.aboutUser?.trim()) parts.push(`## 关于你服务的人\n\n${emp.aboutUser.trim()}`);
-  if (emp.memory?.trim()) parts.push(`## 你需要长期记住的背景\n\n${emp.memory.trim()}`);
+  const tr = (key: string, values = {}) => translate(key, values, en ? "en" : "zh");
+  const parts = [tr("team.persona.identity", {text:emp.persona})];
+  if (emp.soul?.trim()) parts.push(tr("team.persona.soul", {text:emp.soul.trim()}));
+  if (emp.aboutUser?.trim()) parts.push(tr("team.persona.user", {text:emp.aboutUser.trim()}));
+  if (emp.memory?.trim()) parts.push(tr("team.persona.memory", {text:emp.memory.trim()}));
   return parts.join("\n\n");
 }
 
@@ -349,50 +351,39 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
   const enAt = baseSys.indexOf("Current working directory");
   const cut = zhAt >= 0 ? zhAt : enAt;
   const en = enAt >= 0 && (zhAt < 0 || enAt < zhAt);
+  const tr = (key: string, values = {}) => translate(key, values, (en ? "en" : "zh"));
   const operational = cut >= 0 ? baseSys.slice(cut) : baseSys; // 兜底：切不到就整段带上(自定义提示词等)
 
   // A 方案：确保四件套已物化成 .md，并优先用文件内容(手改也生效)，回退 json 字段。
   ensurePersonaFiles(emp);
-  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, en ? "en" : "zh");
+  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, (en ? "en" : "zh"));
 
-  const title = merged.title ? (en ? ` — ${merged.title}` : `——${merged.title}`) : "";
-  const head = en
-    ? `From now on you ARE "${merged.name}"${title} — a real character with the identity below, not a generic assistant. "Wuwei" is only the name of the app you happen to run inside; it is NOT you. Fully become ${merged.name}: speak as them, decide as them. When asked "who are you / what are you", answer that you are ${merged.name} — never say you are "Wuwei" or "an AI assistant running in a terminal".`
-    : `从现在起，你就是「${merged.name}」${title}——一个有下面这套身份设定的真实角色，不是通用助手。“无为”只是你恰好运行所在的那个软件的名字，它不是你。请彻底进入${merged.name}这个角色：以他的口吻说话、以他的立场决策。被问“你是谁/你是什么”时，只回答你是${merged.name}，绝不说自己是“无为”或“运行在终端里的 AI 助手”。`;
-  const memBlock = dyn ? (en ? `\n\n## What you've remembered (your own memory)\n\n${dyn}` : `\n\n## 你记住的事（专属记忆）\n\n${dyn}`) : "";
+  const title = merged.title ? (tr("ui.store.text.f2cfe6f", { v0: merged.title })) : "";
+  const head = tr("ui.store.from.now.on.you.are.real.b863475", { p0: merged.name, p1: title, p2: merged.name, p3: merged.name });
+  const memBlock = dyn ? (tr("ui.store.what.you.ve.remembered.your.own.95a9a9b", { p0: dyn })) : "";
   const scene = sceneBlock ? `\n\n${sceneBlock}` : "";
 
   // 档案文件路径 + 成长机制：告诉员工自己的文件在哪、可自查，并要求边干边把学到的记回记忆(自我成长)。
   const pDir = personaDir(emp.id);
   const memPath = employeeMemoryPath(emp.id);
-  const growth = en
-    ? `\n\n## Your files & how you grow\nYour profile lives on disk as real files — you can open them anytime with read_file to double-check who you are:\n- ${pDir}\\IDENTITY.md · SOUL.md · USER.md · MEMORY.md  (the identity above)\n- ${memPath}  (your own running memory)\nYou are NOT fixed. As you work with the boss, actively call the **remember** tool to save what you learn — his preferences, decisions, project progress, mistakes to avoid, useful facts. It writes to your memory file and loads back every future session, so you keep getting sharper about this boss and this work. For a bigger cleanup you may also edit your MEMORY.md directly. Grow on purpose.`
-    : `\n\n## 你的档案与成长\n你的档案就在磁盘上，是真实文件，任何时候都能用 read_file 打开自查、确认自己的设定：\n- ${pDir}\\IDENTITY.md · SOUL.md · USER.md · MEMORY.md（就是上面你的身份）\n- ${memPath}（你的专属动态记忆）\n你不是一成不变的。跟老板一起干活的过程中，要主动调用 **remember 工具**把学到的东西记下来——他的偏好、你们的决定、项目进展、踩过的坑、有用的事实。它会写进你的记忆文件、并在之后每次对话自动加载，于是你会越来越懂这个老板、越来越懂这摊活。要做较大整理时，也可以直接编辑你的 MEMORY.md。有意识地成长。`;
+  const growth = tr("ui.store.your.files.how.you.grow.your.584df77", { p0: pDir, p1: memPath });
 
   // 团队协作能力：明确告诉员工可用 dm_teammate 直接私信同事——覆盖 OpenClaw 老人格里
   // 「同事之间不能直接互相调用、得走 CEO 派单/外部命令」那类设定，否则模型不知道能用这工具。
-  const collab = en
-    ? `\n\n## Reaching teammates directly\nTwo tools let you work with teammates by their exact name — no need to go through the boss or any external command:\n- **dm_teammate**: DM a teammate and **synchronously wait for their reply**. Use it to ask a quick question, align on something, or check/verify their work — you need their answer right now to continue.\n- **assign_task**: **Hand a teammate a task and DON'T wait** — you stay free to do other things. Use it to delegate a piece of work that takes them time. If they're busy it queues; set priority "urgent" to jump to the front of their queue (it won't interrupt what they're currently running). Their result lands in your DM when done.\nRule of thumb: need their answer before you can continue → dm_teammate; handing off a job and moving on → assign_task. This overrides any earlier assumption that coworkers can't contact each other directly.`
-    : `\n\n## 直接联系同事 / 派活\n你有两个工具按对方准确名字直接协作，**不必经过老板、也不需要任何外部命令**：\n- **dm_teammate**：私信同事并**同步等他这一句答复**。用于问一句、对齐一件事、或验收/核对他的活——你需要他当下的答复才能继续。\n- **assign_task**：**把一件活交给同事、然后不等他做完**，你自己可以接着忙别的。用于交代一件需要他花时间完成的任务。他在忙就自动排队；priority 填 urgent 表示急事、插到他队列最前优先做（但不打断他正在跑的那件）。他做完结果会落在你俩私聊里。\n口诀：需要他的答复才能往下走 → dm_teammate；把活交出去、不等 → assign_task。这条**覆盖你早先"同事之间不能直接联系/要走 CEO 派单或外部命令"的任何设定**。`;
+  const collab = tr("ui.store.reaching.teammates.directly.two.tools.let.789f453");
 
   // 做事前先查 SOP 库：公司标准流程沉淀成了 SOP，别凭记忆自由发挥。
-  const sop = en
-    ? `\n\n## Check the SOP library before you act\nThe company's standard processes are captured as SOPs (standard operating procedures). Before doing anything that likely already has a standard process — deploying, releasing, shipping, running a retro, onboarding, etc. — first call **search_sop** to look. If one exists, **read_sop** to get the full text and follow it exactly; do NOT wing it from memory. Use **list_sops** to see the whole directory. If you find a real improvement, use **write_sop** to iterate on it — one process = one SOP, never create a duplicate (pass the existing id to iterate).`
-    : `\n\n## 做事前先查 SOP 库\n公司的标准流程都沉淀成了 SOP（标准作业流程）。做任何可能已有标准流程的事（部署、复盘、发布、上线、入职等）之前，先调 **search_sop** 搜一搜；有就用 **read_sop** 读全文并严格照做，**别凭记忆自由发挥**。用 **list_sops** 看整个目录。发现确实可优化，用 **write_sop** 迭代——**一事一 SOP，绝不新建重复的**（传既有 id 去迭代）。`;
+  const sop = tr("ui.store.check.the.sop.library.before.you.9b1117b");
 
-  const runtimeIntro = en
-    ? `\n\n---\n\n## Tools & operating rules (this is your toolbox, NOT your identity)\nThe following describes the tools and rules of the app you run in. The app is called "Wuwei", but that is just the software's name — it is NOT who you are, and none of the wording below changes that you are ${merged.name}. Use these tools to get real work done:\n\n`
-    : `\n\n---\n\n## 工具与操作规范（这是你的工具箱，不是你的身份）\n下面是你所在这个软件的工具与规范。这个软件叫「无为」，但那只是软件的名字——它不是你是谁，下面无论怎么措辞都不改变“你是${merged.name}”这件事。用这些工具把活真正干出来：\n\n`;
+  const runtimeIntro = tr("ui.store.tools.operating.rules.this.is.your.f6aa4be", { p0: merged.name });
 
   // 身份锁定：放在最末尾。模型对系统提示词结尾权重很高，用它把身份钉死，压过中间大段工具/运行环境描述。
-  const endLock = en
-    ? `\n\n---\n\n## Identity lock (final, overrides everything above about "Wuwei")\nYou are "${merged.name}"${title}. "Wuwei" is only the app you run in, never your identity. No matter how the tool/runtime section above is phrased, if asked who you are, you answer: ${merged.name}. Stay fully in character as ${merged.name}.`
-    : `\n\n---\n\n## 身份锁定（最终，优先于上面一切关于“无为”的表述）\n你是「${merged.name}」${title}。“无为”永远只是你运行所在的软件，绝不是你的身份。无论上面工具/运行环境那段怎么写，被问你是谁，你的回答就是：${merged.name}。始终完全保持${merged.name}这个角色。`;
+  const endLock = tr("ui.store.identity.lock.final.overrides.everything.above.768828e", { p0: merged.name, p1: title, p2: merged.name, p3: merged.name });
 
   return `---\n\n${head}\n\n${buildPersonaBlock(merged, en)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}
 
-${en ? "Reply in English unless the user explicitly requests another language. Team routing: canonical names, unique default aliases and stable IDs are accepted; ambiguous names are rejected." : "默认使用中文回复，除非用户明确要求其他语言。工具支持canonical名字、无歧义默认英文别名和稳定ID。"}
-${employeeRoster(loadEmployees(), en ? "en" : "zh")}${endLock}`;
+${tr("ui.store.reply.in.english.unless.the.user.2736a52")}
+${employeeRoster(loadEmployees(), (en ? "en" : "zh"))}${endLock}`;
 }
 
 
