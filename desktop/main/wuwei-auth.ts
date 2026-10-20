@@ -14,6 +14,32 @@ import { refreshHostedSession } from "../../src/wuwei-refresh.js";
 
 const SITE = process.env.WUWEI_SITE_URL ?? "https://wuweiai.io";
 
+import type { BillingRequest, BillingResponse } from '../../src/billing/contracts.js';
+
+/** A fixed endpoint allowlist keeps tokens and arbitrary URLs out of the renderer. */
+export async function wuweiBillingRequest(accessToken:string, request:BillingRequest):Promise<BillingResponse|'unauthorized'> {
+  if(!request || !['catalog','quote','ledger','create-order','order'].includes(request.action)) return {error:'invalid_billing_action'};
+  if(request.action==='order' && !/^[a-zA-Z0-9_-]{8,100}$/.test(request.orderId??''))return {error:'invalid_order_id'};
+  const endpoint=request.action==='create-order'?'orders':request.action==='order'?`orders/${request.orderId}`:request.action;
+  const url=new URL(`/api/billing/${endpoint}`,SITE);
+  if(request.action==='ledger') for(const key of ['offset','type','search','from','to'] as const) {
+    if(request[key]!=null) url.searchParams.set(key,String(request[key]));
+  }
+  try {
+    const response=await fetch(url,{
+      method:request.action==='quote'||request.action==='create-order'?'POST':'GET',
+      headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
+      ...(request.action==='quote'?{body:JSON.stringify({sku:request.sku,currency:request.currency})}:{}),
+      ...(request.action==='create-order'?{body:JSON.stringify({sku:request.sku,currency:request.currency,channel:request.channel,chain:request.chain,requestId:request.requestId,expected:request.expected})}:{}),
+      signal:AbortSignal.timeout(15000),
+    });
+    if(response.status===401) return 'unauthorized';
+    const value=await response.json().catch(()=>null);
+    if(!response.ok || !value || typeof value!=='object') return {error:typeof value?.error==='string'?value.error:'billing_unavailable'};
+    return value as BillingResponse;
+  }catch{return {error:'network'};}
+}
+
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入，未手动设置时按系统语言判定）。
 // 主进程返回的这些文案会原样显示在登录表单/浏览器中转页上，必须跟界面语言走。
 // 注意：语言可运行时切换，所以只在调用时求值，别固化成模块常量。

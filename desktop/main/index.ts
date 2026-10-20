@@ -146,6 +146,7 @@ import {
   wuweiCodeLogin,
   wuweiRegister,
   wuweiPayCreate,
+  wuweiBillingRequest,
   wuweiPayCryptoCreate,
   wuweiPayCryptoPayment,
   wuweiPayStatus,
@@ -2533,12 +2534,9 @@ function wrapSecret(t: Tool): Tool {
 
 // 桌面版工具集 = 共享工具 + 浏览器工具 + 动态 MCP 工具(连上后加入)，全部过密钥安全包装。
 // 设置里关掉「知识网络」→ 一并摘掉 brain_* 工具，别再让模型调用(与系统提示注入的开关同源)。
-// 脑网络（brain）为会员专享：非会员即使设置开着也一律停用（不注入说明、不给 brain_* 工具）。
-// isProCached 由 fetchMe 的 membership 更新；普通「记忆」(remember/长期记忆) 不受此门控，全员可用。
-let isProCached = false;
-function brainAvailable(st: ReturnType<typeof loadSettings>): boolean {
-  return brainEnabled(st) && isProCached;
-}
+// Brain is free. Availability follows the user setting.
+// Model usage continues to follow the selected provider billing.
+const brainAvailable = brainEnabled;
 // 主进程界面文案双语：按 WUWEI_LANG(设置时写入)出中/英，供返回给渲染层的 reason/message/text 等用。
 function tt(zh: string, en: string): string {
   return process.env.WUWEI_LANG === "en" ? en : zh;
@@ -3823,12 +3821,7 @@ async function ensureHostedProviderReady(targetSid?: string): Promise<void> {
 }
 // 托管平台每轮结束后：拉最新余额推给渲染层(账号菜单余额随扣币刷新)。
 // 会员态变更 → 脑网络可用性变 → 热更所有会话的工具集 + 系统提示（brain_* 与说明随之加/摘）。
-function applyProFromMe(me: WuweiMe | null): void {
-  const pro = !!me?.membership && me.membership.tier !== "free";
-  if (pro === isProCached) return;
-  isProCached = pro;
-  refreshAgentTools();
-  for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格，不冲回"你是无为"
+function applyProFromMe(_me: WuweiMe | null): void { /* Brain is free; membership does not alter tools. */
 }
 async function refreshWuweiMe(): Promise<void> {
   // Background refresh must not turn a temporary outage into an unhandled rejection.
@@ -5556,6 +5549,17 @@ ipcMain.handle("track", (_e, p: { event?: string; props?: Record<string, unknown
 });
 
 // ── 扫码支付：下单 / 轮询。带用户 token 调后端，401 自动 refresh 重试（同 wuwei-me）──
+ipcMain.handle('billing:request',async (_e,request:import('../../src/billing/contracts.js').BillingRequest)=>{
+  const sess=await getFreshWuweiSession();
+  if(!sess) return {error:'not_logged_in'};
+  let response=await wuweiBillingRequest(sess.accessToken,request);
+  if(response==='unauthorized') {
+    const fresh=await getFreshWuweiSession(sess.accessToken);
+    if(!fresh) return {error:'not_logged_in'};
+    response=await wuweiBillingRequest(fresh.accessToken,request);
+  }
+  return response==='unauthorized'?{error:'not_logged_in'}:response;
+});
 ipcMain.handle("pay:create", async (_e, sku: string, channel: string) => {
   const sess = await getFreshWuweiSession(); // 下单前先确保 token 新鲜，减少 401 与误登出
   if (!sess) return { error: "not_logged_in" };

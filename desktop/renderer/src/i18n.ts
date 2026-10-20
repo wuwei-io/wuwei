@@ -363,7 +363,7 @@ const DICT_EN: Record<string, string> = {
   "pay.coinpack.ctaPrefix": "Pay",
   "pay.coinpack.upgrade": "Upgrade for better value →",
   "pay.plan.title": "Upgrade to Wuwei Pro",
-  "pay.plan.sub": "Hosted credits, priority support, parallel tasks — the more you use, the more you save on higher tiers.",
+  "pay.plan.sub": "Choose a hosted allowance for your actual usage. Value models are recommended for everyday work.",
   "pay.plan.footAny": "Upgrade anytime",
   "pay.plan.footSame": "Same benefits as the website",
   "pay.support.title": "Contact support",
@@ -399,8 +399,8 @@ const DICT_EN: Record<string, string> = {
   "pay.brain.f3s": "The longer you use it, the richer the network and the better Wuwei understands you",
   "pay.brain.f4t": "Beyond context limits",
   "pay.brain.f4s": "Memory isn't bound by a single chat's length — the more you use it, the more valuable your network",
-  "pay.brain.membersOnly": "Members only",
-  "pay.brain.cta": "Unlock Brain with Pro",
+  "pay.brain.free": "Included free for everyone · Model calls follow your provider’s billing",
+  "pay.brain.open": "Open Brain",
   // 设置 · 通用（会话提醒/任务恢复）
   "set.g.remindGroup": "Chat reminders",
   "set.g.autoDismiss": "Auto-dismiss reminders",
@@ -808,7 +808,6 @@ const DICT_EN: Record<string, string> = {
   "set.brain.collapseDetail": "Collapse detail",
   "set.brain.graphEmpty": "No concepts yet — click \"Extract concepts\" above, or have the model brain_learn during chat",
   "set.brain.closeResult": "Close results",
-  "set.brain.proOnly": "Brain is a members-only feature",
   "set.g.grouping": "Session grouping",
   // 设置 · MCP / 密钥（set.mcp.* set.sec.*）
   "set.mcp.clickDetail": "Click for details",

@@ -1,6 +1,7 @@
 // preload：用 contextBridge 暴露最小安全 API 给渲染进程（隔离，不开 nodeIntegration）。
 import { contextBridge, ipcRenderer } from "electron";
 import type { WuweiMe, CatalogProviderDto, ModelPricingData } from "../main/wuwei-auth.js";
+import type { BillingRequest, BillingResponse } from '../../src/billing/contracts.js';
 
 const EVENTS = [
   // 自动更新事件——之前漏在白名单外，导致 main 发的「发现新版/下载进度/已就绪」全被 preload 拦掉、
@@ -435,6 +436,7 @@ const api = {
   // 立即安装已下载好的更新并重启
   installUpdate: () => ipcRenderer.send("updater:install"),
   // 扫码支付：下单拿二维码串 + 轮询订单状态
+  billingRequest: (request:BillingRequest) => ipcRenderer.invoke('billing:request',request) as Promise<BillingResponse>,
   payCreate: (sku: string, channel: string) =>
     ipcRenderer.invoke("pay:create", sku, channel) as Promise<{
       orderId?: string;

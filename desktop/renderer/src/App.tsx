@@ -15,6 +15,7 @@ import { createAccountRefresher, type AccountRefreshState } from '../../../src/a
 import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
+import { BillingPanel } from './components/billing/BillingPanel.js';
 import { hasPaidAllowance, imageToolBalanceFailure, usageLimitKind, usageLimitDestination } from '../../../src/usage-limit.js';
 import { recommendedValueModel, premiumSelectionNeedsConfirmation } from '../../../src/premium-model.js';
 import { PremiumModelNotice } from './components/PremiumModelNotice.js';
@@ -728,15 +729,15 @@ const PRO_PLANS: ProPlan[] = [
 ];
 const PRO_FEATS: [string, string][] = [
   ["托管额度", "不用自己配接口额度"],
-  ["专属客服", "问题优先响应处理"],
-  ["多任务并行", "同时跑多个会话"],
-  ["脑网络记忆", "持续学习，长期记忆"],
+  ["按需选模型", "日常优先高性价比模型"],
+  ["费用清楚", "按实际模型用量消耗额度"],
+  ["免费长期记忆", "所有用户均可使用脑网络"],
 ];
 const PRO_FEATS_EN: [string, string][] = [
   ["Hosted credits", "No API key needed"],
-  ["Priority support", "Faster responses"],
-  ["Parallel tasks", "Run multiple chats at once"],
-  ["Brain memory", "Learns and remembers long-term"],
+  ["Model choice", "Value models for everyday work"],
+  ["Clear usage", "Allowance follows actual model usage"],
+  ["Free long-term memory", "Brain is included for everyone"],
 ];
 
 // 缺币弹窗里的「并排可选套餐」：¥1 体验 + Pro/Plus/Max 月付，统一成一种可选项，选中谁就驱动二维码/Paddle 与右侧详情。
@@ -1511,8 +1512,8 @@ function MessageCenterModal({ onClose, onRead, lang, t }: { onClose: () => void;
     </div>
   );
 }
-// 脑网络功能介绍弹窗（会员专享）：欢迎页案例卡 / 非会员点灰置脑网络菜单时弹出。
-function BrainIntroModal({ onClose, onUpgrade, t }: { onClose: () => void; onUpgrade: () => void; t: T }) {
+// 免费脑网络功能介绍：从欢迎页进入，可直接打开记忆设置。
+function BrainIntroModal({ onClose, onOpenMemory, t }: { onClose: () => void; onOpenMemory: () => void; t: T }) {
   const feats: [React.ReactNode, string, string][] = [
     [
       <><path d="M12 3a4 4 0 0 0-4 4 3.5 3.5 0 0 0-1 6.8V17a3 3 0 0 0 5 2 3 3 0 0 0 5-2v-3.2A3.5 3.5 0 0 0 16 7a4 4 0 0 0-4-4Z" /><path d="M12 7v12" /></>,
@@ -1566,13 +1567,13 @@ function BrainIntroModal({ onClose, onUpgrade, t }: { onClose: () => void; onUpg
             ))}
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "#A97F2E", background: "rgba(201,162,75,.12)", padding: "4px 12px", borderRadius: 20, marginBottom: 14 }}>
-            <PaySpark size={12} /> {t("pay.brain.membersOnly", "会员专享功能")}
+            <PaySpark size={12} /> {t("pay.brain.free", "所有用户免费包含 · 模型调用按原渠道计费")}
           </div>
           <button
-            onClick={onUpgrade}
+            onClick={onOpenMemory}
             style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#c9a24b,#a97f2e)", color: "#fff", fontSize: 14.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 10px 22px -8px rgba(169,127,46,.6)" }}
           >
-            {t("pay.brain.cta", "开通 Pro 解锁脑网络")}
+            {t("pay.brain.open", "打开脑网络")}
           </button>
         </div>
       </div>
@@ -2078,8 +2079,8 @@ const PAY_FAQ: { q: string; qEn: string; a: string; aEn: string }[] = [
   {
     q: "为什么要订阅无为会员？",
     qEn: "Why subscribe to Wuwei?",
-    a: "一份订阅就能用遍全球最强旗舰（Claude、GPT、Gemini、DeepSeek…），不用再分别开各家会员。会员走极速通道、响应更快，每月额度更足，还有跨对话永久记住你项目的脑网络记忆。",
-    aEn: "One subscription gives you every top flagship (Claude, GPT, Gemini, DeepSeek…) instead of paying each vendor separately. Members get a priority speed lane, a bigger monthly quota, and brain-network memory that remembers your projects across chats.",
+    a: "会员提供所选套餐的托管额度，可按任务选择客户端当前可用的模型，按实际用量扣除。长期记忆与脑网络对所有用户免费包含；目前不承诺固定响应速度、优先队列或套餐并发数量。",
+    aEn: "Membership includes the selected hosted allowance. Choose from models available in the app, metered by actual usage. Long-term memory and Brain are included free for everyone. Fixed response speeds, priority queues and tiered concurrency are not currently promised.",
   },
   {
     q: "可以随时更换套餐或取消吗？",
@@ -4066,6 +4067,10 @@ export function App() {
   const [coinPackOpen, setCoinPackOpen] = useState(false); // ② 购买积分包弹窗
   const [planOpen, setPlanOpen] = useState(false); // ③ 升级套餐弹窗
   const [payCheckout, setPayCheckout] = useState<PayOrder | null>(null); // ④ 付款页(扫码)
+  const [billingOpen,setBillingOpen]=useState(false);
+  const [billingPage,setBillingPage]=useState<'plans'|'ledger'>('plans');
+  const billingPreview=import.meta.env.DEV && new URLSearchParams(window.location.search).has('billingPreview');
+  useEffect(()=>{if(billingPreview)setBillingOpen(true);},[billingPreview]);
   const [payResult, setPayResult] = useState<PayResult | null>(null); // ⑤ 支付结果页
   // 加密应用内收款面板：{sku, 显示名, 价格文案}。面板按订单号轮询到账，成功时置空关闭。
   const [cryptoPay, setCryptoPay] = useState<{ sku: string; name: string; price: string } | null>(null);
@@ -4100,7 +4105,7 @@ export function App() {
   useEffect(() => { if (showAcctMenu) { markFirstAction("open_menu"); void window.wuwei.track?.("user_menu_open"); } }, [showAcctMenu]);
   useEffect(() => { if (showSettings) void window.wuwei.track?.("settings_open"); }, [showSettings]); // 打开设置面板
   const [msgUnread, setMsgUnread] = useState(0); // 消息中心未读数（菜单红点）
-  const [showBrainIntro, setShowBrainIntro] = useState(false); // 脑网络功能介绍弹窗（会员专享）
+  const [showBrainIntro, setShowBrainIntro] = useState(false); // 免费脑网络功能介绍弹窗
   const [checkinToast, setCheckinToast] = useState(""); // 每日签到到账轻量提示
   const [checkinDone, setCheckinDone] = useState(false); // 今日是否已签到（手动签或已签后置 true）
   const [checkinBusy, setCheckinBusy] = useState(false); // 签到请求中，防重复点击
@@ -4198,7 +4203,6 @@ export function App() {
   }, [wuwei, showSupportChat]);
   // 灰度开关（C2）：订阅版是否显示，完全由后端 flags 决定，默认隐藏。客户端只渲染不判定。
   const showSubscription = !!wuwei?.flags?.includes("subscription");
-  const isPro = (wuwei?.membership?.tier ?? "free") !== "free"; // 会员态：脑网络等专享功能门控
   const [wuweiBusy, setWuweiBusy] = useState(false);
   // rebind：当前绑的是「无为托管·Claude」且用户已授权 Claude 订阅时，弹窗给「一键改用订阅继续」（订阅走账号额度、不扣无为币）
   const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
@@ -8046,6 +8050,7 @@ export function App() {
 
                             <div className="acct-sep" />
                             <div className="acct-items">
+                              {(wuwei.flags?.includes('billing_v2') || billingPreview) && <button className="acct-it" onClick={()=>{setShowAcctMenu(false);setBillingPage('ledger');setBillingOpen(true);}}>{lang==='en'?'Credit details':'积分明细'}</button>}
                               <button className="acct-it" onClick={openPack}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="3" y="5" width="18" height="14" rx="2.5" />
@@ -10228,11 +10233,6 @@ export function App() {
           askToastAuto={askToastAuto}
           askToastSec={askToastSec}
           onAskToast={changeAskToast}
-          isPro={isPro}
-          onBrainLocked={() => {
-            setShowSettings(false);
-            setShowBrainIntro(true);
-          }}
           onTeamEnabled={(v) => {
             setTeamEnabled(v);
             localStorage.setItem("wuwei-team-enabled", v ? "1" : "0");
@@ -10263,14 +10263,15 @@ export function App() {
           </div>
         </div>
       )}
-      {/* 脑网络功能介绍：欢迎页案例 / 非会员点灰置菜单弹出；点开通跳升级 Pro */}
+      {/* 免费脑网络介绍：打开实际设置，不创建付费订单 */}
       {showBrainIntro && (
         <BrainIntroModal
           t={t}
           onClose={() => setShowBrainIntro(false)}
-          onUpgrade={() => {
+          onOpenMemory={() => {
             setShowBrainIntro(false);
-            setPlanOpen(true);
+            setSettingsTab("brain");
+            setShowSettings(true);
           }}
         />
       )}
@@ -10509,7 +10510,7 @@ export function App() {
         );
       })()}
       {/* ① 无为币不足触发弹窗（v2）：金色升级Pro在上(更划算) + 朱色购买积分包在下 */}
-      {coinShortage && (
+      {coinShortage && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <TrialPayModal
           en={lang === "en"}
           balance={coinShortage.balance != null ? coinShortage.balance : wuwei?.coin.balance ?? 0}
@@ -10566,7 +10567,7 @@ export function App() {
         />
       )}
       {payFaqOpen && <PayFaqModal en={lang === "en"} onClose={() => setPayFaqOpen(false)} />}
-      {coinPackOpen && (
+      {coinPackOpen && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <CoinPackModal
           t={t}
           lang={lang}
@@ -10583,7 +10584,7 @@ export function App() {
           }}
         />
       )}
-      {planOpen && (
+      {planOpen && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <PlanModal
           t={t}
           lang={lang}
@@ -10593,6 +10594,17 @@ export function App() {
             if (lang === "en") { startEnCheckout(plan.sku); return; } // 海外走网页 Paddle 结账
             setPayCheckout({ kind: "plan", plan });
           }}
+        />
+      )}
+      {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage || coinPackOpen || planOpen))) && (
+        <BillingPanel key={wuwei.user.id}
+          lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
+          initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':'monthly'}
+          insufficient={!!coinShortage&&!coinShortage.browse} imageMode={imageMode}
+          onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage('close');}}
+          onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
+          onPaid={()=>{const paidUser=wuwei.user.id;void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===paidUser)setWuwei(current=>current?.user.id===paidUser?me:current);}).catch(()=>{});}}
+          onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:lang==='en'?'Model switched. Send your message when ready.':'已切换模型，请重新发送消息。'});}}
         />
       )}
       {payCheckout && (
@@ -13952,8 +13964,6 @@ function SettingsModal({
   askToastAuto,
   askToastSec,
   onAskToast,
-  isPro,
-  onBrainLocked,
   onTeamEnabled,
 }: {
   onClose: () => void;
@@ -13982,8 +13992,6 @@ function SettingsModal({
   askToastAuto: boolean;
   askToastSec: number;
   onAskToast: (auto: boolean, sec: number) => void;
-  isPro: boolean;
-  onBrainLocked: () => void;
   onTeamEnabled: (v: boolean) => void; // 「AI 员工团队」开关：本组件够不着主区的 appView，回调给主组件同步侧边栏入口
 }) {
   // 上下文压缩·token/消息条数阈值：本地暂存 + 挂载时从 settings 载入，onChange 走独立 IPC(setCompact)
@@ -14985,12 +14993,10 @@ function SettingsModal({
           </button>
           <button
             type="button"
-            className={"set-tab" + (tab === "brain" ? " on" : "") + (isPro ? "" : " locked")}
-            onClick={() => (isPro ? setTab("brain") : onBrainLocked())}
-            title={isPro ? undefined : t("set.brain.proOnly", "脑网络为会员专享功能")}
+            className={"set-tab" + (tab === "brain" ? " on" : "")}
+            onClick={() => setTab("brain")}
           >
             {t("set.tab.brain")}
-            {!isPro && <LockGlyph />}
           </button>
           <button type="button" className={"set-tab" + (tab === "mcp" ? " on" : "")} onClick={() => setTab("mcp")}>
             {t("set.tab.mcp")}
