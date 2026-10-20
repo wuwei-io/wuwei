@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // 无为账号登录（本地回环中转）：
 //   1) 起临时本地 http server(127.0.0.1:随机端口)
 //   2) 系统浏览器打开 官网/auth/desktop?port=PORT&state=STATE（复用官网 Google/邮箱登录 UI）
@@ -43,7 +44,7 @@ export async function wuweiBillingRequest(accessToken:string, request:BillingReq
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入，未手动设置时按系统语言判定）。
 // 主进程返回的这些文案会原样显示在登录表单/浏览器中转页上，必须跟界面语言走。
 // 注意：语言可运行时切换，所以只在调用时求值，别固化成模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 export interface WuweiSession {
   accessToken: string;
@@ -127,19 +128,19 @@ export interface ModelPricingData {
 
 // 本地 /cb 页面：把 URL fragment 里的 token 转成对本地的 query 请求（浏览器不把 # 发给 server）
 // 写成函数而非常量：文案要在请求发生的那一刻按当前界面语言渲染
-const hashBridgeHtml = () => `<!doctype html><meta charset="utf-8"><title>${tt("无为登录", "Sign in to Wuwei")}</title>
+const hashBridgeHtml = () => `<!doctype html><meta charset="utf-8"><title>${tr("ui.wuwei.auth.sign.in.to.wuwei.bb6f4bf")}</title>
 <body style="font-family:system-ui;background:#16191E;color:#F4F6F8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-<div style="text-align:center"><div style="font-size:32px">⏳</div><p>${tt("正在完成登录…", "Finishing sign-in…")}</p></div>
+<div style="text-align:center"><div style="font-size:32px">⏳</div><p>${tr("ui.wuwei.auth.finishing.sign.in.655d79d")}</p></div>
 <script>location.replace("/cb?"+location.hash.slice(1))</script></body>`;
 
-const doneHtml = () => `<!doctype html><meta charset="utf-8"><title>${tt("无为登录", "Sign in to Wuwei")}</title>
+const doneHtml = () => `<!doctype html><meta charset="utf-8"><title>${tr("ui.wuwei.auth.sign.in.to.wuwei.bb6f4bf")}</title>
 <body style="font-family:system-ui;background:#16191E;color:#F4F6F8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-<div style="text-align:center"><div style="font-size:32px">✅</div><p id="m">${tt("登录成功！本页将自动关闭…", "You're signed in! This page will close automatically…")}</p></div>
+<div style="text-align:center"><div style="font-size:32px">✅</div><p id="m">${tr("ui.wuwei.auth.you.re.signed.in.this.page.67b57cf")}</p></div>
 <script>
 setTimeout(function(){
   window.close();
   // 浏览器通常禁止脚本关闭非脚本打开的标签页；关不掉则退回"可关闭"提示，不空许诺
-  setTimeout(function(){ var m=document.getElementById('m'); if(m) m.textContent=${JSON.stringify(tt("登录成功，请回到无为客户端，本页可关闭。", "You're signed in. Head back to the Wuwei app — you can close this page."))}; }, 500);
+  setTimeout(function(){ var m=document.getElementById('m'); if(m) m.textContent=${JSON.stringify(tr("ui.wuwei.auth.you.re.signed.in.head.back.62074a5"))}; }, 500);
 }, 2500);
 </script></body>`;
 
@@ -391,11 +392,11 @@ export async function wuweiPasswordLogin(identifier: string, password: string): 
       body: JSON.stringify({ identifier, password }),
     });
     const j = (await res.json().catch(() => ({}))) as SigninResp;
-    if (!res.ok || j.error) return j.error || tt(`登录失败（${res.status}）`, `Sign-in failed (${res.status})`);
-    return toSession(j) || tt("登录返回异常", "Unexpected sign-in response");
+    if (!res.ok || j.error) return j.error || tr("ui.wuwei.auth.sign.in.failed.4b55279", { p0: res.status });
+    return toSession(j) || tr("ui.wuwei.auth.unexpected.sign.in.response.d5346a1");
   } catch (e) {
     log("wuweiAuth", "password 登录异常", String(e));
-    return tt("网络错误，请重试", "Network error, please try again");
+    return tr("ui.wuwei.auth.network.error.please.try.again.08810fa");
   }
 }
 
@@ -408,11 +409,11 @@ export async function wuweiSendCode(target: string, lang?: string, purpose?: str
       body: JSON.stringify({ target, lang, purpose }),
     });
     const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok || j.error) return j.error || tt(`发送失败（${res.status}）`, `Couldn't send the code (${res.status})`);
+    if (!res.ok || j.error) return j.error || tr("ui.wuwei.auth.couldn.send.the.code.e7b88f9", { p0: res.status });
     return true;
   } catch (e) {
     log("wuweiAuth", "send-code 异常", String(e));
-    return tt("网络错误，请重试", "Network error, please try again");
+    return tr("ui.wuwei.auth.network.error.please.try.again.08810fa");
   }
 }
 
@@ -425,11 +426,11 @@ export async function wuweiCodeLogin(target: string, code: string): Promise<Wuwe
       body: JSON.stringify({ target, code }),
     });
     const j = (await res.json().catch(() => ({}))) as SigninResp;
-    if (!res.ok || j.error) return j.error || tt(`验证失败（${res.status}）`, `Verification failed (${res.status})`);
-    return toSession(j) || tt("登录返回异常", "Unexpected sign-in response");
+    if (!res.ok || j.error) return j.error || tr("ui.wuwei.auth.verification.failed.a8506d3", { p0: res.status });
+    return toSession(j) || tr("ui.wuwei.auth.unexpected.sign.in.response.d5346a1");
   } catch (e) {
     log("wuweiAuth", "code 登录异常", String(e));
-    return tt("网络错误，请重试", "Network error, please try again");
+    return tr("ui.wuwei.auth.network.error.please.try.again.08810fa");
   }
 }
 
@@ -442,11 +443,11 @@ export async function wuweiRegister(email: string, code: string, password: strin
       body: JSON.stringify({ email, code, password }),
     });
     const j = (await res.json().catch(() => ({}))) as SigninResp;
-    if (!res.ok || j.error) return j.error || tt(`注册失败（${res.status}）`, `Sign-up failed (${res.status})`);
-    return toSession(j) || tt("注册返回异常", "Unexpected sign-up response");
+    if (!res.ok || j.error) return j.error || tr("ui.wuwei.auth.sign.up.failed.3e47ea1", { p0: res.status });
+    return toSession(j) || tr("ui.wuwei.auth.unexpected.sign.up.response.54a7706");
   } catch (e) {
     log("wuweiAuth", "register 异常", String(e));
-    return tt("网络错误，请重试", "Network error, please try again");
+    return tr("ui.wuwei.auth.network.error.please.try.again.08810fa");
   }
 }
 

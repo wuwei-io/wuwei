@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* 无为桌面主题：无为品牌 VI · 默认深色（玄墨底 + 月白字 + 靛青导航 + 朱赭一念火种） */
 
 /* 内置彩色 emoji 字体(Noto Color Emoji, COLRv1, woff2 压到 ~5.5MB, OFL 可商用)。
@@ -120,6 +128,7 @@ body {
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
 }
 
 .shell {

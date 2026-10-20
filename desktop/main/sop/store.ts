@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 // 一人公司 · SOP 库 · 数据层
 //
 // 全部数据收在 ~/.wuwei/sop/ 子目录下，删掉整个目录 = 卸载干净，不在数据根目录留痕迹。
@@ -80,7 +81,7 @@ export function createNode(
   const node: SopNode = {
     id: randomUUID(),
     kind,
-    name: name || (kind === "category" ? "新类别" : "新 SOP"),
+    name: name || (kind === "category" ? tr("ui.store.message.34cdc34614") : tr("ui.store.message.1cc294d147")),
     parentId: parentId || undefined,
     order: nextOrder(nodes, parentId),
     createdAt: now,
@@ -206,7 +207,7 @@ export function readVersion(id: string, n: number): string | null {
 export function rollback(id: string, n: number): { version: number } | { error: string } {
   const src = readVersion(id, n);
   if (src === null) return { error: "version_not_found" };
-  const note = process.env.WUWEI_LANG === "en" ? `Rolled back from v${n}` : `回滚自 v${n}`;
+  const note = process.env.WUWEI_LANG === "en" ? `Rolled back from v${n}` : tr("ui.store.message.c8b94d67ae", {p0: n});
   const r = saveSopDoc(id, src, note);
   if (!r.node) return { error: "sop_not_found" };
   return { version: r.version };

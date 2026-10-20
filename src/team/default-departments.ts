@@ -1,3 +1,5 @@
+import systemData from "../localization/content/system-data.json";
+import { tr } from "../localization/index.js";
 import type { Employee } from "./types.js";
 import { DEFAULT_TEAM_ID, type TeamLanguage } from "./default-localization.js";
 
@@ -9,12 +11,7 @@ export interface TeamDepartment {
   order?: number;
 }
 
-const defaults = [
-  { id: "wj-dept-ceo", name: "CEO办公室", en: "CEO Office", headId: "wj-ceo", memberIds: ["wj-ceo"] },
-  { id: "wj-dept-tech", name: "技术部", en: "Engineering", headId: "wj-code", memberIds: ["wj-code"] },
-  { id: "wj-dept-design", name: "设计部", en: "Design", headId: "wj-design", memberIds: ["wj-design", "wj-mobile"] },
-  { id: "wj-dept-general", name: "综合部", en: "General Affairs", headId: undefined, memberIds: ["wj-copy", "wj-data"] },
-] as const;
+const defaults = systemData.departments;
 
 /** Only seed a complete default pack. Custom people and existing departments are never remapped. */
 export function defaultDepartments(employees: Employee[]): TeamDepartment[] | undefined {
@@ -25,7 +22,7 @@ export function defaultDepartments(employees: Employee[]): TeamDepartment[] | un
 
 /** Display only: canonical department names and stable member references stay on disk. */
 export function departmentLabel(department: Pick<TeamDepartment, "name">, language: TeamLanguage): string {
-  return language === "en" ? defaults.find(d => d.name === department.name)?.en || department.name : department.name;
+  return language !== "zh" ? (defaults.find(d => d.name === department.name) ? tr("team.department."+defaults.find(d => d.name === department.name)!.id, {}, language) : department.name) : department.name;
 }
 
 export function departmentNameFromInput(original: Pick<TeamDepartment, "name">, input: string, language: TeamLanguage): string {

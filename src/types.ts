@@ -68,7 +68,7 @@ export interface Decision {
   sourceSession?: string;
   rawDetail?: string;
   // Native paid-tool dialogs resolve these against the current UI language.
-  i18n?: Record<'zh' | 'en', { title: string; question: string; optionLabels: Record<string, string> }>;
+  i18n?: Record<string, { title: string; question: string; optionLabels: Record<string, string> }>;
 }
 export interface DecisionResponse {
   action: "allow" | "deny" | "reply";

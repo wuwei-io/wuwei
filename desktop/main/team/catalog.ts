@@ -1,3 +1,5 @@
+import systemData from "../../../src/localization/content/system-data.json";
+import { tr } from "../../../src/localization/index.js";
 // AI 员工团队 · 内置应用目录
 //
 // 第一期先只有内置目录（不联网）。后续要接线上员工市场时，这里再加一个 fetch 源，
@@ -17,8 +19,8 @@ import companyEmployees from "./catalog-company.json";
 export const BUILTIN_APPS: TeamApp[] = [
   {
     id: "wuwei-team-basic",
-    name: "无为一人公司",
-    desc: "一套开箱即用的 AI 团队：CEO 小笨统管全局，文案小文 / 代码小码 / 数据小数 / 设计小美 / 移动端小移各司其职。装上即可分别私聊，员工请示先由 CEO 把关。每人自带头像、职责边界与系统提示词。",
+    name: systemData.teamName,
+    desc: systemData.DEFAULT_TEAM_DESCRIPTION,
     version: "2.0.0",
     employees: companyEmployees as unknown as Employee[],
   },

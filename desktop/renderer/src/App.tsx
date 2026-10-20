@@ -1,3 +1,8 @@
+import { formatCredits } from "../../../src/billing/presentation.js";
+import {localizeToolMetadata} from "../../../src/localization/tools.js";
+import systemData from "../../../src/localization/content/system-data.json";
+import { LanguageSwitcher } from "./components/LanguageSwitcher.js";
+import { tr, getCurrentLanguage, localizeStoredText } from "../../../src/localization/index.js";
 /// <reference types="vite/client" />
 import { employeeSessionTitle } from "../../../src/team/session-title.js";
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
@@ -22,7 +27,7 @@ import { PremiumModelNotice } from './components/PremiumModelNotice.js';
 import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
-import { getLang, setLang as persistLang, makeT, type Lang, type T } from "./i18n.js";
+import { getLang, setLang as persistLang, makeT, useLanguage, getLanguages, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
 import { researchToolLabel } from "./toolLabel.js";
 import { dedupeDisplayedToolImages } from "./imageResults.js";
@@ -77,7 +82,7 @@ type Item =
       status: "running" | "done";
       image?: string; // 工具返回的图片(截图/send_image 生图)，dataUrl；界面内联缩略图 + 点开预览
     }
-  | { type: "notice"; text: string };
+  | { type: "notice"; text: string; rawError?: string; freeModel?: boolean };
 
 interface Usage {
   totalInput: number;
@@ -123,15 +128,15 @@ interface SessionMeta {
 
 // 优先级方案：高/中/低 + 艾森豪威尔四象限。weight 用于排序(大在前)，tag=徽标短标签，label=全称
 const PRIO_HL = [
-  { tag: "高", weight: 3, label: "高", labelEn: "High" },
-  { tag: "中", weight: 2, label: "中", labelEn: "Medium" },
-  { tag: "低", weight: 1, label: "低", labelEn: "Low" },
+  { tag: systemData.priorityTags[0], weight: 3, get label() { return tr("ui.helpmanualmodal.high.29b7559"); }, get labelEn() { return tr("ui.helpmanualmodal.high.29b7559"); } },
+  { tag: systemData.priorityTags[1], weight: 2, get label() { return tr("ui.helpmanualmodal.medium.c3c3788"); }, get labelEn() { return tr("ui.helpmanualmodal.medium.c3c3788"); } },
+  { tag: systemData.priorityTags[2], weight: 1, get label() { return tr("ui.helpmanualmodal.low.1638d14"); }, get labelEn() { return tr("ui.helpmanualmodal.low.1638d14"); } },
 ];
 const PRIO_QUAD = [
-  { tag: "重急", weight: 4, label: "紧急重要", labelEn: "Urgent & important" },
-  { tag: "重", weight: 3, label: "不紧急重要", labelEn: "Important, not urgent" },
-  { tag: "急", weight: 2, label: "紧急不重要", labelEn: "Urgent, not important" },
-  { tag: "缓", weight: 1, label: "不紧急不重要", labelEn: "Neither" },
+  { tag: systemData.priorityTags[3], weight: 4, get label() { return tr("ui.helpmanualmodal.urgent.important.eab7d5f"); }, get labelEn() { return tr("ui.helpmanualmodal.urgent.important.eab7d5f"); } },
+  { tag: systemData.priorityTags[4], weight: 3, get label() { return tr("ui.helpmanualmodal.important.not.urgent.7c78c1e"); }, get labelEn() { return tr("ui.helpmanualmodal.important.not.urgent.7c78c1e"); } },
+  { tag: systemData.priorityTags[5], weight: 2, get label() { return tr("ui.helpmanualmodal.urgent.not.important.003cf85"); }, get labelEn() { return tr("ui.helpmanualmodal.urgent.not.important.003cf85"); } },
+  { tag: systemData.priorityTags[6], weight: 1, get label() { return tr("ui.helpmanualmodal.neither.ea42932"); }, get labelEn() { return tr("ui.helpmanualmodal.neither.ea42932"); } },
 ];
 const PRIO_TITLE: Record<string, string> = Object.fromEntries(
   [...PRIO_HL, ...PRIO_QUAD].map((p) => [p.tag, p.label]),
@@ -301,17 +306,7 @@ function highlightMatches(root: HTMLElement, q: string): Range | null {
 }
 
 // 设置总目标后发给 AI 的那段工作方式约定（设置→运行模式里可改，{目标} 会被替换成你写的目标）
-const DEFAULT_GOAL_PROMPT = `【这个对话的总目标】{目标}
-
-从现在起你按这个目标自主推进，工作方式：
-1. 先把目标拆成可执行的步骤列出来，不用问我要不要拆；
-2. 然后自己一步步做下去，每做完一步简短报告进展，接着继续下一步，不用等我批准；
-3. 能自己查资料、自己验证、自己决策的一律自己来，无关紧要的选择自己定；
-4. 只有这几种情况停下来问我：需要我提供你拿不到的东西(服务器/账号/密钥/付费/线下信息)；要做删除、上线、写生产、花钱、对外发送这类不可逆或影响他人的动作；目标方向上出现分歧要我拍板；
-5. 我随时可能插话补充信息，听完照做，然后继续朝目标推进；
-6. 每轮结尾用一句话说清"下一步做什么"，方便自动接力。
-现在开始，先给拆解方案，然后直接动手做第一步。`;
-const goalPromptOf = () => localStorage.getItem("wuwei-goal-prompt") || DEFAULT_GOAL_PROMPT;
+const goalPromptOf = () => localStorage.getItem("wuwei-goal-prompt") || tr("goal.defaultPrompt");
 
 // 按会话持久化「调研状态」(是否在调研 + 最新进度)，独立于弹窗开关：
 // 这样点了"只保存"/收起/关掉弹窗、甚至刷新，重新打开还能恢复"调研中 + 进度"，不会一片空白。
@@ -439,23 +434,24 @@ function parseServerCtxLimit(raw: string): number {
 function friendlyError(raw: string, t: T, freeModel = true): string {
   const r = raw || "";
   // 无为托管网关的业务错误 → 友好文案（优先，避免被下方通用 401/429 规则吃掉）
-  if (/insufficient_balance/i.test(r)) return t("err.insufficientBalance", "无为币余额不足：请点账号头像「充值」后，再使用无为托管模型。");
-  if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota", "免费体验次数已用完：登录即可继续使用（注册送 10 无为币，领取后 24 小时有效）。");
-  if (/free_trial_disabled/i.test(r)) return t("err.freeDisabled", "免费体验暂未开放：请登录使用，或稍后再试。");
-  if (/\bdaily_cap_reached\b/i.test(r) && !freeModel) return t("err.paidDailyCap", "已达今日付费使用上限，请明天再试或调整使用限额。");
-  if (/daily_cap_reached/i.test(r)) return t("err.dailyCap", "今日免费额度已用完：明日自动恢复，登录可解锁更高额度。");
-  if (/gateway_not_configured/i.test(r)) return t("err.gatewayNotConfigured", "无为托管暂不可用（服务维护中）：请稍后再试，或切换到其它模型。");
-  if (/unknown_hosted_model/i.test(r)) return t("err.unknownModel", "该无为托管模型暂不可用，请换一个模型。");
-  if (/upstream_rate_limited/i.test(r)) return t("err.providerRateLimited", "模型供应商暂时限流，请稍后重试，或切换其他热门模型。");
-  if (/upstream_error/i.test(r)) return t("err.upstream", "模型服务商暂时不可用：请稍后重试。");
+  if (/anon_login_required|anon_not_allowed/i.test(r)) return t("ui.app.sign.in.to.use.this.model.8ff2e81");
+  if (/insufficient_balance/i.test(r)) return t("err.insufficientBalance");
+  if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota");
+  if (/free_trial_disabled/i.test(r)) return t("err.freeDisabled");
+  if (/\bdaily_cap_reached\b/i.test(r) && !freeModel) return t("err.paidDailyCap");
+  if (/daily_cap_reached/i.test(r)) return t("err.dailyCap");
+  if (/gateway_not_configured/i.test(r)) return t("err.gatewayNotConfigured");
+  if (/unknown_hosted_model/i.test(r)) return t("err.unknownModel");
+  if (/upstream_rate_limited/i.test(r)) return t("err.providerRateLimited");
+  if (/upstream_error/i.test(r)) return t("err.upstream");
   // 模型名不对（自建/中转端点没有该模型）：常见于切到「自建端点」却没填模型，默认名在该端点不存在。
   // 明确指路去设置改模型名，而不是甩一句 "model 'xxx' not found 404"。
   if (/no such model|model[\s'"]*[\w.\-/]*[\s'"]*(not found|does not exist)|model_not_found|unknown[_ ]model|invalid model/i.test(r))
-    return t("err.modelNotFound", "出错：当前端点没有这个模型，请在设置里把模型名改成该平台/端点支持的名称。");
+    return t("err.modelNotFound");
   if (/gateway_error[\s\S]*(invalid_token|no_token)/i.test(r))
-    return t("err.tokenExpired", "无为账号登录已过期：请重新登录后再用托管模型。");
+    return t("err.tokenExpired");
   if (/authentication method|apiKey or authToken|x-api-key|unauthorized|\b401\b|invalid.*key|api key|no credentials|isn't authorized|not authorized|未配置凭证/i.test(r))
-    return t("err.auth", "出错：当前模型未授权或缺少凭证（API Key / 订阅授权），请先完成授权。");
+    return t("err.auth");
   // 上下文超限：必须排在限流规则之前。服务端原文常含 "exceed"，会被下面的 429 规则误吞成「触发限流」，
   // 于是用户干等半天也没用——真正的解法是开新会话或删消息。能解析出数字就把「已用/上限」摆出来。
   const ctxOver = r.match(/(?:prompt is too long|too many tokens)[:\s]*([\d,]+)\s*tokens\s*>\s*([\d,]+)/i);
@@ -463,32 +459,32 @@ function friendlyError(raw: string, t: T, freeModel = true): string {
     ctxOver ||
     /context[_ ](length|window|limit)|context length|model_context_window_exceeded|input length and max_tokens exceed|maximum context/i.test(r)
   ) {
-    const head = t("err.ctxOverflow", "出错：这轮对话太长，超出模型的上下文上限。");
-    const tip = t("err.ctxOverflowTip", "开个新对话接着做（可用「交接」把要点带过去），或删掉部分历史消息。");
+    const head = t("err.ctxOverflow");
+    const tip = t("err.ctxOverflowTip");
     if (ctxOver) {
       const used = fmtTok(Number(ctxOver[1].replace(/,/g, "")));
       const max = fmtTok(Number(ctxOver[2].replace(/,/g, "")));
-      return `${head}（${t("err.ctxUsed", "已用")} ${used} / ${t("err.ctxLimit", "上限")} ${max}）${tip}`;
+      return `${head}（${t("err.ctxUsed")} ${used} / ${t("err.ctxLimit")} ${max}）${tip}`;
     }
     return head + tip;
   }
   // 限流：去掉了原先过宽的 exceed/quota——它们把上下文超限也吞进来了，导致提示完全误导。
   if (/rate.?limit|\b429\b|too many requests|retry.?after|overloaded_error|quota/i.test(r))
-    return t("err.rateLimit", "出错：请求过于频繁或额度已用尽（触发限流），请稍后再试。");
+    return t("err.rateLimit");
   // 长回复被中途切断（undici 的 TypeError: terminated / premature close 等）：
   // 网关已做退避重连+路由兜底，还走到这里说明确实没救回来 → 明确告诉用户「回复继续即可接着做」，别甩英文原文。
   if (/\bterminated\b|premature close|other side closed|aborted|ECONNABORTED/i.test(r))
-    return t("err.interrupted", "出错：与模型的连接中断了（长回复被切断）。回复「继续」即可从中断处接着做。");
+    return t("err.interrupted");
   if (/timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|network|fetch failed|socket hang/i.test(r))
-    return t("err.network", "出错：网络连接失败，请检查网络 / 代理后重试。");
+    return t("err.network");
   // 上下文超长已在上面单独处理，这里只剩真正的请求错误(模型名/参数)
   if (/\b400\b|invalid_request|bad request/i.test(r))
-    return t("err.badRequest", "出错：请求有误（可能是模型名或参数不对）。");
+    return t("err.badRequest");
   if (/\b5\d\d\b|server error|internal error|overloaded/i.test(r))
-    return t("err.server", "出错：服务端错误或繁忙，请稍后重试。");
+    return t("err.server");
   // 未知错误：剥掉机器错误码标记后，只取首行 + 截断，加前缀，不整段英文轰炸
   const clean = r.replace(/\[\[gw:[a-z_]+\]\]\s*/i, "");
-  return t("err.prefix", "出错：") + (clean.split("\n")[0] || clean).slice(0, 120);
+  return t("err.prefix") + (clean.split("\n")[0] || clean).slice(0, 120);
 }
 
 // 从错误里取网关稳定错误码（provider.ts 用 [[gw:code]] 机器标记带过来）。语言无关。
@@ -619,7 +615,7 @@ function PaySpark({ size = 14 }: { size?: number }) {
 }
 function PayCloseX({ onClick }: { onClick: () => void }) {
   return (
-    <button className="pay-x" aria-label={makeT(getLang())("msg.close", "关闭")} onClick={onClick}>
+    <button className="pay-x" aria-label={makeT(getLang())("msg.close")} onClick={onClick}>
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
         <path d="M4 4l8 8M12 4l-8 8" />
       </svg>
@@ -643,7 +639,7 @@ function PackIcon({ size = 20 }: { size?: number }) {
 }
 
 // 价格显示：EN 显示美元、CN 显示人民币。仅影响展示；实收金额始终以后端按 sku 查表为准。
-const money = (en: boolean, cn: number, usd: number): string => (en ? `$${usd}` : `¥${cn}`);
+const money = (en: boolean, cn: number, usd: number): string => (tr("ui.app.text.2093f49", { v0: (en ? undefined : cn), v1: (en ? usd : undefined) }));
 // 加密支付(NOWPayments)最低档：配了 USDT-SOL + USDT-TRC20 两个 payout 钱包后，
 // 便宜链(Solana/BSC)免换汇 floor 降到 ~$2，故加密按钮在 ≥$3 的档都显示(pack_s $3.99 起)；
 // 仅 $1 trial 够不着($1<$2)，由弹窗底部说明统一讲清。
@@ -667,13 +663,13 @@ const EN_SKU: Record<string, string> = {
 type CoinPack = { sku: string; coins: number; bonus: number; price: number; priceUsd: number; desc: string; descEn: string; badge?: string; badgeEn?: string; badgeType?: "rec" | "val" };
 // 积分包（按需充值，价对齐库：pack_s/m/l = ¥19/69/199 · $3.99/12.99/39.99，币量 800/3000/9000 CN=EN）。
 const COIN_PACKS: CoinPack[] = [
-  { sku: "pack_s", coins: 800, bonus: 0, price: 19, priceUsd: 3.99, desc: "按需充值，随用随充", descEn: "Pay as you go" },
-  { sku: "pack_m", coins: 3000, bonus: 0, price: 69, priceUsd: 12.99, desc: "常用档", descEn: "Popular", badge: "推荐", badgeEn: "Recommended", badgeType: "rec" },
-  { sku: "pack_l", coins: 9000, bonus: 0, price: 199, priceUsd: 39.99, desc: "高频 / 团队", descEn: "Heavy / team", badge: "最超值", badgeEn: "Best value", badgeType: "val" },
-  { sku: "pack_xl", coins: 20000, bonus: 0, price: 399, priceUsd: 79.99, desc: "重度 / 团队", descEn: "Power / team" },
+  { sku: "pack_s", coins: 800, bonus: 0, price: 19, priceUsd: 3.99, get desc() { return tr("ui.catalog.app.8936b78243"); }, get descEn() { return tr("ui.catalog.app.8936b78243"); } },
+  { sku: "pack_m", coins: 3000, bonus: 0, price: 69, priceUsd: 12.99, get desc() { return tr("ui.app.message.1fe010ea8e"); }, get descEn() { return tr("ui.app.message.1fe010ea8e"); }, get badge() { return tr("model.badge.11"); }, get badgeEn() { return tr("model.badge.11"); }, badgeType: "rec" },
+  { sku: "pack_l", coins: 9000, bonus: 0, price: 199, priceUsd: 39.99, get desc() { return tr("ui.catalog.app.348f89853c"); }, get descEn() { return tr("ui.catalog.app.348f89853c"); }, get badge() { return tr("ui.app.message.a282fdf96e"); }, get badgeEn() { return tr("ui.app.message.a282fdf96e"); }, badgeType: "val" },
+  { sku: "pack_xl", coins: 20000, bonus: 0, price: 399, priceUsd: 79.99, get desc() { return tr("ui.catalog.app.1dc24fc841"); }, get descEn() { return tr("ui.catalog.app.1dc24fc841"); } },
 ];
 // 测试专用档：仅当后端 flags 含 "coinpack_test" 时展示。CN ¥1 / EN $1（海外走 Paddle pack_test_en）。
-const TEST_COIN_PACK: CoinPack = { sku: "pack_100", coins: 100, bonus: 0, price: 1, priceUsd: 1, desc: "测试专用 · 小额验证", descEn: "Test · small verification", badge: "测试", badgeEn: "Test", badgeType: "val" };
+const TEST_COIN_PACK: CoinPack = { sku: "pack_100", coins: 100, bonus: 0, price: 1, priceUsd: 1, get desc() { return tr("ui.catalog.app.2807bbf022"); }, get descEn() { return tr("ui.catalog.app.2807bbf022"); }, get badge() { return tr("ui.app.test.d2d526c"); }, get badgeEn() { return tr("ui.app.test.d2d526c"); }, badgeType: "val" };
 // 月付阶梯（价/币量/签到 对齐库 coin_catalog）：CN plan_pro/5x/50x = ¥29/99/899；EN pro/plus/max = $6.99/19.99/199。
 type ProPlan = { id: "pro" | "pro5x" | "pro20x" | "pro50x"; sku: string; name: string; nameEn: string; price: number; priceUsd: number; unit: string; unitEn: string; coins: number; coinsEn: number; signin: number; saved: number; sub: string; subEn: string; note: string; noteEn: string; tag: string; tagEn: string; tagType: "rec" | "pop" };
 // ── 思考档位（effort）──────────────────────────────────────────────
@@ -684,16 +680,16 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 // 其它模型不显示选择器，免得给了个按了没反应的开关。
 const EFFORT_MODELS = /claude-(opus-4-[5-9]|opus-[5-9]|sonnet-[5-9]|sonnet-4-6|fable|mythos)|gpt-5|\bo3\b|\bo4\b/i;
 const EFFORT_OPTIONS: { id: Effort; zh: string; en: string; zhDesc: string; enDesc: string }[] = [
-  { id: "low", zh: "快", en: "Fast", zhDesc: "最快最省，适合简单改动和问答", enDesc: "Fastest and cheapest — simple edits and Q&A" },
-  { id: "medium", zh: "平衡", en: "Balanced", zhDesc: "推荐。多数任务够用，不容易超时", enDesc: "Recommended. Enough for most tasks, less likely to time out" },
-  { id: "high", zh: "深入", en: "Deep", zhDesc: "复杂任务更靠谱，但明显更慢", enDesc: "Better on complex work, noticeably slower" },
-  { id: "xhigh", zh: "很深", en: "Deeper", zhDesc: "长链路重构、疑难排查", enDesc: "Long refactors and hard debugging" },
-  { id: "max", zh: "极致", en: "Max", zhDesc: "最强也最慢，容易触发超时", enDesc: "Strongest and slowest — prone to timeouts" },
+  { id: "low", get zh() { return tr("model.badge.6"); }, get en() { return tr("model.badge.6"); }, get zhDesc() { return tr("ui.catalog.app.8480d3df03"); }, get enDesc() { return tr("ui.catalog.app.8480d3df03"); } },
+  { id: "medium", get zh() { return tr("ui.app.message.5081d3292b"); }, get en() { return tr("ui.app.message.5081d3292b"); }, get zhDesc() { return tr("ui.catalog.app.4500427316"); }, get enDesc() { return tr("ui.catalog.app.4500427316"); } },
+  { id: "high", get zh() { return tr("ui.helpmanualmodal.deep.cb03d15"); }, get en() { return tr("ui.helpmanualmodal.deep.cb03d15"); }, get zhDesc() { return tr("ui.catalog.app.8312203e33"); }, get enDesc() { return tr("ui.catalog.app.8312203e33"); } },
+  { id: "xhigh", get zh() { return tr("ui.helpmanualmodal.deeper.96029be"); }, get en() { return tr("ui.helpmanualmodal.deeper.96029be"); }, get zhDesc() { return tr("ui.catalog.app.c284828dc5"); }, get enDesc() { return tr("ui.catalog.app.c284828dc5"); } },
+  { id: "max", get zh() { return tr("ui.helpmanualmodal.max.70a555c"); }, get en() { return tr("ui.helpmanualmodal.max.70a555c"); }, get zhDesc() { return tr("ui.catalog.app.92f766edac"); }, get enDesc() { return tr("ui.catalog.app.92f766edac"); } },
 ];
 function effortLabel(e: Effort, lang: string): string {
   const o = EFFORT_OPTIONS.find((x) => x.id === e);
   if (!o) return e;
-  return lang === "en" ? o.en : o.zh;
+  return lang !== "zh" ? o.en : o.zh;
 }
 
 // 订阅版模型显示名(Claude/Codex 订阅是硬编码 preset，无 catalog label)：统一格式，避免下拉里
@@ -722,23 +718,18 @@ const MODEL_LABEL_OVERRIDES: Record<string, string> = {
 };
 
 const PRO_PLANS: ProPlan[] = [
-  { id: "pro", sku: "plan_pro", name: "无为 Pro", nameEn: "Wuwei Pro", price: 29, priceUsd: 6.99, unit: "/月", unitEn: "/mo", coins: 1000, coinsEn: 2000, signin: 20, saved: 0, sub: "包月托管额度 · 每日签到 20", subEn: "Monthly hosted quota · 20/day check-in", note: "", noteEn: "", tag: "入门", tagEn: "Starter", tagType: "pop" },
-  { id: "pro5x", sku: "plan_pro_5x", name: "无为 Plus", nameEn: "Wuwei Plus", price: 99, priceUsd: 19.99, unit: "/月", unitEn: "/mo", coins: 5000, coinsEn: 6000, signin: 40, saved: 25, sub: "5× 额度 · 每日签到 40", subEn: "5× quota · 40/day check-in", note: "省 20%", noteEn: "Save 20%", tag: "最受欢迎", tagEn: "Most popular", tagType: "rec" },
-  { id: "pro20x", sku: "plan_pro_20x", name: "无为 Ultra", nameEn: "Wuwei Ultra", price: 379, priceUsd: 99, unit: "/月", unitEn: "/mo", coins: 20000, coinsEn: 30000, signin: 70, saved: 201, sub: "20× 额度 · 每日签到 70", subEn: "20× quota · 70/day check-in", note: "省 35%", noteEn: "Save 35%", tag: "大团队", tagEn: "For teams", tagType: "pop" },
-  { id: "pro50x", sku: "plan_pro_50x", name: "无为 Max", nameEn: "Wuwei Max", price: 899, priceUsd: 199, unit: "/月", unitEn: "/mo", coins: 50000, coinsEn: 70000, signin: 100, saved: 899, sub: "50× 额度 · 每日签到 100", subEn: "50× quota · 100/day check-in", note: "省 50%", noteEn: "Save 50%", tag: "畅用到爽", tagEn: "Go all-in", tagType: "rec" },
+  { id: "pro", sku: "plan_pro", get name() { return tr("ui.app.message.82a963bba6"); }, get nameEn() { return tr("ui.app.message.82a963bba6"); }, price: 29, priceUsd: 6.99, get unit() { return tr("ui.billingpanel.mo.00fb449"); }, get unitEn() { return tr("ui.billingpanel.mo.00fb449"); }, coins: 1000, coinsEn: 2000, signin: 20, saved: 0, get sub() { return tr("ui.catalog.app.b7198ddd25"); }, get subEn() { return tr("ui.catalog.app.b7198ddd25"); }, note: "", noteEn: "", get tag() { return tr("plan.tag.starter"); }, get tagEn() { return tr("plan.tag.starter"); }, tagType: "pop" },
+  { id: "pro5x", sku: "plan_pro_5x", get name() { return tr("ui.app.message.b57b61b0d8"); }, get nameEn() { return tr("ui.app.message.b57b61b0d8"); }, price: 99, priceUsd: 19.99, get unit() { return tr("ui.billingpanel.mo.00fb449"); }, get unitEn() { return tr("ui.billingpanel.mo.00fb449"); }, coins: 5000, coinsEn: 6000, signin: 40, saved: 25, get sub() { return tr("ui.catalog.app.4c8e1e2185"); }, get subEn() { return tr("ui.catalog.app.4c8e1e2185"); }, get note() { return tr("ui.app.message.4a55d4c988"); }, get noteEn() { return tr("ui.app.message.4a55d4c988"); }, get tag() { return tr("plan.tag.popular"); }, get tagEn() { return tr("plan.tag.popular"); }, tagType: "rec" },
+  { id: "pro20x", sku: "plan_pro_20x", get name() { return tr("ui.app.message.8cbcb46044"); }, get nameEn() { return tr("ui.app.message.8cbcb46044"); }, price: 379, priceUsd: 99, get unit() { return tr("ui.billingpanel.mo.00fb449"); }, get unitEn() { return tr("ui.billingpanel.mo.00fb449"); }, coins: 20000, coinsEn: 30000, signin: 70, saved: 201, get sub() { return tr("ui.catalog.app.e1bf93d9fd"); }, get subEn() { return tr("ui.catalog.app.e1bf93d9fd"); }, get note() { return tr("ui.app.message.44fb802788"); }, get noteEn() { return tr("ui.app.message.44fb802788"); }, get tag() { return tr("plan.tag.teams"); }, get tagEn() { return tr("plan.tag.teams"); }, tagType: "pop" },
+  { id: "pro50x", sku: "plan_pro_50x", get name() { return tr("ui.app.message.6a060337ee"); }, get nameEn() { return tr("ui.app.message.6a060337ee"); }, price: 899, priceUsd: 199, get unit() { return tr("ui.billingpanel.mo.00fb449"); }, get unitEn() { return tr("ui.billingpanel.mo.00fb449"); }, coins: 50000, coinsEn: 70000, signin: 100, saved: 899, get sub() { return tr("ui.catalog.app.e1cc250805"); }, get subEn() { return tr("ui.catalog.app.e1cc250805"); }, get note() { return tr("ui.app.message.3b1680e6c3"); }, get noteEn() { return tr("ui.app.message.3b1680e6c3"); }, get tag() { return tr("plan.tag.allIn"); }, get tagEn() { return tr("plan.tag.allIn"); }, tagType: "rec" },
 ];
-const PRO_FEATS: [string, string][] = [
-  ["托管额度", "不用自己配接口额度"],
-  ["按需选模型", "日常优先高性价比模型"],
-  ["费用清楚", "按实际模型用量消耗额度"],
-  ["免费长期记忆", "所有用户均可使用脑网络"],
+const PRO_FEATS = (): [string, string][] => [
+  [tr("ui.app.message.c6e59eafb0"), tr("ui.app.message.7f405af902")],
+  [tr("ui.app.message.54c0be8fb0"), tr("ui.app.message.45f180389c")],
+  [tr("ui.app.message.81201e2e2d"), tr("ui.app.message.ebce2025c6")],
+  [tr("ui.app.message.ba8bdd249d"), tr("ui.app.message.67835db973")],
 ];
-const PRO_FEATS_EN: [string, string][] = [
-  ["Hosted credits", "No API key needed"],
-  ["Model choice", "Value models for everyday work"],
-  ["Clear usage", "Allowance follows actual model usage"],
-  ["Free long-term memory", "Brain is included for everyone"],
-];
+
 
 // 缺币弹窗里的「并排可选套餐」：¥1 体验 + Pro/Plus/Max 月付，统一成一种可选项，选中谁就驱动二维码/Paddle 与右侧详情。
 type PayPlanOpt = {
@@ -757,10 +748,10 @@ type PayPlanOpt = {
 // trialEligible=从未付费 → 首位放 ¥1 体验（默认选中）；已付费用户不含体验档，默认最受欢迎档。
 function buildPayOpts(trialEligible: boolean): PayPlanOpt[] {
   const trial: PayPlanOpt = {
-    sku: "plan_trial", kind: "trial", name: "¥1 体验 · 7 天", nameEn: "$1 Trial · 7 days",
-    price: 1, priceUsd: 1, unit: " / 7 天", unitEn: " / 7d", days: 7, coins: 0, signin: 20,
-    badge: "最超值 · 1块钱试7天", badgeEn: "Best deal · 7 days for $1", badgeType: "val",
-    sub: "先花 1 块试 7 天 Pro，够爽再升级", subEn: "Try Pro 7 days for $1 first",
+    sku: "plan_trial", kind: "trial", get name() { return tr("ui.catalog.app.8503e2ece3"); }, get nameEn() { return tr("ui.catalog.app.8503e2ece3"); },
+    price: 1, priceUsd: 1, get unit() { return tr("ui.catalog.app.c088b60621"); }, get unitEn() { return tr("ui.catalog.app.c088b60621"); }, days: 7, coins: 0, signin: 20,
+    get badge() { return tr("ui.catalog.app.5b9b5ae6bc"); }, get badgeEn() { return tr("ui.catalog.app.5b9b5ae6bc"); }, badgeType: "val",
+    get sub() { return tr("ui.catalog.app.0a8a0e0417"); }, get subEn() { return tr("ui.catalog.app.0a8a0e0417"); },
   };
   const plans = PRO_PLANS.map<PayPlanOpt>((p) => ({
     sku: p.sku, kind: "plan", name: p.name, nameEn: p.nameEn,
@@ -779,27 +770,23 @@ const PAYOPT_DEFAULT_SKU = (trialEligible: boolean) => (trialEligible ? "plan_tr
 // 积分包档（按需充值、永久有效）转成统一可选项，供缺币弹窗「积分包」tab 并排展示。
 function buildPackOpts(): PayPlanOpt[] {
   return COIN_PACKS.map((p) => ({
-    sku: p.sku, kind: "pack" as const, name: `${p.coins.toLocaleString()} 无为币`, nameEn: `${p.coins.toLocaleString()} credits`,
+    sku: p.sku, kind: "pack" as const, name: tr("ui.app.message.3e209a50a7", {p0: p.coins.toLocaleString()}), nameEn: `${p.coins.toLocaleString()} credits`,
     price: p.price, priceUsd: p.priceUsd, unit: "", unitEn: "", days: 0,
     coins: p.coins, signin: 0,
     badge: p.badge, badgeEn: p.badgeEn, badgeType: p.badgeType,
     sub: p.desc, subEn: p.descEn,
   }));
 }
-const PACK_PERKS: [string, string][] = [
-  ["永久有效，绝不清零", "买了就是你的，不像订阅按月过期作废"],
-  ["日常任务优先省钱", "优先选择高性价比模型；顶级模型按需使用，消耗单独看价格"],
-  ["随用随充，多少都行", "按需购买，用多少充多少，不用被套餐绑住"],
+const PACK_PERKS = (): [string, string][] => [
+  [tr("ui.app.message.82b49ff7d0"), tr("ui.app.message.2ff39ec6de")],
+  [tr("ui.app.message.c064fa3621"), tr("ui.app.message.30d30fe4c8")],
+  [tr("ui.app.message.6f47607b6c"), tr("ui.app.message.8a214124e2")],
 ];
-const PACK_PERKS_EN: [string, string][] = [
-  ["Never expires", "Once bought it's yours. It won't reset monthly like a subscription."],
-  ["Value models for everyday tasks", "Choose affordable models first; use premium models when needed and check their prices."],
-  ["Top up any amount", "Pay as you go, buy exactly what you need, no plan lock-in."],
-];
+
 
 // ② 购买积分包（朱系）：站内选档；CN 走扫码，EN 走网页 Paddle 结账。
 function CoinPackModal({ packs, onClose, onCheckout, onUpgrade, t, lang }: { packs: CoinPack[]; onClose: () => void; onCheckout: (pack: CoinPack) => void; onUpgrade: () => void; t: T; lang: Lang }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const [sel, setSel] = useState(() => { const i = packs.findIndex((x) => x.badgeType === "rec"); return i >= 0 ? i : 0; }); // 默认选中"推荐"档
   const p = packs[sel];
   const shownAt = useRef(Date.now());
@@ -811,8 +798,8 @@ function CoinPackModal({ packs, onClose, onCheckout, onUpgrade, t, lang }: { pac
         <PayCloseX onClick={close} />
         <div className="pay-top">
           <PayEnso />
-          <h2>{t("pay.coinpack.title", "购买积分包")}</h2>
-          <p>{t("pay.coinpack.sub", "按需充值，用多少买多少，即充即用，永久有效")}</p>
+          <h2>{t("pay.coinpack.title")}</h2>
+          <p>{t("pay.coinpack.sub")}</p>
         </div>
         <div className="pay-rows">
           {packs.map((pack, i) => (
@@ -824,11 +811,11 @@ function CoinPackModal({ packs, onClose, onCheckout, onUpgrade, t, lang }: { pac
               <span style={{ minWidth: 0 }}>
                 <span className="pay-amt">
                   {pack.coins.toLocaleString()}
-                  <span className="u"> {t("pay.credits", "无为币")}</span>
+                  <span className="u"> {t("pay.credits")}</span>
                 </span>
                 <span className="pay-desc" style={{ display: "block" }}>
                   {en ? pack.descEn : pack.desc}
-                  {pack.bonus > 0 && <em> +{pack.bonus} {t("pay.bonusWord", "赠送")}</em>}
+                  {pack.bonus > 0 && <em> +{pack.bonus} {t("pay.bonusWord")}</em>}
                 </span>
               </span>
               <span className="pay-price">{money(en, pack.price, pack.priceUsd)}</span>
@@ -836,11 +823,11 @@ function CoinPackModal({ packs, onClose, onCheckout, onUpgrade, t, lang }: { pac
           ))}
         </div>
         <button className="pay-cta red" onClick={() => { void window.wuwei.track?.("buy_credits_click", { sku: p.sku, price: p.price, dwell_ms: dwell() }); onCheckout(p); }}>
-          {t("pay.coinpack.ctaPrefix", "确认购买")} {money(en, p.price, p.priceUsd)}
+          {t("pay.coinpack.ctaPrefix")} {money(en, p.price, p.priceUsd)}
         </button>
         <div className="pay-cancel">
           <button onClick={onUpgrade} style={{ color: "#A97F2E", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <PaySpark size={12} /> {t("pay.coinpack.upgrade", "升级会员 · 更多优惠 →")}
+            <PaySpark size={12} /> {t("pay.coinpack.upgrade")}
           </button>
         </div>
       </div>
@@ -850,10 +837,10 @@ function CoinPackModal({ packs, onClose, onCheckout, onUpgrade, t, lang }: { pac
 
 // ③ 升级无为 Pro（金系）：档位选择 + 2×2 权益；CN 走扫码，EN 走网页 Paddle 结账。
 function PlanModal({ onClose, onCheckout, t, lang }: { onClose: () => void; onCheckout: (plan: ProPlan) => void; t: T; lang: Lang }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const [sel, setSel] = useState<ProPlan["id"]>("pro5x");
   const selPlan = PRO_PLANS.find((x) => x.id === sel)!;
-  const feats = en ? PRO_FEATS_EN : PRO_FEATS;
+  const feats = PRO_FEATS();
   const shownAt = useRef(Date.now()); // 弹窗打开时刻，算停留时长
   const dwell = () => Date.now() - shownAt.current;
   // 叉掉/点空白关闭（未购买）：记停留时长，后台据此看「看了多久就走」
@@ -864,8 +851,8 @@ function PlanModal({ onClose, onCheckout, t, lang }: { onClose: () => void; onCh
         <PayCloseX onClick={close} />
         <div className="pay-top">
           <PayEnso />
-          <h2>{t("pay.plan.title", "升级无为 Pro")}</h2>
-          <p>{t("pay.plan.sub", "托管额度、专属客服、多任务并行。用得越多，选越高档越划算。")}</p>
+          <h2>{t("pay.plan.title")}</h2>
+          <p>{t("pay.plan.sub")}</p>
         </div>
         <div className="pay-plans">
           {PRO_PLANS.map((plan) => (
@@ -906,10 +893,10 @@ function PlanModal({ onClose, onCheckout, t, lang }: { onClose: () => void; onCh
           ))}
         </div>
         <button className="pay-cta gold" onClick={() => { void window.wuwei.track?.("upgrade_member_click", { plan: selPlan.name, dwell_ms: dwell() }); onCheckout(selPlan); }}>
-          {t("pay.plan.cta", "升级 {name} ¥{p}/月").replace("{name}", en ? selPlan.nameEn : selPlan.name).replace("{p}", en ? String(selPlan.priceUsd) : String(selPlan.price))}
+          {t("pay.plan.cta").replace("{name}", en ? selPlan.nameEn : selPlan.name).replace("{p}", en ? String(selPlan.priceUsd) : String(selPlan.price))}
         </button>
         <div className="pay-fnote">
-          <span className="ok">✓</span> {t("pay.plan.footAny", "随时可升级")}　<span className="ok">✓</span> {t("pay.plan.footSame", "功能权益与官网一致")}
+          <span className="ok">✓</span> {t("pay.plan.footAny")}　<span className="ok">✓</span> {t("pay.plan.footSame")}
         </div>
       </div>
     </div>
@@ -943,7 +930,7 @@ type PayOrder = { kind: "pack"; pack: CoinPack } | { kind: "plan"; plan: ProPlan
 // 支付宝图标：官方矢量 logo(蓝底+白色变形"支"，来源 Simple Icons)。.ico 仅 32px 高分屏会糊，用 SVG 保清晰
 function AlipayMark() {
   return (
-    <svg width="34" height="34" viewBox="0 0 24 24" style={{ borderRadius: 9, flex: "0 0 auto", display: "block" }} role="img" aria-label={getLang() === "en" ? "Alipay" : "支付宝"}>
+    <svg width="34" height="34" viewBox="0 0 24 24" style={{ borderRadius: 9, flex: "0 0 auto", display: "block" }} role="img" aria-label={tr("ui.app.alipay.8f0430e")}>
       <rect width="24" height="24" rx="4" fill="#fff" />
       <path fill="#1677FF" d="M19.695 15.07c3.426 1.158 4.203 1.22 4.203 1.22V3.846c0-2.124-1.705-3.845-3.81-3.845H3.914C1.808.001.102 1.722.102 3.846v16.31c0 2.123 1.706 3.845 3.813 3.845h16.173c2.105 0 3.81-1.722 3.81-3.845v-.157s-6.19-2.602-9.315-4.119c-2.096 2.602-4.8 4.181-7.607 4.181-4.75 0-6.361-4.19-4.112-6.949.49-.602 1.324-1.175 2.617-1.497 2.025-.502 5.247.313 8.266 1.317a16.796 16.796 0 0 0 1.341-3.302H5.781v-.952h4.799V6.975H4.77v-.953h5.81V3.591s0-.409.411-.409h2.347v2.84h5.744v.951h-5.744v1.704h4.69a19.453 19.453 0 0 1-1.986 5.06c1.424.52 2.702 1.011 3.654 1.333m-13.81-2.032c-.596.06-1.71.325-2.321.869-1.83 1.608-.735 4.55 2.968 4.55 2.151 0 4.301-1.388 5.99-3.61-2.403-1.182-4.438-2.028-6.637-1.809" />
     </svg>
@@ -952,7 +939,7 @@ function AlipayMark() {
 // 微信支付图标：清晰矢量微信标（用户 .ico 仅 16px 会糊，改用 SVG）
 function WechatMark() {
   return (
-    <svg width="34" height="34" viewBox="0 0 48 48" style={{ borderRadius: 9, flex: "0 0 auto", display: "block" }} role="img" aria-label={getLang() === "en" ? "WeChat Pay" : "微信支付"}>
+    <svg width="34" height="34" viewBox="0 0 48 48" style={{ borderRadius: 9, flex: "0 0 auto", display: "block" }} role="img" aria-label={tr("ui.app.wechat.pay.2d4758a")}>
       <rect width="48" height="48" rx="12" fill="#07C160" />
       <path d="M20 12.5C12.8 12.5 7 17.2 7 23c0 3.3 1.9 6.2 4.9 8.1l-1.2 3.7 4.4-2.2c1.4.4 2.9.6 4.5.6.4 0 .9 0 1.3-.06-.3-1-.5-2-.5-3.1 0-6 5.6-10.8 12.6-10.8.5 0 1 .01 1.5.07C32.9 16.1 27 12.5 20 12.5z" fill="#fff" />
       <circle cx="15.5" cy="20.5" r="1.7" fill="#07C160" />
@@ -965,13 +952,13 @@ function WechatMark() {
 }
 // 下单错误码 → 用户可读文案
 function payErrMsg(code?: string): string {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   switch (code) {
-    case "wechat_not_ready": return en ? "WeChat Pay coming soon, please use Alipay for now" : "微信支付即将开通，请先用支付宝";
-    case "not_logged_in": return en ? "Session expired, please sign in again" : "登录已过期，请重新登录后再试";
-    case "alipay_not_configured": return en ? "Payment not available yet, please try later" : "支付暂未开通，请稍后再试";
-    case "unknown_sku": return en ? "This option isn't available for purchase" : "该档位暂不可购买";
-    default: return en ? "Order failed, please retry" : "下单失败，请稍后重试";
+    case "wechat_not_ready": return tr("ui.app.wechat.pay.coming.soon.please.use.e8fd1e0");
+    case "not_logged_in": return tr("ui.app.session.expired.please.sign.in.again.3fe1fbd");
+    case "alipay_not_configured": return tr("ui.app.payment.not.available.yet.please.try.fc7c2a4");
+    case "unknown_sku": return tr("ui.app.this.option.isn.available.for.purchase.f45f9c3");
+    default: return tr("ui.app.order.failed.please.retry.5c45517");
   }
 }
 // 微信支付开关：微信商户尚未开通，先隐藏，只留支付宝；开通后翻成 true 即恢复。
@@ -997,9 +984,9 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: 10 }}>
           <PayEnso size={40} />
-          <h2 style={{ marginTop: 10 }}>{t("pay.support.title", "联系客服")}</h2>
+          <h2 style={{ marginTop: 10 }}>{t("pay.support.title")}</h2>
           <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "6px 0 0", lineHeight: 1.5 }}>
-            {getLang() === "en" ? "We're here to help. Pick a way to reach us below." : "有问题随时找我们，选一种方式联系"}
+            {tr("ui.app.we.re.here.to.help.pick.c600ce2")}
           </p>
         </div>
         <div style={{ padding: "18px 30px 30px" }}>
@@ -1010,28 +997,26 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
             className="allow"
             style={{ display: "block", width: "100%", border: "none", background: "var(--spark)", color: "#fff", fontSize: 14, fontWeight: 600, borderRadius: 10, padding: "12px 0", cursor: "pointer", marginBottom: 20 }}
           >
-            {getLang() === "en" ? "Chat with support (live)" : "在线对话（实时收发）"}
+            {tr("ui.app.chat.with.support.live.3b049e0")}
           </button>
         )}
-        {getLang() === "en" ? (
+        {getLang() !== "zh" ? (
           // 英文版：海外不用微信，只给留言反馈入口
           <>
             <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 18px", lineHeight: 1.6 }}>
-              Having trouble? Leave us a message and we&apos;ll reply as soon as we can.
-            </p>
+              {tr("ui.shared.3d2c9c722f")}</p>
             <button
               onClick={onLeaveMessage}
               className="allow"
               style={{ border: "none", background: "var(--spark)", color: "#fff", fontSize: 14, fontWeight: 600, borderRadius: 10, padding: "10px 22px", cursor: "pointer" }}
             >
-              Leave a message
-            </button>
+              {tr("ui.shared.a7e65d46d2")}</button>
           </>
         ) : (
           // 中文版：客服微信二维码 + 微信号 + 加不上走留言
           <>
             <p style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "0 0 14px" }}>
-              {t("pay.support.hint", "遇到问题？扫码或搜索微信号，添加客服「大成」")}
+              {t("pay.support.hint")}
             </p>
             <div
               style={{
@@ -1048,9 +1033,9 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
               }}
             >
               {WECHAT_CS_QR ? (
-                <img src={WECHAT_CS_QR} alt={t("pay.support.qrAlt", "客服微信二维码")} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                <img src={WECHAT_CS_QR} alt={t("pay.support.qrAlt")} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
               ) : (
-                <span style={{ fontSize: 12, color: "#8A93A0" }}>{t("pay.support.qrAlt", "客服微信二维码")}</span>
+                <span style={{ fontSize: 12, color: "#8A93A0" }}>{t("pay.support.qrAlt")}</span>
               )}
             </div>
             <div
@@ -1065,21 +1050,21 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
               }}
             >
               <span style={{ fontSize: 13, color: "var(--text)" }}>
-                {t("pay.support.wechatId", "微信号")} <b style={{ letterSpacing: 0.5 }}>{WECHAT_CS_ID}</b>
+                {t("pay.support.wechatId")} <b style={{ letterSpacing: 0.5 }}>{WECHAT_CS_ID}</b>
               </span>
               <button
                 onClick={copyId}
                 style={{ border: "none", background: "var(--spark)", color: "#fff", fontSize: 12, borderRadius: 7, padding: "4px 10px", cursor: "pointer" }}
               >
-                {copied ? t("pay.support.copied", "已复制") : t("pay.support.copy", "复制")}
+                {copied ? t("pay.support.copied") : t("pay.support.copy")}
               </button>
             </div>
             <p style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
-              {t("pay.support.cantAddPre", "加不上微信？")}
+              {t("pay.support.cantAddPre")}
               <span onClick={onLeaveMessage} style={{ color: "var(--spark)", cursor: "pointer", fontWeight: 600 }}>
-                {t("pay.support.leaveLink", "直接留言")}
+                {t("pay.support.leaveLink")}
               </span>
-              {t("pay.support.cantAddPost", "，客服会尽快回复你。")}
+              {t("pay.support.cantAddPost")}
             </p>
           </>
         )}
@@ -1092,7 +1077,7 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
 // 在线客服：与客服的实时对话窗（轮询 support:thread）。用户发文字+图片，客服后台回复即刻显示在这里。
 // 需登录才能收到 threaded 回复（未登录仍可发，走留言，但回复不回流）。
 function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; loggedIn: boolean; t: T }) {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   const [msgs, setMsgs] = useState<{ id: number; sender: string; message: string; images: string[]; at: string }[]>([]);
   const [input, setInput] = useState("");
   const [imgs, setImgs] = useState<string[]>([]);
@@ -1141,7 +1126,7 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
     const optimistic = { id: tmpId.current--, sender: "user", message: text, images: imgs, at: new Date().toISOString() };
     setMsgs((p) => [...p, optimistic]);
     setInput(""); setImgs([]); setSending(true);
-    const r = await window.wuwei.supportChatSend({ message: text || (en ? "(image)" : "（图片）"), images: optimistic.images }).catch(() => null);
+    const r = await window.wuwei.supportChatSend({ message: text || (tr("ui.app.image.5bb4cb0")), images: optimistic.images }).catch(() => null);
     setSending(false);
     if (r?.ok !== false) {
       void load(true); // 拉权威列表，撤掉乐观占位(此时服务器已有这条)
@@ -1163,27 +1148,27 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
             <span className="sc-dot" />
           </div>
           <div className="sc-head-txt">
-            <div className="sc-title">{en ? "Wuwei Support" : "无为客服"}</div>
-            <div className="sc-sub"><span className="sc-online" />{en ? "Online · usually replies in minutes" : "在线 · 通常几分钟内回复"}</div>
+            <div className="sc-title">{tr("ui.app.wuwei.support.a5287af")}</div>
+            <div className="sc-sub"><span className="sc-online" />{tr("ui.app.online.usually.replies.in.minutes.00081d3")}</div>
           </div>
-          <button className="sc-close" onClick={onClose} aria-label="close">
+          <button className="sc-close" onClick={onClose} aria-label={tr("ui.shared.da38860cb8")}>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
         <div className="sc-list" ref={listRef}>
           {!loaded ? (
-            <div className="sc-empty">{en ? "Loading…" : "加载中…"}</div>
+            <div className="sc-empty">{tr("set.brain.warming")}</div>
           ) : msgs.length === 0 ? (
             <div className="sc-empty">
-              {en ? "Send us a message — describe your issue, attach a screenshot if it helps." : "有问题直接说 —— 可附上截图，客服会尽快回复。"}
-              {!loggedIn && <div className="sc-empty-hint">{en ? "Sign in so our replies show up here." : "登录后，客服的回复会显示在这里。"}</div>}
+              {tr("ui.app.send.us.message.describe.your.issue.e36b8dc")}
+              {!loggedIn && <div className="sc-empty-hint">{tr("ui.app.sign.in.so.our.replies.show.ca3511f")}</div>}
             </div>
           ) : (
             msgs.map((m) => (
               <div key={m.id} className={"sc-row " + (m.sender === "admin" ? "in" : "out")}>
                 <div className="sc-bubble" title={relTime(new Date(m.at).getTime(), Date.now())}>
                   {m.message && <div className="sc-txt">{m.message}</div>}
-                  {m.images?.map((src, i) => (<img key={i} src={src} className="sc-img" alt="" onClick={() => setPreview(src)} title={en ? "View" : "点开看大图"} />))}
+                  {m.images?.map((src, i) => (<img key={i} src={src} className="sc-img" alt="" onClick={() => setPreview(src)} title={tr("ui.app.view.04a9a94")} />))}
                 </div>
               </div>
             ))
@@ -1193,11 +1178,11 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
           <div className="sc-imgrow">{imgs.map((src, i) => (<div key={i} className="sc-thumb"><img src={src} alt="" onClick={() => setPreview(src)} /><button onClick={() => setImgs((p) => p.filter((_, j) => j !== i))}>×</button></div>))}</div>
         )}
         <div className="sc-input">
-          <button className="sc-attach" title={en ? "Attach image" : "发图片"} onClick={() => fileRef.current?.click()}>
+          <button className="sc-attach" title={tr("ui.app.attach.image.69653d9")} onClick={() => fileRef.current?.click()}>
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49" /></svg>
           </button>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { pickImgs(e.target.files); e.currentTarget.value = ""; }} />
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={en ? "Type a message… (paste screenshots directly)" : "输入消息…（可直接粘贴截图）"} rows={1}
+          <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={tr("ui.app.type.message.paste.screenshots.directly.0dfb24f")} rows={1}
             onPaste={(e) => {
               const items = e.clipboardData?.items;
               if (!items) return;
@@ -1206,13 +1191,13 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
               if (files.length) { e.preventDefault(); pickImgs(files); }
             }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-          <button className="sc-send" onClick={() => void send()} disabled={sending || (!input.trim() && imgs.length === 0)}>{en ? "Send" : "发送"}</button>
+          <button className="sc-send" onClick={() => void send()} disabled={sending || (!input.trim() && imgs.length === 0)}>{tr("ui.app.send.f1004bf")}</button>
         </div>
       </div>
       {preview && (
         <div className="sc-lightbox" onClick={(e) => { e.stopPropagation(); setPreview(null); }}>
           <img src={preview} alt="" onClick={(e) => e.stopPropagation()} />
-          <button className="sc-lb-close" onClick={(e) => { e.stopPropagation(); setPreview(null); }} aria-label="close">
+          <button className="sc-lb-close" onClick={(e) => { e.stopPropagation(); setPreview(null); }} aria-label={tr("ui.shared.da38860cb8")}>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
@@ -1243,7 +1228,7 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
     }
   };
   const submit = async () => {
-    if (!msg.trim()) return setErr(t("pay.msg.needContent", "请先填写留言内容"));
+    if (!msg.trim()) return setErr(t("pay.msg.needContent"));
     setPhase("sending");
     setErr("");
     try {
@@ -1251,11 +1236,11 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
       if (r?.ok) setPhase("done");
       else {
         setPhase("edit");
-        setErr(r?.error || t("pay.msg.submitFail", "提交失败，请稍后重试，或直接加客服微信 {id}").replace("{id}", WECHAT_CS_ID));
+        setErr(r?.error || t("pay.msg.submitFail").replace("{id}", WECHAT_CS_ID));
       }
     } catch {
       setPhase("edit");
-      setErr(t("pay.msg.submitFail", "提交失败，请稍后重试，或直接加客服微信 {id}").replace("{id}", WECHAT_CS_ID));
+      setErr(t("pay.msg.submitFail").replace("{id}", WECHAT_CS_ID));
     }
   };
   const inputStyle: React.CSSProperties = {
@@ -1276,20 +1261,20 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: 4 }}>
           <PayEnso size={40} />
-          <h2>{t("pay.msg.title", "留言反馈")}</h2>
+          <h2>{t("pay.msg.title")}</h2>
         </div>
         <div style={{ padding: "0 30px 28px" }}>
           {phase === "done" ? (
             <div style={{ textAlign: "center", padding: "18px 0 6px" }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{t("pay.msg.doneTitle", "✓ 留言已提交")}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{t("pay.msg.doneTitle")}</div>
               <div style={{ fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.7, marginBottom: 18 }}>
-                {t("pay.msg.doneDesc", "我们已收到你的留言，客服会尽快通过你留的联系方式回复你。")}
+                {t("pay.msg.doneDesc")}
               </div>
               <button
                 onClick={onClose}
                 style={{ width: "100%", padding: "10px", borderRadius: 10, border: "none", background: "var(--spark)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
               >
-                {t("pay.msg.done", "完成")}
+                {t("pay.msg.done")}
               </button>
             </div>
           ) : (
@@ -1302,14 +1287,14 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
                   <path d="M12 6.5l1 2 2.2.2-1.6 1.5.5 2.1L12 11.2 9.9 12.3l.5-2.1L8.8 8.7l2.2-.2z" />
                 </svg>
                 <span style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
-                  {t("pay.msg.rewardHint", "有价值的反馈被采纳后，可获无为币或会员奖励 🎁")}
+                  {t("pay.msg.rewardHint")}
                 </span>
               </div>
               <textarea
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
                 onPaste={onPaste}
-                placeholder={t("pay.msg.placeholder", "描述你遇到的问题（可直接粘贴截图）…")}
+                placeholder={t("pay.msg.placeholder")}
                 rows={4}
                 style={{ ...inputStyle, resize: "vertical", minHeight: 90, marginBottom: 10, lineHeight: 1.6 }}
               />
@@ -1321,7 +1306,7 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
                         src={src}
                         alt=""
                         onClick={() => setPreview(src)}
-                        title={t("pay.msg.viewLarge", "点击查看大图")}
+                        title={t("pay.msg.viewLarge")}
                         style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
                       />
                       <button
@@ -1334,21 +1319,21 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
                   ))}
                 </div>
               )}
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>{t("pay.msg.imgHint", "可在上方文本框内粘贴图片，最多 4 张")}</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>{t("pay.msg.imgHint")}</div>
               <input
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
-                placeholder={t("pay.msg.contactPlaceholder", "联系方式（微信 / 手机 / 邮箱，方便客服回复）")}
+                placeholder={t("pay.msg.contactPlaceholder")}
                 style={{ ...inputStyle, marginBottom: 10 }}
               />
-              {err && <div style={{ fontSize: 12, color: "#C0392B", marginBottom: 10, lineHeight: 1.5 }}>{err}</div>}
+              {err && <div style={{ fontSize: 12, color: "#C0392B", marginBottom: 10, lineHeight: 1.5 }}>{localizeStoredText(err, getCurrentLanguage())}</div>}
               <div style={{ display: "flex", gap: 10 }}>
                 {onBack && (
                   <button
                     onClick={onBack}
                     style={{ flex: "0 0 auto", padding: "10px 16px", borderRadius: 10, border: "1px solid var(--border)", background: "none", color: "var(--text-dim)", fontSize: 13, cursor: "pointer" }}
                   >
-                    {t("pay.msg.back", "返回")}
+                    {t("pay.msg.back")}
                   </button>
                 )}
                 <button
@@ -1356,7 +1341,7 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
                   disabled={phase === "sending"}
                   style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "var(--spark)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: phase === "sending" ? "default" : "pointer", opacity: phase === "sending" ? 0.7 : 1 }}
                 >
-                  {phase === "sending" ? t("pay.msg.sending", "提交中…") : t("pay.msg.submit", "提交留言")}
+                  {phase === "sending" ? t("pay.msg.sending") : t("pay.msg.submit")}
                 </button>
               </div>
             </>
@@ -1386,16 +1371,16 @@ type UserMessage = {
   createdAt: string;
 };
 function MessageCenterModal({ onClose, onRead, lang, t }: { onClose: () => void; onRead: (unread: number) => void; lang: string; t: T }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const [msgs, setMsgs] = useState<UserMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   // 分类元数据：标签 + 主题色（承 VI，语义化）
   const CATS: Record<string, { zh: string; en: string; color: string }> = {
-    system: { zh: "系统通知", en: "System", color: "#6B7280" },
-    reward: { zh: "奖励", en: "Reward", color: "#E67E22" },
-    activity: { zh: "活动", en: "Activity", color: "#3B82F6" },
-    feedback: { zh: "反馈回复", en: "Feedback", color: "#10B981" },
+    system: { get zh() { return tr("ui.catalog.app.9ab7824942"); }, get en() { return tr("ui.catalog.app.9ab7824942"); }, color: "#6B7280" },
+    reward: { get zh() { return tr("ui.app.message.6f3bd7a58c"); }, get en() { return tr("ui.app.message.6f3bd7a58c"); }, color: "#E67E22" },
+    activity: { get zh() { return tr("ui.catalog.app.95633d2c31"); }, get en() { return tr("ui.catalog.app.95633d2c31"); }, color: "#3B82F6" },
+    feedback: { get zh() { return tr("ui.catalog.app.7c0ec80bcf"); }, get en() { return tr("ui.catalog.app.7c0ec80bcf"); }, color: "#10B981" },
   };
   const catLabel = (c: string) => (CATS[c] ? (en ? CATS[c].en : CATS[c].zh) : c);
   const catColor = (c: string) => CATS[c]?.color || "#6B7280";
@@ -1421,16 +1406,16 @@ function MessageCenterModal({ onClose, onRead, lang, t }: { onClose: () => void;
     const d = new Date(iso).getTime();
     if (!d) return "";
     const s = Math.floor((Date.now() - d) / 1000);
-    if (s < 60) return en ? "just now" : "刚刚";
-    if (s < 3600) return `${Math.floor(s / 60)}${en ? "m ago" : " 分钟前"}`;
-    if (s < 86400) return `${Math.floor(s / 3600)}${en ? "h ago" : " 小时前"}`;
-    if (s < 2592000) return `${Math.floor(s / 86400)}${en ? "d ago" : " 天前"}`;
+    if (s < 60) return tr("rel.now");
+    if (s < 3600) return `${Math.floor(s / 60)}${tr("ui.app.ago.9ac2a1a")}`;
+    if (s < 86400) return `${Math.floor(s / 3600)}${tr("ui.app.ago.822d019")}`;
+    if (s < 2592000) return `${Math.floor(s / 86400)}${tr("ui.app.ago.5b0d8c8")}`;
     return new Date(iso).toLocaleDateString();
   };
   const rewardText = (r: NonNullable<UserMessage["reward"]>) => {
-    if (r.kind === "coins") return en ? `+${r.amount} coins` : `无为币 +${r.amount}`;
+    if (r.kind === "coins") return tr("ui.app.coins.77b72ff", { p0: r.amount });
     const plan = (r.plan || "Pro").replace(/^\w/, (c) => c.toUpperCase());
-    return en ? `${plan} +${r.amount}d` : `${plan} 会员 +${r.amount}天`;
+    return tr("ui.app.text.d1e0c2c", { p0: plan, p1: r.amount });
   };
   const cats = ["all", "system", "reward", "activity", "feedback"];
   const shown = filter === "all" ? msgs : msgs.filter((m) => m.category === filter);
@@ -1440,7 +1425,7 @@ function MessageCenterModal({ onClose, onRead, lang, t }: { onClose: () => void;
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: 4 }}>
           <PayEnso size={40} />
-          <h2>{en ? "Message Center" : "消息中心"}</h2>
+          <h2>{tr("ui.app.message.center.914789a")}</h2>
         </div>
         {/* 分类筛选 */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "0 30px 12px" }}>
@@ -1461,20 +1446,20 @@ function MessageCenterModal({ onClose, onRead, lang, t }: { onClose: () => void;
                   whiteSpace: "nowrap",
                 }}
               >
-                {c === "all" ? (en ? "All" : "全部") : catLabel(c)}
+                {c === "all" ? (tr("ui.app.all.bafb97c")) : catLabel(c)}
               </button>
             );
           })}
         </div>
         <div style={{ padding: "0 30px 28px", maxHeight: 440, overflowY: "auto" }}>
           {loading ? (
-            <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13, padding: "40px 0" }}>{en ? "Loading…" : "加载中…"}</div>
+            <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13, padding: "40px 0" }}>{tr("set.brain.warming")}</div>
           ) : shown.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 10, opacity: 0.6 }}>
                 <path d="M4 5h16v11H7l-3 3z" />
               </svg>
-              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{en ? "No messages yet" : "暂无消息"}</div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{tr("ui.app.no.messages.yet.b32a88a")}</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1517,23 +1502,23 @@ function BrainIntroModal({ onClose, onOpenMemory, t }: { onClose: () => void; on
   const feats: [React.ReactNode, string, string][] = [
     [
       <><path d="M12 3a4 4 0 0 0-4 4 3.5 3.5 0 0 0-1 6.8V17a3 3 0 0 0 5 2 3 3 0 0 0 5-2v-3.2A3.5 3.5 0 0 0 16 7a4 4 0 0 0-4-4Z" /><path d="M12 7v12" /></>,
-      t("pay.brain.f1t", "持续学习 · 长期记忆"),
-      t("pay.brain.f1s", "模拟人脑，把聊天里有价值的概念与经验自动沉淀进脑网络"),
+      t("pay.brain.f1t"),
+      t("pay.brain.f1s"),
     ],
     [
       <><path d="M9 12h6" /><path d="M8 8a4 4 0 0 0 0 8h1" /><path d="M16 8a4 4 0 0 1 0 8h-1" /></>,
-      t("pay.brain.f2t", "跨对话自动调用"),
-      t("pay.brain.f2s", "下次自动调用你的经验与记忆，不必重复交代"),
+      t("pay.brain.f2t"),
+      t("pay.brain.f2s"),
     ],
     [
       <><path d="M3 17l6-6 4 4 8-8" /><path d="M17 7h4v4" /></>,
-      t("pay.brain.f3t", "越用越懂你"),
-      t("pay.brain.f3s", "用得越久，脑网络越丰富，无为越理解你"),
+      t("pay.brain.f3t"),
+      t("pay.brain.f3s"),
     ],
     [
       <><path d="M6.5 8a3.5 3.5 0 1 0 0 7c2.5 0 3-2 5.5-3.5S17 8 19.5 8a3.5 3.5 0 1 1 0 7c-2.5 0-3-2-5.5-3.5S9 8 6.5 8Z" /></>,
-      t("pay.brain.f4t", "突破上下文限制"),
-      t("pay.brain.f4s", "记忆不受单次对话长度限制，越用你的脑网络越有价值"),
+      t("pay.brain.f4t"),
+      t("pay.brain.f4s"),
     ],
   ];
   return (
@@ -1549,8 +1534,8 @@ function BrainIntroModal({ onClose, onOpenMemory, t }: { onClose: () => void; on
               <circle cx="11" cy="15" r="1" fill="#C05F3C" stroke="none" />
             </svg>
           </div>
-          <h2>{t("pay.brain.title", "脑网络 · 无为的长期记忆")}</h2>
-          <p>{t("pay.brain.sub", "像人脑一样持续学习你的对话，把有价值的经验沉淀下来，跨对话自动调用——用得越久，无为越懂你。")}</p>
+          <h2>{t("pay.brain.title")}</h2>
+          <p>{t("pay.brain.sub")}</p>
         </div>
         <div style={{ padding: "4px 30px 20px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
@@ -1567,13 +1552,13 @@ function BrainIntroModal({ onClose, onOpenMemory, t }: { onClose: () => void; on
             ))}
           </div>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, color: "#A97F2E", background: "rgba(201,162,75,.12)", padding: "4px 12px", borderRadius: 20, marginBottom: 14 }}>
-            <PaySpark size={12} /> {t("pay.brain.free", "所有用户免费包含 · 模型调用按原渠道计费")}
+            <PaySpark size={12} /> {t("pay.brain.free")}
           </div>
           <button
             onClick={onOpenMemory}
             style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#c9a24b,#a97f2e)", color: "#fff", fontSize: 14.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 10px 22px -8px rgba(169,127,46,.6)" }}
           >
-            {t("pay.brain.open", "打开脑网络")}
+            {t("pay.brain.open")}
           </button>
         </div>
       </div>
@@ -1583,22 +1568,22 @@ function BrainIntroModal({ onClose, onOpenMemory, t }: { onClose: () => void; on
 // 付款页（国内支付宝/微信扫码）：向后端下单拿二维码串 → 渲染真 QR → 轮询订单状态，到账自动跳成功页。
 // 国外 Paddle 走托管结账(不自建卡表单)，待接 Paddle.js。
 function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogin }: { order: PayOrder; onClose: () => void; onPaid: (balance?: number, orderId?: string) => void; onContactSupport: () => void; onNeedLogin: () => void }) {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   const [method, setMethod] = useState<"ali" | "wx">("ali");
   const isPlan = order.kind === "plan";
   const sku = order.kind === "pack" ? order.pack.sku : order.plan.sku;
-  const title = order.kind === "pack" ? `${order.pack.coins.toLocaleString()} ${en ? "credits" : "无为币"}` : order.plan.name;
+  const title = order.kind === "pack" ? `${order.pack.coins.toLocaleString()} ${"credits"}` : order.plan.name;
   const gift =
     order.kind === "pack"
       ? order.pack.bonus > 0
-        ? `${en ? `+${order.pack.bonus} bonus · ${order.pack.descEn}` : `含赠送 ${order.pack.bonus} · ${order.pack.desc}`}`
+        ? `${tr("ui.app.bonus.57e62ee", { p0: order.pack.bonus, p1: (en ? order.pack.descEn : order.pack.desc) })}`
         : (en ? order.pack.descEn : order.pack.desc)
       : order.plan.note
-        ? `${en ? `${order.plan.subEn} · ${order.plan.noteEn}` : `${order.plan.sub} · ${order.plan.note}`}`
+        ? `${tr("ui.app.text.2171e40", { v0: (en ? undefined : order.plan.sub), v1: (en ? undefined : order.plan.note), v2: (en ? order.plan.subEn : undefined), v3: (en ? order.plan.noteEn : undefined) })}`
         : (en ? order.plan.subEn : order.plan.sub);
   const price = order.kind === "pack" ? order.pack.price : order.plan.price;
   const unit = isPlan ? (en ? order.plan.unitEn : order.plan.unit) : "";
-  const methodName = method === "ali" ? "支付宝" : "微信";
+  const methodName = method === "ali" ? tr("ui.app.alipay.8f0430e") : tr("ui.app.message.8117866388");
 
   const [qr, setQr] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -1624,7 +1609,7 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
         }
         setQr(r.qr); setOrderId(r.orderId); setPhase("ready");
       })
-      .catch(() => { if (alive) { setPhase("error"); setErrMsg(en ? "Network error, please retry" : "网络异常，请重试"); } });
+      .catch(() => { if (alive) { setPhase("error"); setErrMsg(tr("ui.app.network.error.please.retry.6411585")); } });
     return () => { alive = false; };
   }, [method, sku, reloadKey]);
 
@@ -1636,7 +1621,7 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
       const s = await window.wuwei.payStatus(orderId).catch(() => null);
       if (!alive || !s) return;
       if (s.status === "paid") { clearInterval(t); onPaid(s.balance, orderId); }
-      else if (s.status === "failed" || s.status === "expired") { clearInterval(t); setPhase("error"); setErrMsg(en ? "Order expired, please reorder" : "订单已失效，请重新下单"); }
+      else if (s.status === "failed" || s.status === "expired") { clearInterval(t); setPhase("error"); setErrMsg(tr("ui.app.order.expired.please.reorder.ff7ef45")); }
     }, 2500);
     return () => { alive = false; clearInterval(t); };
   }, [phase, orderId, onPaid]);
@@ -1647,7 +1632,7 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: 8 }}>
           <PayEnso size={46} />
-          <h2>{en ? "Confirm payment" : "确认支付"}</h2>
+          <h2>{tr("ui.app.confirm.payment.d4aa185")}</h2>
         </div>
         <div className={"paych-order" + (isPlan ? " gold" : "")}>
           <div className="paych-order-row">
@@ -1661,17 +1646,17 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
             </div>
           </div>
         </div>
-        <div className="paych-sect">{en ? "Choose payment method" : "选择支付方式"}</div>
+        <div className="paych-sect">{tr("ui.app.choose.payment.method.3bbc9db")}</div>
         <div className="paych-pays">
           <button className={"paych-pay" + (method === "ali" ? " sel-ali" : "")} onClick={() => setMethod("ali")}>
             <AlipayMark />
-            <span className="paych-pay-nm">{en ? "Alipay" : "支付宝"}</span>
+            <span className="paych-pay-nm">{tr("ui.app.alipay.8f0430e")}</span>
             <span className="paych-rd" />
           </button>
           {WECHAT_PAY_ENABLED && (
             <button className={"paych-pay" + (method === "wx" ? " sel-wx" : "")} onClick={() => setMethod("wx")}>
               <WechatMark />
-              <span className="paych-pay-nm">{en ? "WeChat Pay" : "微信支付"}</span>
+              <span className="paych-pay-nm">{tr("ui.app.wechat.pay.2d4758a")}</span>
               <span className="paych-rd" />
             </button>
           )}
@@ -1690,17 +1675,17 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
             <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, boxSizing: "border-box" }}>
               {/* 朱赭品牌色转圈(复用全局 tspin 动画) */}
               <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #ECEFF2", borderTopColor: "#C05F3C", animation: "tspin 0.8s linear infinite" }} />
-              <div style={{ fontSize: 12, color: "#8A93A0", whiteSpace: "nowrap" }}>{en ? "Generating QR code…" : "生成支付二维码…"}</div>
+              <div style={{ fontSize: 12, color: "#8A93A0", whiteSpace: "nowrap" }}>{tr("ui.app.generating.qr.code.d34f186")}</div>
             </div>
           )}
         </div>
         <div className="paych-qrtip">
           {phase === "ready" ? (
             en
-              ? <>Scan with <b style={{ color: method === "ali" ? "#1677FF" : "#07C160" }}>{method === "ali" ? "Alipay" : "WeChat"}</b> to pay ¥{price}, redirects automatically once received</>
-              : <>请使用 <b style={{ color: method === "ali" ? "#1677FF" : "#07C160" }}>{methodName}</b> 扫码支付 ¥{price}，到账后自动跳转</>
+              ? <>{tr("ui.shared.d676e828b0")}<b style={{ color: method === "ali" ? "#1677FF" : "#07C160" }}>{method === "ali" ? tr("ui.billingpanel.message.39270e4d9e") : tr("ui.app.message.8117866388")}</b> {tr("ui.shared.eee53c8ea8")}{price}{tr("ui.shared.2cad3d4d0f")}</>
+              : <>{tr("ui.app.message.e8eaee59ff")}<b style={{ color: method === "ali" ? "#1677FF" : "#07C160" }}>{methodName}</b> {tr("ui.app.message.fdab969728")}{price}{tr("ui.app.message.a8fd440aba")}</>
           ) : phase === "error" ? (
-            errDetail ? <span style={{ color: "#C0392B", wordBreak: "break-all" }}>{errDetail}</span> : (en ? "Try another method or retry later" : "换个支付方式或稍后重试")
+            errDetail ? <span style={{ color: "#C0392B", wordBreak: "break-all" }}>{errDetail}</span> : (tr("ui.app.try.another.method.or.retry.later.151d32f"))
           ) : ""}
         </div>
         {phase !== "loading" && (
@@ -1714,7 +1699,7 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
               <path d="M21 12a9 9 0 1 1-2.64-6.36" />
               <path d="M21 3v5h-5" />
             </svg>
-            {en ? "Refresh QR code" : "刷新二维码"}
+            {tr("ui.app.refresh.qr.code.224bf38")}
           </button>
         )}
         <div className="paych-secure">
@@ -1722,10 +1707,10 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
             <rect x="3" y="11" width="18" height="11" rx="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          {en ? <>Payment secured by <b>Alipay</b></> : <>支付安全由<b>支付宝</b>官方保障</>}
+          {en ? <>{tr("ui.shared.18dcde73a0")}<b>{tr("ui.billingpanel.message.39270e4d9e")}</b></> : <>{tr("ui.app.message.15af86a28c")}<b>{tr("ui.app.alipay.8f0430e")}</b>{tr("ui.app.message.944de25727")}</>}
         </div>
         <div className="paych-alt">
-          <button onClick={onContactSupport}>{en ? "Payment issue?" : "支付遇到问题？"}</button>
+          <button onClick={onContactSupport}>{tr("ui.app.payment.issue.ddafb72")}</button>
         </div>
       </div>
     </div>
@@ -1734,20 +1719,14 @@ function PayCheckoutModal({ order, onClose, onPaid, onContactSupport, onNeedLogi
 
 // 缺币付款弹窗：并排套餐(¥1体验/Pro/Plus/Max) + 积分包 tab，选中即出支付宝码(国内)/Paddle(海外)。
 // 缺币弹窗右侧「下单理由」：每条 = 加粗钩子 + 具体说明，精准戳付费点（顶级模型 / 更快 / 更多额度 / 记忆 / 省钱）。
-const PAYNOW_PERKS: [string, string][] = [
-  ["日常干活，优先省钱", "选择热门高性价比模型，让同一份额度完成更多任务"],
-  ["模型和费用看得清", "免费、高性价比、顶级、生图分类选择，不同模型消耗不同"],
-  ["按实际用量使用额度", "任务可能调用模型多次；查看价格后选择适合自己的模型"],
-  ["按需补充，不必换工具", "额度用完可选择充值，或在免费额度允许时切回免费模型"],
-  ["跨对话保存经验", "会员记忆功能帮助沉淀项目资料、代码习惯和任务经验"],
+const PAYNOW_PERKS = (): [string, string][] => [
+  [tr("ui.app.message.d9e6eb3900"), tr("ui.app.message.940aef5325")],
+  [tr("ui.app.message.c03fe0a52a"), tr("ui.app.message.680d9d213c")],
+  [tr("ui.app.message.932ce186c8"), tr("ui.app.message.1d3b654a65")],
+  [tr("ui.app.message.e0df3d0c6d"), tr("ui.app.message.776e287254")],
+  [tr("ui.app.message.ede191be25"), tr("ui.app.message.bda9921ec6")],
 ];
-const PAYNOW_PERKS_EN: [string, string][] = [
-  ["Spend less on everyday work", "Choose popular value models to complete more tasks with the same allowance."],
-  ["Clear model choices and prices", "Browse free, value, premium and image models. Usage costs differ by model."],
-  ["Allowance follows actual usage", "An agent task may make several model calls. Check prices before choosing."],
-  ["Top up when needed", "Add credits when your allowance runs out, or use free models while free allowance remains."],
-  ["Keep experience across chats", "Member memory helps retain project information, coding preferences and task experience."],
-];
+
 // 模型费用说明弹窗：免费/付费模型按平台分组，输入/输出/缓存命中价，可切无为币/人民币/美元。
 type PricingUnit = "coin" | "cny" | "usd";
 type PricingModel = { id: string; label: string; labelEn: string | null; free: boolean; inCoins: number | null; outCoins: number | null; hitCoins: number | null };
@@ -1755,10 +1734,10 @@ type PricingProvider = { id: string; label: string; labelEn: string | null; host
 type PricingData = { noteZh: string; noteEn: string; footerZh: string; footerEn: string; cnyPerCoin: number; coinPerUsd: number; providers: PricingProvider[] };
 
 function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: () => void; onContact: () => void }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const [data, setData] = useState<PricingData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [unit, setUnit] = useState<PricingUnit>(en ? "usd" : "coin");
+  const [unit, setUnit] = useState<PricingUnit>((getCurrentLanguage() === "zh" ? "coin" : "usd"));
   useEffect(() => {
     let stop = false;
     const fn = window.wuwei.modelPricing;
@@ -1776,13 +1755,13 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
   };
   const freeModels = (data?.providers ?? []).flatMap((p) => p.models.filter((m) => m.free).map((m) => ({ ...m, provider: p })));
   const paidProviders = (data?.providers ?? []).map((p) => ({ ...p, models: p.models.filter((m) => !m.free) })).filter((p) => p.models.length > 0);
-  const unitLabel = en ? { coin: "Coins", cny: "RMB", usd: "USD" } : { coin: "无为币", cny: "人民币", usd: "美元" };
+  const unitLabel = en ? { coin: "Coins", cny: "RMB", usd: "USD" } : { coin: tr("ui.app.message.0960356d1a"), cny: tr("ui.app.message.5509489a06"), usd: tr("ui.app.message.b4573f9c94") };
 
   return (
     <div className="modal-mask" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 14, width: "min(720px,96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
-          <b style={{ fontSize: 15 }}>{en ? "Model pricing" : "模型费用说明"}</b>
+          <b style={{ fontSize: 15 }}>{tr("ui.app.model.pricing.7d3da2e")}</b>
           <button onClick={onClose} style={{ border: "none", background: "none", color: "var(--text-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
         {/* 顶部说明（重要）：不在模型上挣钱，只赚会员/积分 */}
@@ -1790,7 +1769,7 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
           {en ? data?.noteEn ?? "" : data?.noteZh ?? ""}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px 0" }}>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{en ? "Unit (per 1M tokens)" : "单位（每百万 token）"}</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{tr("ui.app.unit.per.tokens.2c59d01")}</span>
           <div style={{ display: "inline-flex", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
             {(["coin", "cny", "usd"] as PricingUnit[]).map((u) => (
               <button key={u} onClick={() => setUnit(u)} style={{ padding: "4px 12px", fontSize: 12, border: "none", cursor: "pointer", background: unit === u ? "var(--spark)" : "transparent", color: unit === u ? "#fff" : "var(--text-dim)" }}>{unitLabel[u]}</button>
@@ -1798,13 +1777,13 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px 20px" }}>
-          {loading && <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 30 }}>{en ? "Loading…" : "加载中…"}</div>}
-          {!loading && !data && <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 30 }}>{en ? "Failed to load pricing." : "定价加载失败，请稍后再试。"}</div>}
+          {loading && <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 30 }}>{tr("set.brain.warming")}</div>}
+          {!loading && !data && <div style={{ color: "var(--text-muted)", textAlign: "center", padding: 30 }}>{tr("ui.app.failed.to.load.pricing.5c904f4")}</div>}
           {data && (
             <>
               {freeModels.length > 0 && (
                 <div style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", marginBottom: 8 }}>{en ? "Free models (0 cost)" : "免费模型（0 费用）"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", marginBottom: 8 }}>{tr("ui.app.free.models.cost.9b0c278")}</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {freeModels.map((m) => (
                       <span key={m.id} style={{ fontSize: 12.5, padding: "4px 10px", borderRadius: 999, background: "rgba(22,163,74,.12)", color: "#16a34a", border: "1px solid rgba(22,163,74,.3)" }}>{mLabel(m)}</span>
@@ -1821,10 +1800,10 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ color: "var(--text-muted)" }}>
-                          <th style={{ textAlign: "left", padding: "5px 8px", fontWeight: 600 }}>{en ? "Model" : "模型"}</th>
-                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{en ? "Input" : "输入"}</th>
-                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{en ? "Output" : "输出"}</th>
-                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{en ? "Cache hit" : "缓存命中"}</th>
+                          <th style={{ textAlign: "left", padding: "5px 8px", fontWeight: 600 }}>{tr("set.m.model")}</th>
+                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{tr("ui.app.input.eeace58")}</th>
+                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{tr("ui.app.output.1b67a33")}</th>
+                          <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 600 }}>{tr("ui.app.cache.hit.05568ff")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1846,7 +1825,7 @@ function ModelPricingModal({ lang, onClose, onContact }: { lang: Lang; onClose: 
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", fontSize: 12.5, color: "var(--text-dim)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           <span>{en ? data?.footerEn ?? "" : data?.footerZh ?? ""}</span>
-          <button onClick={onContact} style={{ flex: "0 0 auto", padding: "6px 14px", borderRadius: 8, border: "none", background: "var(--spark)", color: "#fff", fontSize: 12.5, cursor: "pointer" }}>{en ? "Message support" : "给客服留言"}</button>
+          <button onClick={onContact} style={{ flex: "0 0 auto", padding: "6px 14px", borderRadius: 8, border: "none", background: "var(--spark)", color: "#fff", fontSize: 12.5, cursor: "pointer" }}>{tr("ui.app.message.support.02ca386")}</button>
         </div>
       </div>
     </div>
@@ -1887,7 +1866,7 @@ function TrialPayModal({
   const price = money(en, cur.price, cur.priceUsd);
   const unit = en ? cur.unitEn : cur.unit;
   // 积分包 tab 用积分包专属权益；会员 tab 用订阅权益。
-  const perks = isPack ? (en ? PACK_PERKS_EN : PACK_PERKS) : (en ? PAYNOW_PERKS_EN : PAYNOW_PERKS);
+  const perks = isPack ? (PACK_PERKS()) : (PAYNOW_PERKS());
   // 第一条「省钱锚定」按选中档动态：普通档对标各家 $20 订阅，顶级 Max 档对标 Claude Max / ChatGPT Pro 的 $200。
   const isMaxTier = cur.sku === "plan_pro_50x";
   const anchorDesc = en
@@ -1895,8 +1874,8 @@ function TrialPayModal({
       ? "Skip $200/mo for ChatGPT Pro, $200 for Claude Max, plus top-tier Gemini. Wuwei runs all of them."
       : "Skip paying $20 for ChatGPT, $20 for Claude, $20 for Gemini. Wuwei runs all of them."
     : isMaxTier
-      ? "别再 ChatGPT Pro 200刀、Claude Max 200刀、Gemini 顶配分开交，无为一份全给你"
-      : "别再 ChatGPT 20刀、Claude 20刀、Gemini 20刀分开交，无为一份全给你";
+      ? tr("ui.app.message.0446f1cb04")
+      : tr("ui.app.message.fa2d760187");
   const [qr, setQr] = useState("");
   const [orderId, setOrderId] = useState("");
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
@@ -1915,11 +1894,11 @@ function TrialPayModal({
         .then((r) => {
           if (!alive) return;
           if (r?.error === "not_logged_in") { onNeedLogin(); return; }
-          if (r?.error === "trial_used") { setPhase("error"); setErrMsg("你已用过体验包，换个套餐吧"); return; }
+          if (r?.error === "trial_used") { setPhase("error"); setErrMsg(tr("ui.app.message.4d46aa1230")); return; }
           if (!r || r.error || !r.qr || !r.orderId) { setPhase("error"); setErrMsg(payErrMsg(r?.error)); return; }
           setQr(r.qr); setOrderId(r.orderId); setPhase("ready");
         })
-        .catch(() => { if (alive) { setPhase("error"); setErrMsg("网络异常，请重试"); } });
+        .catch(() => { if (alive) { setPhase("error"); setErrMsg(tr("ui.app.message.b28de91e65")); } });
     }, 400);
     return () => { alive = false; clearTimeout(timer); };
   }, [en, reloadKey, cur.sku]);
@@ -1932,7 +1911,7 @@ function TrialPayModal({
       const s = await window.wuwei.payStatus(orderId).catch(() => null);
       if (!alive || !s) return;
       if (s.status === "paid") { clearInterval(t); onPaid(s.balance, orderId, cur); }
-      else if (s.status === "failed" || s.status === "expired") { clearInterval(t); setPhase("error"); setErrMsg(en ? "Order expired, reopen to retry" : "订单已失效，请重新打开"); }
+      else if (s.status === "failed" || s.status === "expired") { clearInterval(t); setPhase("error"); setErrMsg(tr("ui.app.order.expired.reopen.to.retry.2449e6a")); }
     }, 2500);
     return () => { alive = false; clearInterval(t); };
   }, [phase, orderId]);
@@ -1946,27 +1925,27 @@ function TrialPayModal({
       <div className="pay-card pay-card-wide" onClick={(e) => e.stopPropagation()}>
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: (context === "weekly" || context === "freecap") ? 16 : 2, paddingTop: 22 }}>
-          <h2>{context === "freecap" ? (en ? "Today's free quota is used up" : "今日免费额度用完啦") : context === "weekly" ? (en ? "This month's quota is used up" : "本月额度已用完") : context === "browse" ? (en ? "Choose your plan" : "选择你的套餐") : balance > 0 ? (en ? 'Not enough coins for this request' : '无为币余额不足') : (en ? "You're out of credits" : "无为币用完啦")}</h2>
+          <h2>{context === "freecap" ? (tr("ui.app.today.free.quota.is.used.up.3c1ec9e")) : context === "weekly" ? (tr("ui.app.this.month.quota.is.used.up.294cafa")) : context === "browse" ? (tr("ui.app.choose.your.plan.82aa935")) : balance > 0 ? (tr("ui.app.not.enough.coins.for.this.request.adb077c")) : (tr("ui.app.you.re.out.of.credits.f498091"))}</h2>
           <p>{context === "freecap"
             ? (en
-                ? <>Your free quota refreshes tomorrow. In a hurry? <button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>Upgrade your plan</button> or buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
-                : <>明天可继续使用免费额度。如果着急使用，可<button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>升级会员</button>或购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续使用。</>)
+                ? <>{tr("ui.shared.8e53ce83b4")}<button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>{tr("ui.shared.fcf42bc502")}</button> {tr("ui.shared.e162b9b3cf")}<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>{tr("ui.shared.213b00cf01")}</button> {tr("ui.shared.eac5ee69b9")}</>
+                : <>{tr("ui.app.message.a943cad769")}<button type="button" className="pay-inline-link" onClick={() => switchTab("plan")}>{tr("ui.app.message.710c4321b4")}</button>{tr("ui.app.message.29e7e2a8e7")}<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>{tr("ui.app.message.21d96f752c")}</button>{tr("ui.app.message.cd13e81811")}</>)
             : context === "weekly"
             ? (en
-                ? <>Your monthly quota is used up — it refreshes at your next billing cycle. In a hurry? Buy a <button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>credit pack</button> to keep going.</>
-                : <>您的本月额度已用完，将在下个订阅周期自动恢复。着急使用可购买<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>积分包</button>后继续。</>)
-            : context === "browse" ? (en ? "More allowance for everyday agent work. Choose value models first." : "更多额度用于日常 Agent 干活，优先选择高性价比模型。") : (en ? "Pick a plan to continue. Value models help your allowance last longer." : "选个套餐接着用，高性价比模型让额度用得更久。")}</p>
+                ? <>{tr("ui.shared.2519ac71b4")}<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>{tr("ui.shared.213b00cf01")}</button> {tr("ui.shared.eac5ee69b9")}</>
+                : <>{tr("ui.app.message.8a3113b8e6")}<button type="button" className="pay-inline-link" onClick={() => switchTab("pack")}>{tr("ui.app.message.21d96f752c")}</button>{tr("ui.app.message.88e4937ba4")}</>)
+            : context === "browse" ? (tr("ui.app.more.allowance.for.everyday.agent.work.e4f519a")) : (tr("ui.app.pick.plan.to.continue.value.models.533ff45"))}</p>
         </div>
 
         {/* weekly/freecap 态不显余额行：一句话说明已足够，余额对这两种场景无关或为0 */}
         {context !== "weekly" && context !== "freecap" && (
-          <div className="trial-bal-mini"><span className="pay-coin" /> {context === "browse" ? (en ? `Balance ${balance} credits` : `当前余额 ${balance} 无为币`) : (en ? `Balance ${balance} credits · upgrade to continue` : `当前余额 ${balance} 无为币 · 升级后即可继续`)}</div>
+          <div className="trial-bal-mini"><span className="pay-coin" /> {context === "browse" ? (tr("ui.app.balance.credits.85f86d9", { p0: formatCredits(balance) })) : (tr("ui.app.balance.credits.upgrade.to.continue.8b1d6e4", { p0: formatCredits(balance) }))}</div>
         )}
 
         {/* 顶部 tab：会员套餐 / 积分包，直接切换并排选项（替代原「改用积分包」跳窗） */}
         <div className="trial-tabs">
-          <button className={"trial-tab" + (tab === "plan" ? " on" : "")} onClick={() => switchTab("plan")}>{en ? "Membership" : "会员套餐"}</button>
-          <button className={"trial-tab" + (tab === "pack" ? " on" : "")} onClick={() => switchTab("pack")}>{en ? "Credit packs" : "积分包"}</button>
+          <button className={"trial-tab" + (tab === "plan" ? " on" : "")} onClick={() => switchTab("plan")}>{tr("ui.app.membership.c297b46")}</button>
+          <button className={"trial-tab" + (tab === "pack" ? " on" : "")} onClick={() => switchTab("pack")}>{tr("ui.app.credit.packs.850974e")}</button>
         </div>
 
         {/* 并排选项：默认选中，可切换；选中谁就驱动下方二维码/Paddle 与右侧详情 */}
@@ -1987,9 +1966,9 @@ function TrialPayModal({
                 {o.badge && <span className={"trial-plan-badge2 " + (o.badgeType || "")}>{en ? o.badgeEn : o.badge}</span>}
                 <span className="tpo-nm">{en ? o.nameEn : o.name}</span>
                 <span className="tpo-price">{money(en, o.price, o.priceUsd)}{(en ? o.unitEn : o.unit) ? <small>{en ? o.unitEn : o.unit}</small> : null}</span>
-                {listCn ? (<span className="tpo-save"><s>{en ? `$${listUsd}` : `¥${listCn}`}</s><em>{en ? `-${pct}%` : `省${pct}%`}</em></span>) : null}
-                <span className="tpo-coins">{o.kind === "trial" ? (en ? "7-day full Pro access" : "7 天 Pro 全功能畅用") : o.kind === "pack" ? (en ? "never expires" : "永久有效不清零") : (en ? `${o.coins.toLocaleString()} credits/mo` : `${o.coins.toLocaleString()} 无为币/月`)}</span>
-                <span className="tpo-sub">{o.kind === "plan" ? (en ? `${o.signin}/day check-in` : `每日签到 +${o.signin}`) : (en ? o.subEn : o.sub)}</span>
+                {listCn ? (<span className="tpo-save"><s>{tr("ui.app.text.2093f49", { v0: (en ? undefined : listCn), v1: (en ? listUsd : undefined) })}</s><em>{tr("ui.app.text.a33a173", { p0: pct })}</em></span>) : null}
+                <span className="tpo-coins">{o.kind === "trial" ? (tr("ui.app.day.full.pro.access.9390033")) : o.kind === "pack" ? (tr("ui.app.never.expires.cbabb19")) : (tr("ui.app.credits.mo.f65069c", { p0: o.coins.toLocaleString() }))}</span>
+                <span className="tpo-sub">{o.kind === "plan" ? (tr("ui.app.day.check.in.b008c71", { p0: o.signin })) : (en ? o.subEn : o.sub)}</span>
               </button>
             );
           })}
@@ -2012,8 +1991,7 @@ function TrialPayModal({
                     <div className="trial-pay-or">or</div>
                     <button className="trial-crypto-btn" onClick={() => { void window.wuwei.track?.("crypto_pay_click", { sku: cur.sku, price }); onCrypto(cur); }}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
-                      Pay with Crypto
-                    </button>
+                      {tr("ui.shared.b328e52dae")}</button>
                     <div className="trial-crypto-note">
                       {cur.priceUsd >= CRYPTO_MULTICOIN_USD
                         ? "USDT · BTC & more · works when cards fail"
@@ -2023,11 +2001,11 @@ function TrialPayModal({
                 )}
               </div>
             ) : phase === "ready" && qr ? (
-              <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">支付宝扫码 <b>{price}</b> · 自动到账</div></>
+              <><QRCodeSVG value={qr} size={168} level="M" marginSize={2} /><div className="trial-scan">{tr("ui.app.message.e75104e794")}<b>{price}</b> {tr("ui.app.message.73b322e3f9")}</div></>
             ) : phase === "error" ? (
-              <div className="trial-msg err"><span>{errMsg}</span><button onClick={() => setReloadKey((k) => k + 1)}>重试</button></div>
+              <div className="trial-msg err"><span>{errMsg}</span><button onClick={() => setReloadKey((k) => k + 1)}>{tr("ui.billingpanel.retry.2cd6945")}</button></div>
             ) : (
-              <div className="trial-msg"><div className="trial-spin" /><span>生成支付二维码…</span></div>
+              <div className="trial-msg"><div className="trial-spin" /><span>{tr("ui.app.message.559e9298e5")}</span></div>
             )}
           </div>
           {/* 右：选中套餐详情 + 权益 + 联系客服 */}
@@ -2035,9 +2013,9 @@ function TrialPayModal({
             <div className="trial-plan-nm">{en ? cur.nameEn : cur.name}</div>
             <div className="trial-plan-price">{price}<small>{unit}</small></div>
             <ul className="trial-perks">{perks.map(([pt, pd], i) => (<li key={i}><Check /> <span><b>{pt}</b><em>{i === 0 && !isPack ? anchorDesc : pd}</em></span></li>))}</ul>
-            <div className="trial-note">{cur.saved ? (en ? `Save ¥${cur.saved}/mo vs Pro` : `比按 Pro 每月省 ¥${cur.saved}`) : (en ? cur.subEn : cur.sub)}</div>
+            <div className="trial-note">{cur.saved ? (tr("ui.app.save.mo.vs.pro.043364b", { p0: cur.saved })) : (en ? cur.subEn : cur.sub)}</div>
             <button className="trial-cs" onClick={onContact}>
-              {en ? "Payment issue? Contact support" : "支付遇到问题？联系客服"}
+              {tr("ui.app.payment.issue.contact.support.029c8ab")}
             </button>
           </div>
         </div>
@@ -2046,18 +2024,18 @@ function TrialPayModal({
         {en && (
           <div className="trial-crypto-foot">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.2v9.6M9.6 9.4h3.5a1.9 1.9 0 0 1 0 3.8H9.6M9.6 13.2h3.8a1.9 1.9 0 0 1 0 3.8H9.6" /></svg>
-            <span>Card declined? Pay with <b>crypto</b> (USDT / BTC) — available on <b>all plans</b> except the $1 trial. Small amounts: use Solana / BSC.</span>
+            <span>{tr("ui.shared.370420f322")}<b>{tr("ui.shared.44a9713350")}</b> {tr("ui.shared.6a5c6a922e")}<b>{tr("ui.shared.fd9b9842d2")}</b> {tr("ui.shared.31e27e629d")}</span>
           </div>
         )}
 
         {/* Claude/GPT 订阅改绑：放到最底部(不占主推位)，直连自己的订阅、不扣无为币 */}
         {rebind && (
           <button className="pay-opt pay-opt-plan trial-rebind" onClick={onRebind}>
-            <span className="pay-badge">{en ? "No credits" : "不扣币"}</span>
+            <span className="pay-badge">{tr("ui.app.no.credits.a3e0882")}</span>
             <span className="pay-oi"><PaySpark size={18} /></span>
             <span style={{ minWidth: 0 }}>
-              <span className="pay-ot">{en ? `Continue with ${rebind.label}` : `改用${rebind.label}继续`}</span>
-              <span className="pay-os" style={{ display: "block" }}>{en ? "Direct to your subscription, no credits used" : "直连你的订阅账号 · 不消耗无为币"}</span>
+              <span className="pay-ot">{tr("ui.app.continue.with.6da12ef", { p0: rebind.label })}</span>
+              <span className="pay-os" style={{ display: "block" }}>{tr("ui.app.direct.to.your.subscription.no.credits.f2c129c")}</span>
             </span>
             <span className="pay-arr"><PayArrow /></span>
           </button>
@@ -2066,9 +2044,9 @@ function TrialPayModal({
         <div className="pay-foot trial-foot">
           <button className="pay-foot__faq" onClick={onFaq}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.4 9a2.6 2.6 0 0 1 5 1c0 1.7-2.4 2-2.4 3.5" /><path d="M12 17.2h.01" /></svg>
-            {en ? "FAQ" : "常见问题"}
+            {tr("ui.app.faq.6cbae94")}
           </button>
-          <button onClick={onClose}>{en ? "Not now" : "暂不需要"}</button>
+          <button onClick={onClose}>{tr("ui.app.not.now.73bb3dc")}</button>
         </div>
       </div>
     </div>
@@ -2077,40 +2055,40 @@ function TrialPayModal({
 // 缺币弹窗「常见问题」：高频疑问，降低下单顾虑。问题结构参考同行(Raphael)但按无为实际改写。
 const PAY_FAQ: { q: string; qEn: string; a: string; aEn: string }[] = [
   {
-    q: "为什么要订阅无为会员？",
-    qEn: "Why subscribe to Wuwei?",
-    a: "会员提供所选套餐的托管额度，可按任务选择客户端当前可用的模型，按实际用量扣除。长期记忆与脑网络对所有用户免费包含；目前不承诺固定响应速度、优先队列或套餐并发数量。",
-    aEn: "Membership includes the selected hosted allowance. Choose from models available in the app, metered by actual usage. Long-term memory and Brain are included free for everyone. Fixed response speeds, priority queues and tiered concurrency are not currently promised.",
+    get q() { return tr("ui.app.message.7352ce09d8"); },
+    get qEn() { return tr("ui.app.message.7352ce09d8"); },
+    get a() { return tr("ui.catalog.app.3fbf838b6d"); },
+    get aEn() { return tr("ui.catalog.app.3fbf838b6d"); },
   },
   {
-    q: "可以随时更换套餐或取消吗？",
-    qEn: "Can I change or cancel anytime?",
-    a: "可以。国内按月单次开通、不会自动扣费，不想续下个月不买即可；海外 Paddle 订阅可随时在管理页取消，当期权益保留到到期。想升更高档随时生效。",
-    aEn: "Yes. In China plans are one-time monthly purchases with no auto-charge, so just skip the renewal. Overseas Paddle subscriptions can be cancelled anytime in the portal, and your benefits stay active until the period ends. Upgrades take effect right away.",
+    get q() { return tr("ui.catalog.app.64f50df6e9"); },
+    get qEn() { return tr("ui.catalog.app.64f50df6e9"); },
+    get a() { return tr("ui.catalog.app.3359440ab6"); },
+    get aEn() { return tr("ui.catalog.app.3359440ab6"); },
   },
   {
-    q: "无为币是什么？会过期吗？",
-    qEn: "What are Wuwei coins? Do they expire?",
-    a: "无为币是用量单位（100 币 = ¥1）。订阅每月发放固定额度、每天签到还能再领；订阅额度按周期刷新，单独购买的积分包永久有效。",
-    aEn: "Wuwei coins are the usage unit (100 coins = ¥1). Subscriptions grant a monthly quota plus daily check-in rewards; subscription quota refreshes each cycle, while separately bought credit packs never expire.",
+    get q() { return tr("ui.app.message.72ac8e6c3f"); },
+    get qEn() { return tr("ui.app.message.72ac8e6c3f"); },
+    get a() { return tr("ui.catalog.app.4f49d38c06"); },
+    get aEn() { return tr("ui.catalog.app.4f49d38c06"); },
   },
   {
-    q: "¥1 体验和正式会员有什么区别？",
-    qEn: "How is the ¥1 trial different from membership?",
-    a: "¥1 体验是 7 天 Pro 全功能试用，每个账号首次可享，用来先试爽；正式会员是按月持续的额度 + 更快响应 + 更多权益。",
-    aEn: "The ¥1 trial is a one-time 7-day full Pro experience per account, to try things out first. Membership is the ongoing monthly quota with faster responses and more perks.",
+    get q() { return tr("ui.catalog.app.28f78cff7a"); },
+    get qEn() { return tr("ui.catalog.app.28f78cff7a"); },
+    get a() { return tr("ui.catalog.app.55bd39cbde"); },
+    get aEn() { return tr("ui.catalog.app.55bd39cbde"); },
   },
   {
-    q: "支付安全吗？支持哪些方式？",
-    qEn: "Is payment secure? What methods?",
-    a: "国内走支付宝官方通道，海外走 Paddle，全程不保存你的银行卡信息，到账后自动开通。",
-    aEn: "Payments go through Alipay (China) or Paddle (overseas). We never store your card details, and access is activated automatically once paid.",
+    get q() { return tr("ui.catalog.app.86070fb727"); },
+    get qEn() { return tr("ui.catalog.app.86070fb727"); },
+    get a() { return tr("ui.catalog.app.f38bddd62f"); },
+    get aEn() { return tr("ui.catalog.app.f38bddd62f"); },
   },
   {
-    q: "能退款吗？遇到问题怎么办？",
-    qEn: "Refunds? What if something goes wrong?",
-    a: "数字商品原则上不支持退款；支付或使用遇到任何问题，点弹窗里的「联系客服」或发邮件给我们，会尽快处理。",
-    aEn: "As a digital product, purchases are generally non-refundable. If anything goes wrong with payment or usage, tap “Contact support” in the popup or email us and we'll help fast.",
+    get q() { return tr("ui.catalog.app.924de37425"); },
+    get qEn() { return tr("ui.catalog.app.924de37425"); },
+    get a() { return tr("ui.catalog.app.d55394651d"); },
+    get aEn() { return tr("ui.catalog.app.d55394651d"); },
   },
 ];
 
@@ -2120,8 +2098,8 @@ function PayFaqModal({ en, onClose }: { en: boolean; onClose: () => void }) {
       <div className="pay-card pay-faq-card" onClick={(e) => e.stopPropagation()}>
         <PayCloseX onClick={onClose} />
         <div className="pay-top" style={{ paddingBottom: 8, paddingTop: 24 }}>
-          <h2>{en ? "Common questions" : "常见问题"}</h2>
-          <p>{en ? "Quick answers before you subscribe" : "订阅前，先看看这几个"}</p>
+          <h2>{tr("ui.app.common.questions.30949d0")}</h2>
+          <p>{tr("ui.app.quick.answers.before.you.subscribe.b254e89")}</p>
         </div>
         <div className="pay-faq-list">
           {PAY_FAQ.map((f, i) => (
@@ -2132,7 +2110,7 @@ function PayFaqModal({ en, onClose }: { en: boolean; onClose: () => void }) {
           ))}
         </div>
         <div className="pay-faq-foot">
-          <button onClick={onClose}>{en ? "← Back to plans" : "← 返回支付"}</button>
+          <button onClick={onClose}>{tr("ui.app.back.to.plans.471e3a6")}</button>
         </div>
       </div>
     </div>
@@ -2146,7 +2124,7 @@ type PayResult =
   | { kind: "fail" };
 // 支付结果页：积分到账 / Pro 月付·年付开通 / 失败。真实由 webhook 驱动，此处按订单即时展示。
 function PayResultModal({ result, onClose, onRetry }: { result: PayResult; onClose: () => void; onRetry: () => void }) {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   return (
     <div className="perm-overlay pay-overlay" onClick={onClose}>
       <div className={"pay-card payres-card" + (result.kind === "pro" ? " pro" : "")} onClick={(e) => e.stopPropagation()}>
@@ -2157,22 +2135,22 @@ function PayResultModal({ result, onClose, onRetry }: { result: PayResult; onClo
               <div className="payres-mark ok">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#3E9E6E" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
               </div>
-              <div className="payres-ttl">{en ? "Payment successful" : "支付成功"}</div>
-              <div className="payres-desc">{en ? "Credits added. Enjoy Wuwei hosted models." : "无为币已到账，尽情使用无为托管模型"}</div>
+              <div className="payres-ttl">{tr("ui.app.payment.successful.e925929")}</div>
+              <div className="payres-desc">{tr("ui.app.credits.added.enjoy.wuwei.hosted.models.3a573dc")}</div>
             </div>
             <div className="payres-box">
-              <div className="payres-b1">{en ? "Added this time" : "本次到账"}</div>
+              <div className="payres-b1">{tr("ui.app.added.this.time.34f7f84")}</div>
               <div className="payres-b2">
                 <span className="pay-coin" /> +{result.added.toLocaleString()}
-                <span className="u">{en ? "credits" : "无为币"}</span>
+                <span className="u">{tr("pay.credits")}</span>
               </div>
               <div className="payres-b3">
-                <span>{result.bonus > 0 ? (en ? `+${result.bonus} bonus` : `含赠送 ${result.bonus}`) : (en ? "instant" : "即充即用")}</span>
-                <span>{en ? "Balance" : "当前余额"} <b>{result.balance.toLocaleString()}</b></span>
+                <span>{result.bonus > 0 ? (tr("ui.app.bonus.138f1c2", { p0: result.bonus })) : ("instant")}</span>
+                <span>{tr("ui.app.balance.9a789b2")} <b>{formatCredits(result.balance)}</b></span>
               </div>
             </div>
-            <div className="payres-btns"><button className="payres-btn pri ok" onClick={onClose}>{en ? "Start using" : "开始使用"}</button></div>
-            {result.order && <div className="payres-foot">{en ? `Order ${result.order}` : `订单号 ${result.order}`}</div>}
+            <div className="payres-btns"><button className="payres-btn pri ok" onClick={onClose}>{tr("ui.app.start.using.97dac85")}</button></div>
+            {result.order && <div className="payres-foot">{tr("ui.app.order.7545718", { p0: result.order })}</div>}
           </>
         )}
         {result.kind === "pro" && (
@@ -2182,25 +2160,25 @@ function PayResultModal({ result, onClose, onRetry }: { result: PayResult; onClo
                 <svg viewBox="0 0 24 24" fill="none" stroke="#A97F2E" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
               </div>
               <div className="payres-ttl">
-                {en ? "Activated" : "开通成功"} <span className="payres-pill"><PaySpark size={11} /> {result.planName}</span>
+                {tr("ui.app.activated.ed14381")} <span className="payres-pill"><PaySpark size={11} /> {result.planName}</span>
               </div>
               <div className="payres-desc">
-                {en ? `${result.planName} activated. Enjoy all member benefits.` : `${result.planName} 已开通，尊享全部会员权益`}
+                {tr("ui.app.activated.enjoy.all.member.benefits.3d4548f", { p0: result.planName })}
               </div>
             </div>
             <div className="payres-box gold">
-              <div className="payres-b1">{en ? "Valid until" : "会员有效期"}</div>
-              <div className="payres-b2">{en ? result.expire : `至 ${result.expire}`}</div>
+              <div className="payres-b1">{tr("ui.app.valid.until.57a5106")}</div>
+              <div className="payres-b2">{en ? result.expire : tr("ui.app.message.a364cced73", {p0: result.expire})}</div>
               <div className="payres-b3">
-                <span>{en ? `Daily check-in ${result.signin}` : `每日签到 ${result.signin}`}</span>
+                <span>{tr("ui.app.daily.check.in.b2563fd", { p0: result.signin })}</span>
               </div>
             </div>
             <div className="payres-perks">
               {result.perks.map((pk) => (<span key={pk}>{pk}</span>))}
             </div>
-            <div className="payres-btns"><button className="payres-btn pri gold" onClick={onClose}>{en ? "Start using" : "开始使用"}</button></div>
+            <div className="payres-btns"><button className="payres-btn pri gold" onClick={onClose}>{tr("ui.app.start.using.97dac85")}</button></div>
             <div className="payres-foot">
-              {result.saved ? (en ? `Saved ¥${result.saved} · order ${result.order}` : `已省 ¥${result.saved} · 订单号 ${result.order}`) : (en ? "We'll remind you before renewal" : "到期前提醒续费")}
+              {result.saved ? (tr("ui.app.saved.order.b97186a", { p0: result.saved, p1: result.order })) : (tr("ui.app.we.ll.remind.you.before.renewal.705e393"))}
             </div>
           </>
         )}
@@ -2210,18 +2188,18 @@ function PayResultModal({ result, onClose, onRetry }: { result: PayResult; onClo
               <div className="payres-mark err">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#C0483C" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
               </div>
-              <div className="payres-ttl err">{en ? "Payment not completed" : "支付未完成"}</div>
-              <div className="payres-desc">{en ? "This order wasn't charged. Retry or try another method." : "这笔订单没有扣款，可重新支付或换个方式"}</div>
+              <div className="payres-ttl err">{tr("ui.app.payment.not.completed.a4d8e0e")}</div>
+              <div className="payres-desc">{tr("ui.app.this.order.wasn.charged.retry.or.6b7894a")}</div>
             </div>
             <div className="payres-reason">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
-              <span>{en ? "Possible causes: payment timeout, cancellation, or bank decline. If charged, you'll be refunded to the original method." : "可能原因：支付超时、主动取消或银行未通过。若已扣款，费用原路退回。"}</span>
+              <span>{tr("ui.app.possible.causes.payment.timeout.cancellation.or.b8c76b1")}</span>
             </div>
             <div className="payres-btns">
-              <button className="payres-btn pri err" onClick={onRetry}>{en ? "Pay again" : "重新支付"}</button>
-              <button className="payres-btn ghost" onClick={onRetry}>{en ? "Change method" : "更换支付方式"}</button>
+              <button className="payres-btn pri err" onClick={onRetry}>{tr("ui.app.pay.again.8a454d5")}</button>
+              <button className="payres-btn ghost" onClick={onRetry}>{tr("ui.app.change.method.0bb3d1c")}</button>
             </div>
-            <div className="payres-foot">{en ? "Still stuck? Contact support" : "仍有问题？联系客服"}</div>
+            <div className="payres-foot">{tr("ui.app.still.stuck.contact.support.7195b13")}</div>
           </>
         )}
       </div>
@@ -2250,7 +2228,7 @@ function RoomSettingsModal({
     if (saving) return;
     setSaving(true);
     await onSave({
-      name: name.trim() || (en ? "New group" : "新群"),
+      name: name.trim() || (tr("ui.app.new.group.f8ac38c")),
       maxWake,
       coordinator: coordinator && (room.members || []).includes(coordinator) ? coordinator : undefined,
     });
@@ -2258,27 +2236,27 @@ function RoomSettingsModal({
   return (
     <div className="perm-overlay" onClick={onClose}>
       <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
-        <h3>{en ? "Group settings" : "群设置"}</h3>
+        <h3>{tr("ui.app.group.settings.d861667")}</h3>
         <div className="st-field">
-          <label className="st-label">{en ? "Group name" : "群名"}</label>
+          <label className="st-label">{tr("ui.app.group.name.8498dfd")}</label>
           <input
             className="st-input"
             value={name}
             maxLength={40}
-            placeholder={en ? "Group name" : "给群起个名字"}
+            placeholder={tr("ui.app.group.name.7833ae9")}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
           />
         </div>
         <div className="st-field">
-          <label className="st-label">{en ? "Max wake per message" : "最多同时唤醒"}</label>
+          <label className="st-label">{tr("ui.app.max.wake.per.message.1d3c1a7")}</label>
           <div className="rs-wake">
             <div className="rs-stepper">
-              <button type="button" className="rs-step" disabled={maxWake <= 1} aria-label={en ? "Decrease" : "减少"} onClick={() => setMaxWake((v) => clamp(v - 1))}>
+              <button type="button" className="rs-step" disabled={maxWake <= 1} aria-label={tr("ui.app.decrease.0f04f93")} onClick={() => setMaxWake((v) => clamp(v - 1))}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14" /></svg>
               </button>
               <span className="rs-wake-num">{maxWake}</span>
-              <button type="button" className="rs-step" disabled={maxWake >= 20} aria-label={en ? "Increase" : "增加"} onClick={() => setMaxWake((v) => clamp(v + 1))}>
+              <button type="button" className="rs-step" disabled={maxWake >= 20} aria-label={tr("ui.app.increase.e2580a8")} onClick={() => setMaxWake((v) => clamp(v + 1))}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               </button>
             </div>
@@ -2288,23 +2266,23 @@ function RoomSettingsModal({
               ))}
             </div>
           </div>
-          <p className="st-hint">{en ? "How many teammates one message can wake to work in parallel — more is faster but burns more credits." : "一条消息最多同时叫醒几个同事并行干活，多=更快但更烧额度。"}</p>
+          <p className="st-hint">{tr("ui.app.how.many.teammates.one.message.can.68c4f8f")}</p>
         </div>
         {members.length > 0 && (
           <div className="st-field">
-            <label className="st-label">{en ? "Coordinator" : "协调者"}</label>
+            <label className="st-label">{tr("ui.app.coordinator.457724f")}</label>
             <div className="rs-coord">
-              <button type="button" className={"rs-coord-item" + (!coordinator ? " on" : "")} onClick={() => setCoordinator(undefined)}>{en ? "None" : "不设"}</button>
+              <button type="button" className={"rs-coord-item" + (!coordinator ? " on" : "")} onClick={() => setCoordinator(undefined)}>{tr("ui.app.none.9b96d58")}</button>
               {members.map((m) => (
-                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{employeeLabel(m, en ? "en" : "zh")}</button>
+                <button type="button" key={m.id} className={"rs-coord-item" + (coordinator === m.id ? " on" : "")} onClick={() => setCoordinator(m.id)}>{employeeLabel(m, (getCurrentLanguage()))}</button>
               ))}
             </div>
-            <p className="st-hint">{en ? "The coordinator replies without being @-ed and helps split up the work. Leave as None so everyone needs an @." : "协调者无需 @ 也会响应，帮忙拆活派活。选「不设」则谁都得被 @ 才说话。"}</p>
+            <p className="st-hint">{tr("ui.app.the.coordinator.replies.without.being.ed.53ec16c")}</p>
           </div>
         )}
         <div className="btns">
-          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
-          <button className="allow" disabled={saving} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+          <button onClick={onClose}>{tr("set.st.cancel")}</button>
+          <button className="allow" disabled={saving} onClick={() => void save()}>{saving ? (tr("ui.app.saving.4c8592b")) : (tr("set.st.save"))}</button>
         </div>
       </div>
     </div>
@@ -2312,7 +2290,7 @@ function RoomSettingsModal({
 }
 // 一人公司设置面板（设置→「一人公司」独立模块）：CEO 把关 + 拍板倒计时 + 转派链层数。改动即存(team.configSet)，无需点保存。
 function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: boolean; onToggle: (v: boolean) => void }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const api = (window as any).wuwei?.team;
   const clampLv = (n: number) => Math.min(5, Math.max(1, Math.round(n) || 1));
   const clampSec = (n: number) => Math.min(60, Math.max(3, Math.round(n) || 10));
@@ -2337,24 +2315,22 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
   const onLevels = (n: number) => { const v = clampLv(n); setLevels(v); persist({ maxDmLevels: v }); };
   const onCeo = (id: string) => { setCeoId(id); persist({ ceoEmployeeId: id || null }); };
   const onSec = (n: number) => { const v = clampSec(n); setCeoSec(v); persist({ ceoDecideTimeoutSec: v }); };
-  const ceoName = employeeLabel(employees.find((e) => e.id === ceoId), en ? "en" : "zh", en ? "the CEO" : "CEO");
+  const ceoName = employeeLabel(employees.find((e) => e.id === ceoId), (getCurrentLanguage()), tr("ui.app.the.ceo.3ce4585"));
   // 部门 CRUD：改完以后端返回的 departments 为准(含成员互斥规整)。
   const applyDept = (r: any) => { if (r?.departments) setDepartments(r.departments); flash(); };
-  const deptCreate = () => api?.deptCreate?.({ name: en ? "New department" : "新部门", memberIds: [] }).then(applyDept).catch(() => {});
+  const deptCreate = () => api?.deptCreate?.({ name: tr("ui.app.new.department.30a5a9e"), memberIds: [] }).then(applyDept).catch(() => {});
   const deptUpdate = (id: string, patch: any) => api?.deptUpdate?.(id, patch).then(applyDept).catch(() => {});
   const deptDelete = (id: string) => api?.deptDelete?.(id).then(applyDept).catch(() => {});
-  const nameOf = (id: string) => employeeLabel(employees.find((e) => e.id === id), en ? "en" : "zh", id);
+  const nameOf = (id: string) => employeeLabel(employees.find((e) => e.id === id), (getCurrentLanguage()), id);
   return (
     <>
       {/* 模块总开关：置于一人公司模块顶部。关闭时主进程完全不参与(不注册 IPC、不读写数据目录)；
           开关即决定下方 CEO 把关/转派链/部门等设置与侧边栏入口是否生效。原先在「通用→可选模块」，已上移到此。 */}
       <div className="app-set-row" style={{ cursor: "default", marginBottom: teamOn ? "16px" : "4px" }}>
         <div className="app-set-text">
-          <div className="app-set-label">{en ? "Enable My Company" : "启用一人公司"}</div>
+          <div className="app-set-label">{tr("ui.app.enable.my.company.6aaddfc")}</div>
           <div className="app-set-hint">
-            {en
-              ? "Chat with AI teammates or bring them into a group to work together. On by default for new users."
-              : "与 AI 员工私聊，或建群一起完成任务。新用户默认开启。"}
+            {tr("ui.app.chat.with.ai.teammates.or.bring.f4f2819")}
           </div>
         </div>
         <input
@@ -2366,24 +2342,24 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
       </div>
       {!teamOn && (
         <div className="app-set-hint" style={{ opacity: 0.8 }}>
-          {en ? "Turn it on to configure CEO gatekeeping, transfer chain and departments." : "开启后可配置 CEO 把关、拍板倒计时、转派链与部门。"}
+          {tr("ui.app.turn.it.on.to.configure.ceo.d2f22fa")}
         </div>
       )}
       {teamOn && (<>
       <CompanyHistorySettings lang={lang} />
-      <div className="app-set-group">{en ? "CEO gatekeeping" : "CEO 把关"}</div>
+      <div className="app-set-group">{tr("ui.app.ceo.gatekeeping.edecead")}</div>
       {/* CEO 是谁 */}
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO" : "CEO（上级把关人）"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.ceo.9048083")}</div>
         <span style={{ flex: 1 }} />
         <select className="tc-input tc-select" style={{ maxWidth: 240 }} value={ceoId} onChange={(e) => onCeo(e.target.value)}>
-          <option value="">{en ? "Auto (CEO role / default team CEO)" : "自动识别（职位含 CEO / 名叫小笨）"}</option>
-          {employees.map((m: any) => <option key={m.id} value={m.id}>{employeeLabel(m, en ? "en" : "zh")}{m.title ? ` (${localizeEmployee(m, en ? "en" : "zh").title})` : ""}</option>)}
+          <option value="">{tr("ui.app.auto.ceo.role.default.team.ceo.5a7990c")}</option>
+          {employees.map((m: any) => <option key={m.id} value={m.id}>{employeeLabel(m, (getCurrentLanguage()))}{m.title ? ` (${localizeEmployee(m, (getCurrentLanguage())).title})` : ""}</option>)}
         </select>
       </div>
       {/* 拍板倒计时秒数 */}
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "CEO decision countdown" : "CEO 拍板倒计时"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.ceo.decision.countdown.7fc63a8")}</div>
         <span style={{ flex: 1 }} />
         <div className="set-field">
           <input
@@ -2394,17 +2370,15 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
             onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); onSec(Number(v) || 10); }}
             className="set-field-input"
           />
-          <span className="set-field-unit">{en ? "sec" : "秒"}</span>
+          <span className="set-field-unit">{tr("ui.app.sec.f3d066d")}</span>
         </div>
       </div>
       <div className="app-set-hint" style={{ marginBottom: "16px" }}>
-        {en
-          ? `When a teammate uses ask_user, ${ceoName} gets this long to decide. Decides in time → done automatically, you're not pinged. Can't decide (or times out) → it pops to you (the boss), and waits for you.`
-          : `员工用 ask_user 请示时，先给「${ceoName}」这么久拍板：能在时限内定 → 直接替员工定、不打扰你；拿不准或超时没定 → 才弹给你（董事长），并一直等你。`}
+        {tr("ui.app.when.teammate.uses.ask.user.gets.b39f425", { p0: ceoName })}
       </div>
-      <div className="app-set-group">{en ? "Transfer chain" : "转派链"}</div>
+      <div className="app-set-group">{tr("ui.app.transfer.chain.274f015")}</div>
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{en ? "Max transfer-chain levels" : "转派链最多层数"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.max.transfer.chain.levels.690c2c5")}</div>
         <span style={{ flex: 1 }} />
         <div className="set-field">
           <input
@@ -2415,41 +2389,37 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
             onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); onLevels(Number(v) || 1); }}
             className="set-field-input"
           />
-          <span className="set-field-unit">{en ? "levels" : "层"}</span>
+          <span className="set-field-unit">{tr("ui.app.levels.2967b4c")}</span>
         </div>
       </div>
       <div className="app-set-hint" style={{ marginBottom: "10px" }}>
-        {en
-          ? "How many teammates a single dm-transfer chain can involve (e.g. 3 = A→B→C). 1 disables transfers. Capped low to prevent loops and runaway cost."
-          : "员工之间私信转派最多能串几名同事（如 3 = 小笨→小码→小美）。设 1 = 不允许转派。层数有意设小，防止兜圈子和烧额度。"}
+        {tr("ui.app.how.many.teammates.single.dm.transfer.badb777")}
       </div>
 
       <div className="app-set-group" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span>{en ? "Departments" : "部门"}</span>
+        <span>{tr("ui.app.departments.cd7d6e1")}</span>
         <span style={{ flex: 1 }} />
-        <button type="button" className="tc-btn" style={{ fontSize: 12, padding: "3px 10px" }} onClick={deptCreate}>+ {en ? "New department" : "新建部门"}</button>
+        <button type="button" className="tc-btn" style={{ fontSize: 12, padding: "3px 10px" }} onClick={deptCreate}>+ {tr("ui.app.new.department.46ebda5")}</button>
       </div>
       <div className="app-set-hint" style={{ marginBottom: departments.length ? 10 : 0 }}>
-        {en
-          ? "Each teammate belongs to one department. Heads are marked in Contacts."
-          : "一名员工归属一个部门，负责人显示在通讯录中。"}
+        {tr("ui.app.each.teammate.belongs.to.one.department.c304691")}
       </div>
       {departments.map((d: any) => (
         <div key={d.id} className="dept-card">
           <div className="dept-card-row">
-            <DepartmentNameInput department={d} language={en ? "en" : "zh"} onSave={name => deptUpdate(d.id, { name })} />
-            <button type="button" className="tc-btn-ghost danger" style={{ fontSize: 12 }} onClick={() => deptDelete(d.id)}>{en ? "Delete" : "删除"}</button>
+            <DepartmentNameInput department={d} language={(getCurrentLanguage())} onSave={name => deptUpdate(d.id, { name })} />
+            <button type="button" className="tc-btn-ghost danger" style={{ fontSize: 12 }} onClick={() => deptDelete(d.id)}>{tr("set.st.delShort")}</button>
           </div>
           <div className="dept-card-row">
-            <span className="dept-card-lbl">{en ? "Head" : "负责人"}</span>
+            <span className="dept-card-lbl">{tr("ui.app.head.13d4010")}</span>
             <select className="tc-input tc-select" style={{ flex: 1 }} value={d.headId || ""} onChange={(e) => deptUpdate(d.id, { headId: e.target.value || undefined })}>
-              <option value="">{en ? "None" : "暂不设"}</option>
+              <option value="">{tr("ui.app.none.e1dbbb8")}</option>
               {(d.memberIds || []).map((id: string) => <option key={id} value={id}>{nameOf(id)}</option>)}
             </select>
           </div>
           <div className="dept-card-row" style={{ marginTop: 6 }}>
-            <span className="dept-card-lbl">{en ? "Members" : "成员"}</span>
-            <button type="button" className="tc-btn-ghost" onClick={() => setAddingDept(addingDept === d.id ? null : d.id)}>{addingDept === d.id ? (en ? "Done" : "完成") : (en ? "+ Add member" : "+ 添加成员")}</button>
+            <span className="dept-card-lbl">{tr("ui.app.members.a4462f0")}</span>
+            <button type="button" className="tc-btn-ghost" onClick={() => setAddingDept(addingDept === d.id ? null : d.id)}>{addingDept === d.id ? (tr("pay.msg.done")) : (tr("ui.app.add.member.53197aa"))}</button>
           </div>
           <div className="dept-members">
             {employees.filter(e => (d.memberIds || []).includes(e.id)).map((e) => {
@@ -2460,48 +2430,48 @@ function CompanyTeamSettings({ lang, teamOn, onToggle }: { lang: Lang; teamOn: b
                   key={e.id}
                   type="button"
                   className={"dept-chip" + (inDept ? " on" : "")}
-                  title={otherDept && !inDept ? (en ? `Move from ${departmentLabel(otherDept, "en")}` : `当前在「${otherDept.name}」，勾选即移到本部门`) : undefined}
+                  title={otherDept && !inDept ? (tr("ui.app.move.from.19966d7", { p0: (en ? departmentLabel(otherDept, "en") : otherDept.name) })) : undefined}
                   onClick={() => {
                     const next = inDept ? (d.memberIds || []).filter((m: string) => m !== e.id) : [...(d.memberIds || []), e.id];
                     deptUpdate(d.id, { memberIds: next });
                   }}
                 >
-                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")}  /></span>
-                  {employeeLabel(e, en ? "en" : "zh")} <span aria-label={en ? "Remove member" : "移除成员"}>×</span>
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, (getCurrentLanguage()))}  /></span>
+                  {employeeLabel(e, (getCurrentLanguage()))} <span aria-label={tr("ui.app.remove.member.3f76a15")}>×</span>
                 </button>
               );
             })}
           </div>
-          {!(d.memberIds || []).length && <div className="app-set-hint">{en ? "No members" : "暂无成员"}</div>}
+          {!(d.memberIds || []).length && <div className="app-set-hint">{tr("ui.app.no.members.8eeaea1")}</div>}
           {addingDept === d.id && <div className="dept-add-members" style={{ marginTop: 8 }}>
-            <div className="app-set-hint">{en ? "Choose a teammate. Members of another department will be moved here." : "选择员工。已在其他部门的员工会移到本部门。"}</div>
+            <div className="app-set-hint">{tr("ui.app.choose.teammate.members.of.another.department.7372db3")}</div>
             <div className="dept-members">
               {employees.filter(e => !(d.memberIds || []).includes(e.id)).map(e => {
                 const from = departments.find(x => (x.memberIds || []).includes(e.id));
                 return <button key={e.id} type="button" className="dept-chip" onClick={() => { deptUpdate(d.id, { memberIds: [...(d.memberIds || []), e.id] }); setAddingDept(null); }}>
-                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")} /></span>
-                  {employeeLabel(e, en ? "en" : "zh")}{from ? ` · ${departmentLabel(from, en ? "en" : "zh")}` : ""}
+                  <span className="dept-chip-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, (getCurrentLanguage()))} /></span>
+                  {employeeLabel(e, (getCurrentLanguage()))}{from ? ` · ${departmentLabel(from, (getCurrentLanguage()))}` : ""}
                 </button>;
               })}
-              {employees.every(e => (d.memberIds || []).includes(e.id)) && <span className="app-set-hint">{en ? "All teammates added" : "已加入所有员工"}</span>}
+              {employees.every(e => (d.memberIds || []).includes(e.id)) && <span className="app-set-hint">{tr("ui.app.all.teammates.added.cd5b48a")}</span>}
             </div>
           </div>}
         </div>
       ))}
       </>)}
-      {saved && <div className="app-set-hint" style={{ color: "var(--ok, #3fb950)" }}>{en ? "Saved" : "已保存"}</div>}
+      {saved && <div className="app-set-hint" style={{ color: "var(--ok, #3fb950)" }}>{tr("ui.app.saved.0a6bf62")}</div>}
     </>
   );
 }
 // 定时任务触发规则 → 人话(与主进程 triggerText 镜像)。
 function schedTriggerText(t: any, en: boolean): string {
   const p2 = (n: number) => String(n).padStart(2, "0");
-  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const wk = [tr("ui.index.sun.a18e87c"), tr("ui.index.mon.30b15fa"), tr("ui.index.tue.9e7b616"), tr("ui.index.wed.fc1b35b"), tr("ui.index.thu.10d2d87"), tr("ui.index.fri.444209f"), tr("ui.index.sat.b3e9391")];
   if (!t) return "";
-  if (t.kind === "daily") return en ? `daily ${p2(t.hour)}:${p2(t.minute)}` : `每天 ${p2(t.hour)}:${p2(t.minute)}`;
-  if (t.kind === "weekly") return en ? `${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}` : `每${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}`;
-  if (t.kind === "monthly") return en ? `day ${t.day} ${p2(t.hour)}:${p2(t.minute)}` : `每月${t.day}号 ${p2(t.hour)}:${p2(t.minute)}`;
-  if (t.kind === "interval") return en ? `every ${t.everyMinutes}m` : `每${t.everyMinutes}分钟`;
+  if (t.kind === "daily") return tr("ui.index.daily.e4f3761", { p0: p2(t.hour), p1: p2(t.minute) });
+  if (t.kind === "weekly") return tr("ui.index.text.f63cdcd", { p0: wk[t.weekday], p1: p2(t.hour), p2: p2(t.minute) });
+  if (t.kind === "monthly") return tr("ui.index.day.8095ce1", { p0: t.day, p1: p2(t.hour), p2: p2(t.minute) });
+  if (t.kind === "interval") return tr("ui.app.every.16046fb", { p0: t.everyMinutes });
   return "";
 }
 
@@ -2521,7 +2491,7 @@ function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolea
   const [doc, setDoc] = useState<string>(task?.doc || "");
   const [enabled, setEnabled] = useState<boolean>(task?.enabled !== false);
   const [saving, setSaving] = useState(false);
-  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const wk = [tr("ui.index.sun.a18e87c"), tr("ui.index.mon.30b15fa"), tr("ui.index.tue.9e7b616"), tr("ui.index.wed.fc1b35b"), tr("ui.index.thu.10d2d87"), tr("ui.index.fri.444209f"), tr("ui.index.sat.b3e9391")];
   const num = (v: string, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.floor(Number(v) || 0)));
 
   const save = async () => {
@@ -2545,15 +2515,15 @@ function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolea
   return (
     <div className="perm-overlay" onClick={onClose}>
       <div className="add-st-dialog room-set" onClick={(e) => e.stopPropagation()}>
-        <h3>{task?.id ? (en ? "Edit schedule" : "编辑定时任务") : (en ? "New schedule" : "新建定时任务")}</h3>
+        <h3>{task?.id ? (tr("ui.app.edit.schedule.e0a9f05")) : (tr("ui.app.new.schedule.60e93cc"))}</h3>
         <div className="st-field">
-          <label className="st-label">{en ? "Task name" : "任务名"}</label>
-          <input className="st-input" value={name} maxLength={40} placeholder={en ? "e.g. Daily site review" : "如：每日网站复盘"} onChange={(e) => setName(e.target.value)} />
+          <label className="st-label">{tr("ui.app.task.name.dcd497e")}</label>
+          <input className="st-input" value={name} maxLength={40} placeholder={tr("ui.app.daily.site.review.77b137f")} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="st-field">
-          <label className="st-label">{en ? "Trigger" : "触发频率"}</label>
+          <label className="st-label">{tr("ui.app.trigger.5e0e100")}</label>
           <div className="rs-chips" style={{ marginBottom: 8 }}>
-            {[["daily", en ? "Daily" : "每天"], ["weekly", en ? "Weekly" : "每周"], ["monthly", en ? "Monthly" : "每月"], ["interval", en ? "Interval" : "间隔"]].map(([k, lbl]) => (
+            {[["daily", tr("ui.app.daily.56d9546")], ["weekly", tr("ui.app.weekly.4cf15a1")], ["monthly", tr("ui.app.monthly.1ba7008")], ["interval", tr("ui.app.interval.7afb527")]].map(([k, lbl]) => (
               <button type="button" key={k} className={"rs-chip" + (kind === k ? " on" : "")} onClick={() => setKind(k)}>{lbl}</button>
             ))}
           </div>
@@ -2564,10 +2534,10 @@ function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolea
               </select>
             )}
             {kind === "monthly" && (
-              <span className="sched-inline">{en ? "day" : "每月"}<input className="st-input sched-num" type="number" min={1} max={31} value={day} onChange={(e) => setDay(num(e.target.value, 1, 31))} />{en ? "" : "号"}</span>
+              <span className="sched-inline">{tr("ui.app.day.e4fd26d")}<input className="st-input sched-num" type="number" min={1} max={31} value={day} onChange={(e) => setDay(num(e.target.value, 1, 31))} />{tr("ui.app.text.7a08b92")}</span>
             )}
             {kind === "interval" ? (
-              <span className="sched-inline">{en ? "every" : "每"}<input className="st-input sched-num" type="number" min={1} value={everyMinutes} onChange={(e) => setEveryMinutes(Math.max(1, Math.floor(Number(e.target.value) || 1)))} />{en ? "min" : "分钟"}</span>
+              <span className="sched-inline">{tr("ui.app.every.b943711")}<input className="st-input sched-num" type="number" min={1} value={everyMinutes} onChange={(e) => setEveryMinutes(Math.max(1, Math.floor(Number(e.target.value) || 1)))} />{tr("ui.app.min.11974cf")}</span>
             ) : (
               <span className="sched-inline">
                 <input className="st-input sched-num" type="number" min={0} max={23} value={hour} onChange={(e) => setHour(num(e.target.value, 0, 23))} />:
@@ -2575,29 +2545,29 @@ function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolea
               </span>
             )}
           </div>
-          <p className="st-hint">{en ? "24-hour, local time. Interval min 1 minute." : "24 小时制、本机时区。间隔最小 1 分钟。"}</p>
+          <p className="st-hint">{tr("ui.app.hour.local.time.interval.min.minute.c04631f")}</p>
         </div>
         <div className="st-field">
-          <label className="st-label">{en ? "Content" : "任务内容"}</label>
+          <label className="st-label">{tr("ui.app.content.4c48452")}</label>
           <div className="rs-chips" style={{ marginBottom: 8 }}>
-            <button type="button" className={"rs-chip" + (mode === "sop" ? " on" : "")} onClick={() => setMode("sop")} disabled={sopNodes.length === 0}>{en ? "Reference SOP" : "引用 SOP"}</button>
-            <button type="button" className={"rs-chip" + (mode === "doc" ? " on" : "")} onClick={() => setMode("doc")}>{en ? "Inline doc" : "内嵌文档"}</button>
+            <button type="button" className={"rs-chip" + (mode === "sop" ? " on" : "")} onClick={() => setMode("sop")} disabled={sopNodes.length === 0}>{tr("ui.app.reference.sop.0986837")}</button>
+            <button type="button" className={"rs-chip" + (mode === "doc" ? " on" : "")} onClick={() => setMode("doc")}>{tr("ui.app.inline.doc.3a78c89")}</button>
           </div>
           {mode === "sop" ? (
             sopNodes.length > 0 ? (
               <select className="tc-input tc-select" value={sopId} onChange={(e) => setSopId(e.target.value)}>
                 {sopNodes.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
               </select>
-            ) : <p className="st-hint">{en ? "No SOP yet — write one first, or use an inline doc." : "还没有 SOP，先去建一个，或改用内嵌文档。"}</p>
+            ) : <p className="st-hint">{tr("ui.app.no.sop.yet.write.one.first.e5161f2")}</p>
           ) : (
-            <textarea className="tc-textarea" rows={5} value={doc} placeholder={en ? "Write what to do when triggered…" : "写清到点后要做什么、按什么流程执行…"} onChange={(e) => setDoc(e.target.value)} />
+            <textarea className="tc-textarea" rows={5} value={doc} placeholder={tr("ui.app.write.what.to.do.when.triggered.c934baf")} onChange={(e) => setDoc(e.target.value)} />
           )}
         </div>
-        <label className="sched-enable"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {en ? "Enabled" : "启用"}</label>
+        <label className="sched-enable"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {tr("ui.app.enabled.02606e2")}</label>
         <div className="btns">
-          {task?.id && <button className="danger" style={{ marginRight: "auto" }} onClick={async () => { await api?.scheduleDelete?.(task.id); onClose(); }}>{en ? "Delete" : "删除"}</button>}
-          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
-          <button className="allow" disabled={saving || !name.trim()} onClick={() => void save()}>{saving ? (en ? "Saving…" : "保存中…") : (en ? "Save" : "保存")}</button>
+          {task?.id && <button className="danger" style={{ marginRight: "auto" }} onClick={async () => { await api?.scheduleDelete?.(task.id); onClose(); }}>{tr("set.st.delShort")}</button>}
+          <button onClick={onClose}>{tr("set.st.cancel")}</button>
+          <button className="allow" disabled={saving || !name.trim()} onClick={() => void save()}>{saving ? (tr("ui.app.saving.4c8592b")) : (tr("set.st.save"))}</button>
         </div>
       </div>
     </div>
@@ -2628,8 +2598,8 @@ function SopPromptDialog({ en, opts, onClose }: { en: boolean; opts: SopPromptOp
           />
         </div>
         <div className="btns" style={{ marginTop: 16 }}>
-          <button onClick={onClose}>{en ? "Cancel" : "取消"}</button>
-          <button className="allow" onClick={submit}>{opts.okText || (en ? "Confirm" : "确定")}</button>
+          <button onClick={onClose}>{tr("set.st.cancel")}</button>
+          <button className="allow" onClick={submit}>{opts.okText || (tr("ui.app.confirm.a1f6762"))}</button>
         </div>
       </div>
     </div>
@@ -2796,10 +2766,10 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
             textAlign: "center",
           }}
         >
-          {showLangSwitch && onLang && <button type="button" aria-label="Language / 语言" onClick={() => onLang(zh ? "en" : "zh")} style={{ position: "absolute", top: 10, left: 12, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}>{zh ? "English" : "中文"}</button>}
+          {showLangSwitch && onLang && <LanguageSwitcher language={lang} onChange={onLang} />}
           <button
             onClick={onClose}
-            title={makeT(getLang())("msg.close", "关闭")}
+            title={makeT(getLang())("msg.close")}
             style={{ position: "absolute", top: 8, right: 10, width: 26, height: 26, background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, lineHeight: 1, cursor: "pointer" }}
           >
             ×
@@ -2821,23 +2791,21 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
           </div>
           {/* 弹卡原因：第一眼告诉用户「为啥要登录」(额度用完/需登录)，别让新用户懵。仅有具体原因时显示 */}
           {reason && (
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#C05F3C", background: "rgba(192,95,60,.09)", borderRadius: 9, padding: "7px 10px", marginBottom: 12, lineHeight: 1.4, whiteSpace: "nowrap", textAlign: "center" }}>
-              {reason}
+            <div className="login-intro-reason" style={{ fontSize: 11.5, fontWeight: 600, color: "#C05F3C", background: "rgba(192,95,60,.09)", borderRadius: 9, padding: "7px 10px", marginBottom: 12, lineHeight: 1.4, overflowWrap: "anywhere", textAlign: "center" }}>
+              {localizeStoredText(reason, getCurrentLanguage())}
             </div>
           )}
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 7, lineHeight: 1.3, letterSpacing: 0.2, color: "var(--text)" }}>
             {zh ? (
               <>
-                <span style={{ color: "#C05F3C" }}>登录</span>，解锁更多模型
-              </>
+                <span style={{ color: "#C05F3C" }}>{tr("login.signin")}</span>{tr("ui.app.message.97b263eb21")}</>
             ) : (
               <>
-                <span style={{ color: "#C05F3C" }}>Sign in</span> to unlock more models
-              </>
+                <span style={{ color: "#C05F3C" }}>{tr("usage.clickLogin")}</span> {tr("ui.shared.4c19da5fdb")}</>
             )}
           </div>
           <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-            {zh ? "免费模型有每日额度，付费模型按用量消耗无为币。" : "Free models have daily limits. Paid models use Wuwei coins based on usage."}
+            {tr("ui.app.free.models.have.daily.limits.paid.eb2cb7e")}
           </div>
           <div
             style={{
@@ -2856,7 +2824,7 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
             {[
               { k: "claude", n: "Claude" },
               { k: "gpt", n: "GPT" },
-              { k: "deepseek", n: "DeepSeek" },
+              { k: "deepseek", n: tr("ui.app.message.f310ff0f0e") },
               { k: "kimi", n: "Kimi" },
             ].map((m) => (
               <span key={m.k} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -2902,7 +2870,7 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
             onClick={() => { void window.wuwei.track?.("login_popup_keep_free", {}); if (onKeepFree) onKeepFree(); else onClose(); }}
             style={{ marginTop: 10, width: "100%", padding: "6px", background: "none", border: "none", color: "var(--text-muted)", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
           >
-            {zh ? "继续免费体验（无需登录）" : "Keep exploring free (no sign-in)"}
+            {tr("ui.app.keep.exploring.free.no.sign.in.35ce4ba")}
           </button>
         </div>
       </div>
@@ -2971,7 +2939,12 @@ function WuweiLoginModal({
     const mapped = t("login.err." + s.toLowerCase(), "");
     if (mapped) return mapped;
     // 2. 已含中文(多为我们后端的可读提示) → 原样显示
-    if (/[一-鿿]/.test(s)) return s;
+    if (/[一-鿿]/.test(s)) {
+      const code = Object.entries(systemData.authErrorAliases).find(([, aliases]) => aliases.some(alias => s.includes(alias)))?.[0];
+      if (code) return t("login.err." + code);
+      const localized = localizeStoredText(s, lang);
+      return lang !== "zh" && /[一-鿿]/.test(localized) ? t("login.err.generic") : localized;
+    }
     // 3. 匹配已知英文消息(Supabase 等第三方回的) → 映射成中文
     const low = s.toLowerCase();
     const M: [string, string][] = [
@@ -3114,10 +3087,10 @@ function WuweiLoginModal({
             position: "relative",
           }}
         >
-          {onLang && <button type="button" aria-label="Language / 语言" onClick={() => onLang(zh ? "en" : "zh")} style={{ position: "absolute", top: 10, left: 12, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}>{zh ? "English" : "中文"}</button>}
+          {onLang && <LanguageSwitcher language={lang} onChange={onLang} />}
           <button
             onClick={onClose}
-            title={makeT(getLang())("msg.close", "关闭")}
+            title={makeT(getLang())("msg.close")}
             style={{ position: "absolute", top: 8, right: 10, width: 26, height: 26, background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, lineHeight: 1, cursor: "pointer" }}
           >
             ×
@@ -3133,7 +3106,7 @@ function WuweiLoginModal({
             </div>
           </div>
           {sessionExpired && <div className="session-expired-notice" role="alert">
-            {zh ? '登录已失效，请重新登录后继续使用。' : 'Your session has expired. Please sign in again to continue.'}
+            {tr("ui.app.your.session.has.expired.please.sign.8c6802c")}
           </div>}
           {incentive && (
             <div style={{ textAlign: "center", marginBottom: 14 }}>
@@ -3207,7 +3180,7 @@ function WuweiLoginModal({
                           style={{ padding: "8px 11px", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
                         >
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</span>
-                          {a.password ? <span style={{ fontSize: 10.5, color: "var(--text-muted)", flex: "0 0 auto" }}>{getLang() === "en" ? "Saved" : "已记住"}</span> : null}
+                          {a.password ? <span style={{ fontSize: 10.5, color: "var(--text-muted)", flex: "0 0 auto" }}>{tr("ui.app.saved.4c1a10b")}</span> : null}
                         </div>
                       ))}
                       {suffixSug.map((full) => (
@@ -3267,7 +3240,7 @@ function WuweiLoginModal({
             </>
           )}
 
-          {err && <div style={{ color: "var(--spark)", fontSize: 12, marginBottom: 10, textAlign: "center" }}>{err}</div>}
+          {err && <div style={{ color: "var(--spark)", fontSize: 12, marginBottom: 10, textAlign: "center" }}>{localizeStoredText(err, getCurrentLanguage())}</div>}
 
           <button
             onClick={submit}
@@ -3445,63 +3418,63 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
       <div className="pay-card cpay-card" onClick={(e) => e.stopPropagation()}>
         <PayCloseX onClick={onClose} />
         <div className="cpay-h">
-          <div className="cpay-title">{en ? "Pay with Crypto" : "加密货币支付"}</div>
+          <div className="cpay-title">{tr("ui.app.pay.with.crypto.808c8f7")}</div>
           <div className="cpay-sub">{planName} · {priceLabel}</div>
         </div>
         <div className="cpay-chains">
           {CRYPTO_CHAINS.map((c) => (
             <button key={c.key} className={"cpay-chain" + (chain === c.key ? " on" : "")} onClick={() => setChain(c.key)}>
-              {c.label}{c.badge ? <em>{en ? c.badge : "低费"}</em> : null}
+              {c.label}{c.badge ? <em>{en ? c.badge : tr("ui.app.message.7b0e664ea8")}</em> : null}
             </button>
           ))}
         </div>
 
-        {loading && <div className="cpay-load"><span className="cpay-spin" />{en ? "Generating address…" : "生成收款地址…"}</div>}
-        {!loading && err === "min" && <div className="cpay-msg">{en ? "This network needs a larger amount — try Solana or BNB Chain." : "该网络最低额不够，请换 Solana 或 BNB Chain。"}</div>}
-        {!loading && err === "login" && <div className="cpay-msg">{en ? "Please sign in first." : "请先登录。"}</div>}
-        {!loading && err === "fail" && <div className="cpay-msg">{en ? "Temporarily unavailable — please retry or pick another network." : "暂时不可用，请重试或换个网络。"}</div>}
+        {loading && <div className="cpay-load"><span className="cpay-spin" />{tr("ui.app.generating.address.120f988")}</div>}
+        {!loading && err === "min" && <div className="cpay-msg">{tr("ui.app.this.network.needs.larger.amount.try.bc58a38")}</div>}
+        {!loading && err === "login" && <div className="cpay-msg">{tr("ui.app.please.sign.in.first.6aaf046")}</div>}
+        {!loading && err === "fail" && <div className="cpay-msg">{tr("ui.app.temporarily.unavailable.please.retry.or.pick.2eb5b4a")}</div>}
 
         {!loading && pay && (
           <>
             <div className="cpay-amt-row">
-              <span className="cpay-amt-l">{en ? "Send exactly" : "请转账"}</span>
-              <button className="cpay-amt" onClick={() => copy(String(pay.amount), "amt")} title={en ? "Copy amount" : "复制金额"}>
+              <span className="cpay-amt-l">{tr("ui.app.send.exactly.e8bafc9")}</span>
+              <button className="cpay-amt" onClick={() => copy(String(pay.amount), "amt")} title={tr("ui.app.copy.amount.16c35a5")}>
                 <b>{pay.amount}</b> USDT <CopyGlyph />
               </button>
-              <span className="cpay-net">{en ? "on" : "到"} {netLabel}</span>
+              <span className="cpay-net">{tr("ui.app.on.c489c7c")} {netLabel}</span>
             </div>
             <div className="cpay-qr"><QRCodeSVG value={pay.address} size={160} level="M" marginSize={2} /></div>
-            <button className="cpay-addr" onClick={() => copy(pay.address, "addr")} title={en ? "Copy address" : "复制地址"}>
+            <button className="cpay-addr" onClick={() => copy(pay.address, "addr")} title={tr("ui.app.copy.address.e5bff41")}>
               <span>{pay.address}</span><CopyGlyph />
             </button>
-            {pay.memo && <div className="cpay-memo">⚠️ {en ? "Memo/Tag (required): " : "备注/Tag（必填）："}<b>{pay.memo}</b></div>}
+            {pay.memo && <div className="cpay-memo">⚠️ {tr("ui.app.memo.tag.required.65d8248")}<b>{pay.memo}</b></div>}
             <div className="cpay-status" role="status" aria-live="polite">
-              {checkState === "waiting" && <><span className="cpay-spin" />{en ? "Waiting for payment — checking this order automatically. Do not pay twice." : "等待付款，正在自动检测此订单。已转账请勿重复付款。"}</>}
-              {checkState === "slow" && (en ? "Still waiting for confirmation. Exchange withdrawals may take longer. Do not pay again; contact support if already sent." : "仍在等待到账确认，交易所出币可能较慢。已转账请勿重复付款，可联系客服核查。")}
-              {checkState === "network" && (en ? "Cannot check payment right now. Retrying automatically; this does not mean payment failed. Do not pay again." : "暂时无法查询，正在自动重试；不代表付款失败，请勿重复付款。")}
-              {(checkState === "failed" || checkState === "expired") && (en ? "Order is closed or expired. If you already sent funds, contact support with this order ID. Do not pay again." : "订单已关闭或失效。如果已经转账，请带订单号联系客服，勿重复付款。")}
+              {checkState === "waiting" && <><span className="cpay-spin" />{tr("ui.app.waiting.for.payment.checking.this.order.983933a")}</>}
+              {checkState === "slow" && (tr("ui.app.still.waiting.for.confirmation.exchange.withdrawals.cf715af"))}
+              {checkState === "network" && (tr("ui.app.cannot.check.payment.right.now.retrying.9bec091"))}
+              {(checkState === "failed" || checkState === "expired") && (tr("ui.app.order.is.closed.or.expired.if.da25506"))}
             </div>
-            <div className="cpay-sub">{en ? "Order: " : "订单号："}{orderId}</div>
-            <button className="cpay-howto-t" onClick={() => setCheckVersion((v) => v + 1)}>{en ? "I've paid — check again" : "我已付款，重新查询"}</button>
-            {copied && <div className="cpay-copied">{copied === "addr" ? (en ? "Address copied ✓" : "地址已复制 ✓") : (en ? "Amount copied ✓" : "金额已复制 ✓")}</div>}
+            <div className="cpay-sub">{tr("ui.app.order.40837c3")}{orderId}</div>
+            <button className="cpay-howto-t" onClick={() => setCheckVersion((v) => v + 1)}>{tr("ui.app.ve.paid.check.again.93fdb5a")}</button>
+            {copied && <div className="cpay-copied">{copied === "addr" ? (tr("ui.app.address.copied.836dbf9")) : (tr("ui.app.amount.copied.3c2cbdf"))}</div>}
           </>
         )}
 
         {/* 第一次用加密的用户：怎么付引导。重点写「小额请用 Solana/BSC USDT，提币时选对应网络」——
             这是链不匹配(俄罗斯多拿波场 USDT 但小额收不了波场)的主要化解方式。 */}
         <button className="cpay-howto-t" onClick={() => setHowto((v) => !v)}>
-          {en ? "New to crypto? How to pay" : "第一次用加密货币？怎么付"} <span>{howto ? "▲" : "▼"}</span>
+          {tr("ui.app.new.to.crypto.how.to.pay.5e8b9a4")} <span>{howto ? "▲" : "▼"}</span>
         </button>
         {howto && (
           <div className="cpay-howto">
-            <div className="cpay-step"><b>1</b><span>{en ? `Get USDT on ${netLabel}. Buy it on any major exchange (Binance, OKX, Bybit…) — when withdrawing, pick the ${netLabel} network.` : `准备 ${netLabel} 链上的 USDT（任意交易所买，提币时网络选 ${netLabel}）。`}</span></div>
-            <div className="cpay-step"><b>2</b><span>{en ? "Send the exact amount shown above to the address above." : "把上面的确切金额转到上面的地址。"}</span></div>
-            <div className="cpay-step"><b>3</b><span>{en ? "Your account is credited automatically ~1-2 min after the network confirms. Keep this window open." : "网络确认后约 1-2 分钟自动到账，保持窗口打开。"}</span></div>
-            <div className="cpay-howto-tip">{en ? "💡 Small amounts: use Solana or BNB Chain (Tron needs $12+). Already hold USDT on another chain? Just withdraw it on Solana — it's a dropdown on your exchange." : "💡 小额请用 Solana 或 BNB Chain（波场最低 $12）。手里是别的链的 USDT？提币时网络改选 Solana 即可。"}</div>
+            <div className="cpay-step"><b>1</b><span>{tr("ui.app.get.usdt.on.buy.it.on.05d7f61", { p0: netLabel, p1: netLabel })}</span></div>
+            <div className="cpay-step"><b>2</b><span>{tr("ui.app.send.the.exact.amount.shown.above.930edbd")}</span></div>
+            <div className="cpay-step"><b>3</b><span>{tr("ui.app.your.account.is.credited.automatically.min.83e1126")}</span></div>
+            <div className="cpay-howto-tip">{tr("ui.app.small.amounts.use.solana.or.bnb.fc944f7")}</div>
           </div>
         )}
 
-        <button className="cpay-cs" onClick={onContact}>{en ? "Payment issue? Contact support" : "支付遇到问题？联系客服"}</button>
+        <button className="cpay-cs" onClick={onContact}>{tr("ui.app.payment.issue.contact.support.029c8ab")}</button>
       </div>
     </div>
   );
@@ -3638,7 +3611,7 @@ export function App() {
   // 调研方向/来源(可增删)：默认 最新论文/最新新闻/GitHub，持久化
   const [researchSources, setResearchSources] = useState<string[]>(() => {
     try { const s = localStorage.getItem("wuwei-research-sources"); if (s) { const a = JSON.parse(s); if (Array.isArray(a)) return a; } } catch { /* ignore */ }
-    return getLang() === "en" ? ["Latest papers", "Latest news", "GitHub"] : ["最新论文", "最新新闻", "GitHub"];
+    return [tr("ui.app.latest.papers.4604b14"), tr("ui.app.latest.news.db78721"), tr("ui.app.github.6d98f78")];
   });
   const [srcInput, setSrcInput] = useState("");
   useEffect(() => { try { localStorage.setItem("wuwei-research-sources", JSON.stringify(researchSources)); } catch { /* ignore */ } }, [researchSources]);
@@ -3902,7 +3875,7 @@ export function App() {
   const [imageSku, setImageSku] = useState("");
   const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;quality?:string;coins_per_image:number}[]>([]);
   const imageChoices = imageModelChoices(imageCatalog);
-  const imagePreset: Preset = {id:"wuwei-image",label:"无为托管 · 生图模型",labelEn:"Wuwei hosted · Image models",kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageChoices.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
+  const imagePreset: Preset = {id:"wuwei-image",get label() { return tr("ui.app.message.a24d0f2a14"); },get labelEn() { return tr("ui.app.message.a24d0f2a14"); },kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageChoices.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
   const displayProviderId = imageMode ? imagePreset.id : curProviderId;
   const displayModel = imageMode ? imageChoices.find(s=>s.model===imageCatalog.find(row=>row.sku_id===imageSku)?.model)?.sku_id || imageSku : meta.model;
   const imageLabel = (id:string) => {
@@ -4112,7 +4085,7 @@ export function App() {
   const [checkinPop, setCheckinPop] = useState<{ amount: number; streak?: number } | "already" | null>(null); // 居中签到弹窗
   const [loginResume, setLoginResume] = useState(false); // 登录成功后是否续发刚才拦下的消息
   const loginSendRef = useRef<{ userId: string; sid: string; text: string; images: string[] } | null>(null);
-  const [lang, setLangState] = useState<Lang>(getLang()); // 界面语言
+  const lang = useLanguage(); // 界面语言
   const t = makeT(lang);
   useTx(); // 订阅翻译显示层：译文到货/切换翻译态时刷新本组件里的 tx() 覆盖文本
   const [translateMode, setTranslateMode] = useState(false); // 翻译显示态(仅供发英文版截图，纯覆盖不改数据)
@@ -4124,7 +4097,7 @@ export function App() {
   tRef.current = t;
   function changeLang(l: Lang) {
     persistLang(l);
-    setLangState(l);
+
     // 同步到主进程 settings.app.lang → 刷新 WUWEI_LANG，让主进程 tt()/工具描述/系统提示默认跟随界面语言
     window.wuwei.setAppSettings({ lang: l });
   }
@@ -4177,7 +4150,7 @@ export function App() {
     setShowLoginIntro(false);
     setSessionExpiredNotice(true);
     setShowLoginForm(true);
-    setConn({ status: 'red', reason: getLang() === 'en' ? 'Your session has expired. Please sign in again.' : '登录已失效，请重新登录。' });
+    setConn({ status: 'red', reason: tr("ui.index.your.session.has.expired.please.sign.3bf7b7e") });
   }
   useEffect(() => {
     const refresh = accountRefreshRef.current!;
@@ -4213,7 +4186,7 @@ export function App() {
   // 所有付费/提醒弹窗「展示」统一埋点：依赖用 !!state(布尔)，只在弹窗打开的一刻发一次(对象内容更新不重复发)。
   // 后台「弹窗提示总数」按这些 *_shown 事件汇总，可下钻看谁/IP/地区/时间/弹了什么/点了什么。
   useEffect(() => {
-    if (coinShortage) void window.wuwei.track?.("credits_shortage_shown", { context: coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : (coinShortage.message || "shortage"), canRebind: !!coinShortage.rebind, payPage: langRef.current === "en" ? "paddle" : "alipay" });
+    if (coinShortage) void window.wuwei.track?.("credits_shortage_shown", { context: coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : (coinShortage.message || "shortage"), canRebind: !!coinShortage.rebind, payPage: (getCurrentLanguage() === "zh" ? "alipay" : "paddle") });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!coinShortage]);
   useEffect(() => {
@@ -4243,7 +4216,7 @@ export function App() {
     if (!(import.meta as { env?: { DEV?: boolean } }).env?.DEV) return;
     const openPay = (ctx: null | "weekly" | "shortage" | "freecap" | "browse") => {
       setDebugCtx(ctx);
-      setCoinShortage({ message: "调试预览", balance: 0 });
+      setCoinShortage({ message: tr("ui.app.message.57f40416c4"), balance: 0 });
       shortageShownAt.current = Date.now();
     };
     const h = (e: KeyboardEvent) => {
@@ -4268,7 +4241,7 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === "KeyT" || e.key === "t" || e.key === "T")) {
         e.preventDefault();
         const goEn = langRef.current !== "en";
-        changeLang(goEn ? "en" : "zh"); // 切 i18n UI 语言(现有机制)
+        changeLang(getCurrentLanguage()); // 切 i18n UI 语言(现有机制)
         setTranslateMode(goEn); // 状态栏提示
         setTxMode(goEn); // 开/关动态内容翻译覆盖
       }
@@ -4390,13 +4363,13 @@ export function App() {
       const resp = await window.wuwei.payCryptoCreate(clientSku);
       const inv = resp?.invoiceUrl as string | undefined;
       if (!inv) {
-        push({ type: "notice", text: lang === "en" ? "Crypto checkout unavailable, please try card or contact support." : "加密支付暂不可用，请改用卡支付或联系客服。" });
+        push({ type: "notice", text: tr("ui.app.crypto.checkout.unavailable.please.try.card.9b0b8c0") });
         return;
       }
       window.wuwei.openExternal(inv);
       pollPaymentArrival(clientSku);
     } catch {
-      push({ type: "notice", text: lang === "en" ? "Failed to start crypto checkout, please try again." : "发起加密支付失败，请重试。" });
+      push({ type: "notice", text: tr("ui.app.failed.to.start.crypto.checkout.please.b0837ab") });
     }
   }
   // 结账后后台轮询：付款在系统浏览器/收银台完成，无内嵌回调，靠轮询 wuweiMe 检测到账 → 弹成功窗。
@@ -4441,8 +4414,8 @@ export function App() {
           const plan = PRO_PLANS.find((p) => p.sku === clientSku);
           const isTrial = clientSku === "plan_trial";
           const planName = isTrial
-            ? (lang === "en" ? "$1 Trial" : "¥1 体验")
-            : plan ? (lang === "en" ? plan.nameEn : plan.name) : (m?.plan || "Pro");
+            ? (tr("ui.app.trial.192d185"))
+            : plan ? (lang !== "zh" ? plan.nameEn : plan.name) : (m?.plan || "Pro");
           const expTs = tsOf(m?.expireAt);
           const expire = expTs
             ? fmtDate(new Date(expTs))
@@ -4451,9 +4424,9 @@ export function App() {
             kind: "pro",
             planName,
             expire,
-            giftCoins: isTrial ? 0 : ((lang === "en" ? plan?.coinsEn : plan?.coins) ?? 0),
+            giftCoins: isTrial ? 0 : ((lang !== "zh" ? plan?.coinsEn : plan?.coins) ?? 0),
             signin: isTrial ? 20 : (plan?.signin ?? 0),
-            perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt),
+            perks: (PRO_FEATS()).map(([tt]) => tt),
             saved: plan?.saved || undefined,
             order: "",
           });
@@ -4477,14 +4450,14 @@ export function App() {
     setWuweiReady(true);
     setShowLoginForm(false);
     void runConnCheck(); // 登录后立刻重测连通灯，避免登录前的黄灯一直挂着（凭证已变、必须重探）
-    const en = getLang() === "en";
-    const who = me.user.name || me.user.email || (en ? "user" : "用户");
+    const en = getLang() !== "zh";
+    const who = me.user.name || me.user.email || ("user");
     const msg =
       action === "register"
-        ? (en ? `✓ Registered — welcome to Wuwei! Signed in: ${who}` : `✓ 注册成功，欢迎加入无为！已登录：${who}`)
+        ? (tr("ui.app.registered.welcome.to.wuwei.signed.in.f59e4e2", { p0: who }))
         : action === "reset"
-          ? (en ? `✓ Password reset, signed in automatically: ${who}` : `✓ 密码已重置，已自动登录：${who}`)
-          : (en ? `✓ Signed in: ${who}` : `✓ 已登录：${who}`);
+          ? (tr("ui.app.password.reset.signed.in.automatically.53f3ba3", { p0: who }))
+          : (tr("ui.app.signed.in.7b22eca", { p0: who }));
     push({ type: "notice", text: msg });
     if (loginResume) {
       const t = input.trim();
@@ -4503,8 +4476,8 @@ export function App() {
       push({
         type: "notice",
         text: ok
-          ? (lang === "en" ? "✓ Codex authorized. Choose a model in My connections to use your subscription." : "✓ Codex 授权成功，可在“我的接入”中选择订阅模型使用。")
-          : (lang === "en" ? "Codex authorization didn't complete (cancelled/timeout/port 1455 in use). If codex CLI is running locally, close it and retry." : "Codex 授权未完成（取消/超时/端口 1455 被占）。若本机在跑 codex CLI 请先关掉再试。"),
+          ? (tr("ui.app.codex.authorized.choose.model.in.my.37f5b58"))
+          : (tr("ui.app.codex.authorization.didn.complete.cancelled.timeout.2fb3523")),
       });
     } finally {
       setCodexBusy(false);
@@ -4521,7 +4494,7 @@ export function App() {
   const keyTestingRef = useRef(false); // 防并发验证
   const [conn, setConn] = useState<{ status: "green" | "yellow" | "red" | "checking"; reason: string }>({
     status: "checking",
-    reason: getLang() === "en" ? "Checking connection…" : "检测连通状态…",
+    reason: tr("ui.app.checking.connection.ab4a5e8"),
   });
   const [showConn, setShowConn] = useState(false); // 状态灯说明气泡
   const connCheckSeqRef = useRef(0);
@@ -4663,11 +4636,9 @@ export function App() {
   const freeModelIds = new Set<string>();
   const modelBadges = new Map<string, string>(); // 后台配的模型角标(如「快」)，下拉里显示
   // 后台角标中英对照：DB 里混存中文词(限免/快/更强/深度思考/识图)与英文码(new/hot/top)，英文界面统一映射成英文
-  const BADGE_EN: Record<string, string> = { "限免": "Free", "免费": "Free", "快": "Fast", "更强": "Stronger", "深度思考": "Reasoning", "识图": "Vision", "new": "New", "hot": "Hot", "top": "Top" };
-  const badgeEn = (b: string) => BADGE_EN[b] ?? BADGE_EN[b.toLowerCase()] ?? localizeModelBadge(b, 'en');
+  const badgeEn = (b: string) => localizeModelBadge(b, lang);
   // 英文码 → 中文角标：后台 badge 存的是 new/hot/top 这类码，中文下拉直接显原码(如"top")很丑，这里统一映射
-  const BADGE_CN: Record<string, string> = { "new": "最新", "hot": "热门", "top": "顶级", "free": "免费" };
-  const badgeCn = (b: string) => BADGE_CN[b] ?? BADGE_CN[b.toLowerCase()] ?? localizeModelBadge(b, 'zh');
+  const badgeCn = (b: string) => localizeModelBadge(b, lang);
   const modelLabels = new Map<string, string>(); // 后台配的模型显示名(如 gpt-5.6→"GPT-5.6 Sol")，下拉里优先显示 label
   const modelLabelsEn = new Map<string, string>(); // 后台配的英文显示名(ai_model.label_en)，英文界面优先显示
   const loginReqModelIds = new Set<string>(); // 免费列表里「需登录才可用」的便宜模型 id（匿名灰置引导登录）
@@ -4825,7 +4796,7 @@ export function App() {
       if (!await selectModelChoice(choice)) return;
       setShowProviderMenu(false); setShowModelMenu(false);
     } catch {
-      push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please choose again.' : '切换模型失败，请重新选择。' });
+      push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.choose.4392bcd") });
     } finally { setValueSwitchBusy(false); }
   }
   useEffect(() => {
@@ -4862,7 +4833,7 @@ export function App() {
   // 连通状态检测：更新状态灯（红/黄/绿）
   async function runConnCheck() {
     const seq = ++connCheckSeqRef.current;
-    setConn({ status: "checking", reason: langRef.current === "en" ? "Checking connection…" : "检测连通状态…" });
+    setConn({ status: "checking", reason: tr("ui.app.checking.connection.ab4a5e8") });
     try {
       const r = await window.wuwei.checkConn();
       if (seq !== connCheckSeqRef.current) return;
@@ -4877,7 +4848,7 @@ export function App() {
       void window.wuwei.track?.("model_connect", { ok: r.status === "green", status: r.status }, r.reason?.slice(0, 500));
     } catch {
       if (seq !== connCheckSeqRef.current) return;
-      setConn({ status: "yellow", reason: langRef.current === "en" ? "Check failed, please retry." : "检测失败，请重试。" });
+      setConn({ status: "yellow", reason: tr("ui.app.check.failed.please.retry.85b1dfd") });
     }
   }
   useEffect(() => { if (imageMode) void runConnCheck(); }, [imageMode, imageSku, wuwei?.user?.id, lang]);
@@ -4903,24 +4874,24 @@ export function App() {
       const res = await window.wuwei.testKey(key);
       if (res.ok) {
         await saveApiKeyToSettings(key);
-        push({ type: "notice", text: lang === "en" ? "✓ API Key verified and set — ready to use." : "✓ API Key 已验证通过并设置完成，可以直接使用了。" });
+        push({ type: "notice", text: tr("ui.app.api.key.verified.and.set.ready.57a34af") });
         setNeedAuth(false);
         setAuthDismissed(false);
         setApiKeyStep("idle");
         setApiKeyInput("");
-        setConn({ status: "green", reason: lang === "en" ? "Connected, ready anytime." : "已连通，可随时使用。" });
+        setConn({ status: "green", reason: tr("ui.app.connected.ready.anytime.59dfee3") });
         return true;
       }
       if (keyRejected(res.reason)) {
         // 真·鉴权失败：Key 无效，不保存
-        if (!silent) push({ type: "notice", text: (lang === "en" ? "✗ This key is invalid (auth failed): " : "✗ 这个 Key 无效（鉴权失败）：") + res.reason });
+        if (!silent) push({ type: "notice", text: (tr("ui.app.this.key.is.invalid.auth.failed.c7e5715")) + res.reason });
         return false;
       }
       // Key 有效但请求未通过(余额/额度/账单等)：照样保存，给提醒；灯转黄
       await saveApiKeyToSettings(key);
       push({
         type: "notice",
-        text: (lang === "en" ? "⚠ Key saved (valid), but the request didn't go through — usually an account balance/quota issue, not a key error: " : "⚠ Key 已保存（本身有效），但请求未通过，多为账户余额/额度问题，非 Key 错误：") + res.reason,
+        text: (tr("ui.app.key.saved.valid.but.the.request.cfdb53e")) + res.reason,
       });
       setNeedAuth(false);
       setAuthDismissed(false);
@@ -4949,7 +4920,7 @@ export function App() {
     const creds = { ...(s.creds || {}) };
     creds["claude-oauth"] = { ...(creds["claude-oauth"] || {}), oauthToken: tok };
     window.wuwei.setSettings({ ...s, creds, ...(s.providerId === "claude-oauth" ? { oauthToken: tok } : {}) });
-    push({ type: "notice", text: lang === "en" ? "✓ Claude subscription authorized — please resend your last message." : "✓ Claude 订阅已授权，请重新发送刚才的消息。" });
+    push({ type: "notice", text: tr("ui.app.claude.subscription.authorized.please.resend.your.3550c14") });
     setNeedAuth(false); // 授权完成，收起授权条
     setAuthDismissed(false);
     setOauthStep("idle");
@@ -4962,7 +4933,7 @@ export function App() {
     try {
       const tok = await window.wuwei.claudeLogin();
       if (tok) await saveClaudeToken(tok);
-      else push({ type: "notice", text: lang === "en" ? "Authorization didn't complete (cancelled/timeout), you can retry." : "授权未完成（已取消/超时），可重试。" });
+      else push({ type: "notice", text: tr("ui.app.authorization.didn.complete.cancelled.timeout.you.e39f2d6") });
     } finally {
       setAuthBusy(false);
     }
@@ -4975,7 +4946,7 @@ export function App() {
     setOauthStep("awaiting-code");
     push({
       type: "notice",
-      text: lang === "en" ? "Opened the authorization page in your browser: sign in and click \"Approve\", copy the code shown, come back and click \"Complete authorization\" (clipboard auto-read)." : "已在浏览器打开授权页：登录并点“同意”后，复制页面显示的授权码，回来点「完成授权」（会自动读剪贴板）。",
+      text: tr("ui.app.opened.the.authorization.page.in.your.8cdbf30"),
     });
   }
 
@@ -4987,12 +4958,12 @@ export function App() {
       let code = codeInput.trim();
       if (!code) code = (await window.wuwei.readClipboard()).trim();
       if (!code) {
-        push({ type: "notice", text: lang === "en" ? "No code found: copy the authorization code in the browser first, or paste it into the box, then click complete." : "没读到授权码：请先在浏览器复制授权码，或粘贴进输入框再点完成。" });
+        push({ type: "notice", text: tr("ui.app.no.code.found.copy.the.authorization.3b1576c") });
         return;
       }
       const tok = await window.wuwei.claudeOauthExchange(code);
       if (tok) await saveClaudeToken(tok);
-      else push({ type: "notice", text: lang === "en" ? "The code is invalid or expired — click \"Sign in via browser\" and try again." : "授权码无效或已过期，请重新点「用浏览器登录」再试一次。" });
+      else push({ type: "notice", text: tr("ui.app.the.code.is.invalid.or.expired.0b5df91") });
     } finally {
       setAuthBusy(false);
     }
@@ -5106,9 +5077,9 @@ export function App() {
   // 启动即把当前界面语言同步进主进程 settings.app.lang → WUWEI_LANG，
   // 保证主进程 tt()/工具描述/系统提示默认从一开始就跟随界面语言（此后已持久化，下次启动即正确）。
   useEffect(() => {
+    persistLang(lang);
     window.wuwei.setAppSettings({ lang });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [lang]);
 
   // 自动更新：拿版本号 + 监听「发现新版下载中/已下载好」事件
   useEffect(() => {
@@ -5168,7 +5139,7 @@ export function App() {
 
   async function checkUpdateNow() {
     setShowAcctMenu(false); // 关菜单，结果用居中弹窗显示
-    setUpdateMsg(lang === "en" ? "Checking for updates…" : "正在检查更新…");
+    setUpdateMsg(tr("ui.app.checking.for.updates.ce6b51d"));
     const r = await window.wuwei.checkUpdate();
     if (r.available) {
       setHasUpdate(true);
@@ -5179,10 +5150,10 @@ export function App() {
         setUpdateMsg("");
         setShowUpdateModal(true);
       } else {
-        setUpdateMsg(lang === "en" ? `New version v${r.version} found — downloading in the background. You'll be prompted to update when it's ready.` : `发现新版本 v${r.version}，正在后台下载，下载完成会提示你升级。`);
+        setUpdateMsg(tr("ui.app.new.version.found.downloading.in.the.44e0ef9", { p0: r.version }));
       }
     }
-    else setUpdateMsg(r.error ? (lang === "en" ? "Can't check updates right now (dev build or no update source)." : "暂时无法检查更新（开发版或未配置更新源）。") : (lang === "en" ? `You're on the latest version (v${appVer}).` : `已是最新版本（v${appVer}）。`));
+    else setUpdateMsg(r.error ? (tr("ui.app.can.check.updates.right.now.dev.75ffe29")) : (tr("ui.app.you.re.on.the.latest.version.dffc458", { p0: appVer })));
   }
   // 托盘菜单从主进程事件触发检查更新：用 ref 持有最新闭包，避免 onEvent(空依赖)调到旧的 lang/appVer
   const checkUpdateRef = useRef(checkUpdateNow);
@@ -5361,7 +5332,7 @@ export function App() {
           // 独立调研子会话的实时动作(搜什么/读哪页)→喂进弹窗进度条，不进聊天。持久化(收起/刷新可恢复)
           if (researchSidRef.current === payload.sid) {
             setResearchLive((prev) => {
-              const live = { label: researchToolLabel(payload.name, payload.input, langRef.current === "en"), steps: (prev?.steps || 0) + 1 };
+              const live = { label: researchToolLabel(payload.name, payload.input, langRef.current), steps: (prev?.steps || 0) + 1 };
               saveResearchState(payload.sid, { researching: true, live });
               return live;
             });
@@ -5377,7 +5348,7 @@ export function App() {
           if (imageBillingToolsRef.current.get(payload.id) === imageBillingScopeRef.current) {
             imageBillingToolsRef.current.delete(payload.id);
             if (imageToolBalanceFailure('platform_imagegen', payload.result, payload.isError === true)) {
-              usageLimitHandlerRef.current('balance', lang === 'en' ? 'Not enough quota and coins to generate this image. Add funds to continue.' : '生图额度与无为币不足，请充值后继续。');
+              usageLimitHandlerRef.current('balance', tr("ui.app.not.enough.quota.and.coins.to.956023b"));
             }
           }
           setItems((p) => {
@@ -5414,7 +5385,7 @@ export function App() {
             setCeoDeciding((m) => { if (!(csid in m)) return m; const n = { ...m }; delete n[csid]; return n; });
           } else {
             const sec = Math.max(1, Number(payload.sec) || 10);
-            setCeoDeciding((m) => ({ ...m, [csid]: { ceoName: payload.ceoName || "CEO", askerName: payload.askerName || "", until: Date.now() + sec * 1000 } }));
+            setCeoDeciding((m) => ({ ...m, [csid]: { ceoName: payload.ceoName || tr("team.default.wj-ceo.title"), askerName: payload.askerName || "", until: Date.now() + sec * 1000 } }));
           }
           break;
         }
@@ -5443,7 +5414,7 @@ export function App() {
                 if (modeOf(askSid) !== "cont" || m[askSid]?.id !== payload.id) return m; // 关闭继续/已被人回答时别抢
                 const qs = m[askSid].questions || [];
                 window.wuwei.answerAsk(payload.id, {
-                  list: qs.map(() => ({ selected: [], text: lang === "en" ? "You decide based on the overall goal — pick the most reasonable option and keep going." : "这个你按总目标自己定，挑最合理的选项继续。" })),
+                  list: qs.map(() => ({ selected: [], text: tr("ui.app.you.decide.based.on.the.overall.f7b0fe6") })),
                 });
                 const n = { ...m }; delete n[askSid]; return n;
               });
@@ -5469,7 +5440,7 @@ export function App() {
             }
           }
           if (askSid !== currentIdRef.current) {
-            const title = sessionsRef.current.find((s) => s.id === askSid)?.title || (lang === "en" ? "Another chat" : "其它会话");
+            const title = sessionsRef.current.find((s) => s.id === askSid)?.title || (tr("ui.app.another.chat.d6b9d9c"));
             setAskToasts((t) => [...t.filter((x) => x.sid !== askSid), { askId: payload.id, sid: askSid, title }]);
             // 自动消失：按设置的开关与秒数(关掉则常驻，直到点开/✕忽略)
             if (askToastAutoRef.current) {
@@ -5551,24 +5522,24 @@ export function App() {
           break;
         case "evt:compact":
           if (payload.sid !== currentIdRef.current) break;
-          push({ type: "notice", text: lang === "en" ? `Context compacted: ${payload.before} → ${payload.after} messages` : `上下文已压缩：${payload.before} → ${payload.after} 条消息` });
+          push({ type: "notice", text: tr("ui.app.context.compacted.messages.3f22c22", { p0: payload.before, p1: payload.after }) });
           break;
         case "evt:done":
           if (payload.sid === currentIdRef.current) thinkStartRef.current = null;
           setNeedAuth(false); // 成功完成一轮=鉴权已通，收起授权条
-          setConn({ status: "green", reason: lang === "en" ? "Connected, ready anytime." : "已连通，可随时使用。" }); // 成功=绿灯
+          setConn({ status: "green", reason: tr("ui.app.connected.ready.anytime.59dfee3") }); // 成功=绿灯
           break;
         case "evt:stopped":
           if (payload.sid !== currentIdRef.current) break;
           thinkStartRef.current = null;
-          push({ type: "notice", text: lang === "en" ? "Stopped" : "已停止" });
+          push({ type: "notice", text: tr("set.brain.exStopped") });
           break;
         case "evt:handoff":
           // 交接进度反馈:总结中(在源会话提示)/完成(已切到新会话)/失败
           if (payload.phase === "summarizing")
-            push({ type: "notice", text: lang === "en" ? "Summarizing valuable content, generating handoff doc…" : "正在总结有价值内容、生成交接文档…" });
+            push({ type: "notice", text: tr("ui.app.summarizing.valuable.content.generating.handoff.doc.ea52274") });
           else if (payload.phase === "done")
-            push({ type: "notice", text: lang === "en" ? "Handoff doc ready — continuing in a new chat →" : "交接文档已生成，已开新对话接着做 →" });
+            push({ type: "notice", text: tr("ui.app.handoff.doc.ready.continuing.in.new.0be859f") });
           break;
         case "evt:error": {
           if (payload.sid && payload.sid !== currentIdRef.current) break;
@@ -5599,8 +5570,8 @@ export function App() {
           } else if (!loggedIn && (limitKind || /free_trial_disabled|anon_login_required/i.test(rawMsg))) {
             setLoginIntroReason(
               /anon_login_required/i.test(rawMsg)
-                ? (lang === "en" ? "Sign in to use this model free" : "该模型登录后免费使用")
-                : (lang === "en" ? "Guest free quota used up today" : "今日匿名免费额度已用完，登录可继续使用"),
+                ? "ui.app.sign.in.to.use.this.model.8ff2e81"
+                : "ui.app.guest.free.quota.used.up.today.6a44a62",
             );
             setShowLoginIntro(true);
           }
@@ -5610,7 +5581,7 @@ export function App() {
           if (!suppressInlineNotice) setItems((p) => {
             const last = p[p.length - 1];
             if (last && last.type === "notice" && last.text === friendly) return p;
-            return [...p, { type: "notice", text: friendly }];
+            return [...p, { type: "notice", text: friendly, rawError: rawMsg, freeModel: quotaModelRef.current.free }];
           });
           // 订阅平台(Codex/Claude 订阅)没登录时，上游常回 404「page not found」/ 未授权——不是标准 401，
           // 走不到 isAuthErrorText 就只甩一句生僻报错，用户不知道要登录。这里补判：订阅平台 + 连接类失败 → 也当缺授权。
@@ -5721,14 +5692,14 @@ export function App() {
   }, [showUsage, curProviderId]);
   const doConsumeReset = async (creditId: string) => {
     setResetConfirm(null);
-    setResetMsg(lang === "en" ? "Resetting…" : "重置中…");
+    setResetMsg(tr("login.busyReset"));
     const r = await window.wuwei.codexConsumeReset(creditId);
     if (r.ok) {
-      setResetMsg(lang === "en" ? "✅ Reset! Quota refreshes after you send a message." : "✅ 已重置！发一条消息后额度会刷新。");
+      setResetMsg(tr("ui.app.reset.quota.refreshes.after.you.send.09207c1"));
       const rr = await window.wuwei.codexResetCredits();
       if (rr.ok) setCodexResets({ availableCount: rr.availableCount ?? 0, credits: rr.credits ?? [] });
     } else {
-      setResetMsg((lang === "en" ? "Reset failed: " : "重置失败：") + (r.error || ""));
+      setResetMsg((tr("ui.app.reset.failed.b71d291")) + (r.error || ""));
     }
   };
 
@@ -5898,9 +5869,9 @@ export function App() {
       void applyDefaultModel().then(() => {
         if (currentIdRef.current !== sid || wuweiRef.current?.user.id !== userId) return;
         if (modelDefaultRef.current.handled.has(sid)) doSend(text, imgs);
-        else { push({ type: 'notice', text: lang === 'en' ? 'Loading models. Please try again shortly.' : '正在加载模型，请稍后重试。' }); void refreshCatalog(); }
+        else { push({ type: 'notice', text: tr("ui.app.loading.models.please.try.again.shortly.705bbba") }); void refreshCatalog(); }
       }).catch(() => {
-        push({ type: 'notice', text: lang === 'en' ? 'Could not load the recommended model. Please retry.' : '高性价比推荐模型加载失败，请重试。' });
+        push({ type: 'notice', text: tr("ui.app.could.not.load.the.recommended.model.bb5ca8b") });
       }).finally(() => { if (modelDefaultSendRef.current === request) modelDefaultSendRef.current = null; });
       return;
     }
@@ -5994,7 +5965,7 @@ export function App() {
         runningSetRef.current.delete(sid);
         setRunningSet((s) => { const n = new Set(s); n.delete(sid); return n; });
         lastActivityRef.current.set(sid, now); // 占位，避免下一巡重复触发
-        autoContinue(sid, langRef.current === "en" ? "Keep going toward the overall goal." : "继续朝总目标推进。");
+        autoContinue(sid, tr("ui.app.keep.going.toward.the.overall.goal.34a5392"));
       }
     }, Math.max(10, wdIntervalSec) * 1000);
     return () => clearInterval(iv);
@@ -6051,7 +6022,7 @@ export function App() {
     });
     if (rs?.researching) {
       researchSidRef.current = sid;
-      setResearchLive(rs.live || { label: lang === "en" ? "Reconnecting to research…" : "重连调研中…", steps: 0 });
+      setResearchLive(rs.live || { label: tr("ui.app.reconnecting.to.research.b1dbf26"), steps: 0 });
       // 补拉重载/关窗间隙可能已完成的草稿（拿到就回填并清掉"调研中"）
       window.wuwei.charterDraftGet?.(sid).then((d) => { if (d) applyCharterDraft(sid, d); }).catch(() => {});
     } else {
@@ -6070,14 +6041,12 @@ export function App() {
     const sid = goalEdit.sid;
     if (sid !== currentId) return;
     researchSidRef.current = sid;
-    const live0 = { label: lang === "en" ? "Starting research…" : "开始调研…", steps: 0 };
+    const live0 = { label: tr("ui.app.starting.research.75ea9b5"), steps: 0 };
     setResearchLive(live0);
     saveResearchState(sid, { researching: true, live: live0 }); // 按会话持久化，"只保存"/收起/刷新后重开还能恢复
     setGoalEdit({ ...goalEdit, researching: true, minimized: false });
-    const srcLine = researchSources.map((s) => s.trim()).filter(Boolean).join(lang === "en" ? ", " : "、"); // 调研方向/来源
-    const prompt = lang === "en"
-      ? `Research task (ONLY research — do NOT start implementing yet).\nMy overall goal: ${tx}\n${srcLine ? `\nFocus your research on these directions / sources: ${srcLine}.\n` : ""}\nUse the web_search tool (built-in aggregated search) to find sources, then web_fetch a few specific article URLs to read. Do NOT web_fetch a google/bing search page directly. A few targeted searches + reading a few key sources is enough — don't over-explore. Understand the current state, viable paths, common pitfalls and best practices for this goal.\n\n[OUTPUT — IMPORTANT] When done, your final reply MUST BEGIN with one complete \`\`\`json charter block (write nothing before it, so a long response can't truncate it away). Exactly this shape, only this one json block, all fields filled:\n\`\`\`json\n{\n  "research": "Findings: current state / key insights / recommended path — a tight summary, a few sentences",\n  "rules": { "do": "What to do (one short line each)", "dont": "What NOT to do / how this goal most easily drifts off course (one short line each)" },\n  "plan": [ { "title": "Milestone, ≤12 words", "description": "explain this node as fully as is helpful — what to do, how, why, key considerations", "acceptance": "how we know it's done, one short line", "children": [ { "title": "sub-step", "description": "detailed as needed", "acceptance": "one short line" } ] } ]\n}\n\`\`\`\nPLAN = a TREE, up to 3 levels deep. Break a milestone into "children" sub-nodes when it's complex enough to warrant it; leave "children" out for simple leaves. YOU decide the depth and size by the task's complexity. EVERY node (including sub-nodes) has its own acceptance. Keep TITLES short and ACCEPTANCE to one line; DESCRIPTIONS can be as detailed as helpful — don't force them short. The plan must be COMPLETE: cover the whole path from here to fully achieving the goal, all key milestones in order. In "dont", spell out how this goal most easily drifts into something that looks related but betrays the original intent.`
-      : `研究任务（只调研，先别动手实现）。\n我的总目标是：${tx}\n${srcLine ? `\n重点从这些方向/来源调研：${srcLine}。\n` : ""}\n请用 web_search 工具（内置聚合搜索）找资料，再用 web_fetch 抓具体文章 URL 读全文；【不要】用 web_fetch 直接抓 google/bing 的搜索页。做几次精准搜索、读几篇关键来源即可，别无限展开。弄清这个目标的现状、可行路径、常见坑与最佳实践。\n\n【输出要求·重要】调研完成后，你这条最终回复必须【一开头就先输出】一个完整的 \`\`\`json 契约块（前面不要写任何别的内容，避免正文过长把 json 截断丢失）。结构严格如下，只输出这一个 json 块、字段全部填好：\n\`\`\`json\n{\n  "research": "调研结论：现状/关键发现/推荐路径，精炼几句概要",\n  "rules": { "do": "要做哪些（每条一句话，简短）", "dont": "绝不做哪些/最容易跑偏成什么样（每条一句话，简短）" },\n  "plan": [ { "title": "里程碑一句话（≤20字）", "description": "这个节点做什么/怎么做/为什么，可以详细展开，别刻意精简", "acceptance": "怎样算达标，一句话", "children": [ { "title": "子步骤", "description": "按需详细说明", "acceptance": "一句话" } ] } ]\n}\n\`\`\`\n【计划=树形，最多 3 层】：某个里程碑足够复杂就拆成 children 子节点，简单的叶子节点不用 children。层数和树的大小【由你按任务复杂度自己定】。每个节点（含子节点）都要有自己的验收标准。title 简短、acceptance 一句话；但 description（说明）可以详细展开、想写多细写多细，别刻意压缩。计划要【完整覆盖从现在到彻底达成目标的整条路径】、关键里程碑按先后全列出。dont 里写清「这个目标最容易跑偏成什么样、哪些看似相关其实偏离初衷」。`;
+    const srcLine = researchSources.map((s) => s.trim()).filter(Boolean).join(tr("ui.index.text.6486d4e")); // 调研方向/来源
+    const prompt = tr("ui.app.research.task.only.research.do.not.35c7fb8", { p0: tx, p1: (lang !== "zh" ? srcLine ? `\nFocus your research on these directions / sources: ${srcLine}.\n` : "" : srcLine ? tr("ui.app.message.f4a7bb2e4f", {p0: srcLine}) : "") });
     // 独立子会话跑调研；await 完整结果后回填(evt:charter-draft 也会回填，applyCharterDraft 幂等)
     window.wuwei.charterResearch(sid, prompt)
       .then((r) => { if (r?.ok && r.draft) applyCharterDraft(sid, r.draft); else applyCharterDraft(sid, null); })
@@ -6105,7 +6074,7 @@ export function App() {
   useEffect(() => {
     if (goalEdit?.researching && goalEdit.sid) {
       researchSidRef.current = goalEdit.sid;
-      setResearchLive((prev) => prev || { label: lang === "en" ? "Reconnecting to research…" : "重连调研中…", steps: 0 });
+      setResearchLive((prev) => prev || { label: tr("ui.app.reconnecting.to.research.b1dbf26"), steps: 0 });
       window.wuwei.charterDraftGet?.(goalEdit.sid).then((d) => { if (d) applyCharterDraft(goalEdit.sid, d); }).catch(() => {});
     }
     // 仅挂载时跑一次
@@ -6141,30 +6110,28 @@ export function App() {
 
   // 执行时发给 Agent 的完整工作约定：目标+调研+计划(带验收)+规则+每步自检+里程碑写知识宫殿
   function charterExecPrompt(c: import("./env").Charter): string {
-    const en = lang === "en";
+    const en = lang !== "zh";
     const parts: string[] = [];
-    parts.push(en ? `[Overall goal for this conversation] ${c.text}` : `【这个对话的总目标】${c.text}`);
-    if (c.research?.trim()) parts.push((en ? "[Research findings]\n" : "【调研结论】\n") + c.research.trim());
+    parts.push(tr("ui.app.overall.goal.for.this.conversation.f376d91", { p0: c.text }));
+    if (c.research?.trim()) parts.push((tr("ui.app.research.findings.7c669ec")) + c.research.trim());
     if (c.plan?.length) {
       // 树形序列化：编号 1 / 1.2 / 1.2.3，缩进带层级，含说明+验收
       const lines: string[] = [];
       const walk = (nodes: import("./env").PlanStep[], prefix: string, indent: string) => {
         nodes.forEach((s, i) => {
           const no = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
-          const desc = s.description?.trim() ? (en ? ` — ${s.description.trim()}` : ` —— ${s.description.trim()}`) : "";
-          const acc = s.acceptance?.trim() ? (en ? ` [acceptance: ${s.acceptance.trim()}]` : `【验收：${s.acceptance.trim()}】`) : "";
+          const desc = s.description?.trim() ? (tr("ui.app.text.bb29376", { v0: s.description.trim() })) : "";
+          const acc = s.acceptance?.trim() ? (tr("ui.app.acceptance.51e37b2", { p0: s.acceptance.trim() })) : "";
           lines.push(`${indent}${no}. ${s.title}${desc}${acc}`);
           if (s.children?.length) walk(s.children, no, indent + "  ");
         });
       };
       walk(c.plan, "", "");
-      parts.push((en ? "[Execution plan] hierarchical; advance node by node (finish sub-nodes to complete a parent); self-check acceptance before moving on:\n" : "【执行计划】树形，按节点逐步推进（子节点做完才算父节点完成），每步做完先自测达到验收再进入下一步：\n") + lines.join("\n"));
+      parts.push((tr("ui.app.execution.plan.hierarchical.advance.node.by.3f9208f")) + lines.join("\n"));
     }
-    if (c.rules?.do?.trim()) parts.push((en ? "[Must do]\n" : "【必须做】\n") + c.rules.do.trim());
-    if (c.rules?.dont?.trim()) parts.push((en ? "[Never do] (touching these means drifting off the goal)\n" : "【绝不做】（碰到就是跑偏、背离初衷）\n") + c.rules.dont.trim());
-    const method = en
-      ? `\nHow to work:\n1. From now on, drive toward the goal autonomously along the plan above — start step 1, no need to ask whether to break it down;\n2. After each step: first self-check it against that step's acceptance criteria; only count it done (and move on) once it passes; report progress briefly;\n3. Before EACH step, re-read the goal + plan + rules: know which step you're on, whether you've drifted, whether you're within the rules — the moment you notice drift (doing something off-plan and pointless for the goal), correct course back to the goal immediately;\n4. Do your own research / verification / decisions; decide trivial choices yourself;\n5. Stop and ask me only for: things only I can give (server/account/key/payment/offline info); irreversible or others-affecting actions (delete, deploy, write prod, spend money, send externally); or a genuine fork in direction that needs my call;\n6. Whenever you complete a plan node, write its progress & conclusions into the knowledge base (use write_file to append a markdown note into the docs/knowledge-palace directory) for a long-term record;\n7. End each turn with one line stating the next step.\nStart now — go straight into step 1.`
-      : `\n工作方式：\n1. 从现在起按上面的计划自主推进，直接做第 1 步，不用问我要不要拆；\n2. 每做完一步：先对照该步的验收标准自测是否达标，达标才算完成、才进入下一步；简短报告进展；\n3. 每一步开始前，回看一遍总目标 + 计划 + 规则，明确现在在第几步、有没有跑偏、符不符合规则；一旦发现偏离初衷（在做计划外、对总目标没意义的事），立刻纠正、拉回目标；\n4. 能自己查资料、验证、决策的一律自己来，无关紧要的选择自己定；\n5. 只有这几种情况停下来问我：需要我提供你拿不到的东西（服务器/账号/密钥/付费/线下信息）；删除、上线、写生产、花钱、对外发送这类不可逆或影响他人的动作；目标方向出现分歧要我拍板；\n6. 每完成一个计划节点，把该节点的进展与结论整理成 markdown、用 write_file 写入知识宫殿文档库沉淀下来；\n7. 每轮结尾用一句话说清「下一步做什么」，方便自动接力。\n现在开始，直接做第 1 步。`;
+    if (c.rules?.do?.trim()) parts.push((tr("ui.app.must.do.aac3887")) + c.rules.do.trim());
+    if (c.rules?.dont?.trim()) parts.push((tr("ui.app.never.do.touching.these.means.drifting.e55cb3c")) + c.rules.dont.trim());
+    const method = tr("ui.app.how.to.work.from.now.on.2a77be0");
     return parts.join("\n\n") + method;
   }
 
@@ -6190,7 +6157,7 @@ export function App() {
       doSend(charterExecPrompt(c), []);
     } else {
       const tpl = goalPromptOf();
-      doSend(tpl.includes("{目标}") ? tpl.replaceAll("{目标}", tx) : `【总目标】${tx}\n\n${tpl}`, []);
+      doSend(tpl.includes("{goal}") || tpl.includes(systemData.goalPlaceholder) ? tpl.replaceAll("{goal}", tx).replaceAll(systemData.goalPlaceholder, tx) : tr("goal.withCustomPrompt", {goal:tx,prompt:tpl}), []);
     }
   }
 
@@ -6237,7 +6204,7 @@ export function App() {
 
   // 被中断 → 给输入框挂「继续」幽灵提示：按 Tab 即填入（复用既有补全机制），或点提示条的「继续」直接发
   useEffect(() => {
-    if (!busy && lastWasInterrupted) setSuggestion(lang === "en" ? "continue" : "继续");
+    if (!busy && lastWasInterrupted) setSuggestion("continue");
   }, [busy, lastWasInterrupted, lang]);
 
   // override：不经过输入框直接发一句（如中断后点「继续」）。缺省仍用输入框内容。
@@ -6252,7 +6219,7 @@ export function App() {
       if (sid !== currentIdRef.current || wuweiRef.current) return;
       setPendingImages(images);
       setModelRetry({ sid, userId: null, key: choice.key, text, images });
-    } catch { push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please retry.' : '切换模型失败，请重试。' }); }
+    } catch { push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.retry.f1bb49c") }); }
   }
   function submit(override?: string) {
     const text = (typeof override === "string" ? override : input).trim();
@@ -6279,13 +6246,13 @@ export function App() {
     // 免登录免费体验(anon)走网关匿名分支、不扣无为币 → 绝不做余额拦截(否则登录用户选免费模型、
     // 余额为0时会被误拦弹"无为币不足")。只对真正按量扣币的托管平台做前置拦截。
     if (curPreset?.hosted && !curPreset?.anon && wuwei && (imageMode || !freeModelIds.has(meta.model)) && !hasPaidAllowance(wuwei)) {
-      void refreshWuweiForShortage(imageMode ? (lang === 'en' ? 'Not enough quota and coins to generate this image. Add funds to continue.' : '生图额度与无为币不足，请充值后继续。') : (lang === "en" ? "Out of credits: top up to keep using Wuwei hosted models." : "无为币余额不足：请充值后再使用无为托管模型。"));
+      void refreshWuweiForShortage(imageMode ? (tr("ui.app.not.enough.quota.and.coins.to.956023b")) : (tr("ui.app.out.of.credits.top.up.to.13b0bb4")));
       return;
     }
     setSuggestion(""); // 发送后清掉旧的下一步建议(回复完会重新生成)
     const imgs = pendingImages;
     if (imageMode && imgs.length) {
-      push({type:"notice",text:lang === "en" ? "These presets currently generate from text. Remove the attachments before generating; image editing is not available yet." : "这些预设目前支持文生图。请移除附件后生成，参考图编辑暂未开放。"});
+      push({type:"notice",text:tr("ui.app.these.presets.currently.generate.from.text.fcea283")});
       return;
     }
     const inject = busy; // 跑动中→注入到当前回合
@@ -6368,15 +6335,15 @@ export function App() {
   // 相对时间(最新消息多久前)：随 now(每15s)更新
   const relTime = (ts: number): string => {
     const sec = Math.max(0, Math.floor((now - ts) / 1000));
-    if (sec < 60) return t("rel.sec", "{n}秒前").replace("{n}", String(sec));
+    if (sec < 60) return t("rel.sec").replace("{n}", String(sec));
     const min = Math.floor(sec / 60);
-    if (min < 60) return t("rel.min", "{n}分钟前").replace("{n}", String(min));
+    if (min < 60) return t("rel.min").replace("{n}", String(min));
     const hr = Math.floor(min / 60);
-    if (hr < 24) return t("rel.hour", "{n}小时前").replace("{n}", String(hr));
+    if (hr < 24) return t("rel.hour").replace("{n}", String(hr));
     const day = Math.floor(hr / 24);
-    if (day < 30) return t("rel.day", "{n}天前").replace("{n}", String(day));
+    if (day < 30) return t("rel.day").replace("{n}", String(day));
     const mo = Math.floor(day / 30);
-    return mo < 12 ? t("rel.month", "{n}个月前").replace("{n}", String(mo)) : t("rel.year", "{n}年前").replace("{n}", String(Math.floor(mo / 12)));
+    return mo < 12 ? t("rel.month").replace("{n}", String(mo)) : t("rel.year").replace("{n}", String(Math.floor(mo / 12)));
   };
   // 组内排序：已完成沉底 → 优先级(数字大在前) → 手动拖拽键(未拖过=按最近更新)
   const sortRows = (arr: SessionMeta[]) =>
@@ -6392,21 +6359,21 @@ export function App() {
     const now = new Date();
     const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
     const diff = Math.round((day(now) - day(d)) / 86400000);
-    const en = getLang() === "en";
-    if (diff <= 0) return en ? "Today" : "今天";
-    if (diff === 1) return en ? "Yesterday" : "昨天";
-    if (diff <= 7) return en ? "Last 7 days" : "近 7 天";
-    if (diff <= 30) return en ? "Last 30 days" : "近 30 天";
+    const en = getLang() !== "zh";
+    if (diff <= 0) return tr("ui.app.today.76c71c0");
+    if (diff === 1) return tr("ui.app.yesterday.1f69424");
+    if (diff <= 7) return tr("ui.app.last.days.f458b0e");
+    if (diff <= 30) return tr("ui.app.last.days.0ebce0c");
     if (d.getFullYear() === now.getFullYear())
-      return en ? d.toLocaleString("en-US", { month: "long" }) : `${d.getMonth() + 1} 月`;
-    return en ? `${d.getFullYear()}` : `${d.getFullYear()} 年`;
+      return en ? d.toLocaleString("en-US", { month: "long" }) : tr("ui.app.message.1e21afd591", {p0: d.getMonth() + 1});
+    return tr("ui.app.text.00a1806", { p0: d.getFullYear() });
   };
-  const RECENT_BUCKETS = getLang() === "en" ? ["Today", "Yesterday", "Last 7 days", "Last 30 days"] : ["今天", "昨天", "近 7 天", "近 30 天"];
+  const RECENT_BUCKETS = [tr("ui.app.today.76c71c0"), tr("ui.app.yesterday.1f69424"), tr("ui.app.last.days.f458b0e"), tr("ui.app.last.days.0ebce0c")];
   const dateRank = (b: string) =>
     RECENT_BUCKETS.indexOf(b) >= 0 ? RECENT_BUCKETS.indexOf(b) : 100; // 具体月/年桶排后面，用桶内最新时间兜底排序
   // 会话所属分组(按当前模式)
   const groupOf = (s: SessionMeta): string =>
-    groupMode === "date" ? dateBucket(s.updatedAt) : groupMode === "project" ? s.project || (lang === "en" ? "Uncategorized" : "未归类") : s.group || "";
+    groupMode === "date" ? dateBucket(s.updatedAt) : groupMode === "project" ? s.project || (tr("ui.app.uncategorized.c834627")) : s.group || "";
 
   // 拖拽会话到某会话上→插入并写 order；手动模式下跨组=移动分组
   function dropOnSession(e: React.DragEvent, target: SessionMeta, list: SessionMeta[]) {
@@ -6619,7 +6586,7 @@ export function App() {
     setBabyTidy(true);
     try {
       const note = await window.wuwei.babyReorganize();
-      setBabyChatLog((l) => [...l, { role: "baby", text: `（整理完知识了）${note || ""}`, ts: Date.now() }]);
+      setBabyChatLog((l) => [...l, { role: "baby", text: tr("ui.app.message.45bf964d93", {p0: note || ""}), ts: Date.now() }]);
       await Promise.all([loadBabyGraph().catch(() => {}), loadBabyPyramid().catch(() => {}), babyRefresh()]);
     } finally { setBabyTidy(false); }
   }
@@ -6631,10 +6598,10 @@ export function App() {
     const msg = babyChatInput.trim(); if (!msg || babyBusy) return;
     setBabyChatInput("");
     setBabyChatLog((l) => [...l, { role: "you", text: msg, ts: Date.now() }]);
-    setBabyBusy("它在想…");
+    setBabyBusy(tr("ui.app.message.f4aa8d50b3"));
     try {
       const ans = await window.wuwei.babyChat(msg);
-      setBabyChatLog((l) => [...l, { role: "baby", text: ans || "(没说话)", ts: Date.now() }]);
+      setBabyChatLog((l) => [...l, { role: "baby", text: ans || tr("ui.app.message.9c5f40ac78"), ts: Date.now() }]);
       await babyRefresh(); // 聊天可能上网学到新东西(进记忆/日志)，刷新状态区
     } finally { setBabyBusy(""); }
   }
@@ -6644,7 +6611,7 @@ export function App() {
   }
   function deleteBaby() {
     askConfirm({
-      message: lang === "en" ? "Remove this digital baby connection? (Its memory data is kept, only removed from the UI)" : "确定删除这个数字婴儿的对接吗?(不会删它的记忆数据,只从界面移除)",
+      message: tr("ui.app.remove.this.digital.baby.connection.its.0f15622"),
       danger: true,
       onOk: () => {
         setBabyExists(false); localStorage.setItem("minicc-baby-exists", "0");
@@ -6710,7 +6677,7 @@ export function App() {
             <div className="conn-light-wrap">
               <button
                 className={`conn-light conn-${conn.status}`}
-                title={t("conn.lightTitle", "连通状态（点击查看）")}
+                title={t("conn.lightTitle")}
                 onClick={() => setShowConn((v) => !v)}
               />
               {showConn && (
@@ -6720,14 +6687,14 @@ export function App() {
                     <div className="conn-pop-title">
                       <span className={`conn-dot conn-${conn.status}`} />
                       {conn.status === "green"
-                        ? (lang === "en" ? "Connected" : "已连通")
+                        ? (tr("ui.app.connected.01c9b5a"))
                         : conn.status === "yellow"
-                          ? (lang === "en" ? "Errors — not fully connected" : "有报错，未完全连通")
+                          ? (tr("ui.app.errors.not.fully.connected.ac1e6dd"))
                           : conn.status === "red"
-                            ? (lang === "en" ? "Not connected / not configured" : "未连通 / 未配置")
-                            : (lang === "en" ? "Checking…" : "检测中…")}
+                            ? (tr("ui.app.not.connected.not.configured.ba0e318"))
+                            : (tr("ui.app.checking.4186bc8"))}
                     </div>
-                    <p className="conn-pop-reason">{conn.reason}</p>
+                    <p className="conn-pop-reason">{localizeStoredText(conn.reason, lang)}</p>
                     <div className="conn-pop-actions">
                       <button
                         onClick={() => {
@@ -6735,7 +6702,7 @@ export function App() {
                           void runConnCheck();
                         }}
                       >
-                        {lang === "en" ? "Re-check" : "重新检测"}
+                        {tr("ui.app.re.check.4156bee")}
                       </button>
                       {(conn.status === "red" || conn.status === "yellow") && (
                         <button
@@ -6751,7 +6718,7 @@ export function App() {
                             setShowSettings(true);
                           }}
                         >
-                          {imageMode ? conn.status === 'red' ? (lang === 'en' ? 'Sign in' : '登录') : (lang === 'en' ? 'Refresh models' : '刷新模型') : conn.status === "red" ? (lang === "en" ? "Configure / authorize" : "去配置 / 授权") : (lang === "en" ? "Resolve" : "去解决")}
+                          {imageMode ? conn.status === 'red' ? (tr("login.signin")) : (tr("ui.app.refresh.models.9b97c68")) : conn.status === "red" ? (tr("ui.app.configure.authorize.cb85a9c")) : (tr("ui.app.resolve.2926549"))}
                         </button>
                       )}
                     </div>
@@ -6763,7 +6730,7 @@ export function App() {
             {(idxProg?.building || conProg?.running) && (
               <button
                 className="brain-prog"
-                title={t("brainprog.title", "点击打开脑网络")}
+                title={t("brainprog.title")}
                 onClick={() => {
                   setSettingsTab("brain");
                   setShowSettings(true);
@@ -6793,20 +6760,20 @@ export function App() {
                 />
                 {idxProg?.building
                   ? idxProg.phase === "scan"
-                    ? (lang === "en" ? `Index · scanning ${idxProg.files} docs` : `索引·扫描 ${idxProg.files} 文档`)
-                    : (lang === "en" ? `Index ${idxProg.done}/${idxProg.total || "…"} chunks` : `索引 ${idxProg.done}/${idxProg.total || "…"} 块`)
-                  : (lang === "en" ? `Extract ${conProg?.done}/${conProg?.total}` : `抽概念 ${conProg?.done}/${conProg?.total}`)}
+                    ? (tr("ui.app.index.scanning.docs.288eb35", { p0: idxProg.files }))
+                    : (tr("ui.app.index.chunks.55b7058", { p0: idxProg.done, p1: idxProg.total || "…" }))
+                  : (tr("ui.app.extract.51c3e98", { p0: conProg?.done, p1: conProg?.total }))}
               </button>
             )}
 
             <div className="model-quick">
-              <button className="mq-btn mq-select" title={`${lang === "en" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · ${imageMode ? imageLabel(imageSku) : selectedChoice ? (lang === "en" ? selectedChoice.labelEn : selectedChoice.label) : meta.model}`} onClick={(e) => {
+              <button className="mq-btn mq-select" title={`${lang !== "zh" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · ${imageMode ? imageLabel(imageSku) : selectedChoice ? (lang !== "zh" ? selectedChoice.labelEn : selectedChoice.label) : meta.model}`} onClick={(e) => {
                 openMqMenu(e);
                 setModelPickerCategory(undefined);
                 if (!showProviderMenu) { void refreshCatalog(); void refreshImageCatalog(); }
                 setShowModelMenu(false); setShowProviderMenu((value) => !value);
               }}>
-                <span className="mq-txt"><span className="mq-category-name">{!selectedChoice && !imageMode ? (lang === "en" ? "Model" : "模型") : lang === "en" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · </span>{imageMode ? imageLabel(imageSku) : selectedChoice ? (lang === "en" ? selectedChoice.labelEn : selectedChoice.label) : modelLabelsEn.get(meta.model) || modelLabels.get(meta.model) || meta.model}</span>
+                <span className="mq-txt"><span className="mq-category-name">{!selectedChoice && !imageMode ? (tr("set.m.model")) : lang !== "zh" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · </span>{imageMode ? imageLabel(imageSku) : selectedChoice ? (lang !== "zh" ? selectedChoice.labelEn : selectedChoice.label) : modelLabelsEn.get(meta.model) || modelLabels.get(meta.model) || meta.model}</span>
                 <span className="mq-caret">▾</span>
               </button>
               {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
@@ -6816,7 +6783,7 @@ export function App() {
                   <span className="mq-mid">·</span>
                   <button
                     className="mq-btn mq-eff"
-                    title={t("eff.title", "思考档位：越高越深入，也越慢越贵")}
+                    title={t("eff.title")}
                     onClick={(e) => {
                       openMqMenu(e);
                       setShowEffortMenu((v) => !v);
@@ -6831,7 +6798,7 @@ export function App() {
                 <>
                   <div className="mq-overlay" onClick={() => setShowEffortMenu(false)} />
                   <div className="mq-menu mq-menu-eff" style={{ left: mqMenuLeft }}>
-                    <div className="mq-head">{t("eff.head", "思考档位")}</div>
+                    <div className="mq-head">{t("eff.head")}</div>
                     {EFFORT_OPTIONS.map((o) => (
                       <button
                         key={o.id}
@@ -6846,10 +6813,10 @@ export function App() {
                         }}
                       >
                         <span className="mq-item-main">
-                          {lang === "en" ? o.en : o.zh}
+                          {lang !== "zh" ? o.en : o.zh}
                           {o.id === effort && <span className="mq-check">✓</span>}
                         </span>
-                        <span className="mq-item-sub">{lang === "en" ? o.enDesc : o.zhDesc}</span>
+                        <span className="mq-item-sub">{lang !== "zh" ? o.enDesc : o.zhDesc}</span>
                       </button>
                     ))}
                   </div>
@@ -6868,12 +6835,12 @@ export function App() {
 
             <span
               className="foot-status"
-              title={t("foot.statusTitle", "运行状态 · 本轮上下文 token · 订阅额度(5小时/周)或余额。点击看详情")}
+              title={t("foot.statusTitle")}
               onClick={() => setShowUsage((v) => !v)}
             >
               <span
                 className={"fs-hit" + (busy || runningSet.size > 0 ? " fs-busy" : "") + (runningSet.size > 0 ? " fs-clickable" : "")}
-                title={runningSet.size > 0 ? (lang === "en" ? "Click to view/stop running tasks" : "点击查看/停止运行中的任务") : undefined}
+                title={runningSet.size > 0 ? (tr("ui.app.click.to.view.stop.running.tasks.97f6493")) : undefined}
                 onClick={(e) => {
                   if (runningSet.size === 0) return;
                   e.stopPropagation(); // 别触发用量面板
@@ -6892,7 +6859,7 @@ export function App() {
                       : `○ ${t("foot.ready")}`}
               </span>
               <span className="fs-extra fs-hit">
-                <span title={roomMode ? (lang === "en" ? "Estimated from this room's message text" : "按本群/私聊消息文本长度估算") : undefined}>
+                <span title={roomMode ? (tr("ui.app.estimated.from.this.room.message.text.c966edc")) : undefined}>
                   {t("foot.context")} {roomMode ? "~" : ""}{ctxK.toFixed(1)}k
                 </span>
                 {/* 无为托管会员：底部栏常显本周额度已用%，≥50%黄、≥80%红，提醒省着用。
@@ -6905,7 +6872,7 @@ export function App() {
                   return (
                     <>
                       <span className="fs-dot">·</span>
-                      <span className={"fs-quota" + tone}>{lang === "en" ? "Month" : "本月"} {usedPct}%</span>
+                      <span className={"fs-quota" + tone}>{tr("ui.app.month.7db01cb")} {usedPct}%</span>
                     </>
                   );
                 })()}
@@ -6916,12 +6883,12 @@ export function App() {
                     <span className="fs-dot">·</span>
                     {(rate.primaryWindowMinutes ?? 300) >= 1440 ? (
                       // 主窗口已是周尺度(Codex 168h)：只显示一个「周」用量，不再摆短窗口
-                      <span>{lang === "en" ? "Week" : "周"} {rate.primaryUsedPercent}%</span>
+                      <span>{tr("ui.app.week.ace7b32")} {rate.primaryUsedPercent}%</span>
                     ) : (
                       <>
-                        <span>{lang === "en" ? "5h" : "5小时"} {rate.primaryUsedPercent}%</span>
+                        <span>{tr("ui.app.text.eae1367")} {rate.primaryUsedPercent}%</span>
                         <span className="fs-dot">·</span>
-                        <span>{lang === "en" ? "Week" : "周"} {rate.secondaryUsedPercent ?? 0}%</span>
+                        <span>{tr("ui.app.week.ace7b32")} {rate.secondaryUsedPercent ?? 0}%</span>
                       </>
                     )}
                   </>
@@ -6931,8 +6898,8 @@ export function App() {
                     <span className="fs-dot">·</span>
                     <span>
                       {account.balance.total
-                        ? (lang === "en" ? `Balance ¥${account.balance.total}` : `余额 ${account.balance.total} 元`)
-                        : (lang === "en" ? `Spent ¥${account.balance.consumed}` : `已消耗 ${account.balance.consumed} 元`)}
+                        ? (tr("ui.app.balance.99c4b38", { p0: account.balance.total }))
+                        : (tr("ui.app.spent.4d7b89a", { p0: account.balance.consumed }))}
                     </span>
                   </>
                 )}
@@ -6949,18 +6916,18 @@ export function App() {
       {/* 侧栏收起时，更新药丸改为固定浮动在左下角——否则药丸只在侧栏里，收起后用户永远看不到「发现新版本」 */}
       {collapsed && updateReady && updateReady.version !== updateChipHidden && (
         <div style={{ position: "fixed", left: 14, bottom: 14, zIndex: 60, width: 190, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-          <div className="update-chip" role="button" onClick={() => setShowUpdateModal(true)} title={lang === "en" ? `New version v${updateReady.version} available` : `发现新版本 v${updateReady.version}`}>
+          <div className="update-chip" role="button" onClick={() => setShowUpdateModal(true)} title={tr("ui.app.new.version.available.0001bc0", { p0: updateReady.version })}>
             <span className="update-chip__icon">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 16.5V8" /><path d="M8.5 11.5 12 8l3.5 3.5" /></svg>
             </span>
             <span className="update-chip__text">
-              <span className="update-chip__title">{lang === "en" ? "New version" : "发现新版本"}</span>
+              <span className="update-chip__title">{tr("ui.app.new.version.191f526")}</span>
               <span className="update-chip__ver">v{updateReady.version}</span>
             </span>
             <span className="update-chip__arrow">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
             </span>
-            <button className="update-chip__x" onClick={(e) => { e.stopPropagation(); const v = updateReady.version; setUpdateChipHidden(v); try { localStorage.setItem("wuwei_dismissed_update_chip", v); } catch {} }} title={lang === "en" ? "Dismiss" : "关闭"} aria-label={lang === "en" ? "Dismiss" : "关闭"}>
+            <button className="update-chip__x" onClick={(e) => { e.stopPropagation(); const v = updateReady.version; setUpdateChipHidden(v); try { localStorage.setItem("wuwei_dismissed_update_chip", v); } catch {} }} title={tr("ui.app.dismiss.900510d")} aria-label={tr("ui.app.dismiss.900510d")}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
@@ -6976,7 +6943,7 @@ export function App() {
                 className={"icon-btn side-seg-btn" + (showTeam ? " on" : "")}
                 role="tab"
                 aria-selected={showTeam}
-                title={lang === "en" ? "My Company (toggle)" : "一人公司（点击收起/展开）"}
+                title={tr("ui.app.my.company.toggle.e7af576")}
                 onClick={() => toggleSidePanel("team")}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -6989,7 +6956,7 @@ export function App() {
                 className={"icon-btn side-seg-btn" + (showChats ? " on" : "")}
                 role="tab"
                 aria-selected={showChats}
-                title={lang === "en" ? "Chats (toggle)" : "对话列表（点击收起/展开）"}
+                title={tr("ui.app.chats.toggle.3f85e2f")}
                 onClick={() => toggleSidePanel("chats")}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -6999,10 +6966,10 @@ export function App() {
               </button>
             </div>
           )}
-          <button className="icon-btn" title={t("side.search", "搜索所有对话内容（⌘/Ctrl+F）")} onClick={openSearch}>
+          <button className="icon-btn" title={t("side.search")} onClick={openSearch}>
             <SearchIcon />
           </button>
-          <button className="icon-btn" title={t("side.collapse", "收起侧栏")} onClick={() => toggleCollapse(true)}>
+          <button className="icon-btn" title={t("side.collapse")} onClick={() => toggleCollapse(true)}>
             «
           </button>
         </div>
@@ -7028,11 +6995,11 @@ export function App() {
                   <circle cx="9.5" cy="7" r="3.2" />
                   <path d="M17 11l2 2 3.5-3.5" />
                 </svg>
-                <span className="tool-label">{lang === "en" ? "My Company" : "一人公司"}</span>
+                <span className="tool-label">{tr("ui.app.my.company.05b42c6")}</span>
               </button>
               <button
                 className="tool-expand"
-                title={teamExpanded ? (lang === "en" ? "Collapse" : "收起") : (lang === "en" ? "Expand" : "展开")}
+                title={teamExpanded ? (tr("set.mcp.collapse")) : (tr("ui.app.expand.369944d"))}
                 onClick={() => { const v = !teamExpanded; setTeamExpanded(v); localStorage.setItem("wuwei-team-expanded", v ? "1" : "0"); }}
               >
                 <svg className={"tool-chev" + (teamExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -7048,7 +7015,7 @@ export function App() {
                   onClick={() => { const v = !contactsExpanded; setContactsExpanded(v); localStorage.setItem("wuwei-contacts-expanded", v ? "1" : "0"); }}
                 >
                   <svg className={"tool-chev" + (contactsExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-                  <span className="tool-sub-sec-nm">{lang === "en" ? "Contacts" : "通讯录"}</span>
+                  <span className="tool-sub-sec-nm">{tr("ui.app.contacts.b2a595e")}</span>
                   <span className="tool-sub-sec-cnt">{teamEmployees.length}</span>
                 </button>
                 {/* 员工：一个固定专属会话入口 + 可展开的会话子列表（微信通讯录式）。支持拖拽调整顺序。 */}
@@ -7092,18 +7059,18 @@ export function App() {
                       >
                         <button
                           className="tool-sub-item"
-                          title={lang === "en" ? `Chat with ${employeeLabel(e, "en")}` : `和${e.name}私聊`}
+                          title={tr("ui.app.chat.with.e3dbfcc", { p0: (lang !== "zh" ? employeeLabel(e, "en") : e.name) })}
                           onClick={openLatest}
                           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                         >
                           <span className="tool-sub-av"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, lang)} /></span>
                           <span className="tool-sub-nm">{employeeLabel(e, lang)}</span>
-                          {headIds.has(e.id) && <span className="tool-sub-lead" title={lang === "en" ? "Department head" : "部门负责人"}>{lang === "en" ? "Head" : "负责人"}</span>}
+                          {headIds.has(e.id) && <span className="tool-sub-lead" title={tr("ui.app.department.head.539e0fb")}>{tr("ui.app.head.13d4010")}</span>}
                         </button>
                         {(empSessions.length > 0 || empDms.length > 0) && (
                           <button
                             className="tool-sub-chev"
-                            title={isExpanded ? (lang === "en" ? "Collapse" : "收起") : (lang === "en" ? "Show chats" : "展开对话")}
+                            title={isExpanded ? (tr("set.mcp.collapse")) : (tr("ui.app.show.chats.dd3ec3e"))}
                             onClick={() => setEmpExpanded((prev) => { const n = new Set(prev); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })}
                           >
                             <svg className={"tool-chev" + (isExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
@@ -7113,7 +7080,7 @@ export function App() {
                       {isExpanded && (
                         <div className="tool-sub-convos">
                           {/* 模块①：你和这名员工的对话 */}
-                          <div className="tool-sub-grouplabel">{lang === "en" ? "Chats" : "你俩的对话"}</div>
+                          <div className="tool-sub-grouplabel">{tr("ui.app.chats.81d1f69")}</div>
                           {empSessions.map((s) => (
                             <div
                               key={s.id}
@@ -7123,11 +7090,11 @@ export function App() {
                               onClick={() => { window.wuwei.switchSession(s.id); setAppView(null); setAgiView(null); }}
                               onContextMenu={(ev) => { ev.preventDefault(); setCtxMenu({ sid: s.id, x: ev.clientX, y: ev.clientY }); }}
                             >
-                              <span className="tool-sub-convo-t">{employeeSessionTitle(s, e, lang) || (lang === "en" ? "New chat" : "新对话")}</span>
+                              <span className="tool-sub-convo-t">{employeeSessionTitle(s, e, lang) || (tr("ui.app.new.chat.fca06b0"))}</span>
                               <span className="tool-sub-convo-tm">{relTime(s.updatedAt)}</span>
                               <button
                                 className="tool-sub-convo-del"
-                                title={lang === "en" ? "Delete" : "删除这条对话"}
+                                title={tr("ui.app.delete.6f27c71")}
                                 onClick={(e) => { e.stopPropagation(); window.wuwei.deleteSession(s.id); }}
                               >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -7135,10 +7102,10 @@ export function App() {
                             </div>
                           ))}
                           <button className="tool-sub-newconvo" onClick={() => { void (window as any).wuwei?.team?.chat?.(e.id); setAppView(null); setAgiView(null); }}>
-                            + {lang === "en" ? "New chat" : "新对话"}
+                            + {tr("ui.app.new.chat.fca06b0")}
                           </button>
                           {/* 模块②：该员工与其他同事的私聊(镜像)。有才显示，带灰字标题 + 与上一块留间距，两块视觉独立。 */}
-                          {empDms.length > 0 && <div className="tool-sub-grouplabel with-gap">{lang === "en" ? "DMs with teammates" : "与同事的私聊"}</div>}
+                          {empDms.length > 0 && <div className="tool-sub-grouplabel with-gap">{tr("ui.app.dms.with.teammates.dfb705d")}</div>}
                           {empDms.map((r: any) => {
                             const otherId = (r.members || []).find((m: string) => m !== e.id);
                             const other = teamEmployees.find((x: any) => x.id === otherId);
@@ -7149,7 +7116,7 @@ export function App() {
                                 role="button"
                                 tabIndex={0}
                                 className={"tool-sub-convo tool-sub-dm" + (onDm ? " on" : "")}
-                                title={lang === "en" ? `DM with ${employeeLabel(other, "en", otherId)}` : `与${other?.name || otherId}的私聊`}
+                                title={tr("ui.app.dm.with.75896e4", { p0: (lang !== "zh" ? employeeLabel(other, "en", otherId) : other?.name || otherId) })}
                                 onClick={() => { setDmSelfId(e.id); setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
                                 onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
                               >
@@ -7158,8 +7125,8 @@ export function App() {
                                 <span className="tool-sub-convo-tm">{relTime(r.updatedAt)}</span>
                                 <button
                                   className="tool-sub-convo-del"
-                                  title={lang === "en" ? "Delete chat" : "删除私聊"}
-                                  onClick={(e) => { e.stopPropagation(); askConfirm({ message: lang === "en" ? "Delete this private chat?" : `删除与「${other?.name || otherId}」的私聊？删后可重新发起。`, danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete?.(r.id); if (activeRoomId === r.id) { setActiveRoomId(null); setAppView("store"); } } }); }}
+                                  title={tr("ui.app.delete.chat.3a8eb82")}
+                                  onClick={(e) => { e.stopPropagation(); askConfirm({ message: tr("ui.app.delete.this.private.chat.8783704", { v0: (lang !== "zh" ? undefined : other?.name || otherId) }), danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete?.(r.id); if (activeRoomId === r.id) { setActiveRoomId(null); setAppView("store"); } } }); }}
                                 >
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                                 </button>
@@ -7167,19 +7134,19 @@ export function App() {
                             );
                           })}
                           {/* 模块③：该员工的定时任务。到点自动唤醒他按内容执行。 */}
-                          <div className="tool-sub-grouplabel with-gap">{lang === "en" ? "Schedules" : "定时任务"}</div>
+                          <div className="tool-sub-grouplabel with-gap">{tr("ui.app.schedules.992b43d")}</div>
                           {empSchedules.map((s: any) => (
-                            <div key={s.id} className="tool-sub-convo tool-sub-sched" title={schedTriggerText(s.trigger, lang === "en")}>
+                            <div key={s.id} className="tool-sub-convo tool-sub-sched" title={schedTriggerText(s.trigger, lang !== "zh")}>
                               <span className={"sched-dot" + (s.enabled ? " on" : "")} />
                               <span className="tool-sub-convo-t">{s.name}</span>
-                              <span className="tool-sub-convo-tm">{schedTriggerText(s.trigger, lang === "en")}</span>
-                              <button className="tool-sub-convo-del" title={lang === "en" ? "Edit" : "编辑"} onClick={(ev) => { ev.stopPropagation(); setScheduleModal({ employeeId: e.id, task: s }); }}>
+                              <span className="tool-sub-convo-tm">{schedTriggerText(s.trigger, lang !== "zh")}</span>
+                              <button className="tool-sub-convo-del" title={tr("set.st.editShort")} onClick={(ev) => { ev.stopPropagation(); setScheduleModal({ employeeId: e.id, task: s }); }}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                               </button>
                             </div>
                           ))}
                           <button className="tool-sub-newconvo" onClick={() => setScheduleModal({ employeeId: e.id })}>
-                            + {lang === "en" ? "New schedule" : "新建定时任务"}
+                            + {tr("ui.app.new.schedule.60e93cc")}
                           </button>
                         </div>
                       )}
@@ -7214,13 +7181,13 @@ export function App() {
                             <span className="tool-dept-nm">{departmentLabel(dept, lang)}</span>
                             <span className="tool-dept-cnt">{mems.length}</span>
                           </div>
-                          {mems.length === 0 ? <div className="tool-dept-empty">{lang === "en" ? "No members yet" : "暂无成员"}</div> : mems.map(renderEmp)}
+                          {mems.length === 0 ? <div className="tool-dept-empty">{tr("ui.app.no.members.yet.5e608a1")}</div> : mems.map(renderEmp)}
                         </div>
                       ))}
                       {ungrouped.length > 0 && (
                         <div className="tool-dept">
                           <div className="tool-dept-head">
-                            <span className="tool-dept-nm tool-dept-nm-muted">{lang === "en" ? "Unassigned" : "未分组"}</span>
+                            <span className="tool-dept-nm tool-dept-nm-muted">{tr("ui.app.unassigned.c1fa93f")}</span>
                             <span className="tool-dept-cnt">{ungrouped.length}</span>
                           </div>
                           {ungrouped.map(renderEmp)}
@@ -7235,7 +7202,7 @@ export function App() {
                   onClick={() => { const v = !groupsExpanded; setGroupsExpanded(v); localStorage.setItem("wuwei-groups-expanded", v ? "1" : "0"); }}
                 >
                   <svg className={"tool-chev" + (groupsExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-                  <span className="tool-sub-sec-nm">{lang === "en" ? "Groups" : "群聊"}</span>
+                  <span className="tool-sub-sec-nm">{tr("ui.app.groups.f080cef")}</span>
                   <span className="tool-sub-sec-cnt">{teamRooms.filter((r:any)=>r.type!=="dm").length}</span>
                 </button>
                 {/* 群入口。私聊(type==="dm")不在这里列——它们镜像挂在各自参与员工的通讯录子列表下 */}
@@ -7257,7 +7224,7 @@ export function App() {
                   </button>
                 ))}
                 {groupsExpanded && teamRooms.filter((r:any)=>r.type!=="dm").length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add a group." : "右键新建群聊"}</div>
+                  <div className="tool-sub-hint">{tr("ui.app.right.click.to.add.group.7971838")}</div>
                 )}
                 {/* SOP 库子板块头：公司标准流程文档库（树形，可展开/折叠、右键管理、拖拽） */}
                 <button
@@ -7266,16 +7233,16 @@ export function App() {
                   onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "sop-category" }); }}
                 >
                   <svg className={"tool-chev" + (sopExpanded ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-                  <span className="tool-sub-sec-nm">{lang === "en" ? "SOPs" : "SOP库"}</span>
+                  <span className="tool-sub-sec-nm">{tr("ui.app.sops.c42d895")}</span>
                   <span className="tool-sub-sec-cnt">{sopTree.filter((n:any)=>n.kind==="sop").length}</span>
                 </button>
                 {sopExpanded && renderSopTree(undefined, 0)}
                 {sopExpanded && sopTree.length === 0 && (
-                  <div className="tool-sub-hint">{lang === "en" ? "Right-click to add an SOP." : "右键新建 SOP"}</div>
+                  <div className="tool-sub-hint">{tr("ui.app.right.click.to.add.an.sop.717586a")}</div>
                 )}
                 {teamEmployees.length === 0 && teamRooms.length === 0 && (
                   <button className="tool-sub-empty" onClick={() => { setAppView("store"); setAgiView(null); }}>
-                    {lang === "en" ? "Add teammates →" : "去添加员工 →"}
+                    {tr("ui.app.add.teammates.8ae67bb")}
                   </button>
                 )}
               </div>
@@ -7286,7 +7253,7 @@ export function App() {
               className="side-tools-resizer"
               onMouseDown={startToolsResize}
               onDoubleClick={() => { setToolsH(0); localStorage.removeItem("wuwei-tools-h"); }}
-              title={lang === "en" ? "Drag to resize · double-click to reset" : "拖动调整一人公司面板高度 · 双击恢复自适应"}
+              title={tr("ui.app.drag.to.resize.double.click.to.971a87d")}
             />
           )}
           </>
@@ -7316,40 +7283,40 @@ export function App() {
               <div className="team-cm-mask" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
               <div className="team-cm" style={{ left: Math.min(teamMenu.x, window.innerWidth - 180), top: teamMenu.y }}>
                 {teamMenu.kind === "company" && (<>
-                  <Item label={lang === "en" ? "Add teammate" : "新建/导入员工"} on={() => { setAppView("store"); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "New group" : "建群"} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "Settings" : "设置"} on={() => { setSettingsTab("team"); setShowSettings(true); close(); }} />
-                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
+                  <Item label={tr("ui.app.add.teammate.a3a4d45")} on={() => { setAppView("store"); setAgiView(null); close(); }} />
+                  <Item label={tr("ui.app.new.group.e0bb42b")} on={() => { setActiveRoomId(null); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item label={tr("set.title")} on={() => { setSettingsTab("team"); setShowSettings(true); close(); }} />
+                  <Item label={tr("set.brain.refresh")} on={refreshTeam} />
                 </>)}
                 {teamMenu.kind === "employee" && (<>
-                  <Item label={lang === "en" ? "Chat" : "私聊"} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "Edit" : "编辑"} on={() => { const emp = teamEmployees.find((x: any) => x.id === teamMenu.id); if (emp) setEditEmp(emp); close(); }} />
-                  <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("employee", teamMenu.id!)} />
-                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={refreshTeam} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete "${teamMenu.name}"?` : `删除员工「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.removeEmployee?.(teamMenu.id); } }); }} />
+                  <Item label={tr("ui.app.chat.98f8e01")} on={() => { void api?.chat?.(teamMenu.id); setAppView(null); setAgiView(null); close(); }} />
+                  <Item label={tr("set.st.editShort")} on={() => { const emp = teamEmployees.find((x: any) => x.id === teamMenu.id); if (emp) setEditEmp(emp); close(); }} />
+                  <Item label={tr("ui.app.pin.to.top.ebf047a")} on={() => pin("employee", teamMenu.id!)} />
+                  <Item label={tr("set.brain.refresh")} on={refreshTeam} />
+                  <Item danger label={tr("set.st.delShort")} on={() => { close(); askConfirm({ message: tr("ui.app.delete.53ff44e", { p0: teamMenu.name }), danger: true, onOk: () => { void api?.removeEmployee?.(teamMenu.id); } }); }} />
                 </>)}
                 {teamMenu.kind === "room" && (<>
-                  <Item label={lang === "en" ? "Open" : "进入"} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
-                  <Item label={lang === "en" ? "Settings" : "群设置"} on={() => { setRoomSettings({ id: teamMenu.id! }); close(); }} />
-                  <Item label={lang === "en" ? "Pin to top" : "置顶"} on={() => pin("room", teamMenu.id!)} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete group "${teamMenu.name}"?` : `删除群「${teamMenu.name}」？`, danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); } }); }} />
+                  <Item label={tr("ui.app.open.dc6a395")} on={() => { setActiveRoomId(teamMenu.id!); setAppView("rooms"); setAgiView(null); close(); }} />
+                  <Item label={tr("ui.app.settings.c1e3e79")} on={() => { setRoomSettings({ id: teamMenu.id! }); close(); }} />
+                  <Item label={tr("ui.app.pin.to.top.ebf047a")} on={() => pin("room", teamMenu.id!)} />
+                  <Item danger label={tr("set.st.delShort")} on={() => { close(); askConfirm({ message: tr("ui.app.delete.group.5c64be3", { p0: teamMenu.name }), danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); } }); }} />
                 </>)}
                 {teamMenu.kind === "dm" && (<>
-                  <Item danger label={lang === "en" ? "Delete chat" : "删除私聊"} on={() => { close(); askConfirm({ message: lang === "en" ? `Delete this private chat?` : `删除与「${teamMenu.name}」的私聊？删后可重新发起。`, danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }); }} />
+                  <Item danger label={tr("ui.app.delete.chat.3a8eb82")} on={() => { close(); askConfirm({ message: tr("ui.app.delete.this.private.chat.8783704", { v0: (lang !== "zh" ? undefined : teamMenu.name) }), danger: true, onOk: () => { void api?.roomDelete?.(teamMenu.id); if (activeRoomId === teamMenu.id) { setActiveRoomId(null); setAppView("store"); } } }); }} />
                 </>)}
                 {/* SOP 类别（含顶层「SOP库」头：teamMenu.id 为空=在根建）：新建子类别/新建SOP/重命名/删除 */}
                 {teamMenu.kind === "sop-category" && (<>
-                  <Item label={lang === "en" ? "New subcategory" : "新建子类别"} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: lang === "en" ? "New subcategory" : "新建子类别", label: lang === "en" ? "Category name" : "类别名称", placeholder: lang === "en" ? "e.g. Deployment" : "如：部署上线", onOk: (nm) => { void api?.sopCreate?.("category", nm, pid); } }); }} />
-                  <Item label={lang === "en" ? "New SOP" : "新建 SOP"} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: lang === "en" ? "New SOP" : "新建 SOP", label: lang === "en" ? "SOP title" : "SOP 标题", placeholder: lang === "en" ? "e.g. Deploy to Vercel" : "如：部署到 Vercel", onOk: async (nm) => { const key = nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || undefined; const r = await api?.sopCreate?.("sop", nm, pid, { taskKey: key }); if (r?.exists) { const eid = r?.node?.id; askConfirm({ title: lang === "en" ? "SOP already exists" : "该事已有 SOP", message: lang === "en" ? "One process = one SOP. Open the existing one to iterate on it?" : "一事一 SOP，未重复创建。去迭代现有的这份？", okText: lang === "en" ? "Open" : "去迭代", onOk: () => { if (eid) { setActiveSopId(eid); setAppView("sop"); setAgiView(null); } } }); return; } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (pid) setSopCatOpen((s) => new Set(s).add(pid)); } }); }} />
-                  {teamMenu.id && <Item label={lang === "en" ? "Rename" : "重命名"} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: lang === "en" ? "Rename" : "重命名", label: lang === "en" ? "New name" : "新名称", defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />}
-                  {teamMenu.id && <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: lang === "en" ? `Delete category "${nm}" and everything inside?` : `删除类别「${nm}」及其下所有内容？`, danger: true, onOk: () => { void api?.sopDelete?.(id); } }); }} />}
-                  <Item label={lang === "en" ? "Refresh" : "刷新"} on={() => { api?.sopTree?.().then((r: any) => setSopTree(r?.tree || [])); close(); }} />
+                  <Item label={tr("ui.app.new.subcategory.7feaadc")} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: tr("ui.app.new.subcategory.7feaadc"), label: tr("ui.app.category.name.8ba8cd6"), placeholder: tr("ui.app.deployment.07b688c"), onOk: (nm) => { void api?.sopCreate?.("category", nm, pid); } }); }} />
+                  <Item label={tr("ui.app.new.sop.275e292")} on={() => { const pid = teamMenu.id; close(); askPrompt({ title: tr("ui.app.new.sop.275e292"), label: tr("ui.app.sop.title.6ade855"), placeholder: tr("ui.app.deploy.to.vercel.b7a8e9c"), onOk: async (nm) => { const key = nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || undefined; const r = await api?.sopCreate?.("sop", nm, pid, { taskKey: key }); if (r?.exists) { const eid = r?.node?.id; askConfirm({ title: tr("ui.app.sop.already.exists.63f7566"), message: tr("ui.app.one.process.one.sop.open.the.afdc60b"), okText: tr("ui.app.open.dd010a1"), onOk: () => { if (eid) { setActiveSopId(eid); setAppView("sop"); setAgiView(null); } } }); return; } if (r?.node?.id) { setActiveSopId(r.node.id); setAppView("sop"); setAgiView(null); } if (pid) setSopCatOpen((s) => new Set(s).add(pid)); } }); }} />
+                  {teamMenu.id && <Item label={tr("ui.app.rename.f510124")} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: tr("ui.app.rename.f510124"), label: tr("ui.app.new.name.a3abdaf"), defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />}
+                  {teamMenu.id && <Item danger label={tr("set.st.delShort")} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: tr("ui.app.delete.category.and.everything.inside.f548450", { p0: nm }), danger: true, onOk: () => { void api?.sopDelete?.(id); } }); }} />}
+                  <Item label={tr("set.brain.refresh")} on={() => { api?.sopTree?.().then((r: any) => setSopTree(r?.tree || [])); close(); }} />
                 </>)}
                 {/* 单个 SOP：重命名/删除（新建子项走类别菜单） */}
                 {teamMenu.kind === "sop" && (<>
-                  <Item label={lang === "en" ? "Open" : "打开"} on={() => { close(); setActiveSopId(teamMenu.id!); setAppView("sop"); setAgiView(null); }} />
-                  <Item label={lang === "en" ? "Rename" : "重命名"} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: lang === "en" ? "Rename" : "重命名", label: lang === "en" ? "New name" : "新名称", defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />
-                  <Item danger label={lang === "en" ? "Delete" : "删除"} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: lang === "en" ? `Delete SOP "${nm}"?` : `删除 SOP「${nm}」？`, danger: true, onOk: () => { void api?.sopDelete?.(id); if (activeSopId === id) { setActiveSopId(null); setAppView(null); } } }); }} />
+                  <Item label={tr("ui.app.open.a211eef")} on={() => { close(); setActiveSopId(teamMenu.id!); setAppView("sop"); setAgiView(null); }} />
+                  <Item label={tr("ui.app.rename.f510124")} on={() => { const id = teamMenu.id, cur = teamMenu.name; close(); askPrompt({ title: tr("ui.app.rename.f510124"), label: tr("ui.app.new.name.a3abdaf"), defaultValue: cur, onOk: (nm) => { void api?.sopRename?.(id, nm); } }); }} />
+                  <Item danger label={tr("set.st.delShort")} on={() => { const id = teamMenu.id, nm = teamMenu.name; close(); askConfirm({ message: tr("ui.app.delete.sop.15e6a37", { p0: nm }), danger: true, onOk: () => { void api?.sopDelete?.(id); if (activeSopId === id) { setActiveSopId(null); setAppView(null); } } }); }} />
                 </>)}
               </div>
             </>
@@ -7377,21 +7344,21 @@ export function App() {
             <div className="agi-items">
               {babyExists ? (
                 <div className={"agi-item" + (agiView === "baby" ? " active" : "")}>
-                  <span className="agi-item-name" onClick={openBaby} title={lang === "en" ? "Open digital baby" : "点击进入数字婴儿"}>
+                  <span className="agi-item-name" onClick={openBaby} title={tr("ui.app.open.digital.baby.eaa504f")}>
                     <BabyGlyph />
-                    {lang === "en" ? "Digital Baby" : "数字婴儿"}
+                    {tr("ui.app.digital.baby.4f3790f")}
                   </span>
-                  <span className="agi-item-del" title={lang === "en" ? "Remove" : "删除对接"} onClick={deleteBaby}>✕</span>
+                  <span className="agi-item-del" title={tr("ui.app.remove.f2814ee")} onClick={deleteBaby}>✕</span>
                 </div>
               ) : (
-                <div className="agi-add" onClick={createBaby} title={lang === "en" ? "Add digital baby" : "新增并对接数字婴儿"}>＋ {lang === "en" ? "Add Digital Baby" : "新增数字婴儿"}</div>
+                <div className="agi-add" onClick={createBaby} title={tr("ui.app.add.digital.baby.1ead128")}>＋ {tr("ui.app.add.digital.baby.e0d2f13")}</div>
               )}
             </div>
           )}
         </div>
         )}
         <div className="session-list">
-          {sessions.filter((s) => !s.employeeId).length === 0 && <div className="empty">{lang === "en" ? "No conversations yet" : "暂无历史对话"}</div>}
+          {sessions.filter((s) => !s.employeeId).length === 0 && <div className="empty">{tr("ui.app.no.conversations.yet.b8bca7a")}</div>}
           {(() => {
             const byGroup = new Map<string, SessionMeta[]>();
             for (const s of sessions) {
@@ -7429,7 +7396,7 @@ export function App() {
                 className={
                   "session-item" +
                   (s.id === currentId ? " active" : "") +
-                  (s.done ? " done" : "") +
+                  (s.done ? "done" : "") +
                   (s.id === dragId ? " dragging" : "") +
                   (s.id === dragOverId ? " drag-over" : "")
                 }
@@ -7455,7 +7422,7 @@ export function App() {
                   setCtxMenu({ sid: s.id, x: e.clientX, y: e.clientY });
                 }}
               >
-                {runningSet.has(s.id) && <span className="s-run" title={t("thinking.running", "运行中")} />}
+                {runningSet.has(s.id) && <span className="s-run" title={t("thinking.running")} />}
                 {s.priorityTag && (
                   <span
                     className={"s-prio p" + (s.priority || 0)}
@@ -7464,8 +7431,8 @@ export function App() {
                     {s.priorityTag}
                   </span>
                 )}
-                {s.discuss && <span className="s-discuss" title={t("side.discuss", "待讨论：需过会议讨论")}>{t("side.discussBadge", "议")}</span>}
-                {s.done && <span className="s-done" title={t("side.done", "已完成")}>✓</span>}
+                {s.discuss && <span className="s-discuss" title={t("side.discuss")}>{t("side.discussBadge")}</span>}
+                {s.done && <span className="s-done" title={t("side.done")}>✓</span>}
                 <span className="s-title">{tx(s.title)}</span>
                 <span className="s-time" title={new Date(s.updatedAt).toLocaleString()}>
                   {relTime(s.updatedAt)}
@@ -7595,25 +7562,25 @@ export function App() {
                       try {
                         const r = await window.wuwei.handoffSession(sid);
                         if (!r?.ok)
-                          push({ type: "notice", text: lang === "en" ? "Handoff failed: nothing to distill from this chat" : "交接失败：该会话暂无可提炼的内容" });
+                          push({ type: "notice", text: tr("ui.app.handoff.failed.nothing.to.distill.from.1100e99") });
                         else if (r.goalCarried && r.newId) {
                           // 源会话带总目标 → 新会话自动开智能继续，交接后接着朝目标自主推进
                           setMode(r.newId, "cont");
-                          push({ type: "notice", text: lang === "en" ? "Goal carried to the new chat — smart-continue on, advancing automatically." : "已把总目标带到新对话，并自动开启智能继续，接着朝目标推进。" });
+                          push({ type: "notice", text: tr("ui.app.goal.carried.to.the.new.chat.cd9ecfd") });
                         }
                       } finally {
                         setHandoffBusy(false);
                       }
                     }}
-                    title={t("ctx.handoffTip", "总结本对话有价值的内容，生成交接文档，并开一个干净的新对话接着做(解决上下文被污染)")}
+                    title={t("ctx.handoffTip")}
                   >
                     <HandoffIcon />
-                    <span>{t("ctx.handoff", "总结并交接到新对话")}</span>
+                    <span>{t("ctx.handoff")}</span>
                   </button>
                   <div className="ctx-sep" />
                   <button
                     className="ctx-item ctx-ico"
-                    title={lang === "en" ? "Set an overall goal for this chat; it self-decomposes and drives step by step until done" : "给这个对话定一个大目标，它自己拆解、自己一步步推进，做完为止"}
+                    title={tr("ui.app.set.an.overall.goal.for.this.42a5121")}
                     onClick={() => {
                       const sid = ctxMenu.sid;
                       close();
@@ -7626,14 +7593,14 @@ export function App() {
                       <circle cx="12" cy="12" r="8" />
                       <circle cx="12" cy="12" r="3.4" />
                     </svg>
-                    <span>{lang === "en" ? "Set overall goal…" : "设置总目标…"}</span>
+                    <span>{tr("ui.app.set.overall.goal.846f9cb")}</span>
                   </button>
                   <button
                     className="ctx-item ctx-ico"
-                    title={lang === "en" ? "View the full conversation including exchanges before context compaction" : "查看完整对话，包括上下文压缩前的交流(半夜自主推进跑久了也能回看)"}
+                    title={tr("ui.app.view.the.full.conversation.including.exchanges.655d876")}
                     onClick={() => {
                       const sid = ctxMenu.sid;
-                      const title = sessions.find((x) => x.id === sid)?.title || (lang === "en" ? "Conversation" : "对话");
+                      const title = sessions.find((x) => x.id === sid)?.title || (tr("ui.app.conversation.b284fab"));
                       close();
                       openHistory(sid, title);
                     }}
@@ -7642,7 +7609,7 @@ export function App() {
                       <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H18a2 2 0 0 1 2 2v11.5a1.5 1.5 0 0 1-1.5 1.5H7a3 3 0 0 1-3-3V5.5z" />
                       <path d="M8 8.5h8M8 12h8M8 15.5h5" />
                     </svg>
-                    <span>{lang === "en" ? "View full history…" : "查看完整历史…"}</span>
+                    <span>{tr("ui.app.view.full.history.17b4cd4")}</span>
                   </button>
                   {!isEmp && (
                   <>
@@ -7655,7 +7622,7 @@ export function App() {
                     }}
                   >
                     <DoneIcon />
-                    <span>{s.done ? t("ctx.markUndone", "取消完成") : t("ctx.markDone", "标记完成")}</span>
+                    <span>{s.done ? t("ctx.markUndone") : t("ctx.markDone")}</span>
                   </button>
                   <button
                     className="ctx-item ctx-ico ctx-discuss"
@@ -7665,10 +7632,10 @@ export function App() {
                     }}
                   >
                     <DiscussIcon />
-                    <span>{s.discuss ? t("ctx.unmarkDiscuss", "取消待讨论") : t("ctx.markDiscuss", "标记待讨论")}</span>
+                    <span>{s.discuss ? t("ctx.unmarkDiscuss") : t("ctx.markDiscuss")}</span>
                   </button>
                   <div className="ctx-sep" />
-                  <div className="ctx-head">{t("ctx.moveToGroup", "移动到分组")}</div>
+                  <div className="ctx-head">{t("ctx.moveToGroup")}</div>
                   {groups
                     .filter((g) => g !== s.group)
                     .map((g) => (
@@ -7678,14 +7645,14 @@ export function App() {
                     ))}
                   {s.group && (
                     <button className="ctx-item" onClick={() => move(null)}>
-                      {t("ctx.moveOut", "移出「{g}」").replace("{g}", s.group)}
+                      {t("ctx.moveOut").replace("{g}", s.group)}
                     </button>
                   )}
                   {groupInputSid === ctxMenu.sid ? (
                     <input
                       className="ctx-input"
                       autoFocus
-                      placeholder={t("ctx.newGroupPlaceholder", "新组名，回车创建")}
+                      placeholder={t("ctx.newGroupPlaceholder")}
                       value={newGroupName}
                       onChange={(e) => setNewGroupName(e.target.value)}
                       onKeyDown={(e) => {
@@ -7705,11 +7672,11 @@ export function App() {
                       }}
                     >
                       <PlusIcon />
-                      <span>{t("ctx.newGroup", "新建分组…")}</span>
+                      <span>{t("ctx.newGroup")}</span>
                     </button>
                   )}
                   <div className="ctx-sep" />
-                  <div className="ctx-head">{t("ctx.priority", "优先级")}</div>
+                  <div className="ctx-head">{t("ctx.priority")}</div>
                   <div className="ctx-prio">
                     <button
                       className={"ctx-prio-b" + (!s.priorityTag ? " on" : "")}
@@ -7718,7 +7685,7 @@ export function App() {
                         close();
                       }}
                     >
-                      {t("ctx.prioNone", "无")}
+                      {t("ctx.prioNone")}
                     </button>
                     {PRIO_HL.map((p) => (
                       <button
@@ -7729,11 +7696,11 @@ export function App() {
                           close();
                         }}
                       >
-                        {lang === "en" ? p.labelEn : p.label}
+                        {lang !== "zh" ? p.labelEn : p.label}
                       </button>
                     ))}
                   </div>
-                  <div className="ctx-head">{t("ctx.quadrant", "四象限（重要/紧急）")}</div>
+                  <div className="ctx-head">{t("ctx.quadrant")}</div>
                   <div className="ctx-quad">
                     {PRIO_QUAD.map((p) => (
                       <button
@@ -7744,7 +7711,7 @@ export function App() {
                           close();
                         }}
                       >
-                        {lang === "en" ? p.labelEn : p.label}
+                        {lang !== "zh" ? p.labelEn : p.label}
                       </button>
                     ))}
                   </div>
@@ -7768,7 +7735,7 @@ export function App() {
                   }}
                 />
                 <div className="ctx-menu" style={{ left: groupCtx.x, top: groupCtx.y }}>
-                  <div className="ctx-head">{lang === "en" ? `Group "${groupCtx.name}"` : `分组「${groupCtx.name}」`}</div>
+                  <div className="ctx-head">{tr("ui.app.group.c7680a9", { p0: groupCtx.name })}</div>
                   <button
                     className="ctx-item ctx-ico ctx-new"
                     onClick={() => {
@@ -7778,7 +7745,7 @@ export function App() {
                     }}
                   >
                     <ReportIcon />
-                    <span>{lang === "en" ? "Generate daily report" : "一键生成日报"}</span>
+                    <span>{tr("ui.app.generate.daily.report.68bd935")}</span>
                   </button>
                 </div>
               </>
@@ -7787,15 +7754,15 @@ export function App() {
         {trash.length > 0 && (
           <button
             className="trash-entry"
-            title={lang === "en" ? "Trash: deleted chats are here, restorable; auto-cleared after 7 days" : "回收站：已删除的对话在这里，可恢复；7 天后自动清除"}
+            title={tr("ui.app.trash.deleted.chats.are.here.restorable.76c556e")}
             onClick={() => setShowTrash(true)}
           >
-            <TrashIcon /> {lang === "en" ? "Trash" : "回收站"} <span className="trash-count">{trash.length}</span>
+            <TrashIcon /> {tr("ui.app.trash.54c3cd7")} <span className="trash-count">{trash.length}</span>
           </button>
         )}
         {(() => {
           const name =
-            account.nickname || account.email || account.label || (account.loggedIn ? (lang === "en" ? "Signed in" : "已登录") : (lang === "en" ? "Not signed in" : "未登录"));
+            account.nickname || account.email || account.label || (account.loggedIn ? (tr("ui.app.signed.in.0ea6d5a")) : (tr("ui.app.not.signed.in.3252057")));
           return (
             <>
               {/* 下载进度：正在下载新版时显示实时百分比进度条（下载完成后由「发现新版本」药丸接替） */}
@@ -7803,7 +7770,7 @@ export function App() {
                 <div style={{ padding: "0 10px", marginTop: 12, marginBottom: 4, WebkitAppRegion: "no-drag" } as React.CSSProperties}>
                   <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 10px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
-                      <span>{lang === "en" ? `New version${dlVer ? ` v${dlVer}` : ""} · downloading…` : `发现新版本${dlVer ? ` v${dlVer}` : ""} · 下载中…`}</span>
+                      <span>{tr("ui.app.new.version.downloading.56c60e0", { p0: dlVer ? ` v${dlVer}` : "" })}</span>
                       <span>{dlProgress.percent}%</span>
                     </div>
                     <div style={{ height: 4, borderRadius: 999, background: "var(--bg-raised)", overflow: "hidden" }}>
@@ -7819,7 +7786,7 @@ export function App() {
                     className="update-chip"
                     role="button"
                     onClick={() => setShowUpdateModal(true)}
-                    title={lang === "en" ? `New version v${updateReady.version} available` : `发现新版本 v${updateReady.version}`}
+                    title={tr("ui.app.new.version.available.0001bc0", { p0: updateReady.version })}
                   >
                     <span className="update-chip__icon">
                       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -7829,7 +7796,7 @@ export function App() {
                       </svg>
                     </span>
                     <span className="update-chip__text">
-                      <span className="update-chip__title">{lang === "en" ? "New version" : "发现新版本"}</span>
+                      <span className="update-chip__title">{tr("ui.app.new.version.191f526")}</span>
                       <span className="update-chip__ver">v{updateReady.version}</span>
                     </span>
                     <span className="update-chip__arrow">
@@ -7840,8 +7807,8 @@ export function App() {
                     <button
                       className="update-chip__x"
                       onClick={(e) => { e.stopPropagation(); const v = updateReady.version; setUpdateChipHidden(v); try { localStorage.setItem("wuwei_dismissed_update_chip", v); } catch {} }}
-                      title={lang === "en" ? "Dismiss" : "关闭"}
-                      aria-label={lang === "en" ? "Dismiss" : "关闭"}
+                      title={tr("ui.app.dismiss.900510d")}
+                      aria-label={tr("ui.app.dismiss.900510d")}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
                         <path d="M6 6l12 12M18 6L6 18" />
@@ -7855,7 +7822,7 @@ export function App() {
                   后台可按用户名/机器指纹对指定客户端单独放开——判定全在后端，客户端只渲染。 */}
               {showSubscription && (
                 <button
-                  onClick={() => push({ type: "notice", text: lang === "en" ? "Subscription entry (rollout enabled). Subscription page/benefits coming soon." : "订阅版入口（灰度已放开）。具体订阅页/权益后续接入。" })}
+                  onClick={() => push({ type: "notice", text: tr("ui.app.subscription.entry.rollout.enabled.subscription.page.045d69f") })}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -7871,7 +7838,7 @@ export function App() {
                     fontSize: 13,
                   }}
                 >
-                  <span style={{ color: "#C05F3C" }}>✨</span> {lang === "en" ? "Subscription" : "订阅版"}
+                  <span style={{ color: "#C05F3C" }}>✨</span> {tr("ui.app.subscription.8e99882")}
                 </button>
               )}
               <button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
@@ -7879,14 +7846,14 @@ export function App() {
                   {/* 未登录的头像首字也要跟语言：中文「游」/英文 G，别让英文界面里冒出个汉字 */}
                   <UserAvatar
                     url={wuwei?.user.avatar}
-                    fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial", "游")).slice(0, 1).toUpperCase()}
+                    fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial")).slice(0, 1).toUpperCase()}
                   />
                 </div>
                 <div
                   className="acct-name"
-                  title={wuwei ? wuwei.user.name || wuwei.user.email || (lang === "en" ? "Wuwei user" : "无为用户") : t("acct.notLoggedIn")}
+                  title={wuwei ? wuwei.user.name || wuwei.user.email || (tr("ui.app.wuwei.user.c08095c")) : t("acct.notLoggedIn")}
                 >
-                  {wuweiBusy ? (lang === "en" ? "Signing in…" : "登录中…") : wuwei ? wuwei.user.name || wuwei.user.email || (lang === "en" ? "Wuwei user" : "无为用户") : t("acct.guest")}
+                  {wuweiBusy ? (tr("usage.loggingIn")) : wuwei ? wuwei.user.name || wuwei.user.email || (tr("ui.app.wuwei.user.c08095c")) : t("acct.guest")}
                 </div>
                 <span className="acct-caret">⋯</span>
                 {/* 未读消息红点：菜单收起时也常驻可见，否则用户根本不知道有站内消息（回访/奖励/活动通知）。
@@ -7905,8 +7872,8 @@ export function App() {
                         const tier = wuwei.membership?.tier ?? "free";
                         const isPro = tier !== "free";
                         // 徽标/会员条：主标显档位名(Pro/Plus/Max，后端按套餐档给)，档位(月付/年付)作小灰字
-                        const tierMain = tier === "free" ? (lang === "en" ? "Free" : "免费版") : (wuwei.membership?.plan || "Pro");
-                        const tierQual = tier === "pro_year" ? (lang === "en" ? "yearly" : "年付") : tier === "pro_month" ? (lang === "en" ? "monthly" : "月付") : "";
+                        const tierMain = tier === "free" ? (tr("ui.app.free.42f9771")) : (wuwei.membership?.plan || "Pro");
+                        const tierQual = tier === "pro_year" ? ("yearly") : tier === "pro_month" ? ("monthly") : "";
                         const tierLabel = tierMain + (tierQual ? " " + tierQual : "");
                         const exp = wuwei.membership?.expireAt;
                         const expStr = exp ? new Date(exp).toISOString().slice(0, 10) : "";
@@ -7931,7 +7898,7 @@ export function App() {
                         const openPack = () => void openBrowsePay("topup"); // 充值 → 统一支付弹窗
                         const openPlan = () => void openBrowsePay("upgrade"); // 开通/续费 → 统一支付弹窗
                         // 已登录但没昵称/邮箱时的兜底首字：中文取「无」(无为)，英文取 W
-                        const initial = (wuwei.user.name || wuwei.user.email || t("acct.userInitial", "无")).slice(0, 1).toUpperCase();
+                        const initial = (wuwei.user.name || wuwei.user.email || t("acct.userInitial")).slice(0, 1).toUpperCase();
                         const Spark = () => (
                           <svg className="acct-spark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                             <path d="M8 1.4l1.5 5.1 5.1 1.5-5.1 1.5L8 14.6 6.5 9.5 1.4 8l5.1-1.5z" />
@@ -7946,7 +7913,7 @@ export function App() {
                               </div>
                               <div className="acct-id-txt">
                                 <div className="acct-nm">
-                                  <span className="acct-name">{wuwei.user.name || wuwei.user.email || (lang === "en" ? "Wuwei user" : "无为用户")}</span>
+                                  <span className="acct-name">{wuwei.user.name || wuwei.user.email || (tr("ui.app.wuwei.user.c08095c"))}</span>
                                   {/* 顶部 chip 只显 Pro/Free 主标；月付/年付档位交给下方会员卡，避免同一行重复又过长 */}
                                   <span className={"acct-tier " + (isPro ? "pro" : "free")}>
                                     {isPro && <Spark />}
@@ -7963,12 +7930,12 @@ export function App() {
                                 type="button"
                                 className={"acct-balance-refresh" + (balanceRefresh.busy ? " busy" : "")}
                                 disabled={balanceRefresh.busy}
-                                aria-label={lang === "en" ? "Refresh balance" : "刷新余额"}
+                                aria-label={tr("ui.app.refresh.balance.d87c149")}
                                 aria-busy={balanceRefresh.busy}
-                                title={balanceRefresh.busy ? (lang === "en" ? "Refreshing balance…" : "正在刷新余额…")
-                                  : balanceRefresh.error ? (lang === "en" ? "Refresh failed. Click to retry." : "刷新失败，点击重试")
-                                  : balanceRefresh.updatedAt ? (lang === "en" ? "Refresh balance · Updated " : "刷新余额 · 更新于 ") + new Date(balanceRefresh.updatedAt).toLocaleTimeString(lang === "en" ? "en-GB" : "zh-CN", { hour12: false })
-                                  : (lang === "en" ? "Refresh balance" : "刷新余额")}
+                                title={balanceRefresh.busy ? (tr("ui.app.refreshing.balance.fab873f"))
+                                  : balanceRefresh.error ? (tr("ui.app.refresh.failed.click.to.retry.713077a"))
+                                  : balanceRefresh.updatedAt ? (tr("ui.app.refresh.balance.updated.579ef27")) + new Date(balanceRefresh.updatedAt).toLocaleTimeString(getCurrentLanguage(), { hour12: false })
+                                  : (tr("ui.app.refresh.balance.d87c149"))}
                                 onClick={() => { void accountRefreshRef.current!.refresh(); }}
                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -7979,39 +7946,39 @@ export function App() {
                               <div className="acct-wallet-row">
                                 <div>
                                   <div className="acct-wallet-lbl">
-                                    <CoinIcon size={14} /> {t("usage.coinBal", "余额")}
+                                    <CoinIcon size={14} /> {t("usage.coinBal")}
                                   </div>
                                   <div className="acct-bal">
-                                    {bal.toLocaleString()}
+                                    {formatCredits(bal)}
                                   </div>
                                 </div>
                                 {bal <= 0 && !isPro && (
                                   <button className="acct-topup" onClick={openPack}>
-                                    {lang === "en" ? "Top up" : "充值"}
+                                    {tr("menu.donate")}
                                   </button>
                                 )}
                               </div>
-                              {balanceRefresh.error && <div className="acct-balance-refresh-error" role="status">{lang === "en" ? "Could not refresh. Try again." : "刷新失败，请重试"}</div>}
+                              {balanceRefresh.error && <div className="acct-balance-refresh-error" role="status">{tr("ui.app.could.not.refresh.try.again.ab58e97")}</div>}
                               {/* 签到按钮永远显示：0 余额非会员反而最该签到领免费币，不能因 bal<=0 把它藏掉。
                                   0 余额非会员额外在下方追加充值引导。 */}
                               <button
                                 type="button"
-                                className={"acct-checkin" + (checkinDone ? " done" : "")}
+                                className={"acct-checkin" + (checkinDone ? "done" : "")}
                                 disabled={checkinDone || checkinBusy}
                                 onClick={doCheckin}
                                 title={
                                   checkinDone
-                                    ? t("menu.checkedInTitle", "今日已签到")
+                                    ? t("menu.checkedInTitle")
                                     : isPro
-                                      ? t("menu.hintProGift", "会员每月赠币 · 每日签到再领更多")
-                                      : t("menu.hintDailyCheckin", "每日签到领 10 无为币")
+                                      ? t("menu.hintProGift")
+                                      : t("menu.hintDailyCheckin")
                                 }
                               >
                                 {checkinBusy ? <span className="acct-checkin-spin" aria-hidden="true" /> : checkinDone ? <CheckinDoneIcon size={13} /> : <CheckinIcon size={13} />}
-                                <span>{checkinBusy ? t("menu.checkinBusy", "签到中…") : checkinDone ? t("menu.checkedInShort", "已签到") : t("menu.checkinShort", "签到")}</span>
+                                <span>{checkinBusy ? t("menu.checkinBusy") : checkinDone ? t("menu.checkedInShort") : t("menu.checkinShort")}</span>
                               </button>
                               {bal <= 0 && !isPro && (
-                                <div className="acct-hint zero">{t("menu.hintTopup", "充值解锁更多对话额度")}</div>
+                                <div className="acct-hint zero">{t("menu.hintTopup")}</div>
                               )}
                             </div>
 
@@ -8024,11 +7991,11 @@ export function App() {
                                       <Spark /> {tierMain}{tierQual && <span className="acct-tier-q">{tierQual}</span>}
                                     </div>
                                     <div className="acct-memb-sub">
-                                      {lang === "en" ? `Expires ${expStr}` : `${expStr} 到期`}
+                                      {tr("ui.app.expires.ab9cb0a", { p0: expStr })}
                                     </div>
                                   </div>
                                   <button className="acct-renew" onClick={openPlan}>
-                                    {lang === "en" ? "Renew" : "续费"}
+                                    {tr("ui.app.renew.2d5e514")}
                                   </button>
                                 </div>
                               ) : null
@@ -8040,23 +8007,35 @@ export function App() {
                                     <span className="acct-crown">
                                       <Spark />
                                     </span>{" "}
-                                    {lang === "en" ? "Upgrade to Pro" : "开通 Pro 会员"}
+                                    {tr("ui.app.upgrade.to.pro.21a61f3")}
                                   </div>
-                                  <div className="acct-memb-sub">{lang === "en" ? "More quota · better value · from $6.99/mo" : "更多额度 · 更省 · ¥29/月起"}</div>
+                                  <div className="acct-memb-sub">{tr("ui.app.more.quota.better.value.from.mo.c4f58cd")}</div>
                                 </div>
-                                <span className="acct-go">{lang === "en" ? "Upgrade now" : "立即开通"}</span>
+                                <span className="acct-go">{tr("ui.app.upgrade.now.3da50eb")}</span>
                               </div>
                             ) : null}
 
                             <div className="acct-sep" />
                             <div className="acct-items">
-                              {(wuwei.flags?.includes('billing_v2') || billingPreview) && <button className="acct-it" onClick={()=>{setShowAcctMenu(false);setBillingPage('ledger');setBillingOpen(true);}}>{lang==='en'?'Credit details':'积分明细'}</button>}
+                              {(wuwei.flags?.includes('billing_v2') || billingPreview) && <button className="acct-it" onClick={()=>{setShowAcctMenu(false);setBillingPage('ledger');setBillingOpen(true);}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>{tr("ui.app.credit.details.a3a619a")}</button>}
                               <button className="acct-it" onClick={openPack}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="3" y="5" width="18" height="14" rx="2.5" />
                                   <path d="M3 10h18M7 15h4" />
                                 </svg>
-                                {t("menu.donate", "充值")}
+                                {t("menu.donate")}
+                              </button>
+                              <button
+                                className="acct-it"
+                                onClick={() => {
+                                  void window.wuwei.track?.("menu_item_click", { item: "settings" });
+                                  setShowAcctMenu(false);
+                                  setSettingsTab("general");
+                                  setShowSettings(true);
+                                }}
+                              >
+                                <GearIcon size={16} />
+                                {t("acct.settings")}
                               </button>
                               {/* 消息中心：奖励到账/活动/系统/反馈回复通知；有未读标红点 */}
                               <button
@@ -8071,7 +8050,7 @@ export function App() {
                                   <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                                   <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                                 </svg>
-                                <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap" }}>{lang === "en" ? "Messages" : "消息中心"}</span>
+                                <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap" }}>{tr("ui.app.messages.adbff5a")}</span>
                                 {msgUnread > 0 && (
                                   <span style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, color: "#fff", background: "#E5484D", borderRadius: 999, padding: "1px 6px", minWidth: 16, textAlign: "center", whiteSpace: "nowrap" }}>
                                     {msgUnread > 99 ? "99+" : msgUnread}
@@ -8091,20 +8070,9 @@ export function App() {
                                   <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v18H6.5A2.5 2.5 0 0 1 4 18.5V5.5z" />
                                   <path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H12v18h5.5a2.5 2.5 0 0 0 2.5-2.5V5.5z" />
                                 </svg>
-                                {lang === "en" ? "User Guide" : "使用手册"}
+                                {tr("ui.app.user.guide.f2562f4")}
                               </button>
-                              <button
-                                className="acct-it"
-                                onClick={() => {
-                                  void window.wuwei.track?.("menu_item_click", { item: "settings" });
-                                  setShowAcctMenu(false);
-                                  setSettingsTab("general");
-                                  setShowSettings(true);
-                                }}
-                              >
-                                <GearIcon size={16} />
-                                {t("acct.settings")}
-                              </button>
+
                               <button
                                 className="acct-it"
                                 onClick={() => {
@@ -8119,7 +8087,7 @@ export function App() {
                                   <rect x="17" y="13" width="4" height="6" rx="1.5" />
                                   <path d="M20 19a4 4 0 0 1-4 4h-2" />
                                 </svg>
-                                {t("menu.contactSupport", "联系客服")}
+                                {t("menu.contactSupport")}
                               </button>
                               {/* 留言反馈：直接开留言弹窗（被采纳有奖）；与客服弹窗内「直接留言」共用同一表单 */}
                               <button
@@ -8135,7 +8103,7 @@ export function App() {
                                   <path d="M21 11.5a8.5 8.5 0 0 1-11.7 7.9L4 20l1.4-4A8.5 8.5 0 1 1 21 11.5z" />
                                   <path d="M8.5 11.5h7M8.5 8.5h4" />
                                 </svg>
-                                {t("menu.feedback", "反馈有奖")}
+                                {t("menu.feedback")}
                               </button>
                               {/* 帮助 · 检查更新：平时只显「更新」，有新版才标小红点；点击弹窗看结果/版本信息 */}
                               <button className="acct-it" onClick={() => { void window.wuwei.track?.("menu_item_click", { item: "update" }); return updateReady ? (setShowAcctMenu(false), setShowUpdateModal(true)) : checkUpdateNow(); }}>
@@ -8144,10 +8112,10 @@ export function App() {
                                   <path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 2.5" />
                                   <circle cx="12" cy="16.5" r="0.5" fill="currentColor" />
                                 </svg>
-                                <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap" }}>{lang === "en" ? "Updates" : "更新"}</span>
+                                <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap" }}>{tr("ui.app.updates.c50e856")}</span>
                                 {hasUpdate && (
                                   <span style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, color: "#fff", background: "#E5484D", borderRadius: 999, padding: "1px 6px", whiteSpace: "nowrap" }}>
-                                    {lang === "en" ? "new" : "新"}
+                                    {tr("ui.app.new.c00956e")}
                                   </span>
                                 )}
                               </button>
@@ -8173,16 +8141,17 @@ export function App() {
                           <div style={{ position: "absolute", top: 8, right: 10, zIndex: 6 }}>
                             <button
                               onClick={() => setAcctLangOpen((v) => !v)}
-                              title={lang === "zh" ? "切换语言" : "Language"}
+                              title={tr("ui.app.language.f4b9f0e")}
                               style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0 }}
                             >
                               <GlobeIcon size={15} />
                             </button>
                             {acctLangOpen && (
                               <div style={{ position: "absolute", top: 26, right: 0, background: "var(--bg-raised)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,.18)", overflow: "hidden", zIndex: 7, minWidth: 78 }}>
-                                {([["zh", "中文"], ["en", "English"]] as [Lang, string][]).map(([code, label]) => (
+                                {getLanguages().map(({code, nativeName: label}) => (
                                   <button
                                     key={code}
+                                    data-language-name={code}
                                     onClick={() => { changeLang(code); setAcctLangOpen(false); }}
                                     style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 12px", background: lang === code ? "rgba(192,95,60,.10)" : "none", border: "none", color: lang === code ? "#C05F3C" : "var(--text)", fontSize: 12.5, fontWeight: lang === code ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}
                                   >
@@ -8212,16 +8181,14 @@ export function App() {
                         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 7, lineHeight: 1.3, letterSpacing: 0.2, color: "var(--text)" }}>
                           {lang === "zh" ? (
                             <>
-                              <span style={{ color: "#C05F3C" }}>登录</span>，解锁更多模型
-                            </>
+                              <span style={{ color: "#C05F3C" }}>{tr("login.signin")}</span>{tr("ui.app.message.97b263eb21")}</>
                           ) : (
                             <>
-                              <span style={{ color: "#C05F3C" }}>Sign in</span> to unlock more models
-                            </>
+                              <span style={{ color: "#C05F3C" }}>{tr("usage.clickLogin")}</span> {tr("ui.shared.4c19da5fdb")}</>
                           )}
                         </div>
                         <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-                          {lang === "zh" ? "免费模型有每日额度，付费模型按用量消耗无为币。" : "Free models have daily limits. Paid models use Wuwei coins based on usage."}
+                          {tr("ui.app.free.models.have.daily.limits.paid.eb2cb7e")}
                         </div>
                         {/* 具体模型名，让「顶级」落地 */}
                         <div
@@ -8241,7 +8208,7 @@ export function App() {
                           {[
                             { k: "claude", n: "Claude" },
                             { k: "gpt", n: "GPT" },
-                            { k: "deepseek", n: "DeepSeek" },
+                            { k: "deepseek", n: tr("ui.app.message.f310ff0f0e") },
                             { k: "kimi", n: "Kimi" },
                           ].map((m) => (
                             <span key={m.k} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -8321,7 +8288,7 @@ export function App() {
                         setShowAcctMenu(false);
                         setShowGuide(true);
                       }}>
-                        {lang === "en" ? "User Guide" : "使用手册"}
+                        {tr("ui.app.user.guide.f2562f4")}
                       </button>
                     )}
                   </div>
@@ -8350,28 +8317,28 @@ export function App() {
                   <circle cx="9.5" cy="7" r="3.2" />
                   <path d="M17 11l2 2 3.5-3.5" />
                 </svg>
-                {lang === "en" ? "My Company" : "一人公司"}
+                {tr("ui.app.my.company.05b42c6")}
               </span>
               <div className="team-seg">
                 <button className={appView === "store" ? "on" : ""} onClick={() => setAppView("store")}>
-                  {lang === "en" ? "Teammates" : "员工"}
+                  {tr("ui.app.teammates.661ab3c")}
                 </button>
                 <button className={appView === "rooms" ? "on" : ""} onClick={() => setAppView("rooms")}>
-                  {lang === "en" ? "Groups" : "群"}
+                  {tr("ui.app.groups.a47bd17")}
                 </button>
               </div>
-              <button className="team-panel-close" onClick={() => setAppView(null)} title={lang === "en" ? "Back to chat" : "返回对话"}>
+              <button className="team-panel-close" onClick={() => setAppView(null)} title={tr("ui.app.back.to.chat.5b99500")}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
-                {lang === "en" ? "Back" : "返回"}
+                {tr("pay.msg.back")}
               </button>
             </div>
             )}
             <div className="team-panel-body">
               {appView === "store" ? (
                 <AppStore
-                  en={lang === "en"}
+                  en={lang !== "zh"}
                   onEmployees={setTeamEmployees}
                   onOpenChat={() => setAppView(null)}
                   providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
@@ -8380,7 +8347,7 @@ export function App() {
                 />
               ) : (
                 <RoomView
-                  en={lang === "en"}
+                  en={lang !== "zh"}
                   employees={teamEmployees}
                   initialRoomId={activeRoomId}
                   dmSelfId={dmSelfId}
@@ -8432,15 +8399,15 @@ export function App() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" />
                 </svg>
-                {lang === "en" ? "SOP" : "SOP 库"}
+                {tr("ui.app.sop.811a818")}
               </span>
-              <button className="team-panel-close" onClick={() => setAppView(null)} title={lang === "en" ? "Back to chat" : "返回对话"}>
+              <button className="team-panel-close" onClick={() => setAppView(null)} title={tr("ui.app.back.to.chat.5b99500")}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-                {lang === "en" ? "Back" : "返回"}
+                {tr("pay.msg.back")}
               </button>
             </div>
             <div className="team-panel-body">
-              <SopView en={lang === "en"} sopId={activeSopId} nodes={sopTree} renderMd={(tx) => <MarkdownView text={tx} />} askConfirm={askConfirm} />
+              <SopView en={lang !== "zh"} sopId={activeSopId} nodes={sopTree} renderMd={(tx) => <MarkdownView text={tx} />} askConfirm={askConfirm} />
             </div>
           </div>
         )}
@@ -8448,76 +8415,69 @@ export function App() {
           <div className="baby-panel">
             <div className="baby-header">
               {babyTab === "home" && (
-                <button className="baby-rail-btn" title={babyLeftOpen ? "收起状态面板" : "展开状态面板"}
+                <button className="baby-rail-btn" title={babyLeftOpen ? tr("ui.app.message.27cefc5ee8") : tr("ui.app.message.bd468bda19")}
                   onClick={() => { const v = !babyLeftOpen; setBabyLeftOpen(v); localStorage.setItem("minicc-baby-left", v ? "1" : "0"); }}>
                   {babyLeftOpen ? <Ic.IcPanelLeft size={17} /> : <Ic.IcPanelRight size={17} />}
                 </button>
               )}
               <span className="baby-brand">
                 <span className="by-mark"><Ic.IcBaby size={17} /></span>
-                数字婴儿
-                <span className="baby-brand-sub">{babyVitals.age || "—"} · {babyVitals.mood || "—"}</span>
+                {tr("ui.app.message.90a172548d")}<span className="baby-brand-sub">{babyVitals.age || "—"} · {babyVitals.mood || "—"}</span>
               </span>
               <div className="baby-tabs">
                 <button className={"baby-tab" + (babyTab === "home" ? " on" : "")} onClick={() => setBabyTab("home")}>
-                  <Ic.IcHome size={15} />主界面
-                </button>
+                  <Ic.IcHome size={15} />{tr("ui.app.message.7a3a828abd")}</button>
                 <button className={"baby-tab" + (babyTab === "brain" ? " on" : "")}
                   onClick={() => { setBabyTab("brain"); void reloadBabyBrain(); }}>
-                  <Ic.IcBrain size={15} />记忆网络
-                </button>
+                  <Ic.IcBrain size={15} />{tr("ui.app.message.22b362d347")}</button>
               </div>
-              <button className="baby-close" onClick={() => setAgiView(null)} title="返回对话">
-                <Ic.IcBack size={15} />返回
-              </button>
+              <button className="baby-close" onClick={() => setAgiView(null)} title={tr("ui.app.back.to.chat.5b99500")}>
+                <Ic.IcBack size={15} />{tr("pay.msg.back")}</button>
             </div>
             {babyTab === "brain" ? (
               <div className={"baby-brain" + (brainFull ? " fs" : "")}>
                 <div className="baby-brain-bar">
                   <div className="by-seg">
                     <button className={brainView === "graph" ? "on" : ""} onClick={() => { setBrainView("graph"); loadBabyGraph().catch(() => {}); }}>
-                      <Ic.IcNodes size={14} />网络图
-                    </button>
+                      <Ic.IcNodes size={14} />{tr("ui.app.message.69062e7aea")}</button>
                     <button className={brainView === "pyramid" ? "on" : ""} onClick={() => { setBrainView("pyramid"); loadBabyPyramid().catch(() => {}); }}>
-                      <Ic.IcPyramid size={14} />金字塔
-                    </button>
+                      <Ic.IcPyramid size={14} />{tr("ui.app.message.4a72a3deda")}</button>
                   </div>
                   <div className="by-brain-stats">
-                    <span><b>{babyGraphData.nodes.length}</b> 概念</span>
-                    <span><b>{babyGraphData.edges.length}</b> 关联</span>
+                    <span><b>{babyGraphData.nodes.length}</b> {tr("set.brain.statNodes")}</span>
+                    <span><b>{babyGraphData.edges.length}</b> {tr("ui.app.message.72d7e03935")}</span>
                     {!!babyPyramid?.stats && (
                       <>
-                        <span><b>{babyPyramid.stats.depth}</b> 层</span>
-                        <span><b>{babyPyramid.stats.loose}</b> 没固化</span>
+                        <span><b>{babyPyramid.stats.depth}</b> {tr("ui.app.message.b03601ce3f")}</span>
+                        <span><b>{babyPyramid.stats.loose}</b> {tr("ui.app.message.c6014672ac")}</span>
                       </>
                     )}
                     {/* 读取反馈：数字不变时页面看不出差别，靠这行区分"读到了但没变" vs "根本没读到" */}
                     {brainLoad.err ? (
-                      <span className="by-load-err" title={brainLoad.err}>读取失败：{brainLoad.err}</span>
+                      <span className="by-load-err" title={brainLoad.err}>{tr("ui.app.message.af23eee80c")}{brainLoad.err}</span>
                     ) : brainLoad.at > 0 ? (
-                      <span className="by-load-ok">已更新 {new Date(brainLoad.at).toLocaleTimeString()}</span>
+                      <span className="by-load-ok">{tr("ui.app.message.04629417b1")}{new Date(brainLoad.at).toLocaleTimeString()}</span>
                     ) : null}
                   </div>
                   <button className="by-tidy ghost" style={{ marginLeft: "auto" }}
-                    onClick={() => setBrainFull((v) => !v)} title={brainFull ? "退出全屏 (Esc)" : "全屏看"}>
+                    onClick={() => setBrainFull((v) => !v)} title={brainFull ? tr("ui.app.message.be0f59e929") : tr("ui.app.message.4216fb469c")}>
                     {brainFull ? <Ic.IcShrink size={14} /> : <Ic.IcExpand size={14} />}
-                    {brainFull ? "退出全屏" : "全屏"}
+                    {brainFull ? tr("ui.app.message.ff1e136913") : tr("ui.app.message.dc5adb9f17")}
                   </button>
                   {brainFull && (
-                    <button className="by-tidy ghost" title="回到对话"
+                    <button className="by-tidy ghost" title={tr("ui.app.message.02dc802a68")}
                       onClick={() => { setBrainFull(false); setAgiView(null); }}>
-                      <Ic.IcBack size={14} />返回对话
-                    </button>
+                      <Ic.IcBack size={14} />{tr("ui.app.back.to.chat.5b99500")}</button>
                   )}
                   <button className="by-tidy ghost" data-busy-self="1" disabled={babyTidy || brainLoad.busy}
-                    onClick={() => void reloadBabyBrain()} title="重新读一遍当前的网络/金字塔">
+                    onClick={() => void reloadBabyBrain()} title={tr("ui.app.message.286e5b26b3")}>
                     <span className={brainLoad.busy ? "by-spin" : ""} style={{ display: "flex" }}><Ic.IcRefresh size={14} /></span>
-                    {brainLoad.busy ? "读取中…" : "重新读取"}
+                    {brainLoad.busy ? tr("ui.app.message.b3b7ee9c56") : tr("ui.app.message.3dbb6a70f9")}
                   </button>
                   <button className="by-tidy" data-busy-self="1" disabled={babyTidy} onClick={babyTidyUp}
-                    title="让它把学过的东西重新自组织成一座金字塔(会真的改变塔的形状，要跑一会儿)">
+                    title={tr("ui.app.message.1378628edd")}>
                     <span className={babyTidy ? "by-spin" : ""} style={{ display: "flex" }}><Ic.IcSparkle size={14} /></span>
-                    {babyTidy ? "整理中…" : "整理知识"}
+                    {babyTidy ? tr("ui.app.message.df2e697ba4") : tr("ui.app.message.4045380844")}
                   </button>
                 </div>
                 <div className="baby-brain-canvas">
@@ -8525,7 +8485,7 @@ export function App() {
                     <>
                       <BabyBrainGraph nodes={babyGraphData.nodes} edges={babyGraphData.edges} />
                       {babyGraphData.nodes.length === 0 && (
-                        <div className="baby-brain-empty">它还没学到概念～让它活着或者跟它聊聊，这里就会长出知识网络</div>
+                        <div className="baby-brain-empty">{tr("ui.app.message.9e78915cf2")}</div>
                       )}
                     </>
                   ) : (
@@ -8535,8 +8495,8 @@ export function App() {
                 <div className="baby-brain-tip">
                   <Ic.IcSparkle size={12} />
                   {brainView === "graph"
-                    ? "位置=语义远近(意思相近的自然抱团) · 大小=层级与连接数(睡梦涌现的上层认知更大) · 虚线=抽象自 · 悬停看详情、拖动钉住、滚轮缩放"
-                    : "从上往下：塔尖 → 各层抽象 → 地基(它一个个学来的概念) · 虚线框=还没被收编进任何上层的碎知识"}
+                    ? tr("ui.app.message.c87dc803a5")
+                    : tr("ui.app.message.007fbedd16")}
                 </div>
               </div>
             ) : (
@@ -8546,8 +8506,8 @@ export function App() {
                 <div className="baby-card">
                   <div className="by-card-head" onClick={() => toggleCard("status")}>
                     <span className="by-card-ico"><Ic.IcPulse size={15} /></span>
-                    <span className="by-card-t">状态</span>
-                    <span className="by-card-meta">{babyAlive ? "活着" : "歇着"}</span>
+                    <span className="by-card-t">{tr("ui.app.message.8042eaf126")}</span>
+                    <span className="by-card-meta">{babyAlive ? tr("ui.app.message.8dd0b7c7d2") : tr("ui.app.message.fbf16a8272")}</span>
                     <span className={"by-caret" + (babyCards.status ? "" : " off")}><Ic.IcChevron size={15} /></span>
                   </div>
                   {babyCards.status && (
@@ -8560,45 +8520,44 @@ export function App() {
                 <div className="baby-card">
                   <div className="by-card-head" onClick={() => toggleCard("curious")}>
                     <span className="by-card-ico"><Ic.IcSprout size={15} /></span>
-                    <span className="by-card-t">它好奇的</span>
+                    <span className="by-card-t">{tr("ui.app.message.599cbf99f8")}</span>
                     <span className="by-card-meta">{babyVitals.curiosity ?? 0}</span>
                     <span className={"by-caret" + (babyCards.curious ? "" : " off")}><Ic.IcChevron size={15} /></span>
                   </div>
                   {babyCards.curious && (
                     <div className="by-card-body">
-                      <AutoStickPre className="baby-pre baby-scroll" text={babyCurious || "(暂无)"} />
+                      <AutoStickPre className="baby-pre baby-scroll" text={babyCurious || tr("ui.app.message.38a6d4ed93")} />
                     </div>
                   )}
                 </div>
                 <div className="baby-card">
                   <div className="by-card-head" onClick={() => toggleCard("diary")}>
                     <span className="by-card-ico"><Ic.IcJournal size={15} /></span>
-                    <span className="by-card-t">成长日志</span>
-                    <span className="by-card-meta">{babyVitals.ticks ?? 0} 跳</span>
+                    <span className="by-card-t">{tr("ui.app.message.dd6234c8d8")}</span>
+                    <span className="by-card-meta">{babyVitals.ticks ?? 0} {tr("ui.app.message.c09bdeb16b")}</span>
                     <span className={"by-caret" + (babyCards.diary ? "" : " off")}><Ic.IcChevron size={15} /></span>
                   </div>
                   {babyCards.diary && (
                     <div className="by-card-body">
-                      <AutoStickPre className="baby-pre baby-scroll" text={babyDiary || "(暂无)"} />
+                      <AutoStickPre className="baby-pre baby-scroll" text={babyDiary || tr("ui.app.message.38a6d4ed93")} />
                     </div>
                   )}
                 </div>
               </div>
               ) : (
-              <div className="baby-rail" title="展开状态面板">
+              <div className="baby-rail" title={tr("ui.app.message.bd468bda19")}>
                 <button className="baby-rail-btn" onClick={() => { setBabyLeftOpen(true); localStorage.setItem("minicc-baby-left", "1"); }}>
                   <Ic.IcPanelRight size={17} />
                 </button>
                 <BabyAvatar state={inferBabyState(babyActivity, babyAlive)} happiness={babyVitals.happiness ?? 55}
                   energy={babyVitals.energy ?? 100} alive={babyAlive} size={32} minimal />
                 <span className={"baby-rail-dot" + (babyAlive ? " live" : "")} />
-                <span className="baby-rail-vert">{babyAlive ? "活着" : "歇着"}</span>
+                <span className="baby-rail-vert">{babyAlive ? tr("ui.app.message.8dd0b7c7d2") : tr("ui.app.message.fbf16a8272")}</span>
               </div>
               )}
               <div className="baby-right">
                 <div className="by-chat-head">
-                  <span className="by-card-ico"><Ic.IcChat size={15} /></span>跟它聊天
-                </div>
+                  <span className="by-card-ico"><Ic.IcChat size={15} /></span>{tr("ui.app.message.6d1cf18942")}</div>
                 <div className="by-thread" ref={babyChatRef}
                   onScroll={(e) => { const el = e.currentTarget; babyChatStick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
                   {babyChatLog.length === 0 && (
@@ -8607,10 +8566,8 @@ export function App() {
                         <BabyAvatar state={inferBabyState(babyActivity, babyAlive)} happiness={babyVitals.happiness ?? 55}
                           energy={babyVitals.energy ?? 100} alive={babyAlive} size={88} />
                       </div>
-                      问问它学了什么、对什么好奇、心情怎么样
-                      <br />
-                      它听不懂的会自己上网去查，然后记住
-                    </div>
+                      {tr("ui.app.message.edf1252ad1")}<br />
+                      {tr("ui.app.message.d72cf9f268")}</div>
                   )}
                   {babyChatLog.map((m, i) =>
                     m.role === "you" ? (
@@ -8642,7 +8599,7 @@ export function App() {
                     <textarea
                       rows={1}
                       value={babyChatInput}
-                      placeholder="跟它说点什么…（Enter 发送，Shift+Enter 换行）"
+                      placeholder={tr("ui.app.message.11fa2e77fa")}
                       onChange={(e) => {
                         setBabyChatInput(e.target.value);
                         e.target.style.height = "auto";
@@ -8657,7 +8614,7 @@ export function App() {
                       }}
                     />
                     <button className={"send-btn" + (babyChatInput.trim() && !babyBusy ? " active" : "")}
-                      onClick={babyDoChat} disabled={!babyChatInput.trim() || !!babyBusy} title="发送 (Enter)">
+                      onClick={babyDoChat} disabled={!babyChatInput.trim() || !!babyBusy} title={tr("composer.send")}>
                       <Ic.IcSend size={18} />
                     </button>
                   </div>
@@ -8713,12 +8670,12 @@ export function App() {
                   </>
                 );
               }
-              if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "My Company" : "一人公司"}</span></>;
-              if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "Groups" : "群聊"}</span></>;
-              if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{lang === "en" ? "SOPs" : "SOP"}</span></>;
+              if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.my.company.05b42c6")}</span></>;
+              if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.groups.f080cef")}</span></>;
+              if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.sops.3f7e53e")}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
-              const isDefault = !st || st === "新对话" || st === "New chat";
-              return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (lang === "en" ? "Wuwei" : "无为") : st}</span></>;
+              const isDefault = !st || st === tr("ui.app.new.chat.fca06b0", {}, "zh") || st === tr("ui.app.new.chat.fca06b0", {}, "en");
+              return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (tr("splash.brand")) : st}</span></>;
             })()}
             {/* 群 ⋯ 菜单：群成员 / 清空消息 / 删除群，紧跟群名 */}
             {teamEnabled && appView === "rooms" && activeRoomId && (() => {
@@ -8726,14 +8683,14 @@ export function App() {
               if (!room || room.type === "dm") return null; // 私聊不显示群菜单(成员/删群)——删私聊走侧栏右键
               return (
                 <span className="tb-room-menu-wrap">
-                  <button className="tb-room-menu-btn" onClick={() => setRoomMenu((v) => !v)} title={lang === "en" ? "Group" : "群信息"}>
+                  <button className="tb-room-menu-btn" onClick={() => setRoomMenu((v) => !v)} title={tr("ui.app.group.4c47cce")}>
                     <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
                   </button>
                   {roomMenu && (
                     <>
                       <div className="tb-room-menu-mask" onClick={() => setRoomMenu(false)} />
                       <div className="tb-room-menu">
-                        <div className="tb-room-menu-sec">{lang === "en" ? "Members" : "群成员"} · {room.members.length}</div>
+                        <div className="tb-room-menu-sec">{tr("ui.app.members.0c73770")} · {room.members.length}</div>
                         <div className="tb-room-menu-members">
                           {room.members.map((mid: string) => {
                             const m = teamEmployees.find((x: any) => x.id === mid);
@@ -8741,22 +8698,22 @@ export function App() {
                               <span className="tb-room-mem" key={mid}>
                                 <span className="tb-room-mem-av"><EmployeeAvatar icon={m?.icon} avatarData={m?.avatarData} name={employeeLabel(m, lang, mid)} /></span>
                                 <span className="tb-room-mem-nm">{employeeLabel(m, lang, mid)}</span>
-                                {room.coordinator === mid && <span className="tb-room-mem-host">{lang === "en" ? "host" : "主持"}</span>}
+                                {room.coordinator === mid && <span className="tb-room-mem-host">{tr("ui.app.host.7056d6d")}</span>}
                               </span>
                             );
                           })}
                         </div>
                         <button className="tb-room-menu-item" onClick={() => { setRoomMenu(false); setRoomSettings({ id: room.id }); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-                          {lang === "en" ? "Group settings" : "群设置"}
+                          {tr("ui.app.group.settings.d861667")}
                         </button>
-                        <button className="tb-room-menu-item" onClick={() => { setRoomMenu(false); askConfirm({ message: lang === "en" ? "Clear all messages in this group?" : "清空本群全部消息？", danger: true, onOk: () => { void (window as any).wuwei?.team?.roomClear(room.id); } }); }}>
+                        <button className="tb-room-menu-item" onClick={() => { setRoomMenu(false); askConfirm({ message: tr("ui.app.clear.all.messages.in.this.group.68ae9d7"), danger: true, onOk: () => { void (window as any).wuwei?.team?.roomClear(room.id); } }); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" /></svg>
-                          {lang === "en" ? "Clear messages" : "清空消息"}
+                          {tr("ui.app.clear.messages.b76e4a3")}
                         </button>
-                        <button className="tb-room-menu-item danger" onClick={() => { setRoomMenu(false); askConfirm({ message: lang === "en" ? `Delete group "${room.name}"? Chat history is removed too.` : `删除群「${room.name}」？聊天记录一并删除。`, danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete(room.id); setActiveRoomId(null); setAppView("store"); } }); }}>
+                        <button className="tb-room-menu-item danger" onClick={() => { setRoomMenu(false); askConfirm({ message: tr("ui.app.delete.group.chat.history.is.removed.86b25ba", { p0: room.name }), danger: true, onOk: () => { void (window as any).wuwei?.team?.roomDelete(room.id); setActiveRoomId(null); setAppView("store"); } }); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
-                          {lang === "en" ? "Delete group" : "删除群"}
+                          {tr("ui.app.delete.group.3cff385")}
                         </button>
                       </div>
                     </>
@@ -8770,7 +8727,7 @@ export function App() {
             <span className="tb-browser-wrap">
               <button
                 className="tb-browser"
-                title={t("hdr.browserDetached", "浏览器（独立窗口）")}
+                title={t("hdr.browserDetached")}
                 onClick={() => setShowBrowserMenu((v) => !v)}
               >
                 <svg
@@ -8807,7 +8764,7 @@ export function App() {
                         setShowBrowserMenu(false);
                       }}
                     >
-                      {lang === "en" ? "Dock to split" : "收回为半屏"}
+                      {tr("ui.app.dock.to.split.83f3880")}
                     </button>
                     <button
                       onClick={() => {
@@ -8816,7 +8773,7 @@ export function App() {
                         setShowBrowserMenu(false);
                       }}
                     >
-                      {lang === "en" ? "Dock to full" : "收回为全屏"}
+                      {tr("ui.app.dock.to.full.13c6ef2")}
                     </button>
                     <button
                       className="tb-bm-close"
@@ -8826,7 +8783,7 @@ export function App() {
                         setShowBrowserMenu(false);
                       }}
                     >
-                      {lang === "en" ? "Close browser" : "关闭浏览器"}
+                      {tr("ui.app.close.browser.4e4937f")}
                     </button>
                   </div>
                 </>
@@ -8835,15 +8792,15 @@ export function App() {
           )}
           {window.wuwei.platform !== "darwin" && (
             <span className="win-ctrl">
-              <button className="wc-btn" title={t("win.minimize", "最小化")} onClick={() => window.wuwei.winMinimize()}>
+              <button className="wc-btn" title={t("win.minimize")} onClick={() => window.wuwei.winMinimize()}>
                 ─
               </button>
-              <button className="wc-btn" title={t("win.maximize", "最大化")} onClick={() => window.wuwei.winMaximize()}>
+              <button className="wc-btn" title={t("win.maximize")} onClick={() => window.wuwei.winMaximize()}>
                 ☐
               </button>
               <button
                 className="wc-btn wc-close"
-                title={t("win.close", "关闭")}
+                title={t("win.close")}
                 onClick={() => window.wuwei.winClose()}
               >
                 ✕
@@ -8854,7 +8811,7 @@ export function App() {
 
         {collapsed && (
           <div className="toolbar-min">
-            <button className="icon-btn" title={t("side.expand", "展开侧栏")} onClick={() => toggleCollapse(false)}>
+            <button className="icon-btn" title={t("side.expand")} onClick={() => toggleCollapse(false)}>
               »
             </button>
           </div>
@@ -8879,73 +8836,69 @@ export function App() {
             <div className="welcome">
               <div className="wc-hero">
                 <WuweiLogo size={58} />
-                <p className="wc-eyebrow">{lang === "en" ? "One intention, everything follows" : "一念既出，万事自成"}</p>
+                <p className="wc-eyebrow">{tr("ui.app.one.intention.everything.follows.11408cd")}</p>
                 <h1 className="wc-h1">
-                  {lang === "en" ? "One sentence, and " : "一句话，让 "}
-                  <span className="wc-spark">{lang === "en" ? "AI gets it done" : "AI 替你干活"}</span>
+                  {tr("ui.app.one.sentence.and.5dd4e2f")}
+                  <span className="wc-spark">{tr("ui.app.ai.gets.it.done.de3eb46")}</span>
                 </h1>
                 <p className="wc-lead">
-                  {lang === "en"
-                    ? "Describe what you need and AI breaks it into tasks, calls AI Agents, runs the steps, and brings back results. Great for coding, editing docs, research, organizing files, and running workflows."
-                    : "把需求说清楚，AI 会拆解任务、调用 AI Agent、执行步骤并回收结果。适合写代码、改文档、查资料、整理文件、跑流程。"}
+                  {tr("ui.app.describe.what.you.need.and.ai.315ffdc")}
                 </p>
                 {/* 激活→首条消息的临门一脚：明确「免费·无需登录·直接在下方开聊」，降低"要不要注册"的犹豫。
                     仅未登录时显示（已登录用户不需要这句）。 */}
                 {!wuwei && (
                   <div className="wc-freehint">
                     <span className="wc-freehint__dot" />
-                    {lang === "en"
-                      ? "Free to start, no sign-in needed. Just type below and send."
-                      : "免费开始，无需登录，直接在下方输入发送即可。"}
+                    {tr("ui.app.free.to.start.no.sign.in.993f2f0")}
                   </div>
                 )}
                 <div className="wc-feats">
                   {[
-                    { zh: "免费开始", en: "Free to start", path: <><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" /><circle cx="7" cy="7" r="1.3" /></> },
-                    { zh: "高性价比模型", en: "Value models", path: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></> },
-                    { zh: "秒级响应", en: "Instant responses", path: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" /> },
+                    { get zh() { return tr("ui.catalog.app.bbbca54a97"); }, get en() { return tr("ui.catalog.app.bbbca54a97"); }, path: <><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" /><circle cx="7" cy="7" r="1.3" /></> },
+                    { get zh() { return tr("ui.app.message.074d141a22"); }, get en() { return tr("ui.app.message.074d141a22"); }, path: <><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></> },
+                    { get zh() { return tr("ui.catalog.app.e83011c3ba"); }, get en() { return tr("ui.catalog.app.e83011c3ba"); }, path: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" /> },
                     // 国内直连仅中文版显示（对海外用户无意义）
-                    ...(lang === "en" ? [] : [{ zh: "国内直连", en: "Fast in China", path: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z" /></> }]),
+                    ...(lang !== "zh" ? [] : [{ get zh() { return tr("ui.catalog.app.c73d9fdd06"); }, get en() { return tr("ui.catalog.app.c73d9fdd06"); }, path: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z" /></> }]),
                   ].map((f) => (
                     <span className="wc-feat" key={f.zh}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{f.path}</svg>
-                      {lang === "en" ? f.en : f.zh}
+                      {lang !== "zh" ? f.en : f.zh}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="wc-flow">
                 <div className="wc-step">
-                  <em>{lang === "en" ? "You ask" : "你说"}</em>
-                  <b>{lang === "en" ? "Say what you want done" : "说出你想完成的事"}</b>
+                  <em>{tr("ui.app.you.ask.79beab1")}</em>
+                  <b>{tr("ui.app.say.what.you.want.done.0152ba1")}</b>
                 </div>
                 <span className="wc-arrow" aria-hidden="true">→</span>
                 <div className="wc-step">
-                  <em>{lang === "en" ? "AI works" : "AI 做"}</em>
-                  <b>{lang === "en" ? "AI Agents break it down, call tools, run it" : "AI Agent 拆解任务、调用工具、自动执行"}</b>
+                  <em>{tr("ui.app.ai.works.cf10379")}</em>
+                  <b>{tr("ui.app.ai.agents.break.it.down.call.c9f24d1")}</b>
                 </div>
                 <span className="wc-arrow" aria-hidden="true">→</span>
                 <div className="wc-step">
-                  <em>{lang === "en" ? "You get" : "交付"}</em>
-                  <b>{lang === "en" ? "Results, file paths, how to verify" : "拿到结果、文件路径、验证方法"}</b>
+                  <em>{tr("ui.app.you.get.e07b88e")}</em>
+                  <b>{tr("ui.app.results.file.paths.how.to.verify.190e7f1")}</b>
                 </div>
               </div>
               {/* 脑网络入口 + 特性标签：先隐藏（改 false→true 即恢复） */}
               {false && (
                 <>
-                  <button className="wc-brain" onClick={() => setShowBrainIntro(true)} title={t("wc.brainTitle", "了解脑网络")}>
+                  <button className="wc-brain" onClick={() => setShowBrainIntro(true)} title={t("wc.brainTitle")}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 3a4 4 0 0 0-4 4 3.5 3.5 0 0 0-1 6.8V17a3 3 0 0 0 5 2 3 3 0 0 0 5-2v-3.2A3.5 3.5 0 0 0 16 7a4 4 0 0 0-4-4Z" />
                     </svg>
                     <span className="wc-brain-tx">
-                      <b>{lang === "en" ? "Brain" : "脑网络"}</b>
-                      {lang === "en" ? " keeps learning · long-term memory that knows you better the more you use it" : "持续学习 · 长期记忆，用得越久无为越懂你"}
+                      <b>{tr("set.tab.brain")}</b>
+                      {tr("ui.app.keeps.learning.long.term.memory.that.4b2c901")}
                     </span>
                     <svg className="wc-brain-arr" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M6 3l5 5-5 5" />
                     </svg>
                   </button>
-                  <div className="wc-tags">{lang === "en" ? "Fewer steps · no interruptions · results-first · traceable execution" : "少步骤 · 不中断 · 结果导向 · 可追溯执行"}</div>
+                  <div className="wc-tags">{tr("ui.app.fewer.steps.no.interruptions.results.first.cea02b0")}</div>
                 </>
               )}
             </div>
@@ -8971,7 +8924,7 @@ export function App() {
                 } else {
                   push({
                     type: "notice",
-                    text: lang === "en" ? "This message is already being processed and can't be retracted; press Esc to stop, then undo to edit." : "这条已开始处理，无法撤回；可按 Esc 停止后再撤回编辑。",
+                    text: tr("ui.app.this.message.is.already.being.processed.e5a9ead"),
                   });
                 }
               } else {
@@ -9062,7 +9015,7 @@ export function App() {
                           .join("\n\n")}
                       />
                       {canDel && ord >= 0 && (
-                        <button className="tf-icon del" title={makeT(getLang())("msg.delete", "删除这轮问答(含提问与回复)")} onClick={() => delExchange(ord)}>
+                        <button className="tf-icon del" title={makeT(getLang())("msg.delete")} onClick={() => delExchange(ord)}>
                           <TrashIcon />
                         </button>
                       )}
@@ -9077,45 +9030,45 @@ export function App() {
                         <span className="tf-tok-badge">
                           {/* ↑ 显示「新增输入」(真正新花的·贵)，不显示总输入(含缓存重发的累计，看着大但没意义)；
                               无 round 明细的旧快照才回退到总输入。完整拆分见悬浮面板。 */}
-                          {tok.steps > 0 ? `${tok.steps}${lang === "en" ? " steps" : "步"} · ` : ""}↑{fmtTok(tok.split ? tok.miss : tok.inT)} ↓{fmtTok(tok.outT)}
+                          {tok.steps > 0 ? `${tok.steps}${tr("ui.app.steps.6870398")} · ` : ""}↑{fmtTok(tok.split ? tok.miss : tok.inT)} ↓{fmtTok(tok.outT)}
                         </span>
                         <span className="tf-tok-pop">
                           {tok.steps > 0 && (
                             <span>
-                              <b>{lang === "en" ? "Steps this turn" : "本次步数"}</b>
-                              <em>{tok.steps}{lang === "en" ? "" : " 步"}</em>
+                              <b>{tr("ui.app.steps.this.turn.07f03d1")}</b>
+                              <em>{tok.steps}{tr("ui.app.text.bc7d1ac")}</em>
                             </span>
                           )}
                           {tok.steps > 0 && (
                             <span>
-                              <b>{lang === "en" ? "Context per step" : "每步上下文"}</b>
-                              <em>≈{fmtTok(Math.round(tok.inT / tok.steps))}{lang === "en" ? " (avg)" : "（平均）"}</em>
+                              <b>{tr("ui.app.context.per.step.6ce775f")}</b>
+                              <em>≈{fmtTok(Math.round(tok.inT / tok.steps))}{tr("ui.app.avg.ea5edd9")}</em>
                             </span>
                           )}
                           {tok.split ? (
                             // 有缓存拆分：突出「新增输入」(真花钱)，总输入/缓存命中降为淡色副行(折叠感)
                             <>
                               <span className="tf-tok-div" style={{ fontWeight: 600 }}>
-                                <b>{lang === "en" ? "New input" : "新增输入"}</b>
-                                <em style={{ color: "var(--accent, #C05F3C)", fontWeight: 700 }}>{tok.miss.toLocaleString()}{lang === "en" ? " (costly)" : "（花钱）"}</em>
+                                <b>{tr("ui.app.new.input.a409723")}</b>
+                                <em style={{ color: "var(--accent, #C05F3C)", fontWeight: 700 }}>{tok.miss.toLocaleString()}{tr("ui.app.costly.dbc4cad")}</em>
                               </span>
                               <span className="tf-tok-sub" style={{ opacity: 0.55 }}>
-                                <b>{lang === "en" ? "· Total input" : "· 总输入"}</b>
+                                <b>{tr("ui.app.total.input.18816e6")}</b>
                                 <em>{tok.inT.toLocaleString()}</em>
                               </span>
                               <span className="tf-tok-sub" style={{ opacity: 0.55 }}>
-                                <b>{lang === "en" ? "· Cache hit" : "· 缓存命中"}</b>
-                                <em>{tok.hit.toLocaleString()}{lang === "en" ? " (cheap)" : "（便宜）"}</em>
+                                <b>{tr("ui.app.cache.hit.a39f154")}</b>
+                                <em>{tok.hit.toLocaleString()}{tr("ui.app.cheap.f65a97b")}</em>
                               </span>
                             </>
                           ) : (
                             <span className="tf-tok-div">
-                              <b>{lang === "en" ? "Total input" : "总输入"}</b>
+                              <b>{tr("ui.app.total.input.3363822")}</b>
                               <em>{tok.inT.toLocaleString()}</em>
                             </span>
                           )}
                           <span style={{ fontWeight: 600 }}>
-                            <b>{lang === "en" ? "New output" : "新增输出"}</b>
+                            <b>{tr("ui.app.new.output.d2726fc")}</b>
                             <em style={{ color: "var(--accent, #C05F3C)", fontWeight: 700 }}>{tok.outT.toLocaleString()}</em>
                           </span>
                         </span>
@@ -9135,7 +9088,7 @@ export function App() {
         {awayFromBottom && (
           <button
             className="to-bottom"
-            title={t("stream.toBottom", "回到最新")}
+            title={t("stream.toBottom")}
             onClick={() => {
               const el = streamRef.current;
               if (!el) return;
@@ -9152,44 +9105,44 @@ export function App() {
         )}
 
         <div className="composer" ref={composerRef}>
-          {selectedChoice?.category === 'premium' && <PremiumModelNotice key={selectedModelKey} en={lang === 'en'} busy={busy} switching={valueSwitchBusy} onSwitch={()=>void switchToRecommendedValue()} />}
+          {selectedChoice?.category === 'premium' && <PremiumModelNotice key={selectedModelKey} en={lang !== "zh"} busy={busy} switching={valueSwitchBusy} onSwitch={()=>void switchToRecommendedValue()} />}
           {/* 鉴权提示条：检测到缺授权后常驻，直到授权成功或用户手动 × 关闭 */}
           {needAuth && !authDismissed && (
             <div className="err-fix err-auth">
-              <button className="err-close" title={makeT(getLang())("msg.close", "关闭")} onClick={() => setAuthDismissed(true)}>
+              <button className="err-close" title={makeT(getLang())("msg.close")} onClick={() => setAuthDismissed(true)}>
                 ×
               </button>
               {curPreset?.kind === "anthropic-oauth" ? (
                 // Claude 订阅：一键 OAuth
                 oauthStep === "awaiting-code" ? (
                   <>
-                    <span>{lang === "en" ? "🔑 After approving in the browser, paste the code here → (leave blank to auto-read clipboard):" : "🔑 浏览器同意后，复制页面上的授权码 →（留空则自动读剪贴板）："}</span>
+                    <span>{tr("ui.app.after.approving.in.the.browser.paste.1ae6035")}</span>
                     <div className="err-auth-actions">
                       <input
                         className="code-input"
                         value={codeInput}
                         onChange={(e) => setCodeInput(e.target.value)}
-                        placeholder={t("authbar.pasteCodePh", "粘贴授权码（可留空自动读剪贴板）")}
+                        placeholder={t("authbar.pasteCodePh")}
                       />
                       <button className="allow" onClick={completeBrowserAuth} disabled={authBusy}>
-                        {authBusy ? (lang === "en" ? "Verifying…" : "校验中…") : (lang === "en" ? "Complete authorization" : "完成授权")}
+                        {authBusy ? (tr("set.m.verifying")) : (tr("ui.app.complete.authorization.016f419"))}
                       </button>
                       <button onClick={() => setOauthStep("idle")} disabled={authBusy}>
-                        {lang === "en" ? "Back" : "返回"}
+                        {tr("pay.msg.back")}
                       </button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <span>{lang === "en" ? "🔑 Claude subscription needs authorization. Sign in with one click:" : "🔑 Claude 订阅需要授权才能使用，可一键登录授权："}</span>
+                    <span>{tr("ui.app.claude.subscription.needs.authorization.sign.in.81c237c")}</span>
                     <div className="err-auth-actions">
                       <button className="allow" onClick={authorizeBrowser} disabled={authBusy}>
-                        {lang === "en" ? "Sign in via browser (recommended · reuse logged-in account)" : "用浏览器登录（推荐·复用已登录账号）"}
+                        {tr("ui.app.sign.in.via.browser.recommended.reuse.55cb044")}
                       </button>
                       <button onClick={authorizeWindow} disabled={authBusy}>
-                        {authBusy ? (lang === "en" ? "Authorizing…" : "授权中…") : (lang === "en" ? "Sign in in-app" : "应用内登录")}
+                        {authBusy ? (tr("ui.app.authorizing.f4c7513")) : (tr("ui.app.sign.in.in.app.230c5b8"))}
                       </button>
-                      <button onClick={() => setShowSettings(true)}>{lang === "en" ? "Set key in Settings" : "去设置填 Key"}</button>
+                      <button onClick={() => setShowSettings(true)}>{tr("ui.app.set.key.in.settings.ad07084")}</button>
                     </div>
                   </>
                 )
@@ -9197,11 +9150,11 @@ export function App() {
                 // Codex 订阅：应用内一键 ChatGPT 授权(无需本机 codex CLI)
                 <>
                   <span>
-                    {lang === "en" ? <>🔑 Codex subscription needs ChatGPT login. Click <b>One-click authorize</b> below to open your system browser and sign in to ChatGPT (no local codex needed).</> : <>🔑 Codex 订阅需要 ChatGPT 登录。点下方<b>一键授权</b>，会开系统浏览器登录 ChatGPT（本机无需装 codex）。</>}
+                    {lang !== "zh" ? <>{tr("ui.shared.1897d09923")}<b>{tr("ui.shared.b7a2eeec2b")}</b> {tr("ui.shared.da80d1669c")}</> : <>{tr("ui.app.message.c218c9f44f")}<b>{tr("ui.app.message.9f01687639")}</b>{tr("ui.app.message.34cdd7ecc9")}</>}
                   </span>
                   <div className="err-auth-actions">
                     <button className="allow" onClick={doCodexLogin} disabled={codexBusy}>
-                      {codexBusy ? (lang === "en" ? "Authorizing… (finish login in browser)" : "授权中…（浏览器完成登录）") : (lang === "en" ? "One-click authorize (ChatGPT login)" : "一键授权（ChatGPT 登录）")}
+                      {codexBusy ? (tr("ui.app.authorizing.finish.login.in.browser.0c3f951")) : (tr("ui.app.one.click.authorize.chatgpt.login.c92e4bf"))}
                     </button>
                   </div>
                 </>
@@ -9209,21 +9162,21 @@ export function App() {
                 // 已打开官网，等复制 key：自动检测剪贴板 + 可手动粘贴
                 <>
                   <span>
-                    {lang === "en" ? <>🔑 Opened the sign-up page. <b>Copy your API Key and it's auto-detected and set</b>, or paste it below and click done:</> : <>🔑 已打开获取页面。<b>复制 API Key 后会自动检测并设置</b>，也可粘贴到下方点完成：</>}
+                    {lang !== "zh" ? <>{tr("ui.shared.8e24f830e8")}<b>{tr("ui.shared.4ca1e3ae95")}</b>{tr("ui.shared.93b4ea5eac")}</> : <>{tr("ui.app.message.d3b7ef5876")}<b>{tr("ui.app.message.5b0b626f05")}</b>{tr("ui.app.message.95dc47e53d")}</>}
                   </span>
                   <div className="err-auth-actions">
                     <input
                       className="code-input"
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder={t("authbar.keyDetectPh", "复制 Key 后自动检测；或粘贴到此")}
+                      placeholder={t("authbar.keyDetectPh")}
                       disabled={apiKeyBusy}
                     />
                     <button className="allow" onClick={() => tryApiKey(apiKeyInput)} disabled={apiKeyBusy}>
-                      {apiKeyBusy ? (lang === "en" ? "Detecting…" : "检测中…") : (lang === "en" ? "Finish setup" : "完成设置")}
+                      {apiKeyBusy ? (tr("ui.app.detecting.3524fe6")) : (tr("ui.app.finish.setup.c825552"))}
                     </button>
                     <button onClick={() => setApiKeyStep("idle")} disabled={apiKeyBusy}>
-                      {lang === "en" ? "Back" : "返回"}
+                      {tr("pay.msg.back")}
                     </button>
                   </div>
                 </>
@@ -9231,19 +9184,19 @@ export function App() {
                 // API Key 平台（通义千问 / DeepSeek / OpenAI / 智谱 …）：引导去各自官网拿 key
                 <>
                   <span>
-                    {t("authbar.platformNeedKey", "🔑 当前平台「{name}」需要配置 API Key 才能使用。").replace("{name}", String(curPreset ? pLabel(curPreset, lang) : meta.backend))}
+                    {t("authbar.platformNeedKey").replace("{name}", String(curPreset ? pLabel(curPreset, lang) : meta.backend))}
                   </span>
                   <div className="err-auth-actions">
                     {curPreset?.keyUrl ? (
                       <button className="allow" onClick={startApiKeyFlow}>
-                        {lang === "en" ? `Get an API Key for ${pLabel(curPreset, lang)} ↗` : `去获取 ${curPreset.label} 的 API Key ↗`}
+                        {tr("ui.app.get.an.api.key.for.af14b75", { p0: (lang !== "zh" ? pLabel(curPreset, lang) : curPreset.label) })}
                       </button>
                     ) : (
                       <button className="allow" onClick={() => setApiKeyStep("awaiting")}>
-                        {lang === "en" ? "Paste API Key" : "粘贴 API Key"}
+                        {tr("ui.app.paste.api.key.aa004a7")}
                       </button>
                     )}
-                    <button onClick={() => setShowSettings(true)}>{lang === "en" ? "Set key in Settings" : "去设置填 Key"}</button>
+                    <button onClick={() => setShowSettings(true)}>{tr("ui.app.set.key.in.settings.ad07084")}</button>
                   </div>
                 </>
               )}
@@ -9260,7 +9213,7 @@ export function App() {
                     }}
                     style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", opacity: 0.75, textDecoration: "underline", fontSize: "inherit" }}
                   >
-                    {lang === "en" ? "or try the free tier first (no login) →" : "或先免费体验（无需登录）→"}
+                    {tr("ui.app.or.try.the.free.tier.first.fb3d89d")}
                   </button>
                 </div>
               )}
@@ -9275,10 +9228,10 @@ export function App() {
             const fallback = pickerChoices.find(c => c.free && c.modelId !== unavailModel && (wuwei || !c.needsLogin));
             const fb = fallback?.modelId;
             if (!fb) return null;
-            const fbLabel = MODEL_LABEL_OVERRIDES[fb] || (lang === "en" ? modelLabelsEn.get(fb) : undefined) || modelLabels.get(fb) || fb;
+            const fbLabel = MODEL_LABEL_OVERRIDES[fb] || (lang !== "zh" ? modelLabelsEn.get(fb) : undefined) || modelLabels.get(fb) || fb;
             return (
               <div className="err-fix">
-                <span>{lang === "en" ? "This model is temporarily unavailable." : "当前模型暂时不可用。"}</span>
+                <span>{tr("ui.app.this.model.is.temporarily.unavailable.d743acc")}</span>
                 <button
                   className="primary"
                   onClick={async () => {
@@ -9295,10 +9248,10 @@ export function App() {
                         setPendingImages(lastUser.images || []);
                         setModelRetry({ sid, userId, key: fallback.key, text: lastUser.text, images: lastUser.images || [] });
                       }
-                    } catch { push({ type: 'notice', text: lang === 'en' ? 'Could not switch models. Please retry.' : '切换模型失败，请重试。' }); }
+                    } catch { push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.retry.f1bb49c") }); }
                   }}
                 >
-                  {lang === "en" ? `Switch to ${fbLabel} and retry` : `换用 ${fbLabel} 继续`}
+                  {tr("ui.app.switch.to.and.retry.8a34edf", { p0: fbLabel })}
                 </button>
               </div>
             );
@@ -9313,15 +9266,15 @@ export function App() {
               <div className="err-fix">
                 {lastWasInterrupted ? (
                   <>
-                    <span>{t("err.fix.interrupted", "上一条回复被中断了")}</span>
-                    <button className="primary" onClick={() => submit(lang === "en" ? "continue" : "继续")}>
-                      {t("err.fix.continue", "继续")}
+                    <span>{t("err.fix.interrupted")}</span>
+                    <button className="primary" onClick={() => submit("continue")}>
+                      {t("err.fix.continue")}
                     </button>
                   </>
                 ) : (
                   <>
-                    <span>{lang === "en" ? "The last message errored (may block further sends)" : "上一条消息出错了（可能卡住后续发送）"}</span>
-                    <button onClick={() => window.wuwei.undoLast()}>{lang === "en" ? "Delete it and continue" : "删除这条并继续"}</button>
+                    <span>{tr("ui.app.the.last.message.errored.may.block.d8a7ab7")}</span>
+                    <button onClick={() => window.wuwei.undoLast()}>{tr("ui.app.delete.it.and.continue.6171cf9")}</button>
                   </>
                 )}
               </div>
@@ -9344,12 +9297,12 @@ export function App() {
             </div>
           )}
           {goal && (
-            <div className={"goal-bar" + (goal.active ? " on" : "") + (goal.done ? " done" : "")}>
+            <div className={"goal-bar" + (goal.active ? " on" : "") + (goal.done ? "done" : "")}>
               <span className="goal-ico">{goal.done ? "✓" : "◎"}</span>
               <span className="goal-text" title={goal.text}>{goal.text}</span>
               {goal.active ? (
                 <>
-                  <span className="goal-state">{lang === "en" ? "advancing" : "自主推进中"}{modeOf(currentId) === "cont" && contN > 0 ? (lang === "en" ? ` · step ${contN}` : ` · 第 ${contN} 步`) : ""}</span>
+                  <span className="goal-state">{tr("ui.app.advancing.3b052de")}{modeOf(currentId) === "cont" && contN > 0 ? (tr("ui.app.step.b9f480f", { p0: contN })) : ""}</span>
                   <button
                     onClick={() => {
                       const g = { ...goal, active: false, done: goal.done };
@@ -9358,12 +9311,12 @@ export function App() {
                       setMode(currentId, "auto"); // 暂停 = 回到自动，不再替你接话
                     }}
                   >
-                    {lang === "en" ? "Pause" : "暂停"}
+                    {tr("ui.app.pause.f55ca3a")}
                   </button>
                 </>
               ) : (
                 <>
-                  {goal.done && <span className="goal-state">{lang === "en" ? "done" : "已完成"}</span>}
+                  {goal.done && <span className="goal-state">{tr("ui.app.done.486b41d")}</span>}
                   <button
                     className="on"
                     onClick={() => {
@@ -9371,17 +9324,17 @@ export function App() {
                       window.wuwei.goalSet?.(currentId, g);
                       setGoal(g);
                       setMode(currentId, "cont");
-                      doSend(lang === "en" ? "Keep advancing toward the overall goal; continue where we left off." : "继续朝总目标推进，接着上次没做完的往下做。", []);
+                      doSend(tr("ui.app.keep.advancing.toward.the.overall.goal.d9f303b"), []);
                     }}
                   >
-                    {goal.done ? (lang === "en" ? "Restart" : "重新开始") : (lang === "en" ? "Resume" : "继续")}
+                    {goal.done ? (tr("ui.app.restart.5a3a374")) : (tr("ui.app.resume.c70543e"))}
                   </button>
                 </>
               )}
-              <button onClick={() => openGoalEdit(currentId, goal)}>{lang === "en" ? "Edit" : "改"}</button>
+              <button onClick={() => openGoalEdit(currentId, goal)}>{tr("ui.app.edit.d4bf0a1")}</button>
               {!goal.done && (
                 <button
-                  title={lang === "en" ? "Mark this goal as achieved" : "标记这个目标已达成（目标本身会一直留着，要清掉请到「改」里删除）"}
+                  title={tr("ui.app.mark.this.goal.as.achieved.02574d0")}
                   onClick={() => {
                     const g = { ...goal, active: false, done: true };
                     window.wuwei.goalSet?.(currentId, g);
@@ -9389,7 +9342,7 @@ export function App() {
                     setMode(currentId, "auto");
                   }}
                 >
-                  {lang === "en" ? "✓ Done" : "✓ 完成"}
+                  {tr("ui.app.done.cf6857b")}
                 </button>
               )}
             </div>
@@ -9397,7 +9350,7 @@ export function App() {
           {suggestion && input === "" && (
             <div
               className="suggest-bar"
-              title={t("suggest.title", "点击直接发送 · Tab 填入输入框再改")}
+              title={t("suggest.title")}
               onClick={() => {
                 // 点击=一步到位直接发；想先改的走 Tab 填入输入框
                 const s = suggestion;
@@ -9413,18 +9366,18 @@ export function App() {
               {suggestWait > 0 ? (
                 <button
                   className="suggest-wait"
-                  title={lang === "en" ? "Smart-continue judged this a low-risk question; it will auto-send when the countdown ends. Click to wait for you." : "智能继续：这条判成想问你一句，但没碰红线，倒数完还是会自动发。点这里改成等你。"}
+                  title={tr("ui.app.smart.continue.judged.this.low.risk.1f0154d")}
                   onClick={(e) => { e.stopPropagation(); setSuggestWait(0); }}
                 >
-                  {lang === "en" ? `auto-send in ${suggestWait}s · click to wait` : `${suggestWait}s 后自动发 · 点这等我`}
+                  {tr("ui.app.auto.send.in.click.to.wait.23eb33f", { p0: suggestWait })}
                 </button>
               ) : (
-                <span className="suggest-key">{modeOf(currentId) === "cont" ? (lang === "en" ? "smart-continue" : "智能继续中") : t("suggest.key", "Tab 填入")}</span>
+                <span className="suggest-key">{modeOf(currentId) === "cont" ? (tr("ui.app.smart.continue.26a845a")) : t("suggest.key")}</span>
               )}
               <button
                 className="suggest-x"
-                title={t("suggest.dismiss", "关闭建议")}
-                aria-label={t("suggest.dismiss", "关闭建议")}
+                title={t("suggest.dismiss")}
+                aria-label={t("suggest.dismiss")}
                 onClick={(e) => {
                   e.stopPropagation(); // 别冒泡到整条(那会直接发送)
                   setSuggestWait(0); // 智能继续:关掉建议同时取消自动发送倒计时
@@ -9465,7 +9418,7 @@ export function App() {
               }}
             />
             {busy ? (
-              <button className="send-btn stop" onClick={stop} title={t("composer.stop", "停止")}>
+              <button className="send-btn stop" onClick={stop} title={t("composer.stop")}>
                 <span className="stop-sq" />
               </button>
             ) : modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
@@ -9473,8 +9426,8 @@ export function App() {
               // 避免两轮空档里显示成普通发送图标、让人误以为停了。点它可立即续跑，不必等看门狗。
               <button
                 className="send-btn cont-wait"
-                onClick={() => void autoContinue(currentId, lang === "en" ? "Keep going toward the overall goal." : "继续朝总目标推进。")}
-                title={t("composer.contWait", "自主推进中 · 稍后自动继续（点击立即继续）")}
+                onClick={() => void autoContinue(currentId, tr("ui.app.keep.going.toward.the.overall.goal.34a5392"))}
+                title={t("composer.contWait")}
               >
                 <span className="by-spin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><Ic.IcRefresh size={15} /></span>
               </button>
@@ -9482,7 +9435,7 @@ export function App() {
               <button
                 className={"send-btn" + (input.trim() || pendingImages.length ? " active" : "")}
                 onClick={() => submit()} // 必须包一层：直接 onClick={submit} 会把 MouseEvent 当 override 传进去
-                title={t("composer.send", "发送 (Enter)")}
+                title={t("composer.send")}
                 disabled={!input.trim() && pendingImages.length === 0}
               >
                 ↵
@@ -9499,16 +9452,16 @@ export function App() {
           <>
             <div className="mq-overlay" onClick={() => setShowTasks(false)} />
             <div className="tasks-panel">
-              <div className="tp-head">{lang === "en" ? `Running tasks (${runningSet.size})` : `运行中的任务（${runningSet.size}）`}</div>
+              <div className="tp-head">{tr("ui.app.running.tasks.73db050", { p0: runningSet.size })}</div>
               {[...runningSet].map((sid) => {
                 const meta = sessions.find((s) => s.id === sid);
-                const title = meta?.title || (sid === currentId ? (lang === "en" ? "Current chat" : "当前会话") : (lang === "en" ? "Untitled chat" : "未命名会话"));
+                const title = meta?.title || (sid === currentId ? (tr("ui.app.current.chat.be080be")) : (tr("ui.app.untitled.chat.228167e")));
                 return (
                   <div key={sid} className={"tp-item" + (sid === currentId ? " cur" : "")}>
                     <span className="tp-dot" />
                     <span
                       className="tp-title"
-                      title={t("tasks.switchTo", "切换到该会话")}
+                      title={t("tasks.switchTo")}
                       onClick={() => {
                         if (sid !== currentId) window.wuwei.switchSession(sid);
                         setShowTasks(false);
@@ -9518,17 +9471,17 @@ export function App() {
                     </span>
                     <button
                       className="tp-stop"
-                      title={t("tasks.stopThis", "停止该任务")}
+                      title={t("tasks.stopThis")}
                       onClick={() => window.wuwei.stop(sid)}
                     >
-                      {lang === "en" ? "Stop" : "停止"}
+                      {tr("composer.stop")}
                     </button>
                   </div>
                 );
               })}
               <div className="tp-foot">
                 <button className="tp-stopall" onClick={() => [...runningSet].forEach((s) => window.wuwei.stop(s))}>
-                  {lang === "en" ? "Stop all" : "全部停止"}
+                  {tr("ui.app.stop.all.1b2f691")}
                 </button>
               </div>
             </div>
@@ -9538,7 +9491,7 @@ export function App() {
         {showUsage && (
           <div className="usage-panel">
             <div className="u-row">
-              <span>{t("usage.ctxWindow", "上下文窗口")}</span>
+              <span>{t("usage.ctxWindow")}</span>
               <span>
                 {(usage.lastInput / 1000).toFixed(1)}k / {ctxWinLabel} ({ctxPct}%)
               </span>
@@ -9554,7 +9507,7 @@ export function App() {
                 <div
                   className="u-row"
                   style={{ color: "#C05F3C", cursor: webLoginBusy ? "default" : "pointer", alignItems: "center" }}
-                  title={t("usage.webLoginTitle", "登录对应网站授权后自动刷新余额/额度")}
+                  title={t("usage.webLoginTitle")}
                   onClick={async () => {
                     if (webLoginBusy) return;
                     setWebLoginBusy(true);
@@ -9565,14 +9518,14 @@ export function App() {
                   <span>
                     {account.providerId === "kimi-sub"
                       ? account.expired
-                        ? t("usage.quotaExpired", "额度登录已过期")
-                        : t("usage.quotaNoLogin", "额度未登录")
+                        ? t("usage.quotaExpired")
+                        : t("usage.quotaNoLogin")
                       : account.expired
-                        ? t("usage.balExpired", "余额登录已过期")
-                        : t("usage.balNoLogin", "余额未登录")}
+                        ? t("usage.balExpired")
+                        : t("usage.balNoLogin")}
                   </span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    {webLoginBusy ? t("usage.loggingIn", "登录中…") : t("usage.clickLogin", "点此登录")}
+                    {webLoginBusy ? t("usage.loggingIn") : t("usage.clickLogin")}
                     <RefreshIcon size={13} />
                   </span>
                 </div>
@@ -9583,24 +9536,24 @@ export function App() {
               <>
                 {rate.planType && (
                   <div className="u-row">
-                    <span>{t("usage.plan", "订阅套餐")}</span>
+                    <span>{t("usage.plan")}</span>
                     <span style={{ textTransform: "capitalize" }}>
                       {rate.planType}
-                      {rate.creditsUnlimited ? t("usage.unlimited", " · 无限") : ""}
+                      {rate.creditsUnlimited ? t("usage.unlimited") : ""}
                     </span>
                   </div>
                 )}
                 {typeof rate.primaryUsedPercent === "number" && (
                   <LimitRow
                     // 主窗口≥24h(如 Codex 现在的 168h=7天)：本身就是周尺度，直接标「周限额」，不再单列短窗口
-                    label={(rate.primaryWindowMinutes ?? 300) >= 1440 ? t("limit.weekly", "周限额") : windowLabel(rate.primaryWindowMinutes)}
+                    label={(rate.primaryWindowMinutes ?? 300) >= 1440 ? t("limit.weekly") : windowLabel(rate.primaryWindowMinutes)}
                     used={rate.primaryUsedPercent}
                     resetSec={rate.primaryResetAfterSeconds}
                   />
                 )}
                 {(rate.primaryWindowMinutes ?? 300) < 1440 && typeof rate.secondaryUsedPercent === "number" && (
                   <LimitRow
-                    label={t("limit.weekly", "周限额")}
+                    label={t("limit.weekly")}
                     used={rate.secondaryUsedPercent}
                     resetSec={rate.secondaryResetAfterSeconds}
                   />
@@ -9608,8 +9561,8 @@ export function App() {
                 {curProviderId === "codex" && codexResets && codexResets.availableCount > 0 && (
                   <div className="u-reset">
                     <div className="u-row">
-                      <span>{t("usage.limitReset", "限额重置")}</span>
-                      <span>{t("usage.availCount", "可用 {n} 次").replace("{n}", String(codexResets.availableCount))}</span>
+                      <span>{t("usage.limitReset")}</span>
+                      <span>{t("usage.availCount").replace("{n}", String(codexResets.availableCount))}</span>
                     </div>
                     {codexResets.credits
                       .filter((c) => c.status === "available")
@@ -9618,20 +9571,20 @@ export function App() {
                           <div className="u-reset-info">
                             <span className="u-reset-title">{c.title || "Full reset"}</span>
                             {c.expires_at && (
-                              <span className="u-reset-exp">{t("usage.expiresOn", "{d} 到期").replace("{d}", new Date(c.expires_at).toLocaleDateString())}</span>
+                              <span className="u-reset-exp">{t("usage.expiresOn").replace("{d}", new Date(c.expires_at).toLocaleDateString())}</span>
                             )}
                           </div>
                           {resetConfirm === c.id ? (
                             <span className="u-reset-confirm">
-                              {t("usage.useThis", "用掉这次？")}
+                              {t("usage.useThis")}
                               <button className="allow" onClick={() => doConsumeReset(c.id)}>
-                                {t("usage.confirm", "确认")}
+                                {t("usage.confirm")}
                               </button>
-                              <button onClick={() => setResetConfirm(null)}>{lang === "en" ? "Cancel" : "取消"}</button>
+                              <button onClick={() => setResetConfirm(null)}>{tr("set.st.cancel")}</button>
                             </span>
                           ) : (
                             <button className="u-reset-btn" onClick={() => setResetConfirm(c.id)}>
-                              {t("usage.useReset", "使用重置")}
+                              {t("usage.useReset")}
                             </button>
                           )}
                         </div>
@@ -9639,7 +9592,7 @@ export function App() {
                     {resetMsg && <div className="u-reset-msg">{resetMsg}</div>}
                   </div>
                 )}
-                <div className="u-note">{t("usage.subNote", "数据来自订阅额度（发一条消息后刷新）。")}</div>
+                <div className="u-note">{t("usage.subNote")}</div>
               </>
             ) : curPreset?.hosted || curProviderId.startsWith("wuwei-") ? (
               // 无为托管：显示无为币余额（未登录则引导登录）
@@ -9651,31 +9604,31 @@ export function App() {
                     const wq = wuwei.membership!.weeklyQuota!;
                     const usedPct = Math.max(0, Math.min(100, 100 - wq.remainingPct));
                     const rd = wq.resetsAt ? new Date(wq.resetsAt) : null;
-                    const rs = rd ? (lang === "en" ? rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : `${rd.getMonth() + 1}月${rd.getDate()}日`) : "";
+                    const rs = rd ? (lang !== "zh" ? rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : tr("ui.app.message.e83b0888fd", {p0: rd.getMonth() + 1, p1: rd.getDate()})) : "";
                     return (
                       <div style={{ margin: "2px 0 4px" }}>
                         <div className="u-row" style={{ marginBottom: 4 }}>
-                          <span>{lang === "en" ? "This month" : "本月额度"}</span>
-                          <span>{lang === "en" ? `${usedPct}% used${rs ? ` · resets ${rs}` : ""}` : `已用 ${usedPct}%${rs ? ` · ${rs} 重置` : ""}`}</span>
+                          <span>{tr("ui.app.this.month.60c3b82")}</span>
+                          <span>{tr("ui.app.used.1faca69", { p0: usedPct, p1: (lang !== "zh" ? rs ? ` · resets ${rs}` : "" : rs ? tr("ui.app.message.2f3db82794", {p0: rs}) : "") })}</span>
                         </div>
                         <div className="u-bar"><div className={"u-fill" + (usedPct >= 80 ? " danger" : usedPct >= 50 ? " warn" : "")} style={{ width: usedPct + "%" }} /></div>
                       </div>
                     );
                   })() : (
                     <div className="u-row">
-                      <span>{t("usage.coinBal", "无为币余额")}</span>
-                      <span>{t("usage.coinAmount", "{n} 无为币").replace("{n}", wuwei.coin.balance.toLocaleString())}</span>
+                      <span>{t("usage.coinBal")}</span>
+                      <span>{t("usage.coinAmount").replace("{n}", formatCredits(wuwei.coin.balance))}</span>
                     </div>
                   )}
                   <div className="u-row">
-                    <span>{t("usage.sessTokens", "本会话 tokens")}</span>
+                    <span>{t("usage.sessTokens")}</span>
                     <span>
                       ↑{usage.totalInput.toLocaleString()} ↓{usage.totalOutput.toLocaleString()}
                     </span>
                   </div>
                   {/* 订阅版隐藏「按token扣无为币」说明——不让订阅用户感知币数 */}
                   {!wuwei.membership?.weeklyQuota?.active && (
-                    <div className="u-note">{t("usage.hostedNote", "无为托管按 token×单价扣无为币（余额随对话刷新）。")}</div>
+                    <div className="u-note">{t("usage.hostedNote")}</div>
                   )}
                 </>
               ) : curPreset?.anon ? (
@@ -9688,8 +9641,8 @@ export function App() {
                     setShowLoginForm(true);
                   }}
                 >
-                  <span>{t("usage.freeTrial", "免费体验中")}</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{t("usage.loginUnlock", "登录解锁更多 →")}</span>
+                  <span>{t("usage.freeTrial")}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{t("usage.loginUnlock")}</span>
                 </div>
               ) : (
                 <div
@@ -9700,8 +9653,8 @@ export function App() {
                     setShowLoginForm(true);
                   }}
                 >
-                  <span>{t("usage.coinBal", "无为币余额")}</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{t("usage.loginToView", "登录后查看 · 点此登录")}</span>
+                  <span>{t("usage.coinBal")}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{t("usage.loginToView")}</span>
                 </div>
               )
             ) : account.balance ? (
@@ -9709,37 +9662,37 @@ export function App() {
               <>
                 {account.balance.total && (
                   <div className="u-row">
-                    <span>{t("usage.acctBal", "账户余额")}</span>
-                    <span>{t("usage.yuanAmount", "{n} 元").replace("{n}", String(account.balance.total))}</span>
+                    <span>{t("usage.acctBal")}</span>
+                    <span>{t("usage.yuanAmount").replace("{n}", String(account.balance.total))}</span>
                   </div>
                 )}
                 {account.balance.consumed && (
                   <div className="u-row">
-                    <span>{t("usage.sessConsumed", "本会话已消耗")}</span>
-                    <span>≈ {t("usage.yuanAmount", "{n} 元").replace("{n}", String(account.balance.consumed))}</span>
+                    <span>{t("usage.sessConsumed")}</span>
+                    <span>≈ {t("usage.yuanAmount").replace("{n}", String(account.balance.consumed))}</span>
                   </div>
                 )}
                 <div className="u-row">
-                  <span>{t("usage.sessTokens", "本会话 tokens")}</span>
+                  <span>{t("usage.sessTokens")}</span>
                   <span>
                     ↑{usage.totalInput.toLocaleString()} ↓{usage.totalOutput.toLocaleString()}
                   </span>
                 </div>
                 <div className="u-note">
                   {account.balance.total
-                    ? t("usage.balNote", "余额实时来自 {label} 账户（每轮对话后刷新）。").replace("{label}", account.label ?? "")
-                    : t("usage.consumeNote", "消耗按 token×单价估算（每轮对话后刷新）。")}
+                    ? t("usage.balNote").replace("{label}", account.label ?? "")
+                    : t("usage.consumeNote")}
                 </div>
               </>
             ) : (
               // 无额度/无余额信息：显示 token 统计
               <>
                 <div className="u-row">
-                  <span>{t("usage.totalIn", "本会话累计输入")}</span>
+                  <span>{t("usage.totalIn")}</span>
                   <span>{usage.totalInput.toLocaleString()} tokens</span>
                 </div>
                 <div className="u-row">
-                  <span>{t("usage.totalOut", "本会话累计输出")}</span>
+                  <span>{t("usage.totalOut")}</span>
                   <span>{usage.totalOutput.toLocaleString()} tokens</span>
                 </div>
               </>
@@ -9776,7 +9729,7 @@ export function App() {
                 className="search-input"
                 ref={searchInputRef}
                 autoFocus
-                placeholder={lang === "en" ? "Search all conversations…" : "搜索所有对话的内容…"}
+                placeholder={tr("ui.app.search.all.conversations.3a7961c")}
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 onKeyDown={(e) => {
@@ -9800,33 +9753,25 @@ export function App() {
               {searchQ && (
                 <button
                   className="search-clear"
-                  title={lang === "en" ? "Clear" : "清空"}
+                  title={tr("ui.app.clear.c69ad09")}
                   onMouseDown={(e) => e.preventDefault()} // 别把焦点从输入框抢走，清空后接着打字
                   onClick={() => setSearchQ("")}
                 >
                   ×
                 </button>
               )}
-              <button className="search-x" title={lang === "en" ? "Close (Esc)" : "关闭（Esc）"} onClick={() => setSearchOpen(false)}>
+              <button className="search-x" title={tr("ui.app.close.esc.7afe0a1")} onClick={() => setSearchOpen(false)}>
                 ×
               </button>
             </div>
             <div className="search-stat">
               {searching
-                ? lang === "en"
-                  ? "Searching…（first run builds an index, a few seconds）"
-                  : "搜索中…（第一次会先建索引，稍等几秒）"
+                ? tr("ui.app.searching.first.run.builds.an.index.e8eef5c")
                 : searchRes
                   ? searchRes.hits.length
-                    ? lang === "en"
-                      ? `${searchRes.total} matches · ${searchRes.sessions} conversations${searchRes.truncated ? "（showing the most relevant）" : ""} · ↑↓ to select, Enter to jump`
-                      : `共 ${searchRes.total} 处匹配 · ${searchRes.sessions} 个会话${searchRes.truncated ? "（只列出最相关的一部分）" : ""} · ↑↓ 选择，回车跳转`
-                    : lang === "en"
-                      ? `No content matching "${searchQ.trim()}"`
-                      : `没找到包含「${searchQ.trim()}」的内容`
-                  : lang === "en"
-                    ? "Search across all questions and replies; click a result to jump to it"
-                    : "搜所有对话的提问与回复；点结果直接跳到原文位置"}
+                    ? tr("ui.app.matches.conversations.to.select.enter.to.8642956", { p0: searchRes.total, p1: searchRes.sessions, p2: (lang !== "zh" ? searchRes.truncated ? "（showing the most relevant）" : "" : searchRes.truncated ? tr("ui.app.message.c2893d4ef0") : "") })
+                    : tr("ui.app.no.content.matching.e908bab", { p0: searchQ.trim() })
+                  : tr("ui.app.search.across.all.questions.and.replies.255dbc7")}
             </div>
             {searchRes && searchRes.hits.length > 0 && (
               <div className="search-list">
@@ -9842,14 +9787,14 @@ export function App() {
                   >
                     <div className="search-row-top">
                       <span className="search-row-title" title={h.title}>
-                        {h.title || (lang === "en" ? "New chat" : "新对话")}
+                        {h.title || (tr("ui.app.new.chat.fca06b0"))}
                       </span>
                       <span className={"search-role " + h.role}>
                         {h.role === "user"
-                          ? lang === "en" ? "Me" : "我"
+                          ? tr("ui.index.me.d269d05")
                           : h.role === "assistant"
                             ? "AI"
-                            : lang === "en" ? "Title" : "标题"}
+                            : tr("ui.app.title.e7ded3b")}
                       </span>
                       <span className="search-row-time">{relTime(h.updatedAt)}</span>
                     </div>
@@ -9859,7 +9804,7 @@ export function App() {
                       {h.post}
                       {h.more > 0 && (
                         <span className="search-more">
-                          {lang === "en" ? `+${h.more} more here` : `本条另有 ${h.more} 处`}
+                          {tr("ui.app.more.here.4087fa7", { p0: h.more })}
                         </span>
                       )}
                     </div>
@@ -9876,16 +9821,16 @@ export function App() {
           <div className="history-modal">
             <div className="history-head">
               <span className="history-title" title={historyView.title}>
-                {historyView.title} · {lang === "en" ? "Full history" : "完整历史"}
-                {historyView.compacted && <span className="history-badge">{lang === "en" ? "incl. pre-compaction" : "含压缩前原文"}</span>}
+                {historyView.title} · {tr("ui.app.full.history.0d22e9f")}
+                {historyView.compacted && <span className="history-badge">{tr("ui.app.incl.pre.compaction.5165a66")}</span>}
               </span>
-              <button className="history-close" title={lang === "en" ? "Close" : "关闭"} onClick={() => setHistoryView(null)}>✕</button>
+              <button className="history-close" title={tr("msg.close")} onClick={() => setHistoryView(null)}>✕</button>
             </div>
             <div className="history-body stream">
               {historyView.loading ? (
-                <div className="history-empty">{lang === "en" ? "Loading…" : "加载中…"}</div>
+                <div className="history-empty">{tr("set.brain.warming")}</div>
               ) : historyView.items.length === 0 ? (
-                <div className="history-empty">{lang === "en" ? "No history for this conversation yet." : "这个对话暂无历史记录。"}</div>
+                <div className="history-empty">{tr("ui.app.no.history.for.this.conversation.yet.bc04cb1")}</div>
               ) : (
                 historyView.items.map((it, i) => <ItemView key={i} item={it} now={now} />)
               )}
@@ -9894,7 +9839,7 @@ export function App() {
         </>
       )}
       {goalEdit && (() => {
-        const en = lang === "en";
+        const en = lang !== "zh";
         const ge = goalEdit;
         const setGE = (patch: Partial<NonNullable<typeof goalEdit>>) => setGoalEdit({ ...ge, ...patch });
         // —— 树形计划的增删改(按 id 递归) ——
@@ -9930,12 +9875,12 @@ export function App() {
                   </span>
                   <div className="goal-node-body">
                     <div className="goal-node-titlerow">
-                      <input className="goal-node-title" value={s.title} placeholder={en ? "Node title" : "节点标题"} onChange={(e) => setStepId(s.id, { title: e.target.value })} />
-                      {depth < 3 && <button type="button" className="goal-node-add" title={en ? "Add sub-node" : "加子节点"} onClick={() => addChildId(s.id)}>+{en ? "sub" : "子"}</button>}
-                      <button type="button" className="goal-node-del" title={en ? "Remove" : "删除"} onClick={() => delStepId(s.id)}>×</button>
+                      <input className="goal-node-title" value={s.title} placeholder={tr("ui.app.node.title.57405dc")} onChange={(e) => setStepId(s.id, { title: e.target.value })} />
+                      {depth < 3 && <button type="button" className="goal-node-add" title={tr("ui.app.add.sub.node.04101ed")} onClick={() => addChildId(s.id)}>+{tr("ui.app.sub.00e7cfe")}</button>}
+                      <button type="button" className="goal-node-del" title={tr("set.mcp.delete")} onClick={() => delStepId(s.id)}>×</button>
                     </div>
-                    <textarea className="goal-node-desc" rows={2} value={s.description || ""} placeholder={en ? "Description (optional — can be detailed)" : "说明（选填，可详细）"} onChange={(e) => setStepId(s.id, { description: e.target.value })} />
-                    <input className="goal-node-acc" value={s.acceptance} placeholder={en ? "Acceptance criterion" : "验收标准"} onChange={(e) => setStepId(s.id, { acceptance: e.target.value })} />
+                    <textarea className="goal-node-desc" rows={2} value={s.description || ""} placeholder={tr("ui.app.description.optional.can.be.detailed.6dd52b6")} onChange={(e) => setStepId(s.id, { description: e.target.value })} />
+                    <input className="goal-node-acc" value={s.acceptance} placeholder={tr("ui.app.acceptance.criterion.1424093")} onChange={(e) => setStepId(s.id, { acceptance: e.target.value })} />
                   </div>
                 </div>
                 {hasKids && !collapsed && renderNodes(s.children!, depth + 1, no)}
@@ -9959,11 +9904,11 @@ export function App() {
           return (
             <button
               className={"goal-mini" + (ge.researching ? " researching" : "")}
-              title={en ? "Open goal setup" : "展开目标设置"}
+              title={tr("ui.app.open.goal.setup.68a9832")}
               onClick={() => setGoalEdit({ ...ge, minimized: false })}
             >
               {ge.researching ? <span className="goal-research-spin" /> : <span className="goal-mini-ico">◎</span>}
-              <span className="goal-mini-text">{ge.researching && researchLive ? researchLive.label : ge.text || (en ? "Goal setup" : "目标设置")}</span>
+              <span className="goal-mini-text">{ge.researching && researchLive ? researchLive.label : ge.text || (tr("ui.app.goal.setup.0ffd459"))}</span>
               {ge.researching && researchLive && researchLive.steps > 0 && <span className="goal-mini-step">#{researchLive.steps}</span>}
             </button>
           );
@@ -9973,52 +9918,50 @@ export function App() {
           <div className="mq-overlay goal-modal-overlay" onClick={minimize} />
           <div className="goal-modal goal-modal-lg">
             <div className="goal-modal-h">
-              <span className="goal-modal-h-t">◎ {en ? "Overall goal for this conversation" : "这个对话的总目标"}</span>
+              <span className="goal-modal-h-t">◎ {tr("ui.app.overall.goal.for.this.conversation.82ea34e")}</span>
               <span style={{ flex: 1 }} />
-              <button className="goal-modal-icon" title={en ? "Minimize (keeps researching in background)" : "缩小（调研继续在后台跑）"} onClick={minimize} aria-label="minimize">
+              <button className="goal-modal-icon" title={tr("ui.app.minimize.keeps.researching.in.background.b08cede")} onClick={minimize} aria-label={tr("ui.shared.0c3639c109")}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><line x1="3.5" y1="8" x2="12.5" y2="8" /></svg>
               </button>
-              <button className="goal-modal-icon" title={en ? "Close (discards this research)" : "关闭（放弃这次调研）"} onClick={discard} aria-label="close">
+              <button className="goal-modal-icon" title={tr("ui.app.close.discards.this.research.0295168")} onClick={discard} aria-label={tr("ui.shared.da38860cb8")}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
               </button>
             </div>
             <div className="goal-modal-scroll">
               <div className="goal-modal-sub">
-                {en
-                  ? "Describe what you want to achieve, then let AI research it and draft a plan with acceptance criteria and drift-guard rules. After you click Start, it drives step by step — re-reading the goal, plan and rules each step so it never loses the thread — only stopping to ask when something truly needs you."
-                  : "写清楚你要达成什么，再让 AI 联网调研、拟出带验收标准的计划和防跑偏规则。点「开始执行」后它一步步做，每步都回看目标+计划+规则、绝不丢初衷，只有真正需要你出面的（服务器、账号、花钱、上线）才停下来问你。"}
+                {tr("ui.app.describe.what.you.want.to.achieve.668a184")}
               </div>
               {/* 总目标 */}
-              <div className="goal-field-label">{en ? "Overall goal" : "总目标"}</div>
+              <div className="goal-field-label">{tr("ui.app.overall.goal.b2b0bbd")}</div>
               <textarea
                 autoFocus
                 rows={3}
                 value={ge.text}
-                placeholder={en ? "e.g. Research the latest literature, converge on the most valuable direction, then implement/test/iterate until a verifiable result." : "例：把最前沿的相关文献调研一遍，收敛出最有价值的一条方向，然后一步步实践、测试、迭代，直到跑出可验证的结果。"}
+                placeholder={tr("ui.app.research.the.latest.literature.converge.on.641db33")}
                 onChange={(e) => setGE({ text: e.target.value })}
               />
               {/* 调研并拟计划 */}
               <div className="goal-sec-row">
                 <button className="goal-research-btn" disabled={!ge.text.trim() || ge.researching} onClick={startResearch}>
-                  {ge.researching ? (en ? "Researching…" : "调研中…") : (en ? "🔍 Research & draft plan" : "🔍 调研并拟计划")}
+                  {ge.researching ? (tr("ui.app.researching.2c42485")) : (tr("ui.app.research.draft.plan.6faab6e"))}
                 </button>
                 <span className="goal-sec-hint">
-                  {en ? "Let AI search the latest papers & news online, then auto-fill the findings, plan and rules below for you to review and edit." : "让 AI 联网查最新论文/新闻，自动填好下面的调研结论、计划与规则——你再逐项审阅修改。"}
+                  {tr("ui.app.let.ai.search.the.latest.papers.fb7e30e")}
                 </span>
               </div>
               {/* 调研方向/来源(可增删)：默认 最新论文/最新新闻/GitHub */}
               <div className="goal-src-row">
-                <span className="goal-src-label">{en ? "Sources / directions:" : "调研方向/来源："}</span>
+                <span className="goal-src-label">{tr("ui.app.sources.directions.b6b3480")}</span>
                 {researchSources.map((s, i) => (
                   <span className="goal-src-chip" key={i}>
                     {s}
-                    <button type="button" title={en ? "Remove" : "移除"} onClick={() => setResearchSources((arr) => arr.filter((_, j) => j !== i))}>×</button>
+                    <button type="button" title={tr("msg.remove")} onClick={() => setResearchSources((arr) => arr.filter((_, j) => j !== i))}>×</button>
                   </span>
                 ))}
                 <input
                   className="goal-src-input"
                   value={srcInput}
-                  placeholder={en ? "+ add source…" : "+ 添加来源…"}
+                  placeholder={tr("ui.app.add.source.7331b73")}
                   onChange={(e) => setSrcInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && srcInput.trim()) { e.preventDefault(); setResearchSources((arr) => arr.includes(srcInput.trim()) ? arr : [...arr, srcInput.trim()]); setSrcInput(""); }
@@ -10027,7 +9970,7 @@ export function App() {
               </div>
               {ge.researching && (
                 <div className="goal-researching">
-                  <div>{en ? "AI is researching in an isolated session (doesn't touch this chat) — findings, plan and rules below fill in automatically when done (about 30s–2min). Feel free to minimize (–) or Save only; it keeps running and restores when you reopen. Only Close (×) cancels it." : "AI 正在独立子会话里联网调研（不占用当前对话），完成后会自动把下面的调研结论、计划和规则填好（约几十秒到一两分钟）。可随时点右上角「缩小(–)」或「只保存」——调研继续跑、重新打开自动恢复；只有「关闭(×)」才会取消。"}</div>
+                  <div>{tr("ui.app.ai.is.researching.in.an.isolated.216a4af")}</div>
                   {researchLive && (
                     <div className="goal-research-live">
                       <span className="goal-research-spin" />
@@ -10039,7 +9982,7 @@ export function App() {
               )}
               {/* JSON 视图：与下面字段/计划双向实时同步。改下面→JSON 跟着变；改 JSON→下面跟着变；可整份复制迁移到别的对话 */}
               <button type="button" className="goal-paste-toggle" onClick={() => setPasteOpen((v) => !v)}>
-                {pasteOpen ? (en ? "▾ JSON (live-synced with the fields below)" : "▾ JSON（与下面字段/计划双向同步）") : (en ? "▸ View / edit / copy as JSON (live-synced; paste to migrate)" : "▸ 查看/编辑/复制 JSON（与下面实时同步，可整份复制迁移）")}
+                {pasteOpen ? (tr("ui.app.json.live.synced.with.the.fields.c1c11f0")) : (tr("ui.app.view.edit.copy.as.json.live.174e851"))}
               </button>
               {pasteOpen && (
                 <div className="goal-paste">
@@ -10047,7 +9990,7 @@ export function App() {
                     className="goal-json-view"
                     rows={8}
                     value={pasteText}
-                    placeholder={en ? "The whole charter as JSON — edit here and the fields below update; edit below and this updates. Paste a JSON here to import a whole plan." : "整份契约的 JSON——在这改，下面字段/计划跟着变；改下面，这里也跟着变。把别处的 JSON 粘进来即可整份导入。"}
+                    placeholder={tr("ui.app.the.whole.charter.as.json.edit.d1cf330")}
                     onFocus={() => { jsonEditingRef.current = true; }}
                     onBlur={() => {
                       jsonEditingRef.current = false;
@@ -10064,7 +10007,7 @@ export function App() {
                         setPasteErr("");
                         setGE({ research: p.research, ruleDo: p.ruleDo, ruleDont: p.ruleDont, plan: p.plan.length ? p.plan : ge.plan });
                       } else {
-                        setPasteErr(en ? "Invalid JSON — fields below keep the last valid version." : "JSON 暂时不合法——下面字段先保留上一次有效的。");
+                        setPasteErr(tr("ui.app.invalid.json.fields.below.keep.the.a9e415a"));
                       }
                     }}
                   />
@@ -10076,40 +10019,40 @@ export function App() {
                       className="ghost"
                       onClick={() => {
                         const txt = charterToJson({ research: ge.research, ruleDo: ge.ruleDo, ruleDont: ge.ruleDont, plan: ge.plan });
-                        navigator.clipboard?.writeText(txt).then(() => { setPasteErr(en ? "Copied ✓" : "已复制 ✓"); setTimeout(() => setPasteErr(""), 1500); }).catch(() => {});
+                        navigator.clipboard?.writeText(txt).then(() => { setPasteErr(tr("ui.app.copied.86221c1")); setTimeout(() => setPasteErr(""), 1500); }).catch(() => {});
                       }}
                     >
-                      {en ? "Copy JSON" : "复制 JSON"}
+                      {tr("ui.app.copy.json.00dbb88")}
                     </button>
                   </div>
                 </div>
               )}
               {/* 调研结论 */}
-              <div className="goal-field-label">{en ? "Research findings" : "调研结论"}<span className="goal-field-opt">{en ? "optional" : "选填"}</span></div>
+              <div className="goal-field-label">{tr("ui.app.research.findings.494f67c")}<span className="goal-field-opt">{tr("ui.app.optional.a52b3ba")}</span></div>
               <textarea
                 rows={4}
                 value={ge.research}
-                placeholder={en ? "Findings from the research above — or write your own." : "上面调研得到的现状/发现/推荐路径——也可以自己写。"}
+                placeholder={tr("ui.app.findings.from.the.research.above.or.f587b09")}
                 onChange={(e) => setGE({ research: e.target.value })}
               />
               {/* 计划(树形，最多3层，每节点带说明+验收，可展开子节点) */}
-              <div className="goal-field-label">{en ? "Execution plan — tree, up to 3 levels; each node has a description & acceptance" : "执行计划 —— 树形(最多3层)，每个节点带说明+验收，可展开子节点"}</div>
+              <div className="goal-field-label">{tr("ui.app.execution.plan.tree.up.to.levels.de8ea8c")}</div>
               <div className="goal-plan">
                 {ge.plan.length === 0 && (
-                  <div className="goal-plan-empty">{en ? "No nodes yet — click Research above to have AI draft the tree, or add manually." : "还没有节点——点上面「调研」让 AI 拟出计划树，或手动添加。"}</div>
+                  <div className="goal-plan-empty">{tr("ui.app.no.nodes.yet.click.research.above.c6e4fcd")}</div>
                 )}
                 {renderNodes(ge.plan, 1, "")}
-                <button className="goal-plan-add" onClick={addRootStep}>{en ? "+ Add node" : "+ 添加节点"}</button>
+                <button className="goal-plan-add" onClick={addRootStep}>{tr("ui.app.add.node.a531190")}</button>
               </div>
               {/* 规则：要做 / 绝不做 */}
               <div className="goal-rules">
                 <div className="goal-rules-col">
-                  <div className="goal-field-label">{en ? "Must do" : "要做哪些"}</div>
-                  <textarea rows={3} value={ge.ruleDo} placeholder={en ? "e.g. verify each step with real data; keep it minimal…" : "例：每步用真实数据验证；保持最小实现…"} onChange={(e) => setGE({ ruleDo: e.target.value })} />
+                  <div className="goal-field-label">{tr("ui.app.must.do.c161293")}</div>
+                  <textarea rows={3} value={ge.ruleDo} placeholder={tr("ui.app.verify.each.step.with.real.data.d2a3210")} onChange={(e) => setGE({ ruleDo: e.target.value })} />
                 </div>
                 <div className="goal-rules-col">
-                  <div className="goal-field-label goal-field-dont">{en ? "Never do (drift guard)" : "绝不做（防跑偏）"}</div>
-                  <textarea rows={3} value={ge.ruleDont} placeholder={en ? "e.g. don't turn this into an unrelated side-project; don't over-engineer; don't lose the original intent…" : "例：别做成一个跟初衷无关的小项目；别过度设计；别丢了做这事的初衷…"} onChange={(e) => setGE({ ruleDont: e.target.value })} />
+                  <div className="goal-field-label goal-field-dont">{tr("ui.app.never.do.drift.guard.147a137")}</div>
+                  <textarea rows={3} value={ge.ruleDont} placeholder={tr("ui.app.don.turn.this.into.an.unrelated.43a8616")} onChange={(e) => setGE({ ruleDont: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -10123,14 +10066,14 @@ export function App() {
                     discard();
                   }}
                 >
-                  {en ? "Delete goal" : "删除目标"}
+                  {tr("ui.app.delete.goal.0a158b0")}
                 </button>
               )}
               <span style={{ flex: 1 }} />
-              <button className="ghost" onClick={discard}>{en ? "Cancel" : "取消"}</button>
-              <button className="ghost" onClick={saveOnly}>{en ? "Save only" : "只保存"}</button>
+              <button className="ghost" onClick={discard}>{tr("set.st.cancel")}</button>
+              <button className="ghost" onClick={saveOnly}>{tr("ui.app.save.only.d223118")}</button>
               <button className="primary" disabled={!ge.text.trim()} onClick={() => startGoal(ge)}>
-                {en ? "Start" : "开始执行"}
+                {tr("ui.app.start.08913c7")}
               </button>
             </div>
           </div>
@@ -10142,36 +10085,36 @@ export function App() {
           <div className="mq-overlay" onClick={() => setShowTrash(false)} />
           <div className="trash-modal">
             <div className="trash-head">
-              <span className="trash-head-t"><TrashIcon /> {lang === "en" ? "Trash" : "回收站"}</span>
-              <span className="trash-sub">{lang === "en" ? "Deleted chats can be restored; auto-cleared after 7 days" : "已删除的对话可恢复，7 天后自动清除"}</span>
-              <button className="trash-x" title={lang === "en" ? "Close" : "关闭"} onClick={() => setShowTrash(false)}>×</button>
+              <span className="trash-head-t"><TrashIcon /> {tr("ui.app.trash.54c3cd7")}</span>
+              <span className="trash-sub">{tr("ui.app.deleted.chats.can.be.restored.auto.f1acc97")}</span>
+              <button className="trash-x" title={tr("msg.close")} onClick={() => setShowTrash(false)}>×</button>
             </div>
             <div className="trash-list">
-              {trash.length === 0 && <div className="empty">{lang === "en" ? "Trash is empty" : "回收站是空的"}</div>}
+              {trash.length === 0 && <div className="empty">{tr("ui.app.trash.is.empty.72fe978")}</div>}
               {trash.map((ti) => {
                 const leftMs = ti.deletedAt + 7 * 24 * 3600 * 1000 - Date.now();
                 const leftDays = Math.max(0, Math.ceil(leftMs / (24 * 3600 * 1000)));
-                const title = ti.title || (lang === "en" ? "New chat" : "新对话");
+                const title = ti.title || (tr("ui.app.new.chat.fca06b0"));
                 return (
                   <div key={ti.id} className="trash-row">
                     <div className="trash-info">
                       <div className="trash-title" title={title}>{title}</div>
                       <div className="trash-meta">
-                        {ti.group ? (lang === "en" ? `Group "${ti.group}" · ` : `分组「${ti.group}」· `) : ""}
-                        {lang === "en" ? `deleted ${relTime(ti.deletedAt)} · clears in ${leftDays}d` : `删除于 ${relTime(ti.deletedAt)} · ${leftDays} 天后清除`}
+                        {ti.group ? (tr("ui.app.group.a254736", { p0: ti.group })) : ""}
+                        {tr("ui.app.deleted.clears.in.1028f2e", { p0: relTime(ti.deletedAt), p1: leftDays })}
                       </div>
                     </div>
                     <button className="trash-restore" onClick={() => window.wuwei.restoreSession(ti.id)}>
-                      {lang === "en" ? "Restore" : "恢复"}
+                      {tr("ui.app.restore.88f8a7e")}
                     </button>
                     <button
                       className="trash-purge"
-                      title={lang === "en" ? "Delete permanently, cannot undo" : "彻底删除,不可恢复"}
+                      title={tr("ui.app.delete.permanently.cannot.undo.8717b03")}
                       onClick={() => {
-                        askConfirm({ message: lang === "en" ? `Permanently delete "${title}"? This cannot be undone.` : `彻底删除「${title}」？此操作不可恢复。`, danger: true, onOk: () => window.wuwei.purgeTrash(ti.id) });
+                        askConfirm({ message: tr("ui.app.permanently.delete.this.cannot.be.undone.a400f65", { p0: title }), danger: true, onOk: () => window.wuwei.purgeTrash(ti.id) });
                       }}
                     >
-                      {lang === "en" ? "Delete" : "彻底删除"}
+                      {tr("ui.app.delete.8bafad6")}
                     </button>
                   </div>
                 );
@@ -10182,10 +10125,10 @@ export function App() {
                 <button
                   className="trash-empty"
                   onClick={() => {
-                    askConfirm({ message: lang === "en" ? `Empty trash? This permanently deletes ${trash.length} chat(s).` : `清空回收站？将彻底删除 ${trash.length} 个对话，不可恢复。`, danger: true, onOk: () => window.wuwei.emptyTrash() });
+                    askConfirm({ message: tr("ui.app.empty.trash.this.permanently.deletes.chat.990b2db", { p0: trash.length }), danger: true, onOk: () => window.wuwei.emptyTrash() });
                   }}
                 >
-                  {lang === "en" ? "Empty trash" : "清空回收站"}
+                  {tr("ui.app.empty.trash.b26a3f8")}
                 </button>
               </div>
             )}
@@ -10248,15 +10191,15 @@ export function App() {
               <CheckinDoneIcon size={30} />
             </div>
             {checkinPop === "already" ? (
-              <div className="checkin-pop-title">{t("checkin.popAlready", "今日已签到")}</div>
+              <div className="checkin-pop-title">{t("checkin.popAlready")}</div>
             ) : (
               <>
-                <div className="checkin-pop-title">{t("checkin.popTitle", "签到成功")}</div>
+                <div className="checkin-pop-title">{t("checkin.popTitle")}</div>
                 <div className="checkin-pop-amt">
-                  <CoinIcon size={18} /> +{checkinPop.amount} {t("pay.credits", "无为币")}
+                  <CoinIcon size={18} /> +{checkinPop.amount} {t("pay.credits")}
                 </div>
                 {checkinPop.streak && checkinPop.streak > 1 && (
-                  <div className="checkin-pop-sub">{t("checkin.popStreak", "连续签到 {d} 天").replace("{d}", String(checkinPop.streak))}</div>
+                  <div className="checkin-pop-sub">{t("checkin.popStreak").replace("{d}", String(checkinPop.streak))}</div>
                 )}
               </>
             )}
@@ -10303,7 +10246,7 @@ export function App() {
         <div className="sc-launcher-wrap">
           <button
             className="sc-launcher"
-            title={lang === "en" ? "Support chat" : "在线客服"}
+            title={tr("ui.app.support.chat.94aec4a")}
             onClick={() => { setSupportUnread(0); setShowSupportChat(true); }}
           >
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -10313,7 +10256,7 @@ export function App() {
           </button>
           <button
             className="sc-launcher-x"
-            title={lang === "en" ? "Hide (reach via account menu)" : "隐藏（之后从账号菜单「联系客服」进入）"}
+            title={tr("ui.app.hide.reach.via.account.menu.cd14e14")}
             onClick={() => { setScLauncherHidden(true); localStorage.setItem("wuwei-sc-launcher-hidden", "1"); }}
           >
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -10351,7 +10294,7 @@ export function App() {
         <LoginIntroModal
           lang={lang}
           t={t}
-          reason={loginIntroReason}
+          reason={loginIntroReason ? t(loginIntroReason) : null}
           onLang={changeLang}
           showLangSwitch={langSwitchOnCard}
           onClose={() => { setShowLoginIntro(false); setLoginIntroReason(null); }}
@@ -10392,16 +10335,16 @@ export function App() {
             {confirmDlg.title && <h3 style={{ marginTop: 0 }}>{confirmDlg.title}</h3>}
             <div className="s-note" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, margin: confirmDlg.title ? "0 0 4px" : "2px 0 4px" }}>{confirmDlg.message}</div>
             <div className="btns" style={{ marginTop: 16 }}>
-              <button onClick={() => setConfirmDlg(null)}>{lang === "en" ? "Cancel" : "取消"}</button>
+              <button onClick={() => setConfirmDlg(null)}>{tr("set.st.cancel")}</button>
               <button className={"allow" + (confirmDlg.danger ? " danger" : "")} onClick={() => { const fn = confirmDlg.onOk; setConfirmDlg(null); fn(); }}>
-                {confirmDlg.okText || (lang === "en" ? "Confirm" : "确定")}
+                {confirmDlg.okText || (tr("ui.app.confirm.a1f6762"))}
               </button>
             </div>
           </div>
         </div>
       )}
       {/* SOP 文字输入弹窗：替代原生 prompt()（新建类别/新建SOP/重命名） */}
-      {sopPrompt && <SopPromptDialog en={lang === "en"} opts={sopPrompt} onClose={() => setSopPrompt(null)} />}
+      {sopPrompt && <SopPromptDialog en={lang !== "zh"} opts={sopPrompt} onClose={() => setSopPrompt(null)} />}
       {/* 检查更新结果：居中弹窗提示（检查中/已最新/发现新版下载中） */}
       {updateMsg && (
         <div className="perm-overlay" onClick={() => setUpdateMsg("")}>
@@ -10410,7 +10353,7 @@ export function App() {
             {dlProgress && (
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>
-                  <span>{lang === "en" ? "Downloading…" : "下载中…"}</span>
+                  <span>{tr("ui.app.downloading.568fdf7")}</span>
                   <span>{dlProgress.percent}%</span>
                 </div>
                 <div style={{ height: 6, borderRadius: 999, background: "var(--bg-raised)", overflow: "hidden" }}>
@@ -10419,7 +10362,7 @@ export function App() {
               </div>
             )}
             <div className="btns" style={{ marginTop: 14, justifyContent: "flex-end" }}>
-              <button className="allow" onClick={() => setUpdateMsg("")}>{lang === "en" ? "OK" : "知道了"}</button>
+              <button className="allow" onClick={() => setUpdateMsg("")}>{tr("ui.app.ok.c86991f")}</button>
             </div>
           </div>
         </div>
@@ -10428,13 +10371,13 @@ export function App() {
       {showUpdateModal && updateReady && (
         <div className="perm-overlay" onClick={() => setShowUpdateModal(false)}>
           <div className="add-st-dialog" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>{lang === "en" ? `New version v${updateReady.version} is ready` : `新版本 v${updateReady.version} 已就绪`}</h3>
+            <h3 style={{ marginTop: 0 }}>{tr("ui.app.new.version.is.ready.ccf8e2e", { p0: updateReady.version })}</h3>
             <div className="s-note" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 240, overflow: "auto" }}>
-              {updateReady.notes || (lang === "en" ? "Improvements and fixes. Update now to restart into the new version." : "包含改进与修复。点击升级将立即重启到新版本。")}
+              {updateReady.notes || (tr("ui.app.improvements.and.fixes.update.now.to.5499b8c"))}
             </div>
             <div className="btns" style={{ marginTop: 16 }}>
-              <button onClick={() => setShowUpdateModal(false)}>{lang === "en" ? "Later" : "稍后"}</button>
-              <button className="allow" onClick={() => window.wuwei.installUpdate()}>{lang === "en" ? "Update & restart" : "升级并重启"}</button>
+              <button onClick={() => setShowUpdateModal(false)}>{tr("ui.app.later.4fe0ba0")}</button>
+              <button className="allow" onClick={() => window.wuwei.installUpdate()}>{tr("ui.app.update.restart.aed3107")}</button>
             </div>
           </div>
         </div>
@@ -10461,7 +10404,7 @@ export function App() {
         lang={lang}
         balance={freeCapModal.balance}
         hasMemberQuota={!!freeCapModal.hasMemberQuota}
-        recommendations={pickerChoices.filter((choice) => choice.category === 'economy' && choice.recommended).slice(0, 3).map((choice) => lang === 'en' ? choice.labelEn : choice.label)}
+        recommendations={pickerChoices.filter((choice) => choice.category === 'economy' && choice.recommended).slice(0, 3).map((choice) => lang !== "zh" ? choice.labelEn : choice.label)}
         onClose={() => { usageLimitRequestRef.current = null; setFreeCapModal(null); }}
         onChoose={() => {
           usageLimitRequestRef.current = null;
@@ -10473,37 +10416,35 @@ export function App() {
       />}
       {/* 高价模型烧周额度过快：建议一键切到更省的 DeepSeek V4 Flash / GLM-5.3 Flash；点「继续用」则不再打扰这档 */}
       {quotaWarn && (() => {
-        const en = lang === "en";
+        const en = lang !== "zh";
         const labelOf = (m: string) => MODEL_LABEL_OVERRIDES[m] || (en ? modelLabelsEn.get(m) : undefined) || modelLabels.get(m) || m;
         const curLabel = labelOf(quotaWarn.model);
         const ds = findHostedModel("deepseek-v4-flash");
         const glm = findHostedModel("glm-5.3-flash");
         const rd = quotaWarn.resetsAt ? new Date(quotaWarn.resetsAt) : null;
-        const rs = rd ? (en ? rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : `${rd.getMonth() + 1}月${rd.getDate()}日`) : "";
+        const rs = rd ? (en ? rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : tr("ui.app.message.e83b0888fd", {p0: rd.getMonth() + 1, p1: rd.getDate()})) : "";
         const switchTo = (t: { provider: (typeof providerList)[number]; model: string } | null) => { if (t) void switchToHosted(t.provider, t.model); setQuotaWarn(null); };
         return (
           <>
             <div className="mq-overlay" style={{ zIndex: 200 }} onClick={() => setQuotaWarn(null)} />
             <div className="freecap-modal">
-              <button className="freecap-x" title={en ? "Close" : "关闭"} onClick={() => setQuotaWarn(null)}>×</button>
-              <div className="freecap-title">{en ? "You're burning your monthly quota fast" : "本月额度消耗有点快"}</div>
+              <button className="freecap-x" title={tr("msg.close")} onClick={() => setQuotaWarn(null)}>×</button>
+              <div className="freecap-title">{tr("ui.app.you.re.burning.your.monthly.quota.40a3a73")}</div>
               <div className="freecap-sub">
-                {en
-                  ? `You're on ${curLabel}, which costs more per token. Your monthly quota is ${quotaWarn.usedPct}% used${rs ? ` (resets ${rs})` : ""}. Switch to a cheaper model below to make it last.`
-                  : `你正在用 ${curLabel}，单价较高，本月额度已用 ${quotaWarn.usedPct}%${rs ? `（${rs} 重置）` : ""}。想省着点用，可以切到下面更便宜的模型继续。`}
+                {tr("ui.app.you.re.on.which.costs.more.d223630", { p0: curLabel, p1: quotaWarn.usedPct, p2: (en ? rs ? ` (resets ${rs})` : "" : rs ? tr("ui.app.message.6a84bc0152", {p0: rs}) : "") })}
               </div>
               <div className="freecap-actions">
                 {ds && (
                   <button className="freecap-primary" onClick={() => switchTo(ds)}>
-                    {en ? `Switch to ${labelOf(ds.model)}` : `一键切到 ${labelOf(ds.model)}`}
+                    {tr("ui.app.switch.to.f34fba7", { p0: labelOf(ds.model) })}
                   </button>
                 )}
                 {glm && (
                   <button className="freecap-secondary" onClick={() => switchTo(glm)}>
-                    {en ? `Switch to ${labelOf(glm.model)}` : `一键切到 ${labelOf(glm.model)}`}
+                    {tr("ui.app.switch.to.f34fba7", { p0: labelOf(glm.model) })}
                   </button>
                 )}
-                <button className="freecap-ghost" onClick={() => setQuotaWarn(null)}>{en ? `Keep using ${curLabel}` : `继续用 ${curLabel}`}</button>
+                <button className="freecap-ghost" onClick={() => setQuotaWarn(null)}>{tr("ui.app.keep.using.4edaefa", { p0: curLabel })}</button>
               </div>
             </div>
           </>
@@ -10512,7 +10453,7 @@ export function App() {
       {/* ① 无为币不足触发弹窗（v2）：金色升级Pro在上(更划算) + 朱色购买积分包在下 */}
       {coinShortage && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <TrialPayModal
-          en={lang === "en"}
+          en={lang !== "zh"}
           balance={coinShortage.balance != null ? coinShortage.balance : wuwei?.coin.balance ?? 0}
           rebind={coinShortage.rebind}
           context={debugCtx ?? (coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : ((wuwei?.membership?.weeklyQuota?.active && (wuwei.membership.weeklyQuota.remainingPct ?? 0) <= 0) ? "weekly" : "shortage"))}
@@ -10526,16 +10467,14 @@ export function App() {
             push({
               type: "notice",
               text:
-                lang === "en"
-                  ? `Switched this chat to ${rb.label} (direct, no credits used). Resend to continue.`
-                  : `已把当前对话改用${rb.label}（直连、不扣无为币）。重新发送即可继续。`,
+                tr("ui.app.switched.this.chat.to.direct.no.37523df", { p0: rb.label }),
             });
           }}
           onPaddle={(opt) => { closeShortage("pay_paddle"); startEnCheckout(opt.sku); }}
           onCrypto={(opt) => {
             if (!wuwei?.user.id) { setShowLoginForm(true); return; }
             closeShortage("pay_crypto");
-            setCryptoPay({ sku: opt.sku, name: lang === "en" ? opt.nameEn : opt.name, price: money(lang === "en", opt.price, opt.priceUsd) });
+            setCryptoPay({ sku: opt.sku, name: lang !== "zh" ? opt.nameEn : opt.name, price: money(lang !== "zh", opt.price, opt.priceUsd) });
           }}
           onContact={() => { closeShortage("contact"); setShowSupportChat(true); }}
           onFaq={() => { void window.wuwei.track?.("credits_shortage_action", { action: "faq" }); setPayFaqOpen(true); }}
@@ -10553,11 +10492,11 @@ export function App() {
             } else {
               setPayResult({
                 kind: "pro",
-                planName: lang === "en" ? opt.nameEn : opt.name,
+                planName: lang !== "zh" ? opt.nameEn : opt.name,
                 expire: fmtDate(opt.kind === "trial" ? new Date(Date.now() + opt.days * 24 * 3600_000) : addMonths(new Date(), 1)),
                 giftCoins: opt.coins,
                 signin: opt.signin,
-                perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt),
+                perks: (PRO_FEATS()).map(([tt]) => tt),
                 saved: opt.saved,
                 order: orderId || "",
               });
@@ -10566,7 +10505,7 @@ export function App() {
           }}
         />
       )}
-      {payFaqOpen && <PayFaqModal en={lang === "en"} onClose={() => setPayFaqOpen(false)} />}
+      {payFaqOpen && <PayFaqModal en={lang !== "zh"} onClose={() => setPayFaqOpen(false)} />}
       {coinPackOpen && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <CoinPackModal
           t={t}
@@ -10575,7 +10514,7 @@ export function App() {
           onClose={() => setCoinPackOpen(false)}
           onCheckout={(pack) => {
             setCoinPackOpen(false);
-            if (lang === "en") { startEnCheckout(pack.sku); return; } // 海外走网页 Paddle 结账
+            if (lang !== "zh") { startEnCheckout(pack.sku); return; } // 海外走网页 Paddle 结账
             setPayCheckout({ kind: "pack", pack });
           }}
           onUpgrade={() => {
@@ -10591,7 +10530,7 @@ export function App() {
           onClose={() => setPlanOpen(false)}
           onCheckout={(plan) => {
             setPlanOpen(false);
-            if (lang === "en") { startEnCheckout(plan.sku); return; } // 海外走网页 Paddle 结账
+            if (lang !== "zh") { startEnCheckout(plan.sku); return; } // 海外走网页 Paddle 结账
             setPayCheckout({ kind: "plan", plan });
           }}
         />
@@ -10599,12 +10538,12 @@ export function App() {
       {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage || coinPackOpen || planOpen))) && (
         <BillingPanel key={wuwei.user.id}
           lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
-          initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':'monthly'}
+          initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"monthly"}
           insufficient={!!coinShortage&&!coinShortage.browse} imageMode={imageMode}
-          onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage('close');}}
+          onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage("close");}}
           onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
           onPaid={()=>{const paidUser=wuwei.user.id;void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===paidUser)setWuwei(current=>current?.user.id===paidUser?me:current);}).catch(()=>{});}}
-          onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:lang==='en'?'Model switched. Send your message when ready.':'已切换模型，请重新发送消息。'});}}
+          onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:tr("ui.app.model.switched.send.your.message.when.c9fcf0d")});}}
         />
       )}
       {payCheckout && (
@@ -10624,7 +10563,7 @@ export function App() {
                 expire: fmtDate(addMonths(new Date(), 1)), // 月付：+1 个月
                 giftCoins: o.plan.coins,
                 signin: o.plan.signin,
-                perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt), // 各档同样的会员权益
+                perks: (PRO_FEATS()).map(([tt]) => tt), // 各档同样的会员权益
                 saved: o.plan.saved || undefined,
                 order: ord,
               });
@@ -10653,7 +10592,7 @@ export function App() {
       )}
       {cryptoPay && (
         <CryptoPayModal
-          en={lang === "en"}
+          en={lang !== "zh"}
           sku={cryptoPay.sku}
           planName={cryptoPay.name}
           priceLabel={cryptoPay.price}
@@ -10665,12 +10604,12 @@ export function App() {
             if (opt?.kind === "pack") {
               setPayResult({ kind: "coin", added: opt.coins, bonus: 0, balance: balance ?? 0, order: orderId });
             } else if (opt) {
-              setPayResult({ kind: "pro", planName: lang === "en" ? opt.nameEn : opt.name,
+              setPayResult({ kind: "pro", planName: lang !== "zh" ? opt.nameEn : opt.name,
                 expire: fmtDate(opt.kind === "trial" ? new Date(Date.now() + opt.days * 86400_000) : addMonths(new Date(), 1)),
                 giftCoins: opt.coins, signin: opt.signin,
-                perks: (lang === "en" ? PRO_FEATS_EN : PRO_FEATS).map(([tt]) => tt), order: orderId });
+                perks: (PRO_FEATS()).map(([tt]) => tt), order: orderId });
             } else {
-              push({ type: "notice", text: lang === "en" ? "Payment received. Your account has been credited." : "付款成功，账户已到账。" });
+              push({ type: "notice", text: tr("ui.app.payment.received.your.account.has.been.57690aa") });
             }
             void window.wuwei.wuweiMe().then((me) => { if (me) setWuwei(me); }).catch(() => {});
             void runConnCheck();
@@ -10684,7 +10623,7 @@ export function App() {
         if (!room) return null;
         return (
           <RoomSettingsModal
-            en={lang === "en"}
+            en={lang !== "zh"}
             room={room}
             employees={teamEmployees}
             onClose={() => setRoomSettings(null)}
@@ -10700,7 +10639,7 @@ export function App() {
       {/* 右键员工「编辑」：顶层弹编辑框，覆盖在当前界面上，不切走 appView。保存后 evt:team 广播自动刷新侧栏。 */}
       {editEmp && (
         <EmployeeEditModal
-          en={lang === "en"}
+          en={lang !== "zh"}
           providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
           loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
           onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
@@ -10710,7 +10649,7 @@ export function App() {
       )}
       {scheduleModal && (
         <ScheduleModal
-          en={lang === "en"}
+          en={lang !== "zh"}
           employeeId={scheduleModal.employeeId}
           task={scheduleModal.task}
           sopNodes={(sopTree || []).filter((n: any) => n.kind === "sop").map((n: any) => ({ id: n.id, name: n.name }))}
@@ -10720,11 +10659,9 @@ export function App() {
       {secretPrompt && (
         <div className="perm-overlay" onClick={() => setSecretPrompt(null)}>
           <div className="add-st-dialog sec-prompt" onClick={(e) => e.stopPropagation()}>
-            <h3>{lang === "en" ? "🔒 Possible secret detected" : "🔒 检测到疑似密钥"}</h3>
+            <h3>{tr("ui.app.possible.secret.detected.a1e27ea")}</h3>
             <p className="s-note">
-              {lang === "en"
-                ? "Found the sensitive info below. Check the items to store in the local secret manager — they're encrypted and replaced with placeholders before being sent to the AI, then auto-recognized each time after."
-                : "发现下面的敏感信息。勾选要存入本地密钥管理器的项——存入后会加密保存,并在发给 AI 前用占位符替换,之后每次自动识别。"}
+              {tr("ui.app.found.the.sensitive.info.below.check.7b5555c")}
             </p>
             <div className="sec-cand-list">
               {secretPrompt.candidates.map((c, i) =>
@@ -10732,10 +10669,10 @@ export function App() {
                   // 值已在保险箱、但这次描述不同→让用户三选一
                   <div key={i} className="sec-cand sec-cand-dup">
                     <div className="sec-cand-dup-top">
-                      <span className="sec-cand-kind dup">{lang === "en" ? "Exists" : "已存在"}</span>
+                      <span className="sec-cand-kind dup">{tr("ui.app.exists.bb929ba")}</span>
                       <span className="sec-cand-val">{c.masked}</span>
                       <span className="sec-cand-meta">
-                        {lang === "en" ? "Old note: " : "旧备注："}{c.existing.note || (lang === "en" ? "(none)" : "（无）")} → {lang === "en" ? "new: " : "新："}<b>{c.note}</b>
+                        {tr("ui.app.old.note.19596fd")}{c.existing.note || (tr("set.mcp.dNone"))} → {tr("ui.app.new.a7dba94")}<b>{c.note}</b>
                       </span>
                     </div>
                     <div className="sec-seg">
@@ -10750,7 +10687,7 @@ export function App() {
                             setSecretPrompt({ ...secretPrompt, dupChoice });
                           }}
                         >
-                          {opt === "new" ? (lang === "en" ? "Save as new" : "存为新的一条") : opt === "overwrite" ? (lang === "en" ? "Overwrite note" : "覆盖备注") : (lang === "en" ? "Don't save" : "不存")}
+                          {opt === "new" ? (tr("ui.app.save.as.new.f986488")) : opt === "overwrite" ? (tr("ui.app.overwrite.note.dd850d9")) : (tr("ui.app.don.save.d7a577e"))}
                         </button>
                       ))}
                     </div>
@@ -10777,10 +10714,10 @@ export function App() {
               )}
             </div>
             <div className="btns">
-              <button onClick={() => setSecretPrompt(null)}>{lang === "en" ? "Cancel send" : "取消发送"}</button>
-              <button onClick={() => confirmSecretPrompt(false)}>{lang === "en" ? "Send without saving" : "不存,直接发"}</button>
+              <button onClick={() => setSecretPrompt(null)}>{tr("ui.app.cancel.send.445481e")}</button>
+              <button onClick={() => confirmSecretPrompt(false)}>{tr("ui.app.send.without.saving.d0fafb8")}</button>
               <button className="allow" onClick={() => confirmSecretPrompt(true)}>
-                {lang === "en" ? "Save, replace & send" : "存入并替换后发送"}
+                {tr("ui.app.save.replace.send.5857e4f")}
               </button>
             </div>
           </div>
@@ -10799,7 +10736,7 @@ export function App() {
           />
           <button
             className="lightbox-close"
-            title={t("lightbox.close", "关闭 (Esc)")}
+            title={t("lightbox.close")}
             onClick={(e) => {
               e.stopPropagation();
               setLightbox(null);
@@ -10829,10 +10766,10 @@ export function App() {
                 const src = imgMenu.src;
                 setImgMenu(null);
                 const ok = await copyImageToClipboard(src);
-                if (!ok) push({ type: "notice", text: lang === "en" ? "Failed to copy image (try \"Save image\" instead)" : "复制图片失败（可改用「保存图片」）" });
+                if (!ok) push({ type: "notice", text: tr("ui.app.failed.to.copy.image.try.save.68316ba") });
               }}
             >
-              {lang === "en" ? "Copy image" : "复制图片"}
+              {tr("ui.app.copy.image.409f504")}
             </button>
             <button
               onClick={() => {
@@ -10840,7 +10777,7 @@ export function App() {
                 setImgMenu(null);
               }}
             >
-              {lang === "en" ? "Save image…" : "保存图片…"}
+              {tr("ui.app.save.image.8f2cf19")}
             </button>
             <button
               onClick={() => {
@@ -10848,7 +10785,7 @@ export function App() {
                 setImgMenu(null);
               }}
             >
-              {lang === "en" ? "View full size" : "查看大图"}
+              {tr("ui.app.view.full.size.7d3f099")}
             </button>
           </div>
         </div>
@@ -10873,7 +10810,7 @@ export function App() {
           if (redlineMode === "smart") {
             const rk = askRisk[a.id];
             if (!rk || rk.pending) judging = true; // 判定中：先不倒计时
-            else if (rk.risky) { redlineHit = { word: rk.reason || (lang === "en" ? "a risky action" : "涉及危险动作"), src: "smart" }; autoSec = redlineAutoSec; } // 红线：走「长倒计时」而非干等
+            else if (rk.risky) { redlineHit = { word: rk.reason || (tr("ui.index.risky.action.e172e0c")), src: "smart" }; autoSec = redlineAutoSec; } // 红线：走「长倒计时」而非干等
             else autoSec = askAutoSec; // 判定安全：走倒计时(用原始秒数设置，不再做关键词拦截)
           } else {
             autoSec = askAutoSecFor(a.questions || [], askAutoSec, stopRules);
@@ -10895,7 +10832,7 @@ export function App() {
             if (modeOf(currentId) !== "cont") return;
             // 倒计时到点：按总目标替你选(不勾具体项，让 AI 挑最合理的继续)
             window.wuwei.answerAsk(a.id, {
-              list: (a.questions || []).map(() => ({ selected: [], text: lang === "en" ? "You decide based on the overall goal — pick the most reasonable option and keep going." : "这个你按总目标自己定，挑最合理的选项继续。" })),
+              list: (a.questions || []).map(() => ({ selected: [], text: tr("ui.app.you.decide.based.on.the.overall.f7b0fe6") })),
             });
             clearAsk(currentId);
           }}
@@ -10926,15 +10863,15 @@ export function App() {
                 }}
               >
                 <div className="ask-toast-body">
-                  <div className="ask-toast-title">{makeT(getLang())("asktoast.title", "🔔 有会话在等你选择")}</div>
+                  <div className="ask-toast-title">{makeT(getLang())("asktoast.title")}</div>
                   <div className="ask-toast-sub">
-                    {makeT(getLang())("asktoast.sub", "「{title}」需要确认，点此切换过去").replace("{title}", t.title)}
+                    {makeT(getLang())("asktoast.sub").replace("{title}", t.title)}
                   </div>
                 </div>
                 <button
                   type="button"
                   className="ask-toast-x"
-                  title={makeT(getLang())("asktoast.ignore", "忽略通知（该会话仍在等待，切过去即可回答）")}
+                  title={makeT(getLang())("asktoast.ignore")}
                   onClick={(e) => {
                     e.stopPropagation();
                     dropToast(t.askId);
@@ -10962,17 +10899,17 @@ export function App() {
         <div className="perm-overlay">
           <div className="perm">
             <h3>
-              {lang === "en" ? "Allow " : "允许执行 "}<span className="tname">{pending.name}</span>{lang === "en" ? "?" : "？"}
+              {tr("ui.app.allow.20f3849")}<span className="tname">{pending.name}</span>{tr("ui.app.text.a1f32f8")}
             </h3>
             <div className="args">{JSON.stringify(pending.input, null, 2)}</div>
             <div className="btns">
-              <button onClick={() => answerPerm("deny")}>{lang === "en" ? "Deny (N)" : "拒绝 (N)"}</button>
-              <button onClick={allowAlways}>{lang === "en" ? "Always allow (A)" : "总是允许 (A)"}</button>
+              <button onClick={() => answerPerm("deny")}>{tr("ui.app.deny.c43c7fd")}</button>
+              <button onClick={allowAlways}>{tr("ui.app.always.allow.905b7e4")}</button>
               <button className="allow" onClick={() => answerPerm("allow")}>
-                {lang === "en" ? "Allow (Y)" : "允许 (Y)"}
+                {tr("ui.app.allow.d85a488")}
               </button>
             </div>
-            <div className="hint">{lang === "en" ? "Y allow once · A always allow this tool · N/Esc deny" : "Y 允许一次 · A 总是允许该工具 · N/Esc 拒绝"}</div>
+            <div className="hint">{tr("ui.app.allow.once.always.allow.this.tool.9fded62")}</div>
           </div>
         </div>
       )}
@@ -10994,12 +10931,12 @@ function runningTools(items: Item[]): Extract<Item, { type: "tool" }>[] {
 // 实时状态短语：随执行内容动态变——并行多工具/单工具/思考/生成
 function liveStatus(items: Item[], chars: number, elapsed: number): string {
   const running = runningTools(items);
-  const en = getLang() === "en";
-  if (running.length > 1) return en ? `Running ${running.length} operations in parallel` : `正在并行执行 ${running.length} 个操作`;
+  const en = getLang() !== "zh";
+  if (running.length > 1) return tr("ui.app.running.operations.in.parallel.ec72a4d", { p0: running.length });
   // 前缀「正在」占了 2 个字，标签本身再收紧一点，别顶到右侧的耗时/token
-  if (running.length === 1) return (en ? "" : "正在") + oneLineLabel(toolMetaRaw(running[0]).label, 48);
-  if (chars === 0) return en ? (elapsed > 20 ? "Still waiting for the model" : "Waiting for model response") : (elapsed > 20 ? "仍在等待模型响应" : "等待模型响应");
-  return en ? "Generating reply" : "生成回复";
+  if (running.length === 1) return (tr("ui.app.text.c2000d4")) + oneLineLabel(toolMetaRaw(running[0]).label, 48);
+  if (chars === 0) return en ? (elapsed > 20 ? tr("ui.app.message.53ab91b63d") : "Waiting for model response") : (elapsed > 20 ? tr("ui.app.message.53ab91b63d") : tr("ui.app.message.e7445b706c"));
+  return tr("ui.app.generating.reply.ed854d1");
 }
 
 function ThinkingBar({
@@ -11030,7 +10967,7 @@ function ThinkingBar({
   const status = liveStatus(items, chars, elapsed);
   const runningNow = runningTools(items);
   const running = runningNow.length;
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   // 悬停看完整命令：单个工具在跑时给未截断的原文，其余情况就是状态本身
   const fullStatus = running === 1 ? toolMetaRaw(runningNow[0]).label : status;
   return (
@@ -11044,18 +10981,16 @@ function ThinkingBar({
         className="tmeta tmeta-hover"
         onMouseEnter={() => setPreviewOn(true)}
         onMouseLeave={() => setPreviewOn(false)}
-        title={en ? "Hover to preview generated text" : "悬停查看已生成的正文"}
+        title={tr("ui.app.hover.to.preview.generated.text.4d50f46")}
       >
-        {time} · {tokLabel} tokens · {running > 0 ? (en ? `${running} task(s) running` : `${running} 个任务执行中`) : (en ? "Working" : "执行中")}
+        {time} · {tokLabel} tokens · {running > 0 ? (tr("ui.app.task.running.4eaa7e6", { p0: running })) : (tr("ui.app.working.713443b"))}
         {previewOn && (() => {
           const preview = (textRef?.current || "").slice(-2000);
           return (
             <div className="tpreview">
               {preview
                 ? preview
-                : en
-                  ? "(nothing generated yet; if it stays at 0 tokens, the model hasn't emitted its first token)"
-                  : "（还没有已生成的正文；若一直 0 token，是模型还没吐出首字）"}
+                : tr("ui.app.nothing.generated.yet.if.it.stays.520d657")}
             </div>
           );
         })()}
@@ -11069,17 +11004,17 @@ function fmtReset(sec?: number): string {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  const en = getLang() === "en";
-  if (d > 0) return en ? `resets in ${d}d ${h}h` : `${d}天${h}小时后重置`;
-  if (h > 0) return en ? `resets in ${h}h ${m}m` : `${h}小时${m}分后重置`;
-  return en ? `resets in ${m}m` : `${m}分后重置`;
+  const en = getLang() !== "zh";
+  if (d > 0) return tr("ui.app.resets.in.c78fc09", { p0: d, p1: h });
+  if (h > 0) return tr("ui.app.resets.in.4c2254b", { p0: h, p1: m });
+  return tr("ui.app.resets.in.2b9f2b6", { p0: m });
 }
 
 // 额度窗口时长 → 友好标签：≥48h 用「N天限额」，否则「X小时限额」(数据来自订阅接口返回的窗口时长)
 function windowLabel(min?: number, fallback = 300): string {
   const h = Math.round((min ?? fallback) / 60);
-  const en = getLang() === "en";
-  return h >= 48 ? (en ? `${Math.round(h / 24)}-day limit` : `${Math.round(h / 24)}天限额`) : (en ? `${h}-hour limit` : `${h}小时限额`);
+  const en = getLang() !== "zh";
+  return h >= 48 ? (tr("ui.app.day.limit.d5bc1c1", { p0: Math.round(h / 24) })) : (tr("ui.app.hour.limit.5254d9d", { p0: h }));
 }
 
 function LimitRow({ label, used, resetSec }: { label: string; used: number; resetSec?: number }) {
@@ -11088,7 +11023,7 @@ function LimitRow({ label, used, resetSec }: { label: string; used: number; rese
       <div className="u-row">
         <span>{label}</span>
         <span>
-          {getLang() === "en" ? `${used}% used` : `已用 ${used}%`}
+          {tr("ui.app.used.bd689cc", { p0: used })}
           {resetSec ? <span className="reset"> · {fmtReset(resetSec)}</span> : null}
         </span>
       </div>
@@ -11103,16 +11038,16 @@ function LimitRow({ label, used, resetSec }: { label: string; used: number; rese
 function relTime(ts: number, now: number, tt?: T): string {
   const t = tt ?? makeT(getLang());
   const s = Math.max(0, Math.floor((now - ts) / 1000));
-  if (s < 10) return t("rel.now", "刚刚");
-  if (s < 60) return t("rel.sec", "{n}秒前").replace("{n}", String(s));
+  if (s < 10) return t("rel.now");
+  if (s < 60) return t("rel.sec").replace("{n}", String(s));
   const m = Math.floor(s / 60);
-  if (m < 60) return t("rel.min", "{n}分钟前").replace("{n}", String(m));
+  if (m < 60) return t("rel.min").replace("{n}", String(m));
   const h = Math.floor(m / 60);
-  if (h < 24) return t("rel.hour", "{n}小时前").replace("{n}", String(h));
+  if (h < 24) return t("rel.hour").replace("{n}", String(h));
   const d = Math.floor(h / 24);
-  if (d < 7) return t("rel.day", "{n}天前").replace("{n}", String(d));
+  if (d < 7) return t("rel.day").replace("{n}", String(d));
   const dt = new Date(ts);
-  return t("rel.date", "{mo}月{d}日").replace("{mo}", String(dt.getMonth() + 1)).replace("{d}", String(dt.getDate()));
+  return t("rel.date").replace("{mo}", String(dt.getMonth() + 1)).replace("{d}", String(dt.getDate()));
 }
 
 
@@ -11184,20 +11119,20 @@ function BrowserPanel({
   if (detached) return null;
   return (
     <div className={"browser-panel " + mode} style={mode === "split" ? { flexBasis: width } : undefined}>
-      {mode === "split" && <div className="bp-resizer" onMouseDown={startResize} title={t("browser.resize", "拖动调整宽度")} />}
+      {mode === "split" && <div className="bp-resizer" onMouseDown={startResize} title={t("browser.resize")} />}
       <div className="bp-bar">
-        <button className="bp-nav" disabled={!info.canGoBack} onClick={() => window.wuwei.browserNav("back")} title={t("browser.back", "后退")}>
+        <button className="bp-nav" disabled={!info.canGoBack} onClick={() => window.wuwei.browserNav("back")} title={t("browser.back")}>
           ‹
         </button>
         <button
           className="bp-nav"
           disabled={!info.canGoForward}
           onClick={() => window.wuwei.browserNav("forward")}
-          title={t("browser.forward", "前进")}
+          title={t("browser.forward")}
         >
           ›
         </button>
-        <button className="bp-nav" onClick={() => window.wuwei.browserNav("reload")} title={t("browser.reload", "刷新")}>
+        <button className="bp-nav" onClick={() => window.wuwei.browserNav("reload")} title={t("browser.reload")}>
           ⟳
         </button>
         <input
@@ -11207,19 +11142,19 @@ function BrowserPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") window.wuwei.browserNav("open", urlEdit);
           }}
-          placeholder={t("browser.urlPlaceholder", "输入网址回车打开")}
+          placeholder={t("browser.urlPlaceholder")}
         />
         {info.loading && <span className="bp-loading">…</span>}
-        <button className={"bp-mode" + (mode === "split" ? " on" : "")} onClick={() => onMode("split")} title={t("browser.split", "半屏(与聊天并排)")}>
+        <button className={"bp-mode" + (mode === "split" ? " on" : "")} onClick={() => onMode("split")} title={t("browser.split")}>
           ◫
         </button>
-        <button className={"bp-mode" + (mode === "full" ? " on" : "")} onClick={() => onMode("full")} title={t("browser.full", "全屏浏览器")}>
+        <button className={"bp-mode" + (mode === "full" ? " on" : "")} onClick={() => onMode("full")} title={t("browser.full")}>
           ▢
         </button>
-        <button className="bp-mode" onClick={onDetach} title={t("browser.detach", "弹成独立窗口(可拖动)")}>
+        <button className="bp-mode" onClick={onDetach} title={t("browser.detach")}>
           ⇱
         </button>
-        <button className="bp-close" onClick={onClose} title={t("browser.close", "关闭浏览器面板")}>
+        <button className="bp-close" onClick={onClose} title={t("browser.close")}>
           ✕
         </button>
       </div>
@@ -11273,7 +11208,7 @@ function ItemView({
             {onResend && (
               <button
                 className="tf-icon"
-                title={makeT(getLang())("msg.resend", "重新发送（把这条的文字和图片原样再发一次，切换模型后重试很方便）")}
+                title={makeT(getLang())("msg.resend")}
                 onClick={onResend}
               >
                 <ResendIcon />
@@ -11282,14 +11217,14 @@ function ItemView({
             {onEdit && (
               <button
                 className="tf-icon"
-                title={makeT(getLang())("msg.edit", "撤回并编辑（收回这条，文字回到输入框可改可重发）")}
+                title={makeT(getLang())("msg.edit")}
                 onClick={onEdit}
               >
                 ↩
               </button>
             )}
             {onDelete && (
-              <button className="tf-icon del" title={makeT(getLang())("msg.delete", "删除这轮问答(含提问与回复)")} onClick={onDelete}>
+              <button className="tf-icon del" title={makeT(getLang())("msg.delete")} onClick={onDelete}>
                 <TrashIcon />
               </button>
             )}
@@ -11303,7 +11238,7 @@ function ItemView({
       </div>
     );
   if (item.type === "assistant") return <AssistantMsg text={item.text} anchor={item.anchor} />;
-  if (item.type === "notice") return <div className="notice">ⓘ {item.text}</div>;
+  if (item.type === "notice") return <div className="notice">ⓘ {item.rawError ? friendlyError(item.rawError, makeT(getLang()), item.freeModel) : localizeStoredText(item.text, getLang())}</div>;
   return <ToolView item={item} />;
 }
 
@@ -11427,30 +11362,30 @@ function ResumeBox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchor]);
   const many = sessions.length > 1;
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   return (
     <div
       className="ask resume-ask"
       style={box ? { left: box.left, width: box.width, bottom: box.bottom } : { visibility: "hidden" }}
     >
       <div className="ask-qhead">
-        <span className="ask-tag">{en ? "⚠ Task interrupted" : "⚠ 任务被中断"}</span>
+        <span className="ask-tag">{tr("ui.app.task.interrupted.58ee670")}</span>
         <span className="ask-title">
           {many
-            ? (en ? `${sessions.length} tasks were running when you last quit — let the AI continue?` : `上次退出时有 ${sessions.length} 个任务正在运行，要让 AI 接着继续吗？`)
-            : (en ? "This task was interrupted last time it ran — let the AI continue?" : "上次这个任务运行时被中断，要让 AI 接着继续吗？")}
+            ? (tr("ui.app.tasks.were.running.when.you.last.81c6b97", { p0: sessions.length }))
+            : (tr("ui.app.this.task.was.interrupted.last.time.074be93"))}
         </span>
       </div>
       <div className="resume-rows">
         {sessions.map((s) => (
           <div key={s.id} className="resume-row">
-            <span className="resume-title" title={s.title}>💬 {s.title || (en ? "New chat" : "新对话")}</span>
+            <span className="resume-title" title={s.title}>💬 {s.title || (tr("ui.app.new.chat.fca06b0"))}</span>
             <span className="resume-btns">
               <button type="button" className="allow" onClick={() => onResume(s.id)}>
-                {en ? "Continue" : "继续"}
+                {tr("err.fix.continue")}
               </button>
               <button type="button" onClick={() => onDismiss(s.id)}>
-                {en ? "Ignore" : "忽略"}
+                {tr("ui.app.ignore.bc67d4b")}
               </button>
             </span>
           </div>
@@ -11459,7 +11394,7 @@ function ResumeBox({
       {many && (
         <div className="resume-foot">
           <button type="button" onClick={onDismissAll}>
-            {en ? "Ignore all" : "全部忽略"}
+            {tr("ui.app.ignore.all.7411fda")}
           </button>
         </div>
       )}
@@ -11470,7 +11405,7 @@ function ResumeBox({
 // CEO 把关中的可见提示：员工请示后 CEO 正在拍板，贴输入框上方显示「🧑‍💼 X 拍板中… Ns」实时倒计时。
 // 能定就直接定、不打扰董事长；超时/拿不准才紧随弹出选择框(届时本提示被清)。
 function CeoDecidingPill({ lang, anchor, info }: { lang: Lang; anchor: React.RefObject<HTMLDivElement | null>; info: { ceoName: string; askerName: string; until: number } }) {
-  const en = lang === "en";
+  const en = lang !== "zh";
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const tm = window.setInterval(() => setNow(Date.now()), 500);
@@ -11487,8 +11422,8 @@ function CeoDecidingPill({ lang, anchor, info }: { lang: Lang; anchor: React.Ref
   }, [anchor]);
   const left = Math.max(0, Math.ceil((info.until - now) / 1000));
   const txt = left > 0
-    ? (en ? `🧑‍💼 ${info.ceoName} is deciding… ${left}s (you're only pinged if it can't)` : `🧑‍💼 ${info.ceoName} 正在拍板… ${left}s（拿不准才找你）`)
-    : (en ? `🧑‍💼 ${info.ceoName} is deciding…` : `🧑‍💼 ${info.ceoName} 正在拍板…`);
+    ? (tr("ui.app.is.deciding.you.re.only.pinged.5bed423", { p0: info.ceoName, p1: left }))
+    : (tr("ui.app.is.deciding.7233a21", { p0: info.ceoName }));
   return (
     <div
       className="ask ceo-deciding"
@@ -11641,9 +11576,9 @@ function AskModal({
   if (box && collapsed) {
     return (
       <div className="ask ask-collapsed" style={{ left: box.left, bottom: box.bottom }}>
-        <span className="ask-collapsed-title">{getLang() === "en" ? "A choice is waiting" : "有个选择待处理"}</span>
+        <span className="ask-collapsed-title">{tr("ui.app.choice.is.waiting.43c9604")}</span>
         <button type="button" className="ask-expand" onClick={() => setCollapsed(false)}>
-          {getLang() === "en" ? "Expand" : "展开"}
+          {tr("ui.app.expand.369944d")}
         </button>
       </div>
     );
@@ -11668,7 +11603,7 @@ function AskModal({
         <button
           type="button"
           className="ask-ctl ask-restore"
-          title={t("ask.restoreSize", "恢复默认宽高(跟随输入框)")}
+          title={t("ask.restoreSize")}
           onClick={() => setUserSize(null)}
         >
           <RestoreSizeIcon />
@@ -11677,47 +11612,41 @@ function AskModal({
       <button
         type="button"
         className="ask-ctl ask-fold"
-        title={t("ask.fold", "折叠(先看后面的内容，再展开选择)")}
+        title={t("ask.fold")}
         onClick={() => setCollapsed(true)}
       >
         <FoldIcon />
       </button>
-      <span className="ask-resize" onMouseDown={onResizeDown} title={t("ask.resize", "拖动调整大小")} />
+      <span className="ask-resize" onMouseDown={onResizeDown} title={t("ask.resize")} />
       <div className="ask-q">
         <div className="ask-qhead">
           {q.header && <span className="ask-tag">{q.header}</span>}
           <span className="ask-title">{q.question}</span>
-          {q.multiSelect && <span className="ask-multi">{getLang() === "en" ? "Multi-select" : "可多选"}</span>}
+          {q.multiSelect && <span className="ask-multi">{tr("ui.app.multi.select.0aa524c")}</span>}
         </div>
         {autoOn && (
           <div className="ask-auto">
             <span className="ask-auto-txt">
               {redlineHit
-                ? ((lang || getLang()) === "en"
-                    ? `Redline “${redlineHit.word}”: auto-picking toward the goal in ${left}s (won't wait forever)`
-                    : `命中红线「${redlineHit.word}」：${left} 秒后 AI 按总目标自动选（不再干等）`)
-                : ((lang || getLang()) === "en"
-                    ? `Smart-continue: auto-picking the best option toward the goal in ${left}s`
-                    : `智能继续：${left} 秒后按总目标自动替你选`)}
+                ? (tr("ui.app.redline.auto.picking.toward.the.goal.65a90b6", { p0: redlineHit.word, p1: left }))
+                : (tr("ui.app.smart.continue.auto.picking.the.best.9577bf9", { p0: left }))}
             </span>
             <button type="button" className="ask-auto-wait" onClick={() => setAutoCancelled(true)}>
-              {(lang || getLang()) === "en" ? "let me choose" : "我自己选"}
+              {tr("ui.app.let.me.choose.6925cfe")}
             </button>
           </div>
         )}
         {!autoOn && judging && (
           <div className="ask-redline">
-            {(lang || getLang()) === "en" ? "Smart-continue: checking whether this is safe to auto-decide…" : "智能继续：正在判断这题能不能替你定…"}
+            {tr("ui.app.smart.continue.checking.whether.this.is.dfea0ef")}
           </div>
         )}
         {!autoOn && !judging && redlineHit && (
-          <div className="ask-redline" title={(lang || getLang()) === "en" ? "Smart-continue won't auto-decide on this; adjust in Settings → Smart-continue" : "智能继续不替你定这类；可在 设置→智能继续 调整"}>
+          <div className="ask-redline" title={tr("ui.app.smart.continue.won.auto.decide.on.b2b1c53")}>
             {(() => {
-              const srcZh = redlineHit.src === "custom" ? "你自定义的" : redlineHit.src === "smart" ? "智能识别" : "内置";
+              const srcZh = redlineHit.src === "custom" ? tr("ui.app.message.18abba924a") : redlineHit.src === "smart" ? tr("ui.app.message.5cd4145ced") : tr("ui.app.message.16c03e7785");
               const srcEn = redlineHit.src === "custom" ? "your custom rule" : redlineHit.src === "smart" ? "smart-detected" : "built-in";
-              return (lang || getLang()) === "en"
-                ? `Redline hit: “${redlineHit.word}” (${srcEn}) — waiting for you, no auto-pick. Adjust in Settings → Smart-continue.`
-                : `命中红线「${redlineHit.word}」（${srcZh}），不自动替你选、停下等你。想改去 设置→智能继续。`;
+              return tr("ui.app.redline.hit.waiting.for.you.no.ebcdb05", { p0: redlineHit.word, p1: ((lang || getLang()) === "en" ? srcEn : srcZh) });
             })()}
           </div>
         )}
@@ -11739,7 +11668,7 @@ function AskModal({
                 <img src={src} alt="" />
                 <button
                   type="button"
-                  title={t("msg.remove", "移除")}
+                  title={t("msg.remove")}
                   onClick={() => setImgs((m) => ({ ...m, [step]: (m[step] || []).filter((_, j) => j !== i) }))}
                 >
                   ×
@@ -11752,7 +11681,7 @@ function AskModal({
           <input
             className="ask-other"
             disabled={q.allowCustom === false}
-            placeholder={t("ask.otherPlaceholder", "其它（手动输入或粘贴/添加截图，可选）")}
+            placeholder={t("ask.otherPlaceholder")}
             value={other[step] || ""}
             onFocus={() => setAutoCancelled(true)} // 一点进手动输入框就取消自动提交，别抢你正在打的字/图
             onChange={(e) => setOther((o) => ({ ...o, [step]: e.target.value }))}
@@ -11777,7 +11706,7 @@ function AskModal({
           <button
             type="button"
             className="ask-attach"
-            title={t("ask.addShot", "添加截图")}
+            title={t("ask.addShot")}
             onClick={() => { setAutoCancelled(true); fileRef.current?.click(); }}
           >
             📎
@@ -11797,7 +11726,7 @@ function AskModal({
       </div>
       <div className="ask-foot">
         <button type="button" onClick={onCancel}>
-          {getLang() === "en" ? "Cancel" : "取消"}
+          {tr("set.st.cancel")}
         </button>
         {qs.length > 1 && (
           <span className="ask-step">
@@ -11807,12 +11736,12 @@ function AskModal({
         <span className="ask-foot-spacer" />
         {step > 0 && (
           <button type="button" onClick={() => setStep((v) => v - 1)}>
-            {getLang() === "en" ? "Back" : "上一步"}
+            {tr("ui.app.back.5bf6faa")}
           </button>
         )}
         {showPrimary && (
           <button type="button" className="allow" disabled={!curAnswered} onClick={() => advance()}>
-            {isLast ? (getLang() === "en" ? "Submit" : "提交") : (getLang() === "en" ? "Next" : "下一步")}
+            {isLast ? (tr("ui.app.submit.3c850bc")) : (tr("ui.app.next.9cff86c"))}
           </button>
         )}
       </div>
@@ -11830,13 +11759,13 @@ function StopRulesSettings({ lang }: { lang: Lang }) {
   return (
     <>
       <div className="app-set-row" style={{ cursor: "default" }}>
-        <div className="app-set-label">{lang === "en" ? "When it must stop and ask me (add your own)" : "必须停下来问我的情况（自己加）"}</div>
+        <div className="app-set-label">{tr("ui.app.when.it.must.stop.and.ask.3e5992f")}</div>
       </div>
       <textarea
         rows={5}
         style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: "var(--bg-input)", color: "var(--text)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 12px", fontFamily: "var(--sans)", fontSize: 13, lineHeight: 1.6, outline: "none" }}
         value={text}
-        placeholder={lang === "en" ? "one per line, e.g.\ntouch the prod DB / prod containers\nemail or message anyone\nchange nginx config" : "一行一条，例：\n碰线上库 / prod 容器\n给任何人发邮件或短信\n改 nginx 配置\n跑超过 10 分钟的任务"}
+        placeholder={tr("ui.app.one.per.line.touch.the.prod.b54c531")}
         onChange={(e) => { setText(e.target.value); setSaved(false); }}
         onBlur={() => {
           window.wuwei.stopRulesSet?.(text);
@@ -11845,7 +11774,7 @@ function StopRulesSettings({ lang }: { lang: Lang }) {
         }}
       />
       <div style={{ fontSize: 11, opacity: saved ? 0.75 : 0.45, margin: "4px 0 10px" }}>
-        {saved ? (lang === "en" ? "Saved (saves when you leave the box)" : "已保存（离开输入框即保存）") : (lang === "en" ? "Click elsewhere to save" : "改完点一下别处即保存")}
+        {saved ? (tr("ui.app.saved.saves.when.you.leave.the.9c94023")) : (tr("ui.app.click.elsewhere.to.save.dd97ab8"))}
       </div>
     </>
   );
@@ -11879,7 +11808,7 @@ function ContSettings({ lang }: { lang: Lang }) {
   return (
     <>
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Smart-continue max rounds" : "智能继续最多连推"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.smart.continue.max.rounds.e288bdb")}</div>
         <span style={{ flex: 1 }} />
         <input
           type="number"
@@ -11889,36 +11818,36 @@ function ContSettings({ lang }: { lang: Lang }) {
           onChange={(e) => { const v = Math.max(0, Math.floor(Number(e.target.value) || 0)); setMax(v); pushCfg(v, delay, askSec, redlineSec); }}
         />
         <div className="app-set-hint" style={{ minWidth: 56, textAlign: "right" }}>
-          {max <= 0 ? (lang === "en" ? "∞" : "不限") : (lang === "en" ? "rounds" : "轮")}
+          {max <= 0 ? (tr("ui.app.text.3b8a002")) : ("rounds")}
         </div>
       </div>
       <div style={{ fontSize: 11, opacity: .5, margin: "-2px 0 8px" }}>
-        {lang === "en" ? "Any number; 0 = unlimited, keeps going until the goal is done (you can stop or switch to auto anytime)." : "自己填，多大都行；填 0 就是不限轮数，一直推到目标做完（随时能按停或切回自动）。"}
+        {tr("ui.app.any.number.unlimited.keeps.going.until.5dbd9d7")}
       </div>
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Undo window before sending" : "发出前反悔窗口"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.undo.window.before.sending.41e4cfb")}</div>
         <input type="range" min={0} max={10000} step={100} value={delay} style={{ flex: 1 }} onChange={(e) => { const v = Number(e.target.value); setDelay(v); pushCfg(max, v, askSec, redlineSec); }} />
         <div className="app-set-hint" style={{ minWidth: 44, textAlign: "right" }}>
-          {delay === 0 ? (lang === "en" ? "instant" : "立即") : (delay / 1000).toFixed(1) + (lang === "en" ? "s" : " 秒")}
+          {delay === 0 ? ("instant") : (delay / 1000).toFixed(1) + ("s")}
         </div>
       </div>
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Auto-answer choices after" : "选择题多久由它自己定"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.auto.answer.choices.after.9ca55e3")}</div>
         <input type="range" min={0} max={30} step={1} value={askSec} style={{ flex: 1 }} onChange={(e) => { const v = Number(e.target.value); setAskSec(v); pushCfg(max, delay, v, redlineSec); }} />
         <div className="app-set-hint" style={{ minWidth: 44, textAlign: "right" }}>
-          {askSec === 0 ? (lang === "en" ? "always wait" : "一直等我") : askSec + (lang === "en" ? "s" : " 秒")}
+          {askSec === 0 ? (tr("ui.app.always.wait.d342b22")) : askSec + ("s")}
         </div>
       </div>
       {/* 红线题(命中危险动作)的长倒计时：不再干等，到点仍由 AI 按总目标自己挑。你不在时不浪费时间 */}
       <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Redline auto-answer after" : "红线题多久由它自己定"}</div>
+        <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.redline.auto.answer.after.11efa60")}</div>
         <input type="range" min={0} max={120} step={5} value={redlineSec} style={{ flex: 1 }} onChange={(e) => { const v = Number(e.target.value); setRedlineSec(v); pushCfg(max, delay, askSec, v); }} />
         <div className="app-set-hint" style={{ minWidth: 44, textAlign: "right" }}>
-          {redlineSec === 0 ? (lang === "en" ? "always wait" : "一直等我") : redlineSec + (lang === "en" ? "s" : " 秒")}
+          {redlineSec === 0 ? (tr("ui.app.always.wait.d342b22")) : redlineSec + ("s")}
         </div>
       </div>
       <div style={{ fontSize: 11, opacity: .5, margin: "-2px 0 8px" }}>
-        {lang === "en" ? "Even risky/redline choices get a (longer) countdown instead of waiting forever; at 0s it auto-picks toward the goal. Set 0 = always wait for you." : "命中红线的危险选择也给个（更长的）倒计时，不再一直干等；到点由 AI 按总目标自己挑。填 0 = 红线一直等你。"}
+        {tr("ui.app.even.risky.redline.choices.get.longer.e96fb9f")}
       </div>
     </>
   );
@@ -11929,7 +11858,7 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <button
       className={"tf-icon" + (done ? " ok" : "")}
-      title={done ? (getLang() === "en" ? "Copied" : "已复制") : (getLang() === "en" ? "Copy" : "复制")}
+      title={done ? (tr("pay.support.copied")) : (tr("pay.support.copy"))}
       onClick={() => {
         navigator.clipboard.writeText(text);
         setDone(true);
@@ -11966,7 +11895,7 @@ function splitThinking(text: string): { think: string; answer: string; open: boo
 
 // 可折叠「深度思考」块：思考时自动展开，思考完自动收起（用户仍可点开）。
 function ThinkBlock({ content, live }: { content: string; live?: boolean }) {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   if (!content.trim() && !live) return null;
   return (
     <details className="think-block" open={live ? true : undefined}>
@@ -11975,8 +11904,8 @@ function ThinkBlock({ content, live }: { content: string; live?: boolean }) {
           <path d="M12 2.5c.32 3.6 2.28 5.56 5.9 5.88-3.62.32-5.58 2.28-5.9 5.9-.32-3.62-2.28-5.58-5.9-5.9 3.62-.32 5.58-2.28 5.9-5.88Z" />
           <path d="M18.6 13.8c.16 1.82 1.14 2.8 2.96 2.96-1.82.16-2.8 1.14-2.96 2.96-.16-1.82-1.14-2.8-2.96-2.96 1.82-.16 2.8-1.14 2.96-2.96Z" />
         </svg>
-        <span>{en ? "Deep thinking" : "深度思考"}</span>
-        {live && <span className="tk-live">{en ? "thinking…" : "思考中…"}</span>}
+        <span>{tr("ui.app.deep.thinking.96f8b8b")}</span>
+        {live && <span className="tk-live">{tr("ui.app.thinking.5810665")}</span>}
       </summary>
       <div className="tk-body">{content.trim()}</div>
     </details>
@@ -12021,15 +11950,7 @@ function BabyBrainGraph({ nodes, edges }: { nodes: any[]; edges: any[] }) {
   const spread = Math.min(3.4, Math.max(1, Math.sqrt(nodes.length / 55)));
   const W = Math.round(1400 * spread), H = Math.round(900 * spread);
   // 概念来源 → 固定语义色(不再用哈希随机色)：一眼分清哪些是自己上网学的、哪些是睡梦里涌现的
-  const TYPE_COLOR: Record<string, string> = {
-    "网络学的": "#6f9fad",
-    "聊天学的": "#c05f3c",
-    "知识宫殿": "#5c8a73",
-    "天生好奇": "#c8933f",
-    "睡梦里涌现的": "#9a7fbe",
-    "好奇待学": "#8b949c",
-    "概念": "#8b949c",
-  };
+  const TYPE_COLOR: Record<string, string> = systemData.nodeColors;
   const color = (n: any) => {
     if (typeof n === "string") return TYPE_COLOR[n] || "#8b949c";
     if (n?.isDao) return "#c05f3c";
@@ -12225,8 +12146,8 @@ function BabyBrainGraph({ nodes, edges }: { nodes: any[]; edges: any[] }) {
             <div className="bbg-tip-h"><span className="bbg-dot" style={{ background: color(hoverNode) }} />{hoverNode.name}</div>
             <div className="bbg-tip-type">
               {hoverNode.level === "abstract"
-                ? (hoverNode.isDao ? "塔尖 · 万物归一" : `第 ${hoverNode.depth} 层抽象 · 收敛了 ${hoverNode.children?.length || 0} 个`)
-                : hoverNode.type + (hoverNode.parent ? ` · 归入「${hoverNode.parent}」` : " · 还没固化")}
+                ? (hoverNode.isDao ? tr("ui.app.message.13cc2df711") : tr("ui.app.message.4e5abb13af", {p0: hoverNode.depth, p1: hoverNode.children?.length || 0}))
+                : hoverNode.type + (hoverNode.parent ? tr("ui.app.message.db363010d8", {p0: hoverNode.parent}) : tr("ui.app.message.306d253f31"))}
             </div>
             {hoverNode.summary && <div className="bbg-tip-sum">{hoverNode.summary}</div>}
           </>) : (<>
@@ -12240,16 +12161,16 @@ function BabyBrainGraph({ nodes, edges }: { nodes: any[]; edges: any[] }) {
           <div className="bbg-detail-h"><span className="bbg-dot" style={{ background: color(selNode) }} />{selNode.name}<button onClick={() => setSel(null)}><Ic.IcBack size={13} /></button></div>
           <div className="bbg-detail-type">
             {selNode.level === "abstract"
-              ? (selNode.isDao ? "塔尖 · 万物归一" : `第 ${selNode.depth} 层抽象认知`)
-              : `类型：${selNode.type}`}
+              ? (selNode.isDao ? tr("ui.app.message.13cc2df711") : tr("ui.app.message.029fc72f0a", {p0: selNode.depth}))
+              : tr("ui.app.message.d129b5033a", {p0: selNode.type})}
           </div>
           {selNode.level === "abstract" && !!selNode.children?.length && (
-            <div className="bbg-detail-row"><b>由这些收敛而来（{selNode.children.length}）</b><div>{selNode.children.join("、")}</div></div>
+            <div className="bbg-detail-row"><b>{tr("ui.app.message.a8fdd5411e")}{selNode.children.length}）</b><div>{selNode.children.join("、")}</div></div>
           )}
           {selNode.level !== "abstract" && (
-            <div className="bbg-detail-row"><b>固化情况</b><div>{selNode.parent ? `已归入「${selNode.parent}」` : "还没被收编进任何上层认知"}</div></div>
+            <div className="bbg-detail-row"><b>{tr("ui.app.message.7a564126f1")}</b><div>{selNode.parent ? tr("ui.app.message.c2015af321", {p0: selNode.parent}) : tr("ui.app.message.12b1c3d48b")}</div></div>
           )}
-          {selNode.summary && <div className="bbg-detail-row"><b>它的理解</b><div>{selNode.summary}</div></div>}
+          {selNode.summary && <div className="bbg-detail-row"><b>{tr("ui.app.message.48f1e8870b")}</b><div>{selNode.summary}</div></div>}
           {selNode.attrs && Object.entries(selNode.attrs).map(([k, v]) => (<div key={k} className="bbg-detail-row"><b>{k}</b><div>{String(v)}</div></div>))}
         </div>
       )}
@@ -12301,8 +12222,8 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
   };
   return (
     <div className="code-wrap">
-      <button className={"code-copy" + (done ? " ok" : "")} onClick={copy} title={makeT(getLang())("code.copy", "复制代码")}>
-        {done ? (getLang() === "en" ? "✓ Copied" : "✓ 已复制") : (getLang() === "en" ? "Copy" : "复制")}
+      <button className={"code-copy" + (done ? " ok" : "")} onClick={copy} title={makeT(getLang())("code.copy")}>
+        {done ? (tr("ui.app.copied.2aff14e")) : (tr("pay.support.copy"))}
       </button>
       <pre ref={ref}>{children}</pre>
     </div>
@@ -12352,21 +12273,21 @@ function baseName(p: string): string {
 // 单段命令→动作名
 function segAction(seg: string): string {
   const c = seg.toLowerCase().trim();
-  const en = getLang() === "en";
-  if (/\b(test|pytest|jest|vitest|go test|npm (run )?test)\b/.test(c)) return en ? "Test" : "测试";
+  const en = getLang() !== "zh";
+  if (/\b(test|pytest|jest|vitest|go test|npm (run )?test)\b/.test(c)) return tr("ui.app.test.d2d526c");
   if (/(electron-vite build|vite build|tsc\b|\b(npm|yarn|pnpm) (run )?build\b|cargo build|go build|\bmake\b)/.test(c))
-    return en ? "Build" : "构建";
-  if (/(electron-builder|--dir|\bpkg\b|package)/.test(c)) return en ? "Package" : "打包";
+    return tr("ui.app.build.28ffc2e");
+  if (/(electron-builder|--dir|\bpkg\b|package)/.test(c)) return tr("ui.app.package.b42a1d4");
   if (/\b(deploy|scp|rsync|publish)\b|docker (push|cp)|rm -rf .*app|cp -R .*\.app|xattr/.test(c))
-    return en ? "Deploy" : "部署";
-  if (/\b(install|pip install|npm i\b|yarn add|apt|brew install)\b/.test(c)) return en ? "Install deps" : "安装依赖";
-  if (/\bgit\b/.test(c)) return en ? "Git" : "Git 操作";
-  if (/\b(grep|rg|ag|ack)\b/.test(c)) return en ? "Search" : "搜索内容";
-  if (/\b(ls|find|tree|du|stat|fd)\b/.test(c)) return en ? "List dir" : "浏览目录";
-  if (/\b(cat|head|tail|less|more|sed|awk)\b/.test(c)) return en ? "View file" : "查看文件";
-  if (/\b(mkdir|touch|cp|mv|rm|chmod|ln)\b/.test(c)) return en ? "File op" : "文件操作";
-  if (/\b(node|python3?|electron|osascript|open|kill|pkill)\b|(^|\s)\.\//.test(c)) return en ? "Run" : "运行";
-  return en ? "Run command" : "执行命令";
+    return tr("ui.app.deploy.287233d");
+  if (/\b(install|pip install|npm i\b|yarn add|apt|brew install)\b/.test(c)) return tr("ui.app.install.deps.7703235");
+  if (/\bgit\b/.test(c)) return tr("ui.app.git.852f8c2");
+  if (/\b(grep|rg|ag|ack)\b/.test(c)) return tr("ui.app.search.e8d64c0");
+  if (/\b(ls|find|tree|du|stat|fd)\b/.test(c)) return tr("ui.app.list.dir.a23dcd3");
+  if (/\b(cat|head|tail|less|more|sed|awk)\b/.test(c)) return tr("ui.app.view.file.930094d");
+  if (/\b(mkdir|touch|cp|mv|rm|chmod|ln)\b/.test(c)) return tr("ui.app.file.op.362815f");
+  if (/\b(node|python3?|electron|osascript|open|kill|pkill)\b|(^|\s)\.\//.test(c)) return tr("ui.app.run.42fad98");
+  return tr("ui.app.run.command.f87631e");
 }
 // 把整条命令按 && / ; / | / 换行 拆开，逐段识别动作，拼成"构建 · 部署 · 运行"这种摘要
 function bashIntent(cmd: string): { label: string; category: string } {
@@ -12379,7 +12300,7 @@ function bashIntent(cmd: string): { label: string; category: string } {
     const a = segAction(s);
     if (!acts.includes(a)) acts.push(a);
   }
-  const uniq = acts.length ? acts : [getLang() === "en" ? "Run command" : "执行命令"];
+  const uniq = acts.length ? acts : [tr("ui.app.run.command.f87631e")];
   return { label: uniq.slice(0, 4).join(" · "), category: uniq[0] };
 }
 
@@ -12409,51 +12330,51 @@ function toolMetaRaw(item: Extract<Item, { type: "tool" }>): {
   del?: number;
 } {
   const inp = item.input as any;
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   switch (item.name) {
     case "bash": {
       const bi = bashIntent(String(inp.command || ""));
       return { icon: "⌘", label: bi.label, category: bi.category };
     }
     case "powershell":
-      return { icon: "⌘", label: (en ? "PowerShell: " : "PowerShell：") + String(inp.command || ""), category: en ? "Windows command" : "Windows 命令" };
+      return { icon: "⌘", label: (tr("ui.app.powershell.a67fc8d")) + String(inp.command || ""), category: tr("ui.app.windows.command.03cb5be") };
     case "read_file":
       return {
         icon: "◎",
-        label: (en ? "Read " : "读取 ") + baseName(String(inp.path || "")),
-        category: en ? "Read file" : "读取文件",
+        label: (tr("ui.app.read.6fc7605")) + baseName(String(inp.path || "")),
+        category: tr("ui.app.read.file.559fbbe"),
       };
     case "write_file":
       return {
         icon: "✎",
-        label: (en ? "Create " : "新建 ") + baseName(String(inp.path || "")),
-        category: en ? "Create file" : "新建文件",
+        label: (tr("ui.app.create.4421661")) + baseName(String(inp.path || "")),
+        category: tr("ui.app.create.file.f820687"),
         add: String(inp.content ?? "").length, // 字符数
       };
     case "edit_file":
       return {
         icon: "✎",
-        label: (en ? "Edit " : "编辑 ") + baseName(String(inp.path || "")),
-        category: en ? "Edit file" : "编辑文件",
+        label: (tr("ui.app.edit.1b6b802")) + baseName(String(inp.path || "")),
+        category: tr("ui.app.edit.file.629bfa2"),
         add: String(inp.new_string ?? "").length, // 新增字符数
         del: String(inp.old_string ?? "").length, // 删除字符数
       };
     case "glob":
-      return { icon: "⌕", label: en ? "Find files" : "查找文件", category: en ? "Search" : "搜索内容" };
+      return { icon: "⌕", label: tr("ui.app.find.files.ad2679f"), category: tr("ui.app.search.e8d64c0") };
     case "grep":
-      return { icon: "⌕", label: en ? "Search content" : "搜索内容", category: en ? "Search" : "搜索内容" };
+      return { icon: "⌕", label: tr("ui.app.search.content.11370d4"), category: tr("ui.app.search.e8d64c0") };
     case "web_search":
-      return { icon: "🌐", label: (en ? "Web search: " : "搜索网络：") + String(inp.query || ""), category: en ? "Web search" : "联网搜索" };
+      return { icon: "🌐", label: (tr("ui.app.web.search.c0da4a0")) + String(inp.query || ""), category: tr("ui.app.web.search.972741a") };
     case "web_fetch":
-      return { icon: "🌐", label: (en ? "Fetch page " : "抓取网页 ") + String(inp.url || ""), category: en ? "Read page" : "读取网页" };
+      return { icon: "🌐", label: (tr("ui.app.fetch.page.a33a091")) + String(inp.url || ""), category: tr("ui.app.read.page.ac9f1ef") };
     case "browser_open":
-      return { icon: "🖥", label: (en ? "Browser open " : "浏览器打开 ") + String(inp.url || ""), category: en ? "Browser" : "浏览器" };
+      return { icon: "🖥", label: (tr("ui.app.browser.open.5b46ddf")) + String(inp.url || ""), category: tr("set.tools.badgeBrowser") };
     case "browser_read":
-      return { icon: "🖥", label: en ? "Read current page" : "读取当前页面", category: en ? "Browser" : "浏览器" };
+      return { icon: "🖥", label: tr("ui.app.read.current.page.d4dd429"), category: tr("set.tools.badgeBrowser") };
     case "browser_click":
-      return { icon: "🖥", label: (en ? "Click " : "点击 ") + String(inp.selector || ""), category: en ? "Browser" : "浏览器" };
+      return { icon: "🖥", label: (tr("ui.app.click.737993f")) + String(inp.selector || ""), category: tr("set.tools.badgeBrowser") };
     case "remember":
-      return { icon: "✦", label: (en ? "Remember: " : "记住：") + String(inp.text || ""), category: en ? "Save memory" : "写入记忆" };
+      return { icon: "✦", label: (tr("ui.app.remember.b532336")) + String(inp.text || ""), category: tr("ui.app.save.memory.f51e8a2") };
     default:
       return { icon: "•", label: item.name, category: item.name };
   }
@@ -12462,32 +12383,32 @@ function toolMetaRaw(item: Extract<Item, { type: "tool" }>): {
 // 工具输入预览：展开后显示"具体在执行啥"(运行中也能看)
 function toolInputPreview(item: Extract<Item, { type: "tool" }>): string {
   const inp = (item.input || {}) as any;
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   switch (item.name) {
     case "bash":
       return "$ " + String(inp.command || "");
     case "powershell":
       return "PS> " + String(inp.command || "");
     case "read_file":
-      return (en ? "Read " : "读取 ") + String(inp.path || "");
+      return (tr("ui.app.read.6fc7605")) + String(inp.path || "");
     case "write_file":
-      return (en ? "Write " : "写入 ") + String(inp.path || "");
+      return (tr("ui.app.write.9e9d809")) + String(inp.path || "");
     case "edit_file":
-      return (en ? "Edit " : "编辑 ") + String(inp.path || "");
+      return (tr("ui.app.edit.1b6b802")) + String(inp.path || "");
     case "grep":
-      return (en ? `Search "${inp.pattern ?? ""}"` : `搜索 “${inp.pattern ?? ""}”`) + (inp.path ? (en ? `  ·  path ${inp.path}` : `  ·  路径 ${inp.path}`) : "");
+      return (tr("ui.app.search.fb60fef", { p0: inp.pattern ?? "" })) + (inp.path ? (tr("ui.app.path.e4b1db3", { p0: inp.path })) : "");
     case "glob":
-      return (en ? `Match ${inp.pattern ?? inp.glob ?? ""}` : `匹配 ${inp.pattern ?? inp.glob ?? ""}`) + (inp.path ? (en ? `  ·  path ${inp.path}` : `  ·  路径 ${inp.path}`) : "");
+      return (tr("ui.app.match.d1583ce", { p0: inp.pattern ?? inp.glob ?? "" })) + (inp.path ? (tr("ui.app.path.e4b1db3", { p0: inp.path })) : "");
     case "web_search":
-      return (en ? `Web search: ${inp.query ?? ""}` : `搜索网络：${inp.query ?? ""}`);
+      return (tr("ui.app.web.search.94d87ab", { p0: inp.query ?? "" }));
     case "web_fetch":
-      return (en ? `Fetch ${inp.url ?? ""}` : `抓取 ${inp.url ?? ""}`);
+      return (tr("ui.app.fetch.00892a8", { p0: inp.url ?? "" }));
     case "browser_open":
-      return (en ? `Browser open ${inp.url ?? ""}` : `浏览器打开 ${inp.url ?? ""}`);
+      return (tr("ui.app.browser.open.95458e0", { p0: inp.url ?? "" }));
     case "browser_click":
-      return (en ? `Click ${inp.selector ?? ""}` : `点击 ${inp.selector ?? ""}`);
+      return (tr("ui.app.click.484a51d", { p0: inp.selector ?? "" }));
     case "remember":
-      return (en ? `Remember: ${inp.text ?? ""}` : `记住：${inp.text ?? ""}`);
+      return (tr("ui.app.remember.7bbaec5", { p0: inp.text ?? "" }));
     default: {
       const s = JSON.stringify(inp);
       return s === "{}" ? "" : s;
@@ -12496,9 +12417,10 @@ function toolInputPreview(item: Extract<Item, { type: "tool" }>): string {
 }
 
 const ToolView = React.memo(function ToolView({ item }: { item: Extract<Item, { type: "tool" }> }) {
+  useLanguage();
   const [open, setOpen] = useState(false); // 默认折叠
   const m = toolMeta(item);
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   const running = item.status === "running";
   const diff = renderDiff(item);
   const cmd = (item.name === "bash" || item.name === "powershell") ? String((item.input as any).command || "") : "";
@@ -12514,22 +12436,22 @@ const ToolView = React.memo(function ToolView({ item }: { item: Extract<Item, { 
         {(m.add != null || m.del != null) && (
           <span
             className="tdelta"
-            title={en ? `+${m.add ?? 0} chars${m.del != null ? ` · -${m.del} chars` : ""}` : `新增 ${m.add ?? 0} 字符${m.del != null ? ` · 删除 ${m.del} 字符` : ""}`}
+            title={tr("ui.app.chars.a06e241", { p0: m.add ?? 0, p1: (en ? m.del != null ? ` · -${m.del} chars` : "" : m.del != null ? tr("ui.app.message.ae8b09bbbc", {p0: m.del}) : "") })}
           >
             {m.add != null && <span className="add">+{m.add}</span>}
             {m.del != null && <span className="del">-{m.del}</span>}
-            <span className="tunit">{en ? " chars" : " 字符"}</span>
+            <span className="tunit">{tr("ui.app.chars.dffc869")}</span>
           </span>
         )}
         <span className="tspacer" />
         <span className={"tstat " + (running ? "run" : item.isError ? "err" : "ok")}>
-          {running ? (en ? "Running" : "运行中") : item.isError ? (en ? "Failed" : "失败") : (en ? "Done" : "完成")}
+          {running ? (tr("thinking.running")) : item.isError ? (tr("ui.app.failed.1dad492")) : (tr("pay.msg.done"))}
         </span>
         {hasDetail && <span className="tcaret">{open ? "▾" : "▸"}</span>}
       </div>
       {/* 工具产出的图片(截图 / send_image 生图)：始终内联显示，点开看大图。 */}
       {item.image && (
-        <div className="tool-img" onClick={() => openImageLightbox?.(item.image!)} title={en ? "Click to view" : "点开看大图"}>
+        <div className="tool-img" onClick={() => openImageLightbox?.(item.image!)} title={tr("ui.app.click.to.view.340301c")}>
           <img src={item.image} alt="" />
         </div>
       )}
@@ -12556,14 +12478,14 @@ function ToolGroup({ tools }: { tools: ToolItem[] }) {
     const c = toolMeta(t).category;
     counts[c] = (counts[c] || 0) + 1;
   }
-  const en = getLang() === "en";
-  const mainCat = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || (en ? "Actions" : "操作");
+  const en = getLang() !== "zh";
+  const mainCat = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || (tr("ui.app.actions.d4eb333"));
   const imgTools = tools.filter((t) => t.image); // 组里产出图片的步骤(截图 / send_image 生图)
   return (
     <div className="tool">
       <div className="trow" onClick={() => setOpen((v) => !v)}>
         <span className="tlabel">
-          {mainCat} · {tools.length}{en ? " steps" : " 步"}{running ? `（${done}/${tools.length}）` : ""}
+          {mainCat} · {tools.length}{tr("ui.app.steps.95059a8")}{running ? `（${done}/${tools.length}）` : ""}
         </span>
         <span className="tspacer" />
         <span className="tcaret">{open ? "▾" : "▸"}</span>
@@ -12573,7 +12495,7 @@ function ToolGroup({ tools }: { tools: ToolItem[] }) {
       {!open && imgTools.length > 0 && (
         <div className="tgroup-imgs">
           {imgTools.map((t, i) => (
-            <div key={i} className="tool-img" onClick={() => openImageLightbox?.(t.image!)} title={en ? "Click to view" : "点开看大图"}>
+            <div key={i} className="tool-img" onClick={() => openImageLightbox?.(t.image!)} title={tr("ui.app.click.to.view.340301c")}>
               <img src={t.image} alt="" />
             </div>
           ))}
@@ -12683,7 +12605,7 @@ function renderDiff(item: Extract<Item, { type: "tool" }>) {
 
 function clip(text: string, lines = 12): string {
   const arr = text.split("\n");
-  return arr.length > lines ? arr.slice(0, lines).join("\n") + (getLang() === "en" ? "\n…(truncated)" : "\n…（已截断）") : text;
+  return arr.length > lines ? arr.slice(0, lines).join("\n") + (tr("ui.app.truncated.e415cdf")) : text;
 }
 
 type Kind = "codex" | "anthropic-oauth" | "anthropic-apikey" | "openai";
@@ -12709,22 +12631,18 @@ type Station = { id: string; label: string; baseUrl: string; relay?: boolean };
 // 自定义供应商/中转站 → 伪预设(OpenAI 兼容)，并入平台下拉。relay=true 才加「（中转）」后缀
 // 模块级函数拿不到组件里的 lang，直接读 getLang()
 function stationToPreset(s: Station): Preset {
-  const en = getLang() === "en";
+  const en = getLang() !== "zh";
   return {
     id: s.id,
-    label: s.relay ? s.label + (en ? " (relay)" : "（中转）") : s.label,
+    label: s.relay ? s.label + (tr("ui.app.relay.eea1124")) : s.label,
     kind: "openai",
     baseUrl: s.baseUrl,
     keyUrl: "",
     keyHint: "sk-...",
     models: [],
     note: s.relay
-      ? en
-        ? "Custom relay (OpenAI-compatible — one key, many platforms). Enter the model name from the relay's docs; free text is fine."
-        : "自定义中转站（OpenAI 兼容，一个 key 直连多平台）。模型名按该站文档填，可自定义输入。"
-      : en
-        ? "Self-hosted / custom provider (OpenAI-compatible endpoint, e.g. your own vLLM or Ollama). Model name is free text."
-        : "自建/自定义供应商（OpenAI 兼容端点，如公司 vLLM/Ollama）。模型名可自定义输入。",
+      ? tr("ui.app.custom.relay.openai.compatible.one.key.9b7e7c4")
+      : tr("ui.app.self.hosted.custom.provider.openai.compatible.43f1f60"),
     fixedBaseUrl: true,
     custom: true,
   };
@@ -12754,13 +12672,13 @@ const PRESETS: Preset[] = [
   {
     // 免费体验：无需登录、无需 Key，直接试用智谱免费模型（GLM-*-Flash）。走网关匿名分支，靠设备/IP 每日护栏防滥用。
     id: "wuwei-free",
-    label: "免费体验（无需登录）",
+    get label() { return tr("ui.app.message.2bdf2c7988"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["openrouter-auto-free", "glm-4.7-flash", "glm-4-flash", "glm-z1-flash", "glm-4v-flash"],
-    note: "免费体验：无需登录、无需 Key，直接试用智谱免费大模型（GLM-*-Flash）。每台设备每日有限次数，登录后可解锁更多模型与更高额度。",
+    get note() { return tr("ui.app.message.cb4ce6d244"); },
     fixedBaseUrl: true,
     hosted: true,
     anon: true,
@@ -12768,67 +12686,67 @@ const PRESETS: Preset[] = [
   {
     // 无为托管：走网关、用无为币按 token 扣费，无需自己的 Key。仅灰度放开的用户可见。
     id: "wuwei-deepseek",
-    label: "无为托管 · DeepSeek",
+    get label() { return tr("ui.app.message.e791b28d2b"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
-    note: "无为托管额度：无需自己的 Key，按实际 token 消耗扣无为币（余额在账号菜单查看）。模型与直连 DeepSeek 一致（V4 Pro/Flash）。",
+    get note() { return tr("ui.app.message.290ef044f9"); },
     fixedBaseUrl: true,
     hosted: true,
   },
   {
     id: "wuwei-zhipu",
-    label: "无为托管 · 智谱",
+    get label() { return tr("ui.app.message.d4222af7ee"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["glm-5.2"],
-    note: "无为托管：无需自己的 Key，按 token 扣无为币。智谱 GLM-5.2 旗舰。",
+    get note() { return tr("ui.app.message.5839304560"); },
     fixedBaseUrl: true,
     hosted: true,
   },
   {
     id: "wuwei-kimi",
-    label: "无为托管 · Kimi",
+    get label() { return tr("ui.app.message.d9484c2a0b"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["kimi-k3"],
-    note: "无为托管：无需自己的 Key，按 token 扣无为币。Kimi K3 旗舰。",
+    get note() { return tr("ui.app.message.640b7e1663"); },
     fixedBaseUrl: true,
     hosted: true,
   },
   {
     id: "wuwei-claude",
-    label: "无为托管 · Claude",
+    get label() { return tr("ui.app.message.cba48ff5ea"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["claude-opus-4-8"],
-    note: "无为托管：无需自己的 Key，按 token 扣无为币。Claude Opus 4.8。",
+    get note() { return tr("ui.app.message.8ba05e6c14"); },
     fixedBaseUrl: true,
     hosted: true,
   },
   {
     id: "wuwei-gpt",
-    label: "无为托管 · GPT",
+    get label() { return tr("ui.app.message.570f899d17"); },
     kind: "openai",
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
     models: ["gpt-6-astra", "gpt-5.6", "gpt-5.5"],
-    note: "无为托管：无需自己的 Key，按 token 扣无为币。GPT-6 Astra / 5.6 / 5.5。",
+    get note() { return tr("ui.app.message.d6f81fea7d"); },
     fixedBaseUrl: true,
     hosted: true,
   },
   {
     id: "codex",
-    label: "Codex 订阅（ChatGPT 登录）",
+    get label() { return tr("ui.app.message.b486441944"); },
     kind: "codex",
     baseUrl: "",
     keyUrl: "",
@@ -12839,16 +12757,16 @@ const PRESETS: Preset[] = [
       "gpt-5.6-luna",
       "gpt-5.5",
     ],
-    note: "使用本机 ~/.codex 登录态，无需填写凭证。切换后看状态灯/实际请求为准（不通会亮黄灯）。",
+    get note() { return tr("ui.app.message.0cfc3e1d47"); },
     fixedBaseUrl: true,
   },
   {
     id: "claude-oauth",
-    label: "Claude 订阅（Claude Code）",
+    get label() { return tr("ui.app.message.4f50e061b5"); },
     kind: "anthropic-oauth",
     baseUrl: "",
     keyUrl: "",
-    keyHint: "sk-ant-oat…（点上方一键授权自动获取）",
+    get keyHint() { return tr("ui.app.message.0f034a21dd"); },
     models: [
       "claude-opus-5-5",
       "claude-fable-5-1",
@@ -12909,12 +12827,12 @@ const PRESETS: Preset[] = [
       "o3",
       "o4-mini",
     ],
-    note: "gpt-5.6-terra 均衡 / sol 最强 / luna 省钱",
+    get note() { return tr("ui.app.message.01cf7f650e"); },
     fixedBaseUrl: true,
   },
   {
     id: "openrouter",
-    label: "OpenRouter（中转 · 全平台）",
+    get label() { return tr("ui.app.message.3df80165c2"); },
     kind: "openai",
     baseUrl: "https://openrouter.ai/api/v1",
     keyUrl: "https://openrouter.ai/keys",
@@ -12931,23 +12849,23 @@ const PRESETS: Preset[] = [
       "qwen/qwen3-max",
       "moonshotai/kimi-k2",
     ],
-    note: "一个 key 直连 Claude / GPT / Gemini 等全平台。模型用「厂商/型号」slug（完整清单见 openrouter.ai/models），可选「自定义」直接输入任意 slug。",
+    get note() { return tr("ui.app.message.ef5b59dbb7"); },
     fixedBaseUrl: true,
   },
   {
     id: "deepseek",
-    label: "DeepSeek（深度求索）",
+    get label() { return tr("ui.app.message.f310ff0f0e"); },
     kind: "openai",
     baseUrl: "https://api.deepseek.com/v1",
     keyUrl: "https://platform.deepseek.com/api_keys",
     keyHint: "sk-...",
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
-    note: "V4 Pro/Flash（deepseek-chat/deepseek-reasoner 已于 2026-07-24 停用，已移除）",
+    get note() { return tr("ui.app.message.14efcc0c0b"); },
     fixedBaseUrl: true,
   },
   {
     id: "qwen",
-    label: "通义千问 Qwen（阿里百炼）",
+    get label() { return tr("ui.app.message.798f3e9d7f"); },
     kind: "openai",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     keyUrl: "https://bailian.console.aliyun.com/",
@@ -12969,11 +12887,11 @@ const PRESETS: Preset[] = [
   },
   {
     id: "doubao",
-    label: "豆包 Doubao（火山方舟）",
+    get label() { return tr("ui.app.message.40e8a569fb"); },
     kind: "openai",
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     keyUrl: "https://console.volcengine.com/ark",
-    keyHint: "火山方舟 API Key",
+    get keyHint() { return tr("ui.app.message.55785aa619"); },
     models: [
       "doubao-seed-2-0-pro-260215",
       "doubao-seed-1-8-251228",
@@ -12983,7 +12901,7 @@ const PRESETS: Preset[] = [
       "doubao-1-5-pro-32k-250115",
       "doubao-1-5-lite-32k-250115",
     ],
-    note: "豆包多在方舟「在线推理」创建接入点后用接入点 ID(ep-...)；模型名带日期串会更新，可用「自定义」直接填最新的",
+    get note() { return tr("ui.app.message.77b2057b9e"); },
     fixedBaseUrl: true,
   },
   {
@@ -13007,11 +12925,11 @@ const PRESETS: Preset[] = [
   },
   {
     id: "zhipu",
-    label: "智谱 GLM（BigModel）",
+    get label() { return tr("ui.app.message.faff5e02f1"); },
     kind: "openai",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     keyUrl: "https://open.bigmodel.cn/apikey/platform",
-    keyHint: "智谱 API Key",
+    get keyHint() { return tr("ui.app.message.7300e1bf69"); },
     models: [
       "glm-5.2",
       "glm-5.1",
@@ -13026,12 +12944,12 @@ const PRESETS: Preset[] = [
       "glm-4.6v-flash",
       "glm-4.1v-thinking",
     ],
-    note: "glm-5.2 旗舰(1M上下文)；glm-5v-turbo / glm-4.6v 为视觉多模态(支持图文)",
+    get note() { return tr("ui.app.message.36660f8315"); },
     fixedBaseUrl: true,
   },
   {
     id: "kimi",
-    label: "Kimi（月之暗面 Moonshot）",
+    get label() { return tr("ui.app.message.afc3dd1129"); },
     kind: "openai",
     baseUrl: "https://api.moonshot.cn/v1",
     keyUrl: "https://platform.kimi.com/console/api-keys",
@@ -13050,27 +12968,27 @@ const PRESETS: Preset[] = [
       "moonshot-v1-32k-vision-preview",
       "moonshot-v1-8k-vision-preview",
     ],
-    note: "kimi-k3 旗舰(2.8T/1M上下文)；国际站请改 https://api.moonshot.ai/v1；kimi-latest 与 *-vision-preview 支持图文",
+    get note() { return tr("ui.app.message.4630eb3e45"); },
     fixedBaseUrl: false,
   },
   {
     id: "kimi-sub",
-    label: "Kimi Code 订阅（会员）",
+    get label() { return tr("ui.app.message.5dffcaecb5"); },
     kind: "openai",
     baseUrl: "https://api.kimi.com/coding/v1",
     keyUrl: "https://www.kimi.com/code",
-    keyHint: "sk-...（Kimi Code 控制台会员创建）",
+    get keyHint() { return tr("ui.app.message.cdb8762af2"); },
     models: ["k3", "kimi-for-coding", "kimi-for-coding-highspeed"],
-    note: "走会员订阅额度（非按量计费 API）。base=/coding/v1，旗舰 model 用 k3（≠开放平台的 kimi-k3）。key 在 Kimi Code 控制台创建，最多 5 个、仅创建时可见。⚠官方红线：勿改 User-Agent 冒充其它工具，否则视为违规可能封会员。",
+    get note() { return tr("ui.app.message.35172f39f4"); },
     fixedBaseUrl: false,
   },
   {
     id: "hunyuan",
-    label: "腾讯混元（元宝）",
+    get label() { return tr("ui.app.message.75fd7b2dc6"); },
     kind: "openai",
     baseUrl: "https://api.hunyuan.cloud.tencent.com/v1",
     keyUrl: "https://console.cloud.tencent.com/hunyuan/api-key",
-    keyHint: "混元 API Key",
+    get keyHint() { return tr("ui.app.message.edb0ff8f66"); },
     models: [
       "hunyuan-turbos-latest",
       "hunyuan-t1-latest",
@@ -13080,7 +12998,7 @@ const PRESETS: Preset[] = [
       "hunyuan-lite",
       "hunyuan-vision",
     ],
-    note: "元宝对应腾讯混元 API；hunyuan-vision 支持图文",
+    get note() { return tr("ui.app.message.3332b5ebbd"); },
     fixedBaseUrl: true,
   },
   {
@@ -13097,18 +13015,18 @@ const PRESETS: Preset[] = [
       "grok-4.20-0309-non-reasoning",
       "grok-4.20-multi-agent-0309",
     ],
-    note: "grok-4.x 系原生多模态(支持图文)；grok-4.3 为 1M 上下文旗舰",
+    get note() { return tr("ui.app.message.e02c67fd36"); },
     fixedBaseUrl: true,
   },
   {
     id: "custom",
-    label: "本地 / 自建端点（vLLM、Ollama 等）",
+    get label() { return tr("ui.app.message.6f759dc793"); },
     kind: "openai",
     baseUrl: "http://localhost:8000/v1",
     keyUrl: "",
-    keyHint: "本地可留空",
+    get keyHint() { return tr("ui.app.message.6abce90faf"); },
     models: [],
-    note: "任意 OpenAI 兼容端点，填你的 Base URL + 模型名即可",
+    get note() { return tr("ui.app.message.45948c32d7"); },
     fixedBaseUrl: false,
   },
 ];
@@ -13121,27 +13039,27 @@ const PRESET_EN: Record<string, { label?: string; note?: string; keyHint?: strin
   "wuwei-claude": { label: "Wuwei Hosted · Claude", note: "Hosted: no key needed, credits charged per token. Claude Opus 4.8." },
   "wuwei-gpt": { label: "Wuwei Hosted · GPT", note: "Hosted: no key needed, credits charged per token. GPT-5.5 / 5.6." },
   codex: { label: "Codex subscription (ChatGPT login)", note: "Uses your local ~/.codex login — no credentials needed. Only gpt-5.5 is device-verified; whether other models route through the subscription depends — watch the status light / actual requests after switching (a failure shows amber)." },
-  "claude-oauth": { label: "Claude subscription (Claude Code)", keyHint: "sk-ant-oat… (auto-filled after one-click authorize above)" },
+  get "claude-oauth"() { return { label: tr("ui.app.message.4f50e061b5"), keyHint: "sk-ant-oat… (auto-filled after one-click authorize above)" }; },
   "wuwei-free": { label: "Free trial (no login)", note: "Free trial: no login, no API key — try Zhipu's free models (GLM-*-Flash) right away. Limited uses per device per day; sign in to unlock more models and higher limits." },
   anthropic: { label: "Claude API Key (Anthropic)" },
   openai: { label: "OpenAI (GPT)", note: "gpt-5.6-terra balanced / sol strongest / luna cheapest" },
   openrouter: { label: "OpenRouter (all providers)", note: "One key for Claude / GPT / Gemini and more. Use “vendor/model” slugs (full list at openrouter.ai/models), or pick “Custom” to enter any slug." },
-  deepseek: { label: "DeepSeek", note: "V4 Pro/Flash (deepseek-chat/deepseek-reasoner retired 2026-07-24, removed)" },
+  get deepseek() { return { label: tr("ui.app.message.f310ff0f0e"), note: "V4 Pro/Flash (deepseek-chat/deepseek-reasoner retired 2026-07-24, removed)" }; },
   qwen: { label: "Tongyi Qwen (Alibaba Bailian)" },
   doubao: { label: "Doubao (Volcano Ark)", keyHint: "Volcano Ark API Key", note: "Doubao usually needs an endpoint ID (ep-...) created under Ark “Online Inference”; dated model names change — use “Custom” to fill the latest." },
-  zhipu: { label: "Zhipu GLM (BigModel)", keyHint: "Zhipu API Key", note: "glm-5.2 flagship (1M context); glm-5v-turbo / glm-4.6v are vision multimodal (text+image)" },
-  kimi: { label: "Kimi (Moonshot)", note: "kimi-k3 flagship (2.8T/1M context); for the international site use https://api.moonshot.ai/v1; kimi-latest and *-vision-preview support text+image" },
+  get zhipu() { return { label: tr("ui.app.message.faff5e02f1"), keyHint: "Zhipu API Key", note: "glm-5.2 flagship (1M context); glm-5v-turbo / glm-4.6v are vision multimodal (text+image)" }; },
+  get kimi() { return { label: tr("ui.app.message.afc3dd1129"), note: "kimi-k3 flagship (2.8T/1M context); for the international site use https://api.moonshot.ai/v1; kimi-latest and *-vision-preview support text+image" }; },
   "kimi-sub": { label: "Kimi Code subscription (membership)", keyHint: "sk-... (created in the Kimi Code console for members)", note: "Uses membership subscription quota (not pay-as-you-go API). base=/coding/v1; flagship model is k3 (≠ the open-platform kimi-k3). Create keys in the Kimi Code console — up to 5, shown only once. ⚠ Official rule: don't change the User-Agent to impersonate other tools, or your membership may be banned." },
   hunyuan: { label: "Tencent Hunyuan (Yuanbao)", keyHint: "Hunyuan API Key", note: "Yuanbao maps to the Tencent Hunyuan API; hunyuan-vision supports text+image" },
   grok: { label: "Grok (xAI)", note: "grok-4.x is natively multimodal (text+image); grok-4.3 is the 1M-context flagship" },
-  custom: { label: "Local / self-hosted endpoint (vLLM, Ollama, etc.)", keyHint: "Can be left blank locally", note: "Any OpenAI-compatible endpoint — just fill your Base URL + model name" },
+  get custom() { return { label: tr("ui.app.message.6f759dc793"), keyHint: "Can be left blank locally", note: "Any OpenAI-compatible endpoint — just fill your Base URL + model name" }; },
 };
 // Hosted entries use the catalog's primary model name in the selected language.
 const pLabel = (p: Preset, lang: Lang) => p.hosted && p.id !== "wuwei-free"
-  ? (lang === "en" ? p.labelEn || p.models[0] || "Model" : p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")
-  : (lang === "en" && (PRESET_EN[p.id]?.label || p.labelEn)) || p.label;
-const pKeyHint = (p: Preset, lang: Lang) => (lang === "en" && PRESET_EN[p.id]?.keyHint) || p.keyHint;
-const pNote = (p: Preset, lang: Lang) => (lang === "en" ? PRESET_EN[p.id]?.note ?? p.note : p.note);
+  ? (lang !== "zh" ? p.labelEn || p.models[0] || tr("set.m.model") : p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")
+  : (lang !== "zh" && (PRESET_EN[p.id]?.label || p.labelEn)) || p.label;
+const pKeyHint = (p: Preset, lang: Lang) => (lang !== "zh" && PRESET_EN[p.id]?.keyHint) || p.keyHint;
+const pNote = (p: Preset, lang: Lang) => (lang !== "zh" ? PRESET_EN[p.id]?.note ?? p.note : p.note);
 
 // 菜单/下拉里的展示顺序(不改 PRESETS 定义本身，PRESETS[0]=codex 仍作默认)
 // 后台目录可用时按后台顺序；离线时回退本地排序和此默认顺序。
@@ -13314,167 +13232,84 @@ type CatalogItem = {
 const MCP_CATALOG: CatalogItem[] = [
   {
     name: "filesystem",
-    label: "文件系统",
-    desc: "读写指定目录的文件/搜索",
+    get label() { return tr("ui.app.message.71c1e6fc2a"); },
+    get desc() { return tr("ui.app.message.4b2684cfd5"); },
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-filesystem", "~/Desktop"],
-    config: [{ arg: 2, label: "可访问目录", hint: "AI 能读写的目录，默认桌面；可留桌面或改成项目目录" }],
+    get config() { return [{ arg: 2, label: tr("ui.app.message.8b2f522787"), hint: tr("ui.app.message.43c432a5eb") }]; },
   },
-  { name: "puppeteer", label: "Puppeteer 浏览器", desc: "无头浏览器控制/截图，开箱可用", command: "npx", args: ["-y", "@modelcontextprotocol/server-puppeteer"] },
-  { name: "memory", label: "知识图谱记忆", desc: "持久知识图谱记忆，开箱可用", command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
-  { name: "sequential-thinking", label: "逐步思考", desc: "结构化多步推理，开箱可用", command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"] },
+  { name: "puppeteer", get label() { return tr("ui.app.message.d2f42a90e0"); }, get desc() { return tr("ui.app.message.4e5a9cc69d"); }, command: "npx", args: ["-y", "@modelcontextprotocol/server-puppeteer"] },
+  { name: "memory", get label() { return tr("ui.app.message.1c55db8163"); }, get desc() { return tr("ui.app.message.95247f47ba"); }, command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
+  { name: "sequential-thinking", get label() { return tr("ui.app.message.bcc2eee457"); }, get desc() { return tr("ui.app.message.5b95eac09a"); }, command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"] },
   {
     name: "github",
-    label: "GitHub",
-    desc: "仓库/Issue/PR 操作",
+    get label() { return tr("ui.app.github.6d98f78"); },
+    get desc() { return tr("ui.app.message.9294fcaca9"); },
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-github"],
     env: { GITHUB_PERSONAL_ACCESS_TOKEN: "<token>" },
-    config: [{ env: "GITHUB_PERSONAL_ACCESS_TOKEN", label: "GitHub Token", hint: "github.com/settings/tokens 生成，勾选仓库权限" }],
+    get config() { return [{ env: "GITHUB_PERSONAL_ACCESS_TOKEN", label: "GitHub Token", hint: tr("ui.app.message.f464fc2523") }]; },
   },
   {
     name: "brave-search",
-    label: "Brave 搜索",
-    desc: "网页搜索",
+    get label() { return tr("ui.app.message.1f5f64e03b"); },
+    get desc() { return tr("ui.app.message.a2ca25c852"); },
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-brave-search"],
     env: { BRAVE_API_KEY: "<key>" },
-    config: [{ env: "BRAVE_API_KEY", label: "Brave API Key", hint: "brave.com/search/api 免费申请" }],
+    get config() { return [{ env: "BRAVE_API_KEY", label: "Brave API Key", hint: tr("ui.app.message.a3f5505e0c") }]; },
   },
   {
     name: "postgres",
     label: "Postgres",
-    desc: "查询 Postgres（只读）",
+    get desc() { return tr("ui.app.message.df722912c2"); },
     command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-postgres", "<连接串>"],
-    config: [{ arg: 2, label: "连接串", hint: "postgresql://用户:密码@主机:5432/库名" }],
+    get args() { return ["-y", "@modelcontextprotocol/server-postgres", tr("ui.app.message.cc9ae0cb5d")]; },
+    get config() { return [{ arg: 2, label: tr("ui.app.message.eb2a7c3558"), hint: tr("ui.app.message.3aa0a871d3") }]; },
   },
   {
     name: "slack",
     label: "Slack",
-    desc: "读写 Slack 消息",
+    get desc() { return tr("ui.app.message.8a13676117"); },
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-slack"],
     env: { SLACK_BOT_TOKEN: "<token>", SLACK_TEAM_ID: "<team>" },
-    config: [
-      { env: "SLACK_BOT_TOKEN", label: "Bot Token", hint: "xoxb- 开头" },
-      { env: "SLACK_TEAM_ID", label: "Team ID", hint: "T 开头" },
-    ],
+    get config() { return [
+      { env: "SLACK_BOT_TOKEN", label: "Bot Token", hint: tr("ui.app.message.42d3d4da45") },
+      { env: "SLACK_TEAM_ID", label: "Team ID", hint: tr("ui.app.message.cac591a498") },
+    ]; },
   },
 ];
 
 // MCP 目录英文覆盖（仅 EN 用；缺省回退中文）。key=name；fields key = env 名或 `arg{下标}`。
 const MCP_EN: Record<string, { label?: string; desc?: string; fields?: Record<string, { label?: string; hint?: string }> }> = {
-  filesystem: { label: "Filesystem", desc: "Read/write & search files in allowed dirs", fields: { arg2: { label: "Accessible directory", hint: "Directory the AI can read/write; defaults to Desktop — keep it or point to your project dir" } } },
-  puppeteer: { label: "Puppeteer browser", desc: "Headless browser control/screenshots, works out of the box" },
+  get filesystem() { return { label: tr("ui.app.message.71c1e6fc2a"), desc: "Read/write & search files in allowed dirs", fields: { arg2: { label: "Accessible directory", hint: "Directory the AI can read/write; defaults to Desktop — keep it or point to your project dir" } } }; },
+  get puppeteer() { return { label: tr("ui.app.message.d2f42a90e0"), desc: "Headless browser control/screenshots, works out of the box" }; },
   memory: { label: "Knowledge-graph memory", desc: "Persistent knowledge-graph memory, works out of the box" },
-  "sequential-thinking": { label: "Sequential thinking", desc: "Structured multi-step reasoning, works out of the box" },
+  get "sequential-thinking"() { return { label: tr("ui.app.message.bcc2eee457"), desc: "Structured multi-step reasoning, works out of the box" }; },
   github: { desc: "Repo / issue / PR operations", fields: { GITHUB_PERSONAL_ACCESS_TOKEN: { hint: "Generate at github.com/settings/tokens with repo scope" } } },
-  "brave-search": { label: "Brave Search", desc: "Web search", fields: { BRAVE_API_KEY: { hint: "Free at brave.com/search/api" } } },
-  postgres: { desc: "Query Postgres (read-only)", fields: { arg2: { label: "Connection string", hint: "postgresql://user:password@host:5432/dbname" } } },
-  slack: { desc: "Read/write Slack messages", fields: { SLACK_BOT_TOKEN: { hint: "Starts with xoxb-" }, SLACK_TEAM_ID: { hint: "Starts with T" } } },
+  get "brave-search"() { return { label: tr("ui.app.message.1f5f64e03b"), desc: tr("ui.app.message.a2ca25c852"), fields: { BRAVE_API_KEY: { hint: "Free at brave.com/search/api" } } }; },
+  get postgres() { return { desc: "Query Postgres (read-only)", fields: { arg2: { label: tr("ui.app.message.eb2a7c3558"), hint: "postgresql://user:password@host:5432/dbname" } } }; },
+  get slack() { return { desc: "Read/write Slack messages", fields: { SLACK_BOT_TOKEN: { hint: tr("ui.app.message.42d3d4da45") }, SLACK_TEAM_ID: { hint: tr("ui.app.message.cac591a498") } } }; },
 };
-const mcpLabel = (c: CatalogItem, lang: Lang) => (lang === "en" && MCP_EN[c.name]?.label) || c.label;
-const mcpDesc = (c: CatalogItem, lang: Lang) => (lang === "en" && MCP_EN[c.name]?.desc) || c.desc;
+const mcpLabel = (c: CatalogItem, lang: Lang) => (lang !== "zh" && MCP_EN[c.name]?.label) || c.label;
+const mcpDesc = (c: CatalogItem, lang: Lang) => (lang !== "zh" && MCP_EN[c.name]?.desc) || c.desc;
 const mcpFieldEn = (name: string, key: string, kind: "label" | "hint", fallback: string, lang: Lang) =>
-  (lang === "en" && MCP_EN[name]?.fields?.[key]?.[kind]) || fallback;
+  (lang !== "zh" && MCP_EN[name]?.fields?.[key]?.[kind]) || fallback;
 
 // 内置工具描述的英文（仅设置页 Tools 标签显示用；模型侧描述仍走 src/tools 原文）。按工具名。
-const TOOL_DESC_EN: Record<string, string> = {
-  ...TEAM_TOOL_EN,
-  read_file: "Read a text file's content with line numbers. For viewing code/files.",
-  write_file: "Write/overwrite a file (creates it and parent dirs if missing).",
-  edit_file: "Make an exact string replacement in a file. old_string must appear exactly once, or it errors.",
-  bash: "Run a shell command in the working dir (bash on macOS/Linux; Windows defaults to WSL bash). Returns stdout+stderr and exit code.",
-  powershell: "Run native Windows commands (PowerShell first, auto-falls back to cmd). For junctions/symlinks, the registry, services/processes, WMI and other native Windows work — more reliable than wrapping cmd inside bash. Falls back to a normal shell off Windows.",
-  glob: "Find files by glob pattern (e.g. '**/*.ts'), returns matching paths.",
-  grep: "Search file contents by regex/string, returns matching lines (file:line:content).",
-  remember: "Save a long-term memory (preferences, facts, project background); auto-loaded in future chats.",
-  web_search: "Search the web — returns titles/links/snippets of relevant pages. For latest info, research, and docs.",
-  web_fetch: "Fetch a web page and return its main text content.",
-  ask_user: "Pop up clickable options for the user to choose/confirm, instead of asking in prose.",
-  brain_recall: "Recall relevant concepts and relations from the local Brain (knowledge graph).",
-  brain_learn: "Add a concept / knowledge node to the local Brain.",
-  brain_link: "Create a relation between two concepts in the Brain.",
-  brain_forget: "Remove a concept or relation from the Brain.",
-  brain_read_doc: "Read the full source of a document indexed in the Brain.",
-  browser_open: "Open a web page URL in the built-in browser (can run JS; better than web_fetch for dynamic/interactive pages). After opening, use browser_read for text and browser_click to click elements.",
-  browser_read: "Read the visible text of the built-in browser's current page (open one first with browser_open).",
-  browser_click: "Click an element matching a CSS selector on the built-in browser's current page (buttons/links etc). Follow with browser_read to see changes.",
-};
-const toolDesc = (name: string, fallback: string, lang: Lang) => (lang === "en" && TOOL_DESC_EN[name]) || fallback;
+
+
 // 记忆默认种子头 # 记忆 / # Memory 跟随界面语言互换（只换开头那一行 H1，用户后加的内容不动）
 function swapMemHeader(text: string, lang: Lang): string {
-  return lang === "en" ? text.replace(/^# 记忆(\s|$)/, "# Memory$1") : text.replace(/^# Memory(\s|$)/, "# 记忆$1");
+  return lang !== "zh" ? text.replace(/^# 记忆(\s|$)/, "# Memory$1") : text.replace(/^# Memory(\s|$)/, systemData.memoryHeaderZh);
 }
-const TOOL_SOURCE_EN: Record<string, string> = { "内置工具": "Built-in tools", "浏览器": "Browser" };
-const TOOL_PARAM_EN: Record<string, Record<string, string>> = {
-  read_file: { path: "File path (relative or absolute)", offset: "Start line (1-based), optional", limit: "Lines to read, default 2000" },
-  write_file: { path: "File path (relative or absolute)", content: "Full content to write" },
-  edit_file: { path: "File path", old_string: "Exact text to replace (must be unique in the file)", new_string: "Replacement text", replace_all: "Replace all occurrences, default false" },
-  bash: { command: "Shell command to run", timeout_ms: "Timeout in ms, default 120000" },
-  powershell: { command: "Command to run (PowerShell syntax; the same string is run as cmd syntax when falling back)", timeout_ms: "Timeout in ms, default 120000" },
-  glob: { pattern: "Glob pattern, e.g. **/*.ts", path: "Search root directory, default working dir" },
-  grep: { pattern: "Regex/string to search for", path: "Directory/file to search, default working dir", glob: "Filter by file type, e.g. '*.ts' (optional)" },
-  web_search: { query: "Search query" },
-  web_fetch: { url: "Web page URL (http/https)" },
-  // ask_user 的问题/选项说明嵌在 items 里，逐层替换(见 localizeToolGroups)
-  ask_user: {
-    questions: "One or more questions to ask the user",
-    question: "The question text",
-    header: "Very short label (optional, e.g. “Approach”, “File”)",
-    multiSelect: "Allow multiple selections (default: single-select)",
-    options: "Clickable options",
-    label: "Option text",
-    description: "Option explanation (optional)",
-  },
-  remember: { text: "One line to remember long-term (concise, self-contained)" },
-  browser_open: { url: "Web page URL to open" },
-  browser_click: { selector: "CSS selector of the element to click" },
-  brain_recall: { query: "Topic/concept to recall, e.g. 'figcheck deploy', 'fig07 server'", limit: "Max concepts to return, default 6" },
-  brain_learn: {
-    name: "Primary concept name, e.g. 'figcheck', 'deploy_view_prod.sh'",
-    type: "Type: project / server / script / caveat / command / concept…",
-    summary: "One-line summary",
-    aliases: "Aliases, optional",
-    attrs: "Structured key-value attributes, e.g. {git: '~/...', test_env: 'fig01', deploy: '...'}",
-  },
-  brain_link: { from: "Source concept", to: "Target concept", relation: "Relation: deploy script / test env / prod server / contains service / caveat / related…" },
-  brain_forget: { name: "Concept name to remove" },
-  brain_read_doc: { ref: "Document relative path or chunk id (the file value returned by brain_recall)" },
-};
+
+
 type ToolGroupRaw = { source: string; kind: "builtin" | "browser" | "mcp"; tools: { name: string; description: string; readOnly: boolean; inputSchema: any }[] };
+const toolDesc = (name: string, fallback: string, lang: Lang) => localizeToolMetadata({ name, description: fallback, inputSchema: {} }, lang).description;
 // 把 getTools 返回的分组按语言彻底本地化：source 名、工具描述、inputSchema 参数说明（List/JSON 视图共用）。
-function localizeToolGroups(groups: ToolGroupRaw[], lang: Lang): ToolGroupRaw[] {
-  if (lang !== "en") return groups;
-  return groups.map((g) => ({
-    ...g,
-    source: TOOL_SOURCE_EN[g.source] ?? g.source,
-    tools: g.tools.map((tl) => {
-      const pmap = TOOL_PARAM_EN[tl.name];
-      let schema = tl.inputSchema;
-      if (pmap && schema && typeof schema === "object") {
-        // 逐层下钻：ask_user 的问题/选项说明嵌在 items.properties 里，只译顶层会漏中文
-        const walk = (node: any): any => {
-          if (!node || typeof node !== "object") return node;
-          const out: any = { ...node };
-          if (out.properties && typeof out.properties === "object") {
-            const props: any = {};
-            for (const [k, v] of Object.entries(out.properties as Record<string, any>)) {
-              const child = walk(v);
-              props[k] = pmap[k] ? { ...child, description: pmap[k] } : child;
-            }
-            out.properties = props;
-          }
-          if (out.items) out.items = walk(out.items);
-          return out;
-        };
-        schema = walk(schema);
-      }
-      return { ...tl, description: TOOL_DESC_EN[tl.name] ?? tl.description, inputSchema: schema };
-    }),
-  }));
-}
+function localizeToolGroups(groups: ToolGroupRaw[], lang: Lang): ToolGroupRaw[] { return groups.map(group => ({ ...group, source: localizeStoredText(group.source, lang), tools: group.tools.map(tool => localizeToolMetadata(tool, lang)) })); }
 
 // 迁移：把已装服务器里的旧 <占位> 自动补成目录里的默认值(如 sqlite 的 <db路径>→~/wuwei.db)，让老配置也开箱可用
 function migrateMcpDefaults(text: string): { text: string; changed: boolean } {
@@ -13852,7 +13687,7 @@ function ConceptGraph({
         </g>
         {nodes.length === 0 && (
           <text x={W / 2} y={H / 2} fontSize={16} fill="var(--text-2, #999)" textAnchor="middle">
-            {makeT(getLang())("set.brain.graphEmpty", "暂无概念——点上方「抽取概念」或对话中让模型 brain_learn")}
+            {makeT(getLang())("set.brain.graphEmpty")}
           </text>
         )}
       </svg>
@@ -13889,7 +13724,7 @@ function ConceptGraph({
               </div>
               {infoNode.summary && <div style={{ marginBottom: 4 }}>{infoNode.summary}</div>}
               {infoNode.aliases?.length > 0 && (
-                <div style={{ color: "var(--text-2, #888)", marginBottom: 4 }}>{makeT(getLang())("brain.info.aliases", "别名")}{getLang() === "en" ? ": " : "："}{infoNode.aliases.join(getLang() === "en" ? ", " : "、")}</div>
+                <div style={{ color: "var(--text-2, #888)", marginBottom: 4 }}>{makeT(getLang())("brain.info.aliases", tr("ui.app.message.dbdd6e5356"))}{tr("ui.app.text.7f29e73")}{infoNode.aliases.join(tr("ui.index.text.6486d4e"))}</div>
               )}
               {Object.keys(infoNode.attrs || {}).length > 0 && (
                 <div style={{ marginBottom: 4 }}>
@@ -13902,11 +13737,11 @@ function ConceptGraph({
                 </div>
               )}
               <div style={{ color: "var(--text-2, #888)", fontSize: 11 }}>
-                {getLang() === "en" ? `Weight ${infoNode.weight} · Hits ${infoNode.hits}` : `权重 ${infoNode.weight} · 命中 ${infoNode.hits}`}
-                {infoNode.updatedAt ? (getLang() === "en" ? ` · Updated ${fmtTime(infoNode.updatedAt)}` : ` · 更新 ${fmtTime(infoNode.updatedAt)}`) : ""}
+                {tr("ui.app.weight.hits.48e21b3", { p0: infoNode.weight, p1: infoNode.hits })}
+                {infoNode.updatedAt ? (tr("ui.app.updated.61cf84e", { p0: fmtTime(infoNode.updatedAt) })) : ""}
               </div>
               {pinInfo?.kind === "node" && !hover && (
-                <div style={{ color: "var(--text-2, #aaa)", fontSize: 11, marginTop: 4 }}>{getLang() === "en" ? "Drag to reposition & pin · double-click to unpin" : "拖动可挪位并钉住 · 双击解除固定"}</div>
+                <div style={{ color: "var(--text-2, #aaa)", fontSize: 11, marginTop: 4 }}>{tr("ui.app.drag.to.reposition.pin.double.click.5481948")}</div>
               )}
             </>
           )}
@@ -13917,9 +13752,9 @@ function ConceptGraph({
                 <span style={{ color: "var(--accent, #e0533d)" }}> ──{infoEdge.relation}→ </span>
                 {byId.get(infoEdge.to)?.name || infoEdge.to}
               </div>
-              <div style={{ color: "var(--text-2, #888)", marginBottom: 4 }}>{getLang() === "en" ? "Relation: " : "关系："}{infoEdge.relation}</div>
+              <div style={{ color: "var(--text-2, #888)", marginBottom: 4 }}>{tr("ui.app.relation.2715b83")}{infoEdge.relation}</div>
               <div style={{ color: "var(--text-2, #888)", fontSize: 11 }}>
-                {getLang() === "en" ? `Weight ${infoEdge.weight} · Hits ${infoEdge.hits}` : `权重 ${infoEdge.weight} · 命中 ${infoEdge.hits}`}
+                {tr("ui.app.weight.hits.48e21b3", { p0: infoEdge.weight, p1: infoEdge.hits })}
               </div>
             </>
           )}
@@ -14045,7 +13880,7 @@ function SettingsModal({
   // ── 文档冷存储（知识宫殿等）──
   const [docStat, setDocStat] = useState<{ chunks: number; files: number; dir: string; builtAt: number }>({ chunks: 0, files: 0, dir: "", builtAt: 0 });
   // 默认目录跟随界面语言：英文界面别塞中文路径
-  const [docDir, setDocDir] = useState(lang === "en" ? "~/Documents/knowledge" : "~/Documents/tanxun/知识宫殿");
+  const [docDir, setDocDir] = useState(tr("ui.app.documents.knowledge.efc5cd1"));
   const [docBuilding, setDocBuilding] = useState(false);
   const [docProg, setDocProg] = useState("");
   credsRef.current = creds;
@@ -14152,7 +13987,8 @@ function SettingsModal({
   // ── 工具面板：当前生效的全部工具（按来源分组）──
   type ToolInfo = { name: string; description: string; readOnly: boolean; inputSchema: any };
   type ToolGroup = { source: string; kind: "builtin" | "browser" | "mcp"; tools: ToolInfo[] };
-  const [toolGroups, setToolGroups] = useState<ToolGroup[]>([]);
+  const [rawToolGroups, setToolGroups] = useState<ToolGroup[]>([]);
+  const toolGroups = localizeToolGroups(rawToolGroups, lang);
   const [toolTotal, setToolTotal] = useState(0);
   const [toolView, setToolView] = useState<"list" | "json">("list"); // 列表 / JSON 视图
   const [toolSel, setToolSel] = useState<ToolInfo | null>(null); // 点开看详情的工具
@@ -14161,7 +13997,7 @@ function SettingsModal({
   useEffect(() => {
     if (tab !== "tools") return;
     window.wuwei.getTools().then((r) => {
-      setToolGroups(localizeToolGroups(r.groups, lang));
+      setToolGroups(r.groups);
       setToolTotal(r.total);
     });
   }, [tab, lang]);
@@ -14180,26 +14016,26 @@ function SettingsModal({
         setDocBuilding(true);
         setDocProg(
           d.phase === "scan"
-            ? (lang === "en" ? `Found ${d.files} docs, vectorizing…` : `扫描到 ${d.files} 个文档，开始向量化…`)
-            : (lang === "en" ? `Vectorizing ${d.done}/${d.total} chunks…` : `向量化 ${d.done}/${d.total} 块…`),
+            ? (tr("ui.app.found.docs.vectorizing.85161cb", { p0: d.files }))
+            : (tr("ui.app.vectorizing.chunks.c7f63ec", { p0: d.done, p1: d.total })),
         );
       }
     });
     window.wuwei.brainEmbedReady().then((r) => {
-      if (r) setBrainWarmMsg(lang === "en" ? "✓ Embedding model ready — semantic search enabled." : "✓ 向量模型就绪，语义检索已启用。");
+      if (r) setBrainWarmMsg(tr("set.brain.warmOk"));
     });
     window.wuwei.brainConceptProgress().then((c) => setConExtract(c));
     const off = window.wuwei.onEvent((ch, p) => {
       if (ch === "evt:brain-docs") {
         const d = p as { building?: boolean; phase: string; files?: number; total?: number; done?: number };
-        if (d.phase === "scan") setDocProg(lang === "en" ? `Found ${d.files} docs, vectorizing…` : `扫描到 ${d.files} 个文档，开始向量化…`);
-        else if (d.phase === "embed") setDocProg(lang === "en" ? `Vectorizing ${d.done}/${d.total} chunks…` : `向量化 ${d.done}/${d.total} 块…`);
+        if (d.phase === "scan") setDocProg(tr("ui.app.found.docs.vectorizing.85161cb", { p0: d.files }));
+        else if (d.phase === "embed") setDocProg(tr("ui.app.vectorizing.chunks.c7f63ec", { p0: d.done, p1: d.total }));
         else if (d.phase === "done") {
-          setDocProg(lang === "en" ? `✓ Done, ${d.total} chunks total` : `✓ 完成，共 ${d.total} 块`);
+          setDocProg(tr("ui.app.done.chunks.total.a4ca753", { p0: d.total }));
           setDocBuilding(false);
           window.wuwei.brainDocStats().then(setDocStat);
         } else if (d.phase === "error") {
-          setDocProg(lang === "en" ? "✗ Build failed" : "✗ 构建失败");
+          setDocProg(tr("ui.app.build.failed.54b069f"));
           setDocBuilding(false);
         }
       } else if (ch === "evt:brain-concepts") {
@@ -14230,7 +14066,7 @@ function SettingsModal({
     setUnlockErr("");
     const r = await window.wuwei.secretsReveal(unlockPw);
     if (!r.ok) {
-      setUnlockErr(r.error || (lang === "en" ? "Verification failed" : "验证失败"));
+      setUnlockErr(r.error || (tr("ui.app.verification.failed.601f440")));
       return;
     }
     const map: Record<string, string> = {};
@@ -14250,7 +14086,7 @@ function SettingsModal({
   async function addSecret() {
     setSecErr("");
     if (!secNew.value.trim()) {
-      setSecErr(t("set.sec.needValue", "请填入密钥值"));
+      setSecErr(t("set.sec.needValue"));
       return;
     }
     const r = await window.wuwei.secretsAdd({
@@ -14260,7 +14096,7 @@ function SettingsModal({
       note: secNew.note.trim() || undefined,
     });
     if (!r.ok) {
-      setSecErr(r.error || (lang === "en" ? "Add failed" : "添加失败"));
+      setSecErr(r.error || (tr("ui.app.add.failed.4bda4aa")));
       return;
     }
     setSecNew({ name: "", envVar: "", value: "", note: "" });
@@ -14272,7 +14108,7 @@ function SettingsModal({
       setSecImportText("");
       setSecImportOpen(false);
       reloadSecrets();
-    } else setSecErr(r.error || (lang === "en" ? "Import failed" : "导入失败"));
+    } else setSecErr(r.error || (tr("ui.app.import.failed.8a3942a")));
   }
   // 内置平台 + 中转站(合并成一份预设列表；下拉与查找都用它)
   const allPresets = applyProviderEdits(
@@ -14355,9 +14191,9 @@ function SettingsModal({
   }, [lang]);
   // 语言切换时，未自定义的「默认提示词」跟着切中英（系统/脑网络/密钥三段）
   useEffect(() => {
-    if (!sysPromptTouched && sysPromptDefaultEn) setSysPrompt(lang === "en" ? sysPromptDefaultEn : sysPromptDefault);
-    if (!brainPromptTouched && brainPromptDefaultEn) setBrainPrompt(lang === "en" ? brainPromptDefaultEn : brainPromptDefault);
-    if (!secretsPromptTouched && secretsPromptDefaultEn) setSecretsPrompt(lang === "en" ? secretsPromptDefaultEn : secretsPromptDefault);
+    if (!sysPromptTouched && sysPromptDefaultEn) setSysPrompt(tr("agent.defaultPrompt", {}, lang));
+    if (!brainPromptTouched && brainPromptDefaultEn) setBrainPrompt(tr("agent.brainNote", {}, lang));
+    if (!secretsPromptTouched && secretsPromptDefaultEn) setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
   useEffect(() => {
@@ -14416,7 +14252,7 @@ function SettingsModal({
       }
     } else {
       args.forEach((a, i) => {
-        if (a.includes("<")) fields.push({ label: (lang === "en" ? "Arg " : "参数 ") + (i + 1), hint: "", kind: "arg", idx: i });
+        if (a.includes("<")) fields.push({ label: (tr("ui.app.arg.2d286ab")) + (i + 1), hint: "", kind: "arg", idx: i });
       });
       Object.entries(envMap).forEach(([k, v]) => {
         if (String(v).includes("<")) fields.push({ label: k, hint: "", kind: "env", key: k });
@@ -14537,7 +14373,7 @@ function SettingsModal({
       const defEn = (r as any)?.defaultPromptEn || defZh;
       setSysPromptDefault(defZh);
       setSysPromptDefaultEn(defEn);
-      const def = lang === "en" ? defEn : defZh; // 按当前界面语言选默认
+      const def = lang !== "zh" ? defEn : defZh; // 按当前界面语言选默认
       if (typeof s.systemPrompt === "string") {
         setSysPrompt(s.systemPrompt);
         setSysPromptTouched(true);
@@ -14554,7 +14390,7 @@ function SettingsModal({
         setBrainPrompt(s.brainPrompt);
         setBrainPromptTouched(true);
       } else {
-        setBrainPrompt(lang === "en" ? bDefEn : bDefZh);
+        setBrainPrompt(lang !== "zh" ? bDefEn : bDefZh);
         setBrainPromptTouched(false);
       }
       // 密钥说明提示词：同上
@@ -14566,7 +14402,7 @@ function SettingsModal({
         setSecretsPrompt(s.secretsPrompt);
         setSecretsPromptTouched(true);
       } else {
-        setSecretsPrompt(lang === "en" ? sDefEn : sDefZh);
+        setSecretsPrompt(lang !== "zh" ? sDefEn : sDefZh);
         setSecretsPromptTouched(false);
       }
     });
@@ -14627,25 +14463,25 @@ function SettingsModal({
     const key = (candidate || "").trim();
     if (!key || sKeyTestingRef.current) return false;
     sKeyTestingRef.current = true;
-    if (!silent) setSKeyMsg(lang === "en" ? "Checking…" : "检测中…");
+    if (!silent) setSKeyMsg(tr("ui.app.checking.4186bc8"));
     try {
       const res = await window.wuwei.testKey(key, keyOverride());
       if (res.ok) {
         setApiKey(key);
         persist({ apiKeyOverride: key, close: false }); // 保存但不关，留在弹窗看结果
         setSKeyWaiting(false);
-        setSKeyMsg(lang === "en" ? "✓ API Key verified and set — ready to use (you can close this window)." : "✓ API Key 已验证通过并设置完成，可直接使用（可关闭本窗）。");
+        setSKeyMsg(tr("ui.app.api.key.verified.and.set.ready.94666e1"));
         return true;
       }
       if (keyRejected(res.reason)) {
-        if (!silent) setSKeyMsg((lang === "en" ? "✗ Key invalid (auth failed): " : "✗ Key 无效（鉴权失败）：") + res.reason);
+        if (!silent) setSKeyMsg((tr("ui.app.key.invalid.auth.failed.bd1002d")) + res.reason);
         return false;
       }
       // Key 有效但请求未通过(余额/额度/账单等)：照样保存并提醒
       setApiKey(key);
       persist({ apiKeyOverride: key, close: false });
       setSKeyWaiting(false);
-      setSKeyMsg((lang === "en" ? "⚠ Key saved (valid), but the request didn't go through — usually an account balance/quota issue: " : "⚠ Key 已保存（本身有效），但请求未通过，多为账户余额/额度问题：") + res.reason);
+      setSKeyMsg((tr("ui.app.key.saved.valid.but.the.request.05c89ae")) + res.reason);
       return true;
     } finally {
       sKeyTestingRef.current = false;
@@ -14656,7 +14492,7 @@ function SettingsModal({
   function startGetKey() {
     if (preset.keyUrl) window.wuwei.openExternal(preset.keyUrl);
     sLastClipRef.current = "";
-    setSKeyMsg(lang === "en" ? "Opened the sign-up page: copy your API Key and it'll be auto-filled and verified…" : "已打开获取页面：复制 API Key 后会自动填入并验证…");
+    setSKeyMsg(tr("ui.app.opened.the.sign.up.page.copy.ce4046f"));
     setSKeyWaiting(true);
   }
 
@@ -14683,7 +14519,7 @@ function SettingsModal({
       if (tok) {
         setOauthToken(tok);
         save(tok);
-      } else alert(lang === "en" ? "Authorization didn't go through (cancelled, timed out, or failed). Please try again." : "授权未完成（已取消/超时/失败），请重试。");
+      } else alert(tr("ui.app.authorization.didn.go.through.cancelled.timed.28df40d"));
     } finally {
       setClaudeBusy(false);
     }
@@ -14704,7 +14540,7 @@ function SettingsModal({
       let code = sCode.trim();
       if (!code) code = (await window.wuwei.readClipboard()).trim();
       if (!code) {
-        alert(lang === "en" ? "No authorization code found. Copy it from the browser first, or paste it into the box." : "没读到授权码：请先在浏览器复制授权码，或粘贴进输入框。");
+        alert(tr("ui.app.no.authorization.code.found.copy.it.b4292a6"));
         return;
       }
       const tok = await window.wuwei.claudeOauthExchange(code);
@@ -14712,7 +14548,7 @@ function SettingsModal({
         setSAwaitCode(false);
         setOauthToken(tok);
         save(tok);
-      } else alert(lang === "en" ? "The code is invalid or expired — click \"Sign in via browser\" and try again." : "授权码无效或已过期，请重新点「用浏览器登录」。");
+      } else alert(tr("ui.app.the.code.is.invalid.or.expired.d67977f"));
     } finally {
       setClaudeBusy(false);
     }
@@ -14723,7 +14559,7 @@ function SettingsModal({
     if (preset.hosted && (pid !== loadedRef.current.providerId || model !== loadedRef.current.model)) {
       onHostedModels(pid); return;
     }
-    if (!model.trim()) { setModelError(lang === 'en' ? 'Choose a model before saving.' : '请先选择模型后再保存。'); return; }
+    if (!model.trim()) { setModelError(tr("ui.app.choose.model.before.saving.c33f84e")); return; }
     setModelError('');
     const apiKind = preset.kind === "anthropic-apikey" || preset.kind === "openai";
     const prevSlot = credsRef.current[pid] || {};
@@ -14783,7 +14619,7 @@ function SettingsModal({
     const label = newStName.trim();
     let url = newStUrl.trim();
     if (!label || !url) {
-      alert(lang === "en" ? "Please fill in both the relay name and the Base URL." : "请填写中转站名称和 Base URL。");
+      alert(tr("ui.app.please.fill.in.both.the.relay.2299eee"));
       return;
     }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -14846,7 +14682,7 @@ function SettingsModal({
   function saveStationEdit() {
     const label = newStName.trim();
     if (!label) {
-      alert(lang === "en" ? "Please fill in a name." : "请填写名称。");
+      alert(tr("ui.app.please.fill.in.name.ad0f802"));
       return;
     }
     if (editIsBuiltin) {
@@ -14867,7 +14703,7 @@ function SettingsModal({
     }
     let url = newStUrl.trim();
     if (!url) {
-      alert(lang === "en" ? "Please fill in the Base URL." : "请填写 Base URL。");
+      alert(tr("ui.app.please.fill.in.the.base.url.c99db6a"));
       return;
     }
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -14977,7 +14813,7 @@ function SettingsModal({
             </button>
           )}
           <button type="button" className={"set-tab" + (tab === "remote" ? " on" : "")} onClick={() => setTab("remote")}>
-            {lang === "en" ? "Mobile remote" : "手机端远程"}
+            {tr("ui.app.mobile.remote.0b45b14")}
           </button>
           <button type="button" data-testid="settings-tab-model" className={"set-tab" + (tab === "model" ? " on" : "")} onClick={() => setTab("model")}>
             {t("set.tab.model")}
@@ -15017,7 +14853,7 @@ function SettingsModal({
               <button
                 type="button"
                 className="set-win-btn"
-                title={maxed ? t("set.win.restore", "还原窗口大小") : t("set.win.maximize", "最大化（同时把整个窗口最大化铺满屏幕）")}
+                title={maxed ? t("set.win.restore") : t("set.win.maximize")}
                 onClick={async () => {
                   const next = !maxed;
                   setMaxed(next);
@@ -15036,7 +14872,7 @@ function SettingsModal({
                   </svg>
                 )}
               </button>
-              <button type="button" className="set-win-btn" title={t("win.close", "关闭")} onClick={onClose}>
+              <button type="button" className="set-win-btn" title={t("win.close")} onClick={onClose}>
                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
@@ -15060,20 +14896,21 @@ function SettingsModal({
           {/* ── 通用：会话分组 + 上下文压缩 + 账号读取 ── */}
           {tab === "general" && (
             <>
-              <div className="app-set-group">语言 / Language</div>
+              <div className="app-set-group">{t("language.choose")}</div>
               <div className="theme-pick" style={{ marginBottom: "16px" }}>
-                {(["zh", "en"] as Lang[]).map((l) => (
+                {getLanguages().map(({code: l, nativeName}) => (
                   <button
                     key={l}
+                    data-language-name={l}
                     type="button"
                     className={"theme-opt" + (lang === l ? " on" : "")}
                     onClick={() => onLang(l)}
                   >
-                    {l === "zh" ? "中文" : "English"}
+                    {nativeName}
                   </button>
                 ))}
               </div>
-              <div className="app-set-group">{t("set.g.grouping", "会话分组")}</div>
+              <div className="app-set-group">{t("set.g.grouping")}</div>
               <div className="theme-pick" style={{ marginBottom: "6px" }}>
                 {[
                   { id: "manual", label: t("set.g.manual") },
@@ -15116,13 +14953,13 @@ function SettingsModal({
               </div>
               {/* 触发压缩的两个阈值：token 阈值(空=自动按模型上下文80%) + 消息条数阈值(0=关)。任一命中即压 */}
               <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Token threshold" : "Token 阈值"}</div>
+                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.token.threshold.326b19a")}</div>
                 <span style={{ flex: 1 }} />
                 <div className="set-field">
                   <input
                     type="number"
                     min={0}
-                    placeholder={lang === "en" ? "Auto 80%" : "自动 80%"}
+                    placeholder={tr("ui.app.auto.bdef013")}
                     value={compThr}
                     onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); setCompThr(v); window.wuwei.setCompact?.({ threshold: Number(v) || 0 }); }}
                     className="set-field-input"
@@ -15131,34 +14968,30 @@ function SettingsModal({
                 </div>
               </div>
               <div className="app-set-hint" style={{ marginBottom: "12px" }}>
-                {lang === "en"
-                  ? "Compaction triggers when the previous turn's input tokens exceed this. Leave blank = auto (80% of the current model's context window)."
-                  : "上一轮输入 token 超过此值就触发压缩。留空=自动（按当前模型上下文的 80%）。"}
+                {tr("ui.app.compaction.triggers.when.the.previous.turn.6c36f42")}
               </div>
               <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Message-count threshold" : "消息条数阈值"}</div>
+                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.message.count.threshold.b5f2b0c")}</div>
                 <span style={{ flex: 1 }} />
                 <div className="set-field">
                   <input
                     type="number"
                     min={0}
-                    placeholder={lang === "en" ? "0 = off" : "0 关"}
+                    placeholder={tr("ui.app.off.879acbe")}
                     value={compMsgThr}
                     onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); setCompMsgThr(v); window.wuwei.setCompact?.({ msgThreshold: Number(v) || 0 }); }}
                     className="set-field-input"
                   />
-                  <span className="set-field-unit">{lang === "en" ? "msgs" : "条"}</span>
+                  <span className="set-field-unit">{tr("ui.app.msgs.f040f03")}</span>
                 </div>
               </div>
               <div className="app-set-hint" style={{ marginBottom: "16px" }}>
-                {lang === "en"
-                  ? "Also compact when the message count exceeds this (either threshold triggers it). 0 = off, token-only."
-                  : "消息条数超过此值也触发压缩（与 token 阈值任一命中即压）。0=关闭，只按 token 判断。"}
+                {tr("ui.app.also.compact.when.the.message.count.9475f10")}
               </div>
               {/* 完整对话历史归档：压缩前原文永不丢，右键会话→查看完整历史。这里设保留天数 */}
-              <div className="app-set-group">{lang === "en" ? "Full history archive" : "完整对话历史归档"}</div>
+              <div className="app-set-group">{tr("ui.app.full.history.archive.e05c9b4")}</div>
               <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Keep archived logs for" : "归档日志保留"}</div>
+                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.keep.archived.logs.for.8ba7ccb")}</div>
                 <span style={{ flex: 1 }} />
                 <div className="set-field">
                   <input
@@ -15168,18 +15001,16 @@ function SettingsModal({
                     className="set-field-input"
                     onChange={(e) => localStorage.setItem("wuwei-transcript-days", String(Math.max(0, Math.floor(Number(e.target.value) || 0))))}
                   />
-                  <span className="set-field-unit">{lang === "en" ? "days" : "天"}</span>
+                  <span className="set-field-unit">{tr("ui.app.days.236e6f1")}</span>
                 </div>
               </div>
               <div className="app-set-hint" style={{ marginBottom: "16px" }}>
-                {lang === "en"
-                  ? "Every exchange is archived before context compaction, so you can review what happened before it was summarized (right-click a conversation → View full history). 0 = keep forever. Cleanup runs on next launch."
-                  : "每次上下文压缩前都会把原始交流归档，之后可回看被摘要前的完整对话（右键会话→查看完整历史）。填 0 = 永久保留。清理在下次启动时执行。"}
+                {tr("ui.app.every.exchange.is.archived.before.context.5149c51")}
               </div>
               {/* 自主推进看门狗：开着智能继续的会话卡住时，定时巡检自动朝总目标续。间隔+判停阈值可配 */}
-              <div className="app-set-group">{lang === "en" ? "Autonomous watchdog" : "自主推进 · 看门狗"}</div>
+              <div className="app-set-group">{tr("ui.app.autonomous.watchdog.4ffd18c")}</div>
               <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Stall timeout" : "卡住多久自动继续"}</div>
+                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.stall.timeout.a180ee9")}</div>
                 <span style={{ flex: 1 }} />
                 <div className="set-field">
                   <input
@@ -15189,16 +15020,14 @@ function SettingsModal({
                     onChange={(e) => { const v = Math.max(20, Number(e.target.value.replace(/[^\d]/g, "")) || 90); onWatchdog(watchdogInterval, v); }}
                     className="set-field-input"
                   />
-                  <span className="set-field-unit">{lang === "en" ? "sec" : "秒"}</span>
+                  <span className="set-field-unit">{tr("ui.app.sec.f3d066d")}</span>
                 </div>
               </div>
               <div className="app-set-hint" style={{ marginBottom: "12px" }}>
-                {lang === "en"
-                  ? "For chats with smart-continue on: if there's no activity for this long (stalled / dropped / throttled), it auto-continues toward the overall goal. Chats still marked running wait longer (+150s) to avoid cutting off long tools."
-                  : "开着「智能继续」的会话：若这么久没任何活动（断链/被节流/僵死），就自动朝总目标续上。仍在运行中的会多等一截（+150秒）避免打断长工具。"}
+                {tr("ui.app.for.chats.with.smart.continue.on.d92e0fa")}
               </div>
               <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{lang === "en" ? "Check interval" : "巡检间隔"}</div>
+                <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.check.interval.6640d02")}</div>
                 <span style={{ flex: 1 }} />
                 <div className="set-field">
                   <input
@@ -15208,21 +15037,18 @@ function SettingsModal({
                     onChange={(e) => { const v = Math.max(10, Number(e.target.value.replace(/[^\d]/g, "")) || 40); onWatchdog(v, watchdogIdle); }}
                     className="set-field-input"
                   />
-                  <span className="set-field-unit">{lang === "en" ? "sec" : "秒"}</span>
+                  <span className="set-field-unit">{tr("ui.app.sec.f3d066d")}</span>
                 </div>
               </div>
               <div className="app-set-hint" style={{ marginBottom: "16px" }}>
-                {lang === "en" ? "How often the watchdog checks for stalled chats." : "看门狗每隔多久巡检一次是否有会话卡住。"}
+                {tr("ui.app.how.often.the.watchdog.checks.for.885d9e4")}
               </div>
-              <div className="app-set-group">{t("set.g.effortGroup", "思考档位")}</div>
+              <div className="app-set-group">{t("set.g.effortGroup")}</div>
               <div className="app-set-row" style={{ cursor: "default" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{t("set.g.effortPicker", "在底栏显示档位选择器")}</div>
+                  <div className="app-set-label">{t("set.g.effortPicker")}</div>
                   <div className="app-set-hint">
-                    {t(
-                      "set.g.effortPickerHint",
-                      "开启后可在输入框下方随时切换「快 / 平衡 / 深入」。档位越高思考越深，也越慢越贵；任务老是跑到一半中断时，调低一档往往就能一次跑完。只对支持该参数的模型显示（Claude 4.5 以上、GPT-5 系）。",
-                    )}
+                    {t("set.g.effortPickerHint")}
                   </div>
                 </div>
                 <input
@@ -15233,12 +15059,12 @@ function SettingsModal({
                 />
               </div>
               <div className="app-set-hint" style={{ marginBottom: "16px" }} />
-              <div className="app-set-group">{t("set.g.remindGroup", "会话提醒")}</div>
+              <div className="app-set-group">{t("set.g.remindGroup")}</div>
               <div className="app-set-row" style={{ cursor: "default" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{t("set.g.autoDismiss", "提醒自动消失")}</div>
+                  <div className="app-set-label">{t("set.g.autoDismiss")}</div>
                   <div className="app-set-hint">
-                    {t("set.g.autoDismissHint", "别的会话「在等你选择」时右上角的提醒：开启则倒计时后自动消失；关闭则常驻，直到你点开处理或手动 ✕ 忽略。改动点「保存」后生效。")}
+                    {t("set.g.autoDismissHint")}
                   </div>
                 </div>
                 <input
@@ -15251,7 +15077,7 @@ function SettingsModal({
               {toastAutoDraft && (
                 <div className="app-set-row" style={{ cursor: "default", gap: "10px", marginBottom: "16px" }}>
                   <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>
-                    {t("set.g.countdown", "消失倒计时")}
+                    {t("set.g.countdown")}
                   </div>
                   <input
                     type="range"
@@ -15263,16 +15089,16 @@ function SettingsModal({
                     style={{ flex: 1 }}
                   />
                   <div className="app-set-hint" style={{ minWidth: 44, textAlign: "right" }}>
-                    {t("set.g.seconds", "{n} 秒").replace("{n}", String(toastSecDraft))}
+                    {t("set.g.seconds").replace("{n}", String(toastSecDraft))}
                   </div>
                 </div>
               )}
-              <div className="app-set-group">{t("set.g.taskResumeGroup", "任务恢复")}</div>
+              <div className="app-set-group">{t("set.g.taskResumeGroup")}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{t("set.g.taskResume", "检测中断的任务并提示恢复")}</div>
+                  <div className="app-set-label">{t("set.g.taskResume")}</div>
                   <div className="app-set-hint">
-                    {t("set.g.taskResumeHint", "打开时若发现被强制关闭、或明显干到一半就退出的任务，在输入框上方提示是否让 AI 接着继续。关闭则不再提示。")}
+                    {t("set.g.taskResumeHint")}
                   </div>
                 </div>
                 <input
@@ -15286,14 +15112,12 @@ function SettingsModal({
                 />
               </div>
 
-              <div className="app-set-group">{lang === "en" ? "Claude subscription auth" : "Claude 订阅授权"}</div>
+              <div className="app-set-group">{tr("ui.app.claude.subscription.auth.b4dbb3e")}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Auto-refresh token before expiry" : "令牌过期时自动续期"}</div>
+                  <div className="app-set-label">{tr("ui.app.auto.refresh.token.before.expiry.ddef7cc")}</div>
                   <div className="app-set-hint">
-                    {lang === "en"
-                      ? "Refreshes the Claude subscription token with its refresh token before it expires, so you don't have to re-authorize in every chat. Note: shares one login with the local claude CLI, so refreshing may log the CLI out — turn off if that bothers you."
-                      : "Claude 订阅令牌快到期时用 refreshToken 自动换新，免得每个对话反复重新授权。注意：与本机 claude 命令行共用同一登录，续期可能顶掉命令行的登录态——若你也在终端用 claude 且介意，就关掉。"}
+                    {tr("ui.app.refreshes.the.claude.subscription.token.with.8d342df")}
                   </div>
                 </div>
                 <input
@@ -15304,14 +15128,12 @@ function SettingsModal({
                 />
               </div>
 
-              <div className="app-set-group">{lang === "en" ? "Privacy & diagnostics" : "隐私与诊断"}</div>
+              <div className="app-set-group">{tr("ui.app.privacy.diagnostics.76c385c")}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Send diagnostics to improve the app" : "发送诊断信息用于改善体验"}</div>
+                  <div className="app-set-label">{tr("ui.app.send.diagnostics.to.improve.the.app.5b78fc6")}</div>
                   <div className="app-set-hint">
-                    {lang === "en"
-                      ? "Sends anonymous error and usage diagnostics (no conversation content) to help us find and fix problems. You can turn this off anytime."
-                      : "上报匿名的报错与使用诊断（不含对话内容），帮助我们发现并修复问题。可随时关闭。"}
+                    {tr("ui.app.sends.anonymous.error.and.usage.diagnostics.7db1b68")}
                   </div>
                 </div>
                 <input
@@ -15368,29 +15190,29 @@ function SettingsModal({
                 {t("set.d.outputHint")}
               </div>
 
-              <div className="app-set-group">{lang === "en" ? "Execution" : "运行模式"}</div>
+              <div className="app-set-group">{tr("ui.app.execution.86d3b21")}</div>
               <div className="app-set-hint" style={{ marginBottom: "10px" }}>
-                {lang === "en" ? "Ordinary tools are allowed automatically by default. Smart-continue is off by default. Changes apply to this chat and become the default for new chats." : "普通工具默认自动允许，智能继续默认关闭。修改立即应用于当前对话，并作为新建对话的默认设置。"}
+                {tr("ui.app.ordinary.tools.are.allowed.automatically.by.59705ad")}
               </div>
               <label className="app-set-row" style={{ marginBottom: "6px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Auto" : "自动"}</div>
+                  <div className="app-set-label">{tr("mode.auto")}</div>
                   <div className="app-set-hint">
-                    {lang === "en" ? "Approve tool permissions automatically. When off, tool permissions wait for your approval." : "自动放行工具权限；关闭后，需要你确认工具权限。"}
+                    {tr("ui.app.approve.tool.permissions.automatically.when.off.8e3d147")}
                   </div>
                 </div>
-                <input type="checkbox" className="app-set-toggle" aria-label={lang === "en" ? "Auto" : "自动"}
+                <input type="checkbox" className="app-set-toggle" aria-label={tr("mode.auto")}
                   checked={executionMode !== "manual"}
                   onChange={(e) => onExecutionMode(e.target.checked ? "auto" : "manual")} />
               </label>
               <label className="app-set-row" style={{ marginBottom: "10px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Smart-continue" : "智能继续"}</div>
+                  <div className="app-set-label">{tr("ui.app.smart.continue.269f877")}</div>
                   <div className="app-set-hint">
-                    {lang === "en" ? "Keep advancing after each turn. Enabling this also enables Auto." : "一轮结束后继续推进任务；开启时同时开启自动。"}
+                    {tr("ui.app.keep.advancing.after.each.turn.enabling.35578f8")}
                   </div>
                 </div>
-                <input type="checkbox" className="app-set-toggle" aria-label={lang === "en" ? "Smart-continue" : "智能继续"}
+                <input type="checkbox" className="app-set-toggle" aria-label={tr("ui.app.smart.continue.269f877")}
                   checked={executionMode === "cont"}
                   onChange={(e) => onExecutionMode(e.target.checked ? "cont" : "auto")} />
               </label>
@@ -15399,12 +15221,12 @@ function SettingsModal({
               <div style={{ height: 8 }} />
               {/* 红线识别方式：智能识别(LLM判是否真危险) / 关键词匹配(选项含词即停) */}
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "2px" }}>
-                <div className="app-set-label">{lang === "en" ? "Redline detection" : "红线识别方式"}</div>
+                <div className="app-set-label">{tr("ui.app.redline.detection.fd7651a")}</div>
               </div>
               <div className="theme-pick" style={{ marginBottom: "6px" }}>
                 {[
-                  { id: "smart", label: lang === "en" ? "Smart (AI)" : "智能识别" },
-                  { id: "keyword", label: lang === "en" ? "Keywords" : "关键词匹配" },
+                  { id: "smart", label: tr("ui.app.smart.ai.617b5da") },
+                  { id: "keyword", label: tr("ui.app.keywords.e823fc2") },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -15420,9 +15242,7 @@ function SettingsModal({
                 ))}
               </div>
               <div className="app-set-hint" style={{ marginBottom: "12px" }}>
-                {lang === "en"
-                  ? "Keywords: stop whenever an option text contains a risky word (fast, may over-trigger). Smart: an AI judges whether auto-deciding would really execute a dangerous action (fewer false stops, one quick call per question)."
-                  : "关键词匹配：选项文字里出现危险词就停（快，但偶尔误伤）。智能识别：让 AI 判断「自主选下去会不会真触发危险动作」（更少误停，每题多一次快速判定）。"}
+                {tr("ui.app.keywords.stop.whenever.an.option.text.d60c433")}
               </div>
               <StopRulesSettings lang={lang} />
               </>}
@@ -15431,14 +15251,12 @@ function SettingsModal({
               {/* AGI 板块(实验性)：暂时隐藏（false 包裹，保留代码以便日后恢复） */}
               {false && (
                 <>
-                  <div className="app-set-group">{lang === "en" ? "AGI (experimental)" : "AGI 板块（实验性）"}</div>
+                  <div className="app-set-group">{tr("ui.app.agi.experimental.5797589")}</div>
                   <div className="app-set-row" style={{ cursor: "default", marginBottom: "6px" }}>
                     <div className="app-set-text">
-                      <div className="app-set-label">{lang === "en" ? "Show AGI section (Digital Baby) in the sidebar" : "在侧边栏显示 AGI 板块（数字婴儿）"}</div>
+                      <div className="app-set-label">{tr("ui.app.show.agi.section.digital.baby.in.0c3f45a")}</div>
                       <div className="app-set-hint">
-                        {lang === "en"
-                          ? "A curiosity-driven digital baby that self-learns, grows and chats. Needs a local Python backend — set agi.babyDir & agi.python in ~/.wuwei/config.json."
-                          : "好奇心驱动、自主学习成长并能聊天的数字婴儿。依赖本地 Python 后端——需在 ~/.wuwei/config.json 配 agi.babyDir 与 agi.python。"}
+                        {tr("ui.app.curiosity.driven.digital.baby.that.self.d3cb0d6")}
                       </div>
                     </div>
                     <input
@@ -15460,14 +15278,12 @@ function SettingsModal({
           {/* ── 手机端远程：独立菜单（原在通用页内，抽出单列）。允许手机用本机(含 Claude Code 订阅)执行 ── */}
           {tab === "remote" && (
             <>
-              <div className="app-set-group">{lang === "en" ? "Mobile remote" : "手机端远程"}</div>
+              <div className="app-set-group">{tr("ui.app.mobile.remote.0b45b14")}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: remoteOn ? "8px" : "16px" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{lang === "en" ? "Allow mobile app to use this computer" : "允许手机端远程调用本机"}</div>
+                  <div className="app-set-label">{tr("ui.app.allow.mobile.app.to.use.this.91ae461")}</div>
                   <div className="app-set-hint">
-                    {lang === "en"
-                      ? "When on, this computer stays connected so your phone can run tasks here (using this machine, incl. its Claude Code subscription). Off by default — no connection, no trace."
-                      : "开启后本机会保持在线，手机端可选择用这台电脑执行任务（用本机，含已登录的 Claude Code 订阅）。默认关闭——不开就不连、不占资源。"}
+                    {tr("ui.app.when.on.this.computer.stays.connected.0c793d4")}
                   </div>
                 </div>
                 <input
@@ -15484,11 +15300,9 @@ function SettingsModal({
                 <>
                   <div className="app-set-row" style={{ cursor: "default", marginBottom: "8px", paddingLeft: "12px" }}>
                     <div className="app-set-text">
-                      <div className="app-set-label">{lang === "en" ? "Share this machine’s subscription models" : "同步本机订阅版模型给手机"}</div>
+                      <div className="app-set-label">{tr("ui.app.share.this.machine.subscription.models.8ff93f5")}</div>
                       <div className="app-set-hint">
-                        {lang === "en"
-                          ? "Let the phone use this machine’s Claude Code / Codex subscription. Off = remote run allowed but local subscription not exposed."
-                          : "让手机能用本机的 Claude Code / Codex 订阅。不开=仍可远程执行，但不把本地订阅暴露给手机。"}
+                        {tr("ui.app.let.the.phone.use.this.machine.11eca90")}
                       </div>
                     </div>
                     <input
@@ -15503,13 +15317,13 @@ function SettingsModal({
                   </div>
                   <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px", paddingLeft: "12px" }}>
                     <div className="app-set-text">
-                      <div className="app-set-label">{lang === "en" ? "Device name (shown on phone)" : "设备名（手机端显示）"}</div>
+                      <div className="app-set-label">{tr("ui.app.device.name.shown.on.phone.753f5f2")}</div>
                     </div>
                     <input
                       type="text"
                       className="set-field-input"
                       style={{ width: "160px" }}
-                      placeholder={lang === "en" ? "e.g. My MacBook" : "如 我的MacBook"}
+                      placeholder={tr("ui.app.my.macbook.6d1cd08")}
                       value={remoteDeviceName}
                       onChange={(e) => setRemoteDeviceName(e.target.value)}
                       onBlur={() => setAppToggle({ remoteDeviceName: remoteDeviceName.trim() } as any)}
@@ -15551,12 +15365,12 @@ function SettingsModal({
                 </button>
                 {preset.custom && (
                   <button type="button" className="station-edit" onClick={() => openEditStation()}>
-                    {lang === "en" ? "Edit" : "编辑"}
+                    {tr("set.st.editShort")}
                   </button>
                 )}
                 {preset.custom && (
                   <button type="button" className="station-del" onClick={() => deleteStation(pid)}>
-                    {t("set.m.delete")}{lang === "en" ? ` “${pLabel(preset, lang).replace(/（中转）$/, "")}”` : `「${preset.label.replace(/（中转）$/, "")}」`}
+                    {t("set.m.delete")}{tr("ui.app.text.0f67eef", { v0: (lang !== "zh" ? undefined : preset.label.replace(/（中转）$/, "")), v1: (lang !== "zh" ? pLabel(preset, lang).replace(/（中转）$/, "") : undefined) })}
                   </button>
                 )}
               </div>
@@ -15576,7 +15390,7 @@ function SettingsModal({
                       }
                     }}
                   >
-                    {!model && <option value="" disabled>{lang === 'en' ? 'Choose a model' : '请选择模型'}</option>}
+                    {!model && <option value="" disabled>{tr("ui.app.choose.model.0d10839")}</option>}
                     {modelOptions.map((m) => (
                       <option key={m} value={m}>
                         {m}
@@ -15597,18 +15411,18 @@ function SettingsModal({
 
               {/* 模型列表管理：手动加/删该平台的模型(自定义加的可删，预设自带的不可删) */}
               <div className="model-list-mgr">
-                <div className="mlm-head">{t("set.m.modelList", "该平台模型列表")}</div>
+                <div className="mlm-head">{t("set.m.modelList")}</div>
                 <div className="mlm-chips">
-                  {modelOptions.length === 0 && <span className="mlm-empty">{t("set.m.noModels", "还没有模型，下面加一个")}</span>}
+                  {modelOptions.length === 0 && <span className="mlm-empty">{t("set.m.noModels")}</span>}
                   {modelOptions.map((m) => {
                     const isCustom = (creds[pid]?.customModels || []).includes(m);
                     return (
                       <span key={m} className={"mlm-chip" + (m === model ? " on" : "")}>
-                        <button type="button" className="mlm-pick" title={t("set.m.pickTitle", "选用该模型")} onClick={() => { if (preset.hosted) { onHostedModels(pid); return; } setModel(m); setCustomModel(false); }}>
+                        <button type="button" className="mlm-pick" title={t("set.m.pickTitle")} onClick={() => { if (preset.hosted) { onHostedModels(pid); return; } setModel(m); setCustomModel(false); }}>
                           {m}
                         </button>
                         {isCustom && (
-                          <button type="button" className="mlm-del" title={t("set.m.delTitle", "从列表删除")} onClick={() => delCustomModel(m)}>
+                          <button type="button" className="mlm-del" title={t("set.m.delTitle")} onClick={() => delCustomModel(m)}>
                             ✕
                           </button>
                         )}
@@ -15623,10 +15437,10 @@ function SettingsModal({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); addCustomModel(newModelName); setNewModelName(""); }
                     }}
-                    placeholder={t("set.m.addModelPlaceholder", "加模型名，如 qwen2.5-vl-72b-instruct")}
+                    placeholder={t("set.m.addModelPlaceholder")}
                   />
                   <button type="button" onClick={() => { addCustomModel(newModelName); setNewModelName(""); }}>
-                    ＋ {t("set.m.add", "添加")}
+                    ＋ {t("set.m.add")}
                   </button>
                 </div>
               </div>
@@ -15634,9 +15448,9 @@ function SettingsModal({
               {/* 该模型能力开关(按【模型】各存各的，切模型即时切换；保存后生效) */}
               <div className="model-caps">
                 <div className="model-caps-head">
-                  {t("set.m.capsFor", "能力开关 · 针对模型")} <b>{model || t("set.m.noneSel", "（未选）")}</b>
+                  {t("set.m.capsFor")} <b>{model || t("set.m.noneSel")}</b>
                 </div>
-                <label className="cap-row" title={t("set.m.toolcallTitle", "关掉后请求不带 tools 参数——自建 vLLM/llama-server 未开工具支持时(一带 tools 就报错)请关掉；关掉后该模型只能纯对话、不能调工具/跑 agent")}>
+                <label className="cap-row" title={t("set.m.toolcallTitle")}>
                   <input
                     type="checkbox"
                     checked={!curCaps.noTools}
@@ -15644,11 +15458,11 @@ function SettingsModal({
                     onChange={(e) => setModelCap({ noTools: !e.target.checked })}
                   />
                   <span className="cap-text">
-                    <b>{t("set.m.toolcall", "工具调用 / Agent")}</b>
-                    <em>{t("set.m.toolcallHint", "关掉=请求不带 tools 参数（自建端点不支持工具调用时关掉，否则报错；关掉后只能纯对话）")}</em>
+                    <b>{t("set.m.toolcall")}</b>
+                    <em>{t("set.m.toolcallHint")}</em>
                   </span>
                 </label>
-                <label className="cap-row" title={t("set.m.visionTitle", "模型名含 vl/vision/omni 等会自动按多模态处理；名字不含但确实能看图的模型，在这里手动开启")}>
+                <label className="cap-row" title={t("set.m.visionTitle")}>
                   <input
                     type="checkbox"
                     checked={!!curCaps.vision}
@@ -15656,8 +15470,8 @@ function SettingsModal({
                     onChange={(e) => setModelCap({ vision: e.target.checked })}
                   />
                   <span className="cap-text">
-                    <b>{t("set.m.vision", "看图 / 视觉")}</b>
-                    <em>{t("set.m.visionHint", "强制按多模态处理并发送真图片；纯文本模型别开（会 400）。名字含 vl/vision 的已自动识别")}</em>
+                    <b>{t("set.m.vision")}</b>
+                    <em>{t("set.m.visionHint")}</em>
                   </span>
                 </label>
               </div>
@@ -15666,7 +15480,7 @@ function SettingsModal({
                 <div className="key-guide">
                   {t("set.m.noKey")}
                   <a onClick={startGetKey}>
-                    {lang === "zh" ? `去 ${preset.label} 官网获取（复制后自动填入验证）↗` : `Get one from ${pLabel(preset, lang)} ↗`}
+                    {tr("ui.app.get.one.from.7e114ee", { p0: (!(lang === "zh") ? pLabel(preset, lang) : preset.label) })}
                   </a>
                   <span className="key-steps">{t("set.m.getKeySteps")}</span>
                   {(sKeyWaiting || sKeyMsg) && (
@@ -15725,9 +15539,7 @@ function SettingsModal({
                         {t("set.m.authBrowser")}
                       </button>
                       <p className="s-note">
-                        {lang === "zh"
-                          ? "用系统默认浏览器打开授权页，可直接选已登录的 Google 账号，登录并点“同意”后，复制授权码回来完成（走订阅额度，不额外计费）。"
-                          : "Opens the authorization page in your default browser; pick your signed-in Google account, click “Allow”, then copy the code back (uses your subscription quota, no extra charge)."}
+                        {tr("ui.app.opens.the.authorization.page.in.your.9ff932a")}
                         <a className="link-inline" onClick={() => !claudeBusy && claudeLoginWindow()}>
                           {t("set.m.useInApp")}
                         </a>
@@ -15752,7 +15564,7 @@ function SettingsModal({
                           type="button"
                           className="eye-btn clr"
                           onClick={() => setOauthToken("")}
-                          title={t("set.m.clearToken", "清空授权 Token（过期后清掉，改用下方 API Key；点保存后生效）")}
+                          title={t("set.m.clearToken")}
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M5 7h14M10 7V5.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V7M7 7l.8 11a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4L18 7" />
@@ -15760,7 +15572,7 @@ function SettingsModal({
                         </button>
                       </div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                        {lang === "en" ? "When the auth token expires, click ✕ on the right to clear and \"Save\", then switch to the API Key below." : "授权 Token 过期后点右侧 ✕ 清空并「保存」，即可改用下方 API Key。"}
+                        {tr("ui.app.when.the.auth.token.expires.click.e48afbd")}
                       </div>
                     </label>
                   ) : null}
@@ -15778,7 +15590,7 @@ function SettingsModal({
                       try {
                         const ok = await window.wuwei.codexLogin();
                         if (ok) await persist({ close: true });
-                        else alert(lang === "zh" ? "Codex 授权未完成（取消/超时/端口 1455 被占）。" : "Codex authorization failed (canceled/timeout/port 1455 busy).");
+                        else alert(tr("ui.app.codex.authorization.failed.canceled.timeout.port.3ab24e1"));
                       } finally {
                         setSCodexBusy(false);
                       }
@@ -15787,9 +15599,7 @@ function SettingsModal({
                     {sCodexBusy ? t("set.m.codexAuthing") : t("set.m.codexAuth")}
                   </button>
                   <p className="s-note">
-                    {lang === "zh"
-                      ? "用系统默认浏览器打开 ChatGPT 登录（走本地回环，无需安装 codex CLI）。登录并同意后自动回来完成，授权写入本机 ~/.codex，可直接对话（走订阅额度）。"
-                      : "Opens ChatGPT login in your default browser (local loopback, no codex CLI needed). After you sign in and allow, it completes automatically and writes to ~/.codex — ready to chat (uses your subscription quota)."}
+                    {tr("ui.app.opens.chatgpt.login.in.your.default.0564278")}
                   </p>
                 </>
               )}
@@ -15808,7 +15618,7 @@ function SettingsModal({
                       type="button"
                       className="eye-btn"
                       onClick={() => setShowKey((v) => !v)}
-                      title={showKey ? (lang === "en" ? "Hide" : "隐藏") : (lang === "en" ? "Show" : "显示")}
+                      title={showKey ? (tr("set.m.hide")) : (tr("set.m.show"))}
                     >
                       <EyeIcon off={showKey} />
                     </button>
@@ -15847,7 +15657,7 @@ function SettingsModal({
                     setShowAddStation(true);
                   }}
                 >
-                  {t("set.st.addBtn", "＋ 添加供应商 / 中转站")}
+                  {t("set.st.addBtn")}
                 </button>
               </div>
               <div className="prov-list">
@@ -15889,19 +15699,19 @@ function SettingsModal({
                       <button
                         type="button"
                         className="prov-mini"
-                        title={p.custom ? t("set.st.editBtnCustom", "编辑名称 / 端点 / 类型") : t("set.st.renameBtn", "重命名该平台")}
+                        title={p.custom ? t("set.st.editBtnCustom") : t("set.st.renameBtn")}
                         onClick={() => openEditStation(p.id)}
                       >
-                        {t("set.st.editShort", "编辑")}
+                        {t("set.st.editShort")}
                       </button>
                       <button
                         type="button"
                         className="prov-mini del"
-                        title={p.custom ? t("set.st.delCustom", "删除该自定义供应商") : t("set.st.delBuiltin", "删除该平台(可一键恢复默认)")}
+                        title={p.custom ? t("set.st.delCustom") : t("set.st.delBuiltin")}
                         disabled={orderedPresets.length <= 1}
                         onClick={() => deleteProvider(p.id)}
                       >
-                        {t("set.st.delShort", "删除")}
+                        {t("set.st.delShort")}
                       </button>
                       <button
                         type="button"
@@ -15918,9 +15728,9 @@ function SettingsModal({
               </div>
               {removed.length > 0 && (
                 <div className="prov-restore">
-                  {lang === "en" ? `${removed.length} default provider(s) removed` : `已删除 ${removed.length} 个默认平台`}
+                  {tr("ui.app.default.provider.removed.2b40a1f", { p0: removed.length })}
                   <button type="button" className="link-inline" onClick={restoreRemovedProviders}>
-                    {lang === "en" ? "Restore defaults" : "恢复默认平台"}
+                    {tr("ui.app.restore.defaults.e3f4b7e")}
                   </button>
                 </div>
               )}
@@ -15946,17 +15756,17 @@ function SettingsModal({
                 />
               </label>
               <p className="s-note pp-fixed">
-                {lang === "zh" ? "发给模型的第一段指令。" : "The first instruction sent to the model. "}
+                {tr("ui.app.the.first.instruction.sent.to.the.bd7905f")}
                 <code>{"{model}"}</code>
-                {lang === "zh" ? " = 当前型号，" : " = current model, "}
+                {tr("ui.app.current.model.a93eca6")}
                 <code>{"{cwd}"}</code>
-                {lang === "zh" ? " = 工作目录，会自动替换。" : " = working dir; replaced automatically. "}
+                {tr("ui.app.working.dir.replaced.automatically.70dcd75")}
                 {sysPromptTouched && (
                   <button
                     type="button"
                     className="link-inline"
                     onClick={() => {
-                      setSysPrompt(lang === "en" ? sysPromptDefaultEn : sysPromptDefault);
+                      setSysPrompt(tr("agent.defaultPrompt", {}, lang));
                       setSysPromptTouched(false);
                     }}
                   >
@@ -15978,14 +15788,12 @@ function SettingsModal({
                   }}
                 />
                 <span>
-                  {lang === "zh"
-                    ? `为当前平台「${preset.label}」单独设置（覆盖全局）`
-                    : `Override for “${pLabel(preset, lang)}” (this provider only)`}
+                  {tr("ui.app.override.for.this.provider.only.ec7818d", { p0: (!(lang === "zh") ? pLabel(preset, lang) : preset.label) })}
                 </span>
               </label>
               {platPromptOn && (
                 <label className="field pp-grow">
-                  <span>{lang === "en" ? `“${pLabel(preset, lang)}” ` : `「${preset.label}」`}{t("set.pr.overrideLabelSuffix")}</span>
+                  <span>{tr("ui.app.text.113068a", { v0: (lang !== "zh" ? undefined : preset.label), v1: (lang !== "zh" ? pLabel(preset, lang) : undefined) })}{t("set.pr.overrideLabelSuffix")}</span>
                   <textarea
                     className="sysprompt-area pp-fill"
                     value={platPrompt}
@@ -16013,10 +15821,8 @@ function SettingsModal({
                 />
               </label>
               <p className="s-note pp-fixed">
-                {lang === "zh"
-                  ? "你对模型说「记住…」时它会自动往这里追加；也可在此手动增删。保存后下一条消息即生效。存于 "
-                  : "When you tell the model “remember…”, it appends here; you can also edit manually. Takes effect on the next message. Stored at "}
-                <code>~/.wuwei/memory.md</code>{lang === "zh" ? "。" : "."}
+                {tr("ui.app.when.you.tell.the.model.remember.ac61c00")}
+                <code>~/.wuwei/memory.md</code>{tr("ui.app.text.76b3731")}
               </p>
             </div>
           )}
@@ -16063,16 +15869,16 @@ function SettingsModal({
                           color: brainView === v ? "#fff" : "var(--text)",
                         }}
                       >
-                        {v === "graph" ? t("set.brain.viewGraph", "可视化") : t("set.brain.viewPrompt", "提示词")}
+                        {v === "graph" ? t("set.brain.viewGraph") : t("set.brain.viewPrompt")}
                       </button>
                     ))}
                   </div>
                   {/* 总开关：关掉后不注入脑网络说明、不再提供 brain_* 工具 */}
                   <div className="app-set-row" style={{ order: -2, cursor: "default" }}>
                     <div className="app-set-text">
-                      <div className="app-set-label">{t("set.brain.enableTitle", "启用脑网络")}</div>
+                      <div className="app-set-label">{t("set.brain.enableTitle")}</div>
                       <div className="app-set-hint">
-                        {t("set.brain.enableHint", "开：给模型注入脑网络说明并提供 brain_recall / brain_learn 等工具。关：完全停用（下面的概念/文档仍在，随时可重新开启）。")}
+                        {t("set.brain.enableHint")}
                       </div>
                     </div>
                     <input
@@ -16088,9 +15894,9 @@ function SettingsModal({
                   {/* 子开关：recall 是否连带扫描『相关文档』(文档冷存储) */}
                   <div className="app-set-row" style={{ order: -1, cursor: "default", opacity: brainOn ? 1 : 0.5 }}>
                     <div className="app-set-text">
-                      <div className="app-set-label">{t("set.brain.scanDocsTitle", "检索时扫描相关文档")}</div>
+                      <div className="app-set-label">{t("set.brain.scanDocsTitle")}</div>
                       <div className="app-set-hint">
-                        {t("set.brain.scanDocsHint", "开：brain_recall 除概念子图外，还返回知识宫殿等文档库的相关原文片段。关：只返回概念子图、不扫文档。")}
+                        {t("set.brain.scanDocsHint")}
                       </div>
                     </div>
                     <input
@@ -16107,7 +15913,7 @@ function SettingsModal({
                   {brainView === "prompt" ? (
                     <>
                       <label className="field pp-grow">
-                        <span>{t("set.brain.promptLabel", "脑网络说明提示词")} {brainPromptTouched ? t("set.pr.customized", "（已自定义）") : t("set.pr.default", "（默认）")}</span>
+                        <span>{t("set.brain.promptLabel")} {brainPromptTouched ? t("set.pr.customized") : t("set.pr.default")}</span>
                         <textarea
                           className="sysprompt-area pp-fill"
                           value={brainPrompt}
@@ -16116,22 +15922,22 @@ function SettingsModal({
                             setBrainPromptTouched(true);
                           }}
                           onBlur={() => window.wuwei.setBrainPrompt(brainPromptTouched ? brainPrompt : null)}
-                          placeholder={t("set.brain.promptPlaceholder", "（留空 = 用默认脑网络说明）")}
+                          placeholder={t("set.brain.promptPlaceholder")}
                         />
                       </label>
                       <p className="s-note pp-fixed">
-                        {t("set.brain.promptNote", "这段会拼进系统提示词，告诉模型如何使用本地脑网络（brain_recall/brain_learn/brain_link）。改完失焦即保存并热更当前所有会话；「已沉淀的概念」目录会自动追加在其后。")}
+                        {t("set.brain.promptNote")}
                         {brainPromptTouched && (
                           <button
                             type="button"
                             className="link-inline"
                             onClick={() => {
-                              setBrainPrompt(lang === "en" ? brainPromptDefaultEn : brainPromptDefault);
+                              setBrainPrompt(tr("agent.brainNote", {}, lang));
                               setBrainPromptTouched(false);
                               window.wuwei.setBrainPrompt(null);
                             }}
                           >
-                            {t("set.pr.restore", "恢复默认")}
+                            {t("set.pr.restore")}
                           </button>
                         )}
                       </p>
@@ -16163,7 +15969,7 @@ function SettingsModal({
                     </button>
                     {brainWarmMsg && (
                       <span className="s-note" style={{ margin: 0 }}>
-                        {brainWarmMsg}
+                        {localizeStoredText(brainWarmMsg, getCurrentLanguage())}
                       </span>
                     )}
                   </div>
@@ -16193,7 +15999,7 @@ function SettingsModal({
                       <button
                         type="button"
                         onClick={() => setBrainRecallOut("")}
-                        title={t("set.brain.closeResult", "关闭结果")}
+                        title={t("set.brain.closeResult")}
                         style={{ position: "absolute", top: 4, right: 4, zIndex: 1, width: 20, height: 20, lineHeight: "18px", textAlign: "center", padding: 0, borderRadius: 4, border: "none", background: "rgba(127,127,127,0.15)", cursor: "pointer", fontSize: 13 }}
                       >
                         ✕
@@ -16222,8 +16028,8 @@ function SettingsModal({
                     {brainLeftOpen ? (
                     <div style={{ width: 220, flex: "0 0 220px", display: "flex", flexDirection: "column", gap: 6, minHeight: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span className="s-note" style={{ margin: 0, flex: 1, fontWeight: 600 }}>{t("set.brain.conceptList", "概念列表")}</span>
-                        <button type="button" className="brain-col-btn" title={t("set.brain.collapseList", "收起概念列表")} onClick={() => setBrainLeftOpen(false)}>
+                        <span className="s-note" style={{ margin: 0, flex: 1, fontWeight: 600 }}>{t("set.brain.conceptList")}</span>
+                        <button type="button" className="brain-col-btn" title={t("set.brain.collapseList")} onClick={() => setBrainLeftOpen(false)}>
                           ◀
                         </button>
                       </div>
@@ -16240,7 +16046,7 @@ function SettingsModal({
                             id: "",
                             name: "",
                             aliases: [],
-                            type: lang === "en" ? "Concept" : "概念",
+                            type: tr("ui.app.concept.86125d3"),
                             summary: "",
                             attrs: {},
                             weight: 1,
@@ -16282,11 +16088,11 @@ function SettingsModal({
                       <button
                         type="button"
                         className="brain-col-rail"
-                        title={t("set.brain.expandList", "展开概念列表")}
+                        title={t("set.brain.expandList")}
                         onClick={() => setBrainLeftOpen(true)}
                       >
                         <span className="brain-rail-arrow">▶</span>
-                        <span className="brain-rail-label">{t("set.brain.conceptList", "概念列表")}</span>
+                        <span className="brain-rail-label">{t("set.brain.conceptList")}</span>
                       </button>
                     )}
 
@@ -16322,7 +16128,7 @@ function SettingsModal({
                         <button
                           type="button"
                           className="brain-col-btn"
-                          title={t("set.brain.closeDetail", "关闭详情（取消选中）")}
+                          title={t("set.brain.closeDetail")}
                           onClick={() => {
                             setBrainDraft(null);
                             setBrainSel(null);
@@ -16334,12 +16140,12 @@ function SettingsModal({
                         <button
                           type="button"
                           className="brain-col-rail"
-                          title={t("set.brain.expandDetail", "展开详情")}
+                          title={t("set.brain.expandDetail")}
                           onClick={() => setBrainRightOpen(true)}
                           style={{ flex: "1 1 auto", width: "auto" }}
                         >
                           <span className="brain-rail-arrow">◀</span>
-                          <span className="brain-rail-label">{t("set.brain.detail", "概念详情")}</span>
+                          <span className="brain-rail-label">{t("set.brain.detail")}</span>
                         </button>
                       </div>
                     )}
@@ -16347,14 +16153,14 @@ function SettingsModal({
                       <div style={{ width: 300, flex: "0 0 300px", minHeight: 0, overflow: "auto" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span className="s-note" style={{ margin: 0, flex: 1, fontWeight: 600 }}>{t("set.brain.detail", "概念详情")}</span>
-                            <button type="button" className="brain-col-btn" title={t("set.brain.collapseDetail", "收起详情")} onClick={() => setBrainRightOpen(false)}>
+                            <span className="s-note" style={{ margin: 0, flex: 1, fontWeight: 600 }}>{t("set.brain.detail")}</span>
+                            <button type="button" className="brain-col-btn" title={t("set.brain.collapseDetail")} onClick={() => setBrainRightOpen(false)}>
                               ▶
                             </button>
                             <button
                               type="button"
                               className="brain-col-btn"
-                              title={t("set.brain.closeDetail", "关闭详情（取消选中）")}
+                              title={t("set.brain.closeDetail")}
                               onClick={() => {
                                 setBrainDraft(null);
                                 setBrainSel(null);
@@ -16554,7 +16360,7 @@ function SettingsModal({
                     </div>
                     {docProg && (
                       <span className="s-note" style={{ margin: 0 }}>
-                        {docProg}
+                        {localizeStoredText(docProg, getCurrentLanguage())}
                       </span>
                     )}
                     {/* 概念抽取：用当前对话模型(k3)从已索引文档批量抽概念+关系填进 graph。按文档级调用，省 token；可停。 */}
@@ -16781,7 +16587,7 @@ function SettingsModal({
                                 <div
                                   className="mcp-cat-info clk"
                                   onClick={() => setMcpOnlineOpen(open ? null : key)}
-                                  title={t("set.mcp.clickDetail", "点击看详情")}
+                                  title={t("set.mcp.clickDetail")}
                                 >
                                   <span className="mcp-cat-label">
                                     <code>{r.name}</code>
@@ -16844,7 +16650,7 @@ function SettingsModal({
 
                   <div className="mcp-foot">
                     <button type="button" className="link-inline" onClick={() => setMcpRawEdit((v) => !v)}>
-                      {mcpRawEdit ? t("set.mcp.collapseJson", "收起 JSON") : t("set.mcp.advJson", "高级：编辑 JSON")}
+                      {mcpRawEdit ? t("set.mcp.collapseJson") : t("set.mcp.advJson")}
                     </button>
                     <span className="mcp-path">~/.wuwei/mcp.json</span>
                   </div>
@@ -16857,7 +16663,7 @@ function SettingsModal({
                           setMcpConfig(e.target.value);
                           mcpTouchedRef.current = true;
                         }}
-                        placeholder={lang === "en" ? '{ "mcpServers": { "name": { "command": "npx", "args": ["-y", "..."] } } }' : '{ "mcpServers": { "名称": { "command": "npx", "args": ["-y", "..."] } } }'}
+                        placeholder={tr("ui.app.mcpservers.name.command.npx.args.4b22ed1")}
                       />
                       <button
                         type="button"
@@ -16868,7 +16674,7 @@ function SettingsModal({
                           setTimeout(reloadMcpStatus, 2800);
                         }}
                       >
-                        {t("set.mcp.saveReconnect", "保存并重连")}
+                        {t("set.mcp.saveReconnect")}
                       </button>
                     </>
                   )}
@@ -16917,8 +16723,7 @@ function SettingsModal({
                         className={"tv-btn" + (toolView === "json" ? " on" : "")}
                         onClick={() => setToolView("json")}
                       >
-                        JSON
-                      </button>
+                        {tr("set.tools.json")}</button>
                     </div>
                   </div>
 
@@ -16985,9 +16790,9 @@ function SettingsModal({
 
               <div className="app-set-row" style={{ cursor: "default" }}>
                 <div className="app-set-text">
-                  <div className="app-set-label">{t("set.sec.detectTitle", "发送前检测疑似新密钥")}</div>
+                  <div className="app-set-label">{t("set.sec.detectTitle")}</div>
                   <div className="app-set-hint">
-                    {t("set.sec.detectHint", "开：发送前扫描文本、发现疑似新密钥就弹窗让你确认是否入库。关：不再扫描拦截——传很长的临时 token 时不会被切成一堆弹窗。（已入库密钥仍会自动脱敏，不受此开关影响。）")}
+                    {t("set.sec.detectHint")}
                   </div>
                 </div>
                 <input
@@ -17119,19 +16924,19 @@ function SettingsModal({
                         <div className="sec-edit-fields">
                           <input
                             className="sec-in"
-                            placeholder={t("set.sec.editName", "名称")}
+                            placeholder={t("set.sec.editName")}
                             value={secEditDraft.name}
                             onChange={(e) => setSecEditDraft((d) => ({ ...d, name: e.target.value }))}
                           />
                           <input
                             className="sec-in"
-                            placeholder={t("set.sec.editEnvPlaceholder", "环境变量名 (如 DB_PASSWORD)")}
+                            placeholder={t("set.sec.editEnvPlaceholder")}
                             value={secEditDraft.envVar}
                             onChange={(e) => setSecEditDraft((d) => ({ ...d, envVar: e.target.value }))}
                           />
                           <input
                             className="sec-in"
-                            placeholder={t("set.sec.editNote", "备注 (可选)")}
+                            placeholder={t("set.sec.editNote")}
                             value={secEditDraft.note}
                             onChange={(e) => setSecEditDraft((d) => ({ ...d, note: e.target.value }))}
                           />
@@ -17150,10 +16955,10 @@ function SettingsModal({
                                 reloadSecrets();
                               }}
                             >
-                              {lang === "en" ? "Save" : "保存"}
+                              {tr("set.st.save")}
                             </button>
                             <button type="button" onClick={() => setSecEdit(null)}>
-                              {lang === "en" ? "Cancel" : "取消"}
+                              {tr("set.st.cancel")}
                             </button>
                           </div>
                         </div>
@@ -17176,13 +16981,13 @@ function SettingsModal({
                           <button
                             type="button"
                             className="sec-edit-btn"
-                            title={t("set.sec.editTitle", "改名称/备注")}
+                            title={t("set.sec.editTitle")}
                             onClick={() => {
                               setSecEditDraft({ name: s.name, envVar: s.envVar || "", note: s.note || "" });
                               setSecEdit(s.id);
                             }}
                           >
-                            {lang === "en" ? "Edit" : "编辑"}
+                            {tr("set.st.editShort")}
                           </button>
                           <button
                             type="button"
@@ -17205,7 +17010,7 @@ function SettingsModal({
               {/* 密钥说明提示词：拼进系统提示词的那段，查看/修改 */}
               <details className="sec-prompt" style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                 <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text)" }}>
-                  {t("set.sec.promptLabel", "密钥说明提示词")} {secretsPromptTouched ? t("set.pr.customized", "（已自定义）") : t("set.pr.default", "（默认）")}{t("set.sec.promptViewEdit", " — 查看/修改")}
+                  {t("set.sec.promptLabel")} {secretsPromptTouched ? t("set.pr.customized") : t("set.pr.default")}{t("set.sec.promptViewEdit")}
                 </summary>
                 <label className="field" style={{ marginTop: 8, display: "block" }}>
                   <textarea
@@ -17217,22 +17022,22 @@ function SettingsModal({
                       setSecretsPromptTouched(true);
                     }}
                     onBlur={() => window.wuwei.setSecretsPrompt(secretsPromptTouched ? secretsPrompt : null)}
-                    placeholder={t("set.sec.promptPlaceholder", "（留空 = 用默认密钥说明）")}
+                    placeholder={t("set.sec.promptPlaceholder")}
                   />
                 </label>
                 <p className="s-note">
-                  {t("set.sec.promptNote", "这段会拼进系统提示词，告诉模型密钥走本地保险箱/环境变量、不索取明文。改完失焦即保存并热更当前所有会话。")}
+                  {t("set.sec.promptNote")}
                   {secretsPromptTouched && (
                     <button
                       type="button"
                       className="link-inline"
                       onClick={() => {
-                        setSecretsPrompt(lang === "en" ? secretsPromptDefaultEn : secretsPromptDefault);
+                        setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
                         setSecretsPromptTouched(false);
                         window.wuwei.setSecretsPrompt(null);
                       }}
                     >
-                      {t("set.pr.restore", "恢复默认")}
+                      {t("set.pr.restore")}
                     </button>
                   )}
                 </p>
@@ -17255,69 +17060,69 @@ function SettingsModal({
     {showAddStation && (
       <div className="perm-overlay add-st-overlay" onClick={() => { setShowAddStation(false); setEditStationId(null); setEditIsBuiltin(false); }}>
         <div className="add-st-dialog" onClick={(e) => e.stopPropagation()}>
-          <h3>{editIsBuiltin ? t("set.st.renameTitle", "重命名平台") : editStationId ? t("set.st.editTitle", "编辑供应商 / 中转站") : t("set.st.addTitle", "添加供应商 / 中转站")}</h3>
+          <h3>{editIsBuiltin ? t("set.st.renameTitle") : editStationId ? t("set.st.editTitle") : t("set.st.addTitle")}</h3>
 
           {!editIsBuiltin && (
             <div className="st-field">
-              <span className="st-label">{t("set.st.type", "类型")}</span>
+              <span className="st-label">{t("set.st.type")}</span>
               <div className="theme-pick">
                 <button
                   type="button"
                   className={"theme-opt" + (!newStRelay ? " on" : "")}
                   onClick={() => setNewStRelay(false)}
                 >
-                  {t("set.st.selfhost", "自建供应商")}
+                  {t("set.st.selfhost")}
                 </button>
                 <button
                   type="button"
                   className={"theme-opt" + (newStRelay ? " on" : "")}
                   onClick={() => setNewStRelay(true)}
                 >
-                  {t("set.st.relayType", "中转站")}
+                  {t("set.st.relayType")}
                 </button>
               </div>
               <p className="st-hint">
                 {newStRelay
-                  ? t("set.st.relayHint", "中转站：一个 key 直连多平台（OpenAI 兼容）。名字会带「（中转）」后缀。")
-                  : t("set.st.selfhostHint", "自建供应商：你自己的 OpenAI 兼容端点，如公司 vLLM / Ollama / llama-server。")}
+                  ? t("set.st.relayHint")
+                  : t("set.st.selfhostHint")}
               </p>
             </div>
           )}
 
           <div className="st-field">
-            <span className="st-label">{t("set.st.name", "名称")}</span>
+            <span className="st-label">{t("set.st.name")}</span>
             <input
               className="st-input"
               autoFocus
               value={newStName}
               onChange={(e) => setNewStName(e.target.value)}
-              placeholder={editIsBuiltin ? t("set.st.namePhBuiltin", "显示名") : newStRelay ? t("set.st.namePhRelay", "如：我的便宜中转") : t("set.st.namePhSelf", "如：公司 Qwen")}
+              placeholder={editIsBuiltin ? t("set.st.namePhBuiltin") : newStRelay ? t("set.st.namePhRelay") : t("set.st.namePhSelf")}
             />
           </div>
 
           {!editIsBuiltin && (
             <div className="st-field">
-              <span className="st-label">{t("set.st.baseUrlLabel", "Base URL（OpenAI 兼容端点）")}</span>
+              <span className="st-label">{t("set.st.baseUrlLabel")}</span>
               <input
                 className="st-input"
                 value={newStUrl}
                 onChange={(e) => setNewStUrl(e.target.value)}
-                placeholder={t("set.st.baseUrlPh", "如 http://192.168.2.195:8000/v1")}
+                placeholder={t("set.st.baseUrlPh")}
               />
             </div>
           )}
 
           <p className="st-note">
             {editIsBuiltin
-              ? t("set.st.noteBuiltin", "只改这个平台的显示名（端点/密钥/模型都不变；改回原名即恢复默认）。")
+              ? t("set.st.noteBuiltin")
               : editStationId
-                ? t("set.st.noteEdit", "改名 / 改类型 / 改端点地址；API Key 与模型在上一页各自保留不变。")
-                : t("set.st.noteAdd", "添加后回上一页填 API Key、模型名。⚠️ 填 key = 把 key 交给该端点，请只添加你信任的。")}
+                ? t("set.st.noteEdit")
+                : t("set.st.noteAdd")}
           </p>
           <div className="btns">
-            <button onClick={() => { setShowAddStation(false); setEditStationId(null); setEditIsBuiltin(false); }}>{t("set.st.cancel", "取消")}</button>
+            <button onClick={() => { setShowAddStation(false); setEditStationId(null); setEditIsBuiltin(false); }}>{t("set.st.cancel")}</button>
             <button className="allow" onClick={editStationId ? saveStationEdit : addStation}>
-              {editStationId ? t("set.st.save", "保存") : t("set.st.add", "添加")}
+              {editStationId ? t("set.st.save") : t("set.st.add")}
             </button>
           </div>
         </div>
@@ -17389,13 +17194,13 @@ function AppSettingsModal({
   return (
     <div className="perm-overlay" onClick={onClose}>
       <div className="settings" onClick={(e) => e.stopPropagation()}>
-        <h3>设置</h3>
-        <div className="app-set-group">会话分组</div>
+        <h3>{tr("set.title")}</h3>
+        <div className="app-set-group">{tr("ui.app.message.ef2a4f98e5")}</div>
         <div className="theme-pick" style={{ marginBottom: "6px" }}>
           {[
-            { id: "manual", label: "手动分组" },
-            { id: "date", label: "按日期" },
-            { id: "project", label: "按项目" },
+            { id: "manual", label: tr("set.g.manual") },
+            { id: "date", label: tr("set.g.byDate") },
+            { id: "project", label: tr("set.g.byProject") },
           ].map((m) => (
             <button
               key={m.id}
@@ -17408,14 +17213,13 @@ function AppSettingsModal({
           ))}
         </div>
         <div className="app-set-hint" style={{ marginBottom: "14px" }}>
-          手动：右键会话移动/新建分组、可拖拽排序；按日期/按项目：自动分组（项目名由 AI 按会话内容归纳）。
-        </div>
-        <div className="app-set-group">输出方式</div>
+          {tr("ui.app.message.46d09b8c4a")}</div>
+        <div className="app-set-group">{tr("ui.app.message.ad545f242a")}</div>
         <div className="theme-pick" style={{ marginBottom: "6px" }}>
           {[
-            { id: "stream", label: "流式（一下出）" },
-            { id: "typewriter", label: "打字机（匀速）" },
-            { id: "instant", label: "回完一次性" },
+            { id: "stream", label: tr("ui.app.message.25c4a07b0c") },
+            { id: "typewriter", label: tr("set.d.typewriter") },
+            { id: "instant", label: tr("ui.app.message.3c597b4cc0") },
           ].map((m) => (
             <button
               key={m.id}
@@ -17430,8 +17234,7 @@ function AppSettingsModal({
         {streamMode === "typewriter" && (
           <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
             <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>
-              打字机速度
-            </div>
+              {tr("set.d.typeSpeed")}</div>
             <input
               type="range"
               min={80}
@@ -17442,18 +17245,15 @@ function AppSettingsModal({
               style={{ flex: 1 }}
             />
             <div className="app-set-hint" style={{ minWidth: 66, textAlign: "right" }}>
-              {streamSpeed} 字/秒
-            </div>
+              {streamSpeed} {tr("ui.app.message.5b2905ffe0")}</div>
           </div>
         )}
         <div className="app-set-hint" style={{ marginBottom: "14px" }}>
-          流式=收到即刻整批显示；打字机=匀速逐字，最丝滑；回完一次性=回复期间不显示、完成后整段出。
-        </div>
-        <div className="app-set-group">上下文压缩</div>
+          {tr("ui.app.message.20b4cefbd5")}</div>
+        <div className="app-set-group">{tr("set.g.compaction")}</div>
         <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
           <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>
-            保留最近条数
-          </div>
+            {tr("ui.app.message.cbdefe144c")}</div>
           <input
             type="number"
             min={2}
@@ -17462,34 +17262,31 @@ function AppSettingsModal({
             onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); const n = Math.min(2000, Math.max(2, Number(v) || 2)); onKeepRecent(n); }}
             style={{ flex: 1, minWidth: 0 }}
           />
-          <div className="app-set-hint" style={{ minWidth: 40, textAlign: "right" }}>条</div>
+          <div className="app-set-hint" style={{ minWidth: 40, textAlign: "right" }}>{tr("ui.companyhistorysettings.messages.e958b0a")}</div>
         </div>
         <div className="app-set-hint" style={{ marginBottom: "14px" }}>
-          上下文超限时，会把更早的消息总结成要点摘要、保留最近这么多条原文。数字越大越不易“失忆”，但更费上下文。
-        </div>
+          {tr("ui.app.message.27446ce964")}</div>
         <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-          <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>Token 阈值</div>
-          <input type="number" min={0} placeholder="自动（模型上下文80%）" value={compThr}
+          <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.token.threshold.326b19a")}</div>
+          <input type="number" min={0} placeholder={tr("ui.app.message.688aa8cd7e")} value={compThr}
             onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); setCompThr(v); window.wuwei.setCompact?.({ threshold: Number(v) || 0 }); }}
             style={{ flex: 1, minWidth: 0 }} />
         </div>
         <div className="app-set-hint" style={{ marginBottom: "10px" }}>
-          上一轮输入 token 超过此值就触发压缩。留空=自动（按当前模型上下文的 80%）。
-        </div>
+          {tr("ui.app.message.a4a1eac05e")}</div>
         <div className="app-set-row" style={{ cursor: "default", gap: "10px" }}>
-          <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>消息条数阈值</div>
-          <input type="number" min={0} placeholder="0（关，只按 token）" value={compMsgThr}
+          <div className="app-set-label" style={{ whiteSpace: "nowrap" }}>{tr("ui.app.message.f0a5394512")}</div>
+          <input type="number" min={0} placeholder={tr("ui.app.message.6dcb699819")} value={compMsgThr}
             onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ""); setCompMsgThr(v); window.wuwei.setCompact?.({ msgThreshold: Number(v) || 0 }); }}
             style={{ flex: 1, minWidth: 0 }} />
         </div>
         <div className="app-set-hint" style={{ marginBottom: "14px" }}>
-          消息条数超过此值也触发压缩（与 token 阈值任一命中即压）。0=关闭，只按 token 判断。
-        </div>
-        <div className="app-set-group">界面主题</div>
+          {tr("ui.app.message.b7adbe729b")}</div>
+        <div className="app-set-group">{tr("set.d.theme")}</div>
         <div className="theme-pick" style={{ marginBottom: "14px" }}>
           {[
-            { id: "light", label: "白色" },
-            { id: "gold", label: "淡金" },
+            { id: "light", label: tr("ui.app.message.e57d7f1172") },
+            { id: "gold", label: tr("ui.app.message.842eadeb2b") },
           ].map((t) => (
             <button
               key={t.id}
@@ -17502,20 +17299,17 @@ function AppSettingsModal({
             </button>
           ))}
         </div>
-        <div className="app-set-group">Claude 订阅</div>
+        <div className="app-set-group">{tr("set.g.claudeSub")}</div>
         <div className="app-set-row" style={{ cursor: "default" }}>
           <div className="app-set-text">
-            <div className="app-set-label">账号信息自动读取</div>
+            <div className="app-set-label">{tr("ui.app.message.08f5ca95af")}</div>
             <div className="app-set-hint">
-              用户名 / 邮箱 / 套餐直接从本机 Claude Code 配置（~/.claude.json）读取，随 Claude Code
-              自动保持最新，无需登录或填 token。额度（5小时/周）发消息后从响应头刷新。
-            </div>
+              {tr("ui.app.message.eb573c45df")}</div>
           </div>
         </div>
         <div className="btns">
           <button className="allow" onClick={onClose}>
-            知道了
-          </button>
+            {tr("ui.app.message.008f981397")}</button>
         </div>
       </div>
     </div>

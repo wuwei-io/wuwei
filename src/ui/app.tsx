@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../localization/index.js";
 // Ink 主应用：驱动 Agent，把流式 hooks 映射成 React 状态并渲染。
 import React, { useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
@@ -7,7 +8,7 @@ import type { Tool } from "../types.js";
 import { MessageItem, StatusBar, PermissionPrompt, type Item } from "./views.js";
 
 // 终端界面文案跟随语言（WUWEI_LANG 在 src/index.tsx 入口按系统语言定，桌面端由设置写入）
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 interface Pending {
   tool: Tool;
@@ -96,11 +97,11 @@ export function App({
         onCompact: (b, a) =>
           push({
             type: "notice",
-            text: tt(`上下文已压缩：${b} → ${a} 条消息`, `Context compacted: ${b} → ${a} messages`),
+            text: tr("ui.app.context.compacted.messages.3f22c22", { p0: b, p1: a }),
           }),
       });
     } catch (e: any) {
-      push({ type: "notice", text: tt(`出错: ${e.message}`, `Error: ${e.message}`) });
+      push({ type: "notice", text: tr("ui.app.error.e5d7520", { p0: e.message }) });
     } finally {
       setBusy(false);
     }
@@ -118,10 +119,7 @@ export function App({
     if (text === "/help") {
       push({
         type: "notice",
-        text: tt(
-          "命令：/reset 清空对话 · /exit 退出。直接输入需求即可；写文件/命令会请求确认。",
-          "Commands: /reset clears the chat · /exit quits. Just type what you need; writing files or running commands asks for confirmation.",
-        ),
+        text: tr("ui.app.commands.reset.clears.the.chat.exit.78e9a6c"),
       });
       return;
     }
@@ -139,7 +137,7 @@ export function App({
 
       {busy && !pending && (
         <Box marginTop={1}>
-          <Spinner label={tt("思考中…", "Thinking…")} />
+          <Spinner label={tr("ui.app.thinking.885e169")} />
         </Box>
       )}
 
@@ -147,7 +145,7 @@ export function App({
         <Box marginTop={1}>
           <Text color="green">› </Text>
           <TextInput
-            placeholder={tt("输入需求，回车发送（/help 查看命令）", "Type what you need, Enter to send (/help for commands)")}
+            placeholder={tr("ui.app.type.what.you.need.enter.to.6b46a5e")}
             onSubmit={onSubmit}
           />
         </Box>

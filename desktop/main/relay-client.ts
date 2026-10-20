@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 // 手机端远程设备执行 · relay 常驻连接（电脑端，M1）。
 // ⚠️ 仅当用户在设置里开「允许手机端远程调用本机」(remoteEnabled) 才启动。
 // 职责(M1)：WSS 连 relay.wuweiai.io/ws，首条 hello 上报 deviceId/name/platform/channels；
@@ -116,7 +117,7 @@ async function handleRemoteReq(msg: any): Promise<void> {
   if (!reqId) return;
   const reply = (m: Record<string, unknown>) => { try { ws?.send(JSON.stringify(m)); } catch { /* ignore */ } };
   const method = String(msg.method || "");
-  if (!remoteEnabled(loadSettings())) { reply({ type: 'resp', reqId, error: '本机已关闭远程调用' }); return; }
+  if (!remoteEnabled(loadSettings())) { reply({ type: 'resp', reqId, error: tr("ui.relay-client.message.147cd41222") }); return; }
   // 待审批中心：直接用本地池处理，不走 index 的业务 handler。
   if (method === "perms.list") {
     reply({ type: "resp", reqId, data: { perms: remoteDecisions.list() } }); return;
@@ -129,7 +130,7 @@ async function handleRemoteReq(msg: any): Promise<void> {
     const ok = remoteDecisions.decide(String(msg.params?.permId || ""), parsePermDecision(msg.params));
     reply({ type: "resp", reqId, data: { ok } }); return;
   }
-  if (!_remoteReqHandler) { reply({ type: "resp", reqId, error: "本机不支持该请求(请更新客户端)" }); return; }
+  if (!_remoteReqHandler) { reply({ type: "resp", reqId, error: tr("ui.relay-client.message.4532ae6827") }); return; }
   try {
     const data = await _remoteReqHandler(String(msg.method || ""), msg.params ?? null);
     reply({ type: "resp", reqId, data });
@@ -158,7 +159,7 @@ async function handleRemoteChat(msg: any): Promise<void> {
   const room = msg.type === "room-chat";
   const errorType = room ? "room-error" : "chat-error";
   if (!remoteEnabled(loadSettings()) || (room ? !_remoteRoomExecutor : !_remoteExecutor)) {
-    reply({ type: errorType, reqId, message: "本机未开启该远程执行能力，请检查设置或更新客户端" }); return;
+    reply({ type: errorType, reqId, message: tr("ui.relay-client.message.d816d8b05a") }); return;
   }
   const ac = new AbortController();
   remoteAborts.set(reqId, ac);
@@ -176,9 +177,9 @@ async function handleRemoteChat(msg: any): Promise<void> {
     onImage: dataUrl => reply({ type: "image", reqId, dataUrl }),
     requestDecision,
     onPermission: (tool, input) => requestDecision({
-      permId: randomUUID(), risk: "high", title: "需要你确认",
-      question: "电脑即将执行一项可能修改本机内容的操作。你要继续吗？",
-      options: [{ label: "拒绝", value: "deny", recommended: true, tone: "safe" }, { label: "允许执行", value: "allow", tone: "danger" }],
+      permId: randomUUID(), risk: "high", title: tr("ui.index.message.47a1580dc5"),
+      question: tr("ui.relay-client.message.b8305aec63"),
+      options: [{ label: tr("ui.index.message.7caaf0c897"), value: "deny", recommended: true, tone: "safe" }, { label: tr("ui.index.message.fe73513fd6"), value: "allow", tone: "danger" }],
       allowCustom: false, timeoutSec: null, rawDetail: tool + "\n" + JSON.stringify(input, null, 2),
       sourceSession: msg.sessionId || msg.roomId,
     }),
@@ -187,11 +188,11 @@ async function handleRemoteChat(msg: any): Promise<void> {
     if (room) {
       await _remoteRoomExecutor!({ ...args, roomId: String(msg.roomId || ""), mentions: Array.isArray(msg.mentions) ? msg.mentions : [],
         onRoomEvent: event => reply({ ...event, reqId, roomId: msg.roomId }) });
-      if (ac.signal.aborted) throw new Error("已停止");
+      if (ac.signal.aborted) throw new Error(tr("set.brain.exStopped"));
       reply({ type: "room-done", reqId, roomId: msg.roomId });
     } else {
       const result = await _remoteExecutor!(args);
-      if (ac.signal.aborted) throw new Error("已停止");
+      if (ac.signal.aborted) throw new Error(tr("set.brain.exStopped"));
       if ("error" in result) reply({ type: errorType, reqId, message: result.error });
       else reply({ type: "chat-done", reqId, ...result });
     }
@@ -269,7 +270,7 @@ function connect() {
 
   ws.on("open", () => {
     reconnectDelay = RECONNECT_BASE_MS; // 连上即重置退避
-    const name = (s?.app?.remoteDeviceName || "").trim() || hostname() || "我的电脑";
+    const name = (s?.app?.remoteDeviceName || "").trim() || hostname() || tr("ui.relay-client.message.7a6b1a2b37");
     const hello = {
       type: "hello",
       deviceId: getDeviceId(),

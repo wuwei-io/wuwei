@@ -1,5 +1,6 @@
+import { tr } from "../../../../src/localization/index.js";
 import React, { useEffect, useState } from "react";
-import { getLang, makeT } from "../i18n";
+import { useLanguage, makeT } from "../i18n";
 
 /**
  * 无为 · 开屏启动动画（整屏遮罩）
@@ -22,7 +23,7 @@ const HOLD_MS_REDUCED = 500; // 降级：几乎直接进主界面
 const FADE_MS = 560; // 淡出时长（与 CSS transition 对齐）
 
 export function Splash() {
-  const t = makeT(getLang());
+  const t = makeT(useLanguage());
   // 首次挂载即决定：本次启动没播过才播（避免 HMR / 重渲染复播）
   const [phase, setPhase] = useState<"play" | "fade" | "done">(() => {
     try {
@@ -37,7 +38,7 @@ export function Splash() {
     try {
       sessionStorage.setItem(SPLASH_KEY, "1");
     } catch {
-      /* 隐私模式等无 sessionStorage：仍正常播这一次 */
+
     }
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const t = setTimeout(() => setPhase("fade"), reduce ? HOLD_MS_REDUCED : HOLD_MS);
@@ -62,9 +63,9 @@ export function Splash() {
       <section className="wsplash-lockup">
         <svg className="wsplash-mark" viewBox="0 0 240 240" aria-hidden="true">
           <g transform="rotate(-8 120 118)">
-            {/* 官方主标几何：82r 圆弧描边动画（stroke-dashoffset 1→0） */}
+            {}
             <path className="wsplash-enso" pathLength={1} d="M152.04 193.48 A82 82 0 1 1 195.48 150.04" />
-            {/* 收笔一点朱：在圆相描完后点上 */}
+            {}
             <circle className="wsplash-spark" cx={195.48} cy={150.04} r={7.6} />
           </g>
         </svg>
@@ -96,7 +97,7 @@ const SPLASH_CSS = `
 }
 .wsplash--out { opacity: 0; pointer-events: none; }
 
-/* 细栅格底纹（低存在感） */
+
 .wsplash::before {
   position: absolute;
   inset: 0;
@@ -129,7 +130,7 @@ const SPLASH_CSS = `
   filter: drop-shadow(0 22px 44px rgba(0, 0, 0, 0.26));
 }
 
-/* 官方主标几何：82r 圆弧 + 收笔一点朱，整体 -8° 微倾 */
+
 .wsplash-enso {
   fill: none;
   stroke: #F4F6F8;

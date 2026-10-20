@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 // 一人公司 · SOP 库 · 单个 SOP 详情界面（tc- 设计语言，与群/私聊统一）
 //
 // 三个 tab：查看（渲染 md 全文）/ 编辑（源码 textarea + 实时预览，存盘产生新版本）/ 版本（历史列表，可查看/回滚）。
@@ -76,13 +77,13 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
       setVersions(vr?.versions || []);
       setViewingVer(null);
     };
-    const msg = en ? `Roll back to v${n}? This creates a new version; history is kept.` : `回滚到 v${n}？会作为新版本写入，历史不会丢。`;
+    const msg = tr("ui.sopview.roll.back.to.this.creates.new.0d2a1aa", { p0: n });
     if (askConfirm) askConfirm({ message: msg, onOk: () => { void run(); } });
     else void run();
   };
 
   if (!node) {
-    return <div className="tc-pane"><div className="tc-empty">{en ? "SOP not found." : "SOP 不存在。"}</div></div>;
+    return <div className="tc-pane"><div className="tc-empty">{tr("ui.sopview.sop.not.found.2c43529")}</div></div>;
   }
   const path = pathOf(sopId);
 
@@ -99,10 +100,10 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
           </div>
         </div>
         <div className="tc-seg sop-seg">
-          <button className={tab === "view" ? "on" : ""} onClick={() => setTab("view")}>{en ? "View" : "查看"}</button>
-          <button className={tab === "edit" ? "on" : ""} onClick={() => setTab("edit")}>{en ? "Edit" : "编辑"}</button>
+          <button className={tab === "view" ? "on" : ""} onClick={() => setTab("view")}>{tr("ui.sopview.view.b481c5f")}</button>
+          <button className={tab === "edit" ? "on" : ""} onClick={() => setTab("edit")}>{tr("set.st.editShort")}</button>
           <button className={tab === "versions" ? "on" : ""} onClick={() => setTab("versions")}>
-            {en ? "History" : "版本"}{versions.length ? <span className="sop-seg-cnt">{versions.length}</span> : null}
+            {tr("ui.sopview.history.d5e2bd3")}{versions.length ? <span className="sop-seg-cnt">{versions.length}</span> : null}
           </button>
         </div>
       </div>
@@ -112,7 +113,7 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
         <div className="sop-body sop-view">
           {doc.trim()
             ? (renderMd ? renderMd(doc) : <pre className="sop-raw">{doc}</pre>)
-            : <div className="tc-empty">{en ? "No content yet. Switch to Edit to write this SOP." : "还没有正文。切到「编辑」把这份 SOP 写出来。"}</div>}
+            : <div className="tc-empty">{tr("ui.sopview.no.content.yet.switch.to.edit.b34be69")}</div>}
         </div>
       )}
 
@@ -123,17 +124,17 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
             <textarea
               className="sop-textarea"
               value={draft}
-              placeholder={en ? "Write the SOP in Markdown…" : "用 Markdown 写这份 SOP…"}
+              placeholder={tr("ui.sopview.write.the.sop.in.markdown.f48461a")}
               onChange={(e) => { setDraft(e.target.value); setDirty(e.target.value !== doc); }}
             />
             <div className="sop-preview">
-              {draft.trim() ? (renderMd ? renderMd(draft) : <pre className="sop-raw">{draft}</pre>) : <div className="tc-empty">{en ? "Preview" : "预览"}</div>}
+              {draft.trim() ? (renderMd ? renderMd(draft) : <pre className="sop-raw">{draft}</pre>) : <div className="tc-empty">{tr("ui.sopview.preview.6d82087")}</div>}
             </div>
           </div>
           <div className="sop-edit-foot">
-            <span className="sop-edit-hint">{dirty ? (en ? "Unsaved changes" : "有未保存的改动") : (en ? "Saved" : "已保存")}</span>
+            <span className="sop-edit-hint">{dirty ? (tr("ui.sopview.unsaved.changes.599070c")) : (tr("ui.app.saved.0a6bf62"))}</span>
             <button className="tc-btn" disabled={!dirty || saving} onClick={save}>
-              {saving ? (en ? "Saving…" : "保存中…") : (en ? "Save as new version" : "保存为新版本")}
+              {saving ? (tr("ui.app.saving.4c8592b")) : (tr("ui.sopview.save.as.new.version.c3476aa"))}
             </button>
           </div>
         </div>
@@ -145,14 +146,14 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
           {viewingVer !== null ? (
             <div className="sop-ver-preview">
               <div className="sop-ver-preview-bar">
-                <button className="tc-btn-ghost" onClick={() => setViewingVer(null)}>‹ {en ? "Back to list" : "返回列表"}</button>
+                <button className="tc-btn-ghost" onClick={() => setViewingVer(null)}>‹ {tr("ui.sopview.back.to.list.f71d656")}</button>
                 <span className="sop-ver-preview-t">v{viewingVer}</span>
-                <button className="tc-btn" onClick={() => doRollback(viewingVer)}>{en ? "Roll back to this" : "回滚到此版"}</button>
+                <button className="tc-btn" onClick={() => doRollback(viewingVer)}>{tr("ui.sopview.roll.back.to.this.9238b73")}</button>
               </div>
-              <div className="sop-view">{verText.trim() ? (renderMd ? renderMd(verText) : <pre className="sop-raw">{verText}</pre>) : <div className="tc-empty">{en ? "(empty)" : "（空）"}</div>}</div>
+              <div className="sop-view">{verText.trim() ? (renderMd ? renderMd(verText) : <pre className="sop-raw">{verText}</pre>) : <div className="tc-empty">{tr("ui.sopview.empty.01039ef")}</div>}</div>
             </div>
           ) : versions.length === 0 ? (
-            <div className="tc-empty">{en ? "No versions yet — save once to create v1." : "还没有版本 · 保存一次即产生 v1。"}</div>
+            <div className="tc-empty">{tr("ui.sopview.no.versions.yet.save.once.to.a457f6a")}</div>
           ) : (
             <div className="sop-ver-list">
               {[...versions].reverse().map((v) => (
@@ -163,8 +164,8 @@ export function SopView({ en, sopId, nodes, renderMd, askConfirm }: Props) {
                     {v.note && <span className="sop-ver-note">{v.note}</span>}
                   </span>
                   <span className="sop-ver-acts">
-                    <button className="tc-btn-ghost" onClick={() => openVersion(v.version)}>{en ? "View" : "查看此版"}</button>
-                    <button className="tc-btn-ghost" onClick={() => doRollback(v.version)}>{en ? "Roll back" : "回滚此版"}</button>
+                    <button className="tc-btn-ghost" onClick={() => openVersion(v.version)}>{tr("ui.sopview.view.a26bcab")}</button>
+                    <button className="tc-btn-ghost" onClick={() => doRollback(v.version)}>{tr("ui.sopview.roll.back.0edc3e8")}</button>
                   </span>
                 </div>
               ))}

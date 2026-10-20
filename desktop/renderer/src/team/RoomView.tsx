@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import { employeeLabel, localizeEmployee } from "../../../../src/team/default-localization.js";
 // 群 · 多员工协作界面（tc- 设计语言，与一人公司内页统一）
 //
@@ -71,17 +72,17 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
 
   const room = rooms.find((r) => r.id === cur) || null;
   const empOf = (id: string) => employees.find((e) => e.id === id);
-  const nameOf = (id: string) => employeeLabel(empOf(id), en ? "en" : "zh", id);
+  const nameOf = (id: string) => employeeLabel(empOf(id), (getCurrentLanguage()), id);
   const relT = (ts: number) => {
     const d = Date.now() - (ts || 0);
-    if (d < 60000) return en ? "just now" : "刚刚";
-    if (d < 3600000) return Math.floor(d / 60000) + (en ? "m ago" : " 分钟前");
-    if (d < 86400000) return Math.floor(d / 3600000) + (en ? "h ago" : " 小时前");
-    return Math.floor(d / 86400000) + (en ? "d ago" : " 天前");
+    if (d < 60000) return tr("rel.now");
+    if (d < 3600000) return Math.floor(d / 60000) + (tr("ui.app.ago.9ac2a1a"));
+    if (d < 86400000) return Math.floor(d / 3600000) + (tr("ui.app.ago.822d019"));
+    return Math.floor(d / 86400000) + (tr("ui.app.ago.5b0d8c8"));
   };
 
   // @ 补全候选：所有人 + 群成员，按查询词过滤。抽到组件层，弹窗渲染与键盘导航共用同一份。
-  const mentionAll = en ? "Everyone" : "所有人";
+  const mentionAll = tr("ui.roomview.everyone.374dada");
   const mentionCands: { id: string; name: string }[] = (() => {
     if (mention === null || !room) return [];
     const cand0 = [{ id: "__all__", name: mentionAll }, ...room.members.map((id) => ({ id, name: nameOf(id) }))];
@@ -89,7 +90,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     return cand0.filter((c) => !q || c.name.toLowerCase().includes(q));
   })();
   const pickMention = (name: string) => {
-    const inserted = name === mentionAll ? (en ? "all" : "所有人") : name;
+    const inserted = name === mentionAll ? ("all") : name;
     setText((t) => t.replace(/@[^\s@]*$/, `@${inserted} `));
     setMention(null);
     setMentionIdx(0);
@@ -211,10 +212,10 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     stuckRef.current = true; // 点了继续，吸底看进展
     if (room?.type === "dm") {
       const dmResponder = (room.members || []).find((m) => m !== dmSelfId);
-      void api.roomSend(cur, en ? "Please continue from where you left off." : "接着上一步继续做。", dmResponder);
+      void api.roomSend(cur, tr("ui.roomview.please.continue.from.where.you.left.5f89146"), dmResponder);
     } else {
       const at = workers.map((w) => `@${w.name}`).join(" ");
-      void api.roomSend(cur, `${at} ${en ? "please continue from where you left off." : "接着上一步继续做。"}`);
+      void api.roomSend(cur, `${at} ${tr("ui.roomview.please.continue.from.where.you.left.0ba051a")}`);
     }
   };
 
@@ -233,24 +234,24 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     return (
       <div className="tc-pane">
         <div className="tc-room-bar">
-          <button className="tc-btn-ghost" onClick={() => setCreating(false)}>‹ {en ? "Cancel" : "取消"}</button>
-          <span className="tc-room-bar-t">{en ? "New group" : "建群"}</span>
+          <button className="tc-btn-ghost" onClick={() => setCreating(false)}>‹ {tr("set.st.cancel")}</button>
+          <span className="tc-room-bar-t">{tr("ui.app.new.group.e0bb42b")}</span>
         </div>
 
         <div className="tc-field" style={{ marginTop: 18 }}>
-          <label>{en ? "Group name" : "群名"}</label>
+          <label>{tr("ui.app.group.name.8498dfd")}</label>
           <input
             className="tc-input"
             value={newName}
-            placeholder={en ? "e.g. Landing page revamp" : "例如：落地页改版"}
+            placeholder={tr("ui.roomview.landing.page.revamp.7870201")}
             onChange={(e) => setNewName(e.target.value)}
           />
         </div>
 
         <div className="tc-field">
-          <label>{en ? "Members" : "成员"}<em>{en ? "pull teammates in" : "拉进来一起干活"}</em></label>
+          <label>{tr("ui.app.members.a4462f0")}<em>{tr("ui.roomview.pull.teammates.in.d4b1656")}</em></label>
           {employees.length === 0 ? (
-            <div className="tc-empty">{en ? "No teammates yet — add some first." : "还没有员工，先去「员工」页添加。"}</div>
+            <div className="tc-empty">{tr("ui.roomview.no.teammates.yet.add.some.first.c7de454")}</div>
           ) : (
             <div className="tc-emps">
               {employees.map((e) => {
@@ -268,13 +269,13 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         setNewMembers(n);
                       }}
                     />
-                    <span className="tc-ava"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, en ? "en" : "zh")} /></span>
+                    <span className="tc-ava"><EmployeeAvatar icon={e.icon} avatarData={e.avatarData} name={employeeLabel(e, (getCurrentLanguage()))} /></span>
                     <span className="tc-emp-meta">
                       <span className="tc-emp-nm">
-                        <b title={employeeLabel(e, en ? "en" : "zh")}>{employeeLabel(e, en ? "en" : "zh")}</b>
-                        {e.title && <span className="tc-role" title={localizeEmployee(e, en ? "en" : "zh").title}>{localizeEmployee(e, en ? "en" : "zh").title}</span>}
+                        <b title={employeeLabel(e, (getCurrentLanguage()))}>{employeeLabel(e, (getCurrentLanguage()))}</b>
+                        {e.title && <span className="tc-role" title={localizeEmployee(e, (getCurrentLanguage())).title}>{localizeEmployee(e, (getCurrentLanguage())).title}</span>}
                       </span>
-                      {e.blurb && <span className="tc-emp-desc" title={localizeEmployee(e, en ? "en" : "zh").blurb}>{localizeEmployee(e, en ? "en" : "zh").blurb}</span>}
+                      {e.blurb && <span className="tc-emp-desc" title={localizeEmployee(e, (getCurrentLanguage())).blurb}>{localizeEmployee(e, (getCurrentLanguage())).blurb}</span>}
                     </span>
                     {on && (
                       <span className="tc-pick-check">
@@ -289,15 +290,13 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         </div>
 
         <div className="tc-field">
-          <label>{en ? "Coordinator" : "常驻协调者"}<em>{en ? "answers without being @-ed" : "不用 @ 也会应答"}</em></label>
+          <label>{tr("ui.roomview.coordinator.faa137e")}<em>{tr("ui.roomview.answers.without.being.ed.a58b194")}</em></label>
           <select className="tc-input tc-select" value={newCoord} onChange={(e) => setNewCoord(e.target.value)}>
-            <option value="">{en ? "None — everyone must be @-ed" : "不设（所有人都要被 @ 才说话）"}</option>
+            <option value="">{tr("ui.roomview.none.everyone.must.be.ed.cfdc259")}</option>
             {[...newMembers].map((id) => <option key={id} value={id}>{nameOf(id)}</option>)}
           </select>
           <div className="tc-field-hint">
-            {en
-              ? "Without a coordinator, messages that @ nobody are just recorded — nobody runs. Biggest cost saver."
-              : "不设协调者时，没 @ 人的消息只记进上下文、不唤醒任何人——这是最省钱的一档。"}
+            {tr("ui.roomview.without.coordinator.messages.that.nobody.are.88662e4")}
           </div>
         </div>
 
@@ -312,7 +311,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
             setNewName(""); setNewMembers(new Set()); setNewCoord("");
           }}
         >
-          {en ? "Create group" : "创建群"}
+          {tr("ui.roomview.create.group.9b5ecdb")}
         </button>
       </div>
     );
@@ -323,10 +322,10 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
     return (
       <div className="tc-pane">
         <div className="tc-room-bar">
-          <span className="tc-room-bar-t">{en ? "Groups" : "群"}</span>
+          <span className="tc-room-bar-t">{tr("ui.app.groups.a47bd17")}</span>
           <button className="tc-add" style={{ marginLeft: "auto" }} onClick={() => setCreating(true)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-            {en ? "New group" : "建群"}
+            {tr("ui.app.new.group.e0bb42b")}
           </button>
         </div>
 
@@ -335,9 +334,9 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
             <span className="tc-empty-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
             </span>
-            <div className="tc-empty-t">{en ? "No groups yet" : "还没有群"}</div>
-            <div className="tc-empty-d">{en ? "Create one and pull a few teammates in to work together." : "建一个，把几名员工拉进去一起干活。"}</div>
-            <button className="tc-btn" onClick={() => setCreating(true)}>{en ? "New group" : "建群"}</button>
+            <div className="tc-empty-t">{tr("ui.roomview.no.groups.yet.89046a1")}</div>
+            <div className="tc-empty-d">{tr("ui.roomview.create.one.and.pull.few.teammates.0f2345e")}</div>
+            <button className="tc-btn" onClick={() => setCreating(true)}>{tr("ui.app.new.group.e0bb42b")}</button>
           </div>
         ) : (
           <div className="tc-room-list">
@@ -349,11 +348,11 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                 <span className="tc-room-meta">
                   <span className="tc-room-nm">
                     {tx(r.name)}
-                    {r.coordinator && <span className="tc-room-host">{nameOf(r.coordinator)} {en ? "hosts" : "主持"}</span>}
+                    {r.coordinator && <span className="tc-room-host">{nameOf(r.coordinator)} {tr("ui.roomview.hosts.71dc702")}</span>}
                   </span>
                   {r.lastText && <span className="tc-room-last">{r.lastText}</span>}
                 </span>
-                <span className="tc-room-cnt">{r.members.length} {en ? "" : "人"}</span>
+                <span className="tc-room-cnt">{r.members.length} {tr("ui.roomview.text.a022381")}</span>
               </button>
             ))}
           </div>
@@ -374,9 +373,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
       >
         {msgs.length === 0 && (
           <div className="tc-chat-empty">
-            {en
-              ? `Say something. @ someone to call them; ${room.coordinator ? `${nameOf(room.coordinator)} answers even without @.` : "nobody answers unless @-ed."}`
-              : `说点什么吧。@ 某人点名叫他；${room.coordinator ? `${nameOf(room.coordinator)} 不用 @ 也会应答。` : "没设协调者，要 @ 了才有人应答。"}`}
+            {tr("ui.roomview.say.something.someone.to.call.them.aac5869", { p0: (en ? room.coordinator ? `${nameOf(room.coordinator)} answers even without @.` : "nobody answers unless @-ed." : room.coordinator ? tr("ui.roomview.message.c6d2f60a3d", {p0: nameOf(room.coordinator)}) : tr("ui.roomview.message.0e84476714")) })}
           </div>
         )}
         {msgs.map((m) => {
@@ -403,7 +400,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                   <div className="tc-msg-steps">
                     <button className="tc-msg-steps-bar" onClick={() => setOpenSteps((s) => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })}>
                       <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" /></svg>
-                      <span>{en ? `Execution · ${m.steps.length} ${m.steps.length === 1 ? "step" : "steps"}` : `执行过程 · ${m.steps.length} 步`}</span>
+                      <span>{tr("ui.roomview.execution.e5611cf", { v0: m.steps.length, v1: (en ? m.steps.length === 1 ? "step" : tr("ui.app.steps.95059a8") : undefined) })}</span>
                       <svg className={"tc-msg-steps-caret" + (openSteps.has(m.id) ? " up" : "")} viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
                     {openSteps.has(m.id) && (
@@ -414,7 +411,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                           const ropen = openResults.has(rkey);
                           return (
                             <div className="tc-msg-step" key={i}>
-                              <button className={"tc-prog-step tc-msg-step-head" + (s.isError ? " err" : " done") + (s.result ? " has-result" : "")} title={label} onClick={() => { if (!s.result) return; setOpenResults((o) => { const n = new Set(o); if (n.has(rkey)) n.delete(rkey); else n.add(rkey); return n; }); }}>
+                              <button className={"tc-prog-step tc-msg-step-head" + (s.isError ? " err" : "done") + (s.result ? " has-result" : "")} title={label} onClick={() => { if (!s.result) return; setOpenResults((o) => { const n = new Set(o); if (n.has(rkey)) n.delete(rkey); else n.add(rkey); return n; }); }}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{s.isError ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M20 6 9 17l-5-5" />}</svg>
                                 <span className="tc-prog-step-t">{label}</span>
                                 {s.result && <svg className={"tc-msg-step-caret" + (ropen ? " up" : "")} viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>}
@@ -430,10 +427,10 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                 )}
                 {/* 气泡下方独立操作栏(对齐主对话)：复制 / 删除 + 时间，悬停显现 */}
                 <div className="tc-msg-meta">
-                  <button className="tc-msg-act" title={en ? "Copy" : "复制"} onClick={() => { try { navigator.clipboard?.writeText(m.text); } catch { /* ignore */ } }}>
+                  <button className="tc-msg-act" title={tr("pay.support.copy")} onClick={() => { try { navigator.clipboard?.writeText(m.text); } catch { /* ignore */ } }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
                   </button>
-                  <button className="tc-msg-act" title={en ? "Delete" : "删除"} onClick={() => cur && api?.roomMsgDelete(cur, m.id)}>
+                  <button className="tc-msg-act" title={tr("set.st.delShort")} onClick={() => cur && api?.roomMsgDelete(cur, m.id)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
                   </button>
                   <span className="tc-msg-time">{relT(m.ts)}</span>
@@ -449,16 +446,16 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           const active = [...allTools].reverse().find((t) => !t.done);
           const doneCount = allTools.filter((t) => t.done).length;
           const detail = active
-            ? " · " + researchToolLabel(active.name, active.input, en)
+            ? " · " + researchToolLabel(active.name, active.input, getCurrentLanguage())
             : allTools.length > 0
-              ? (en ? ` · ${doneCount}/${allTools.length} done` : ` · 已完成 ${doneCount}/${allTools.length}`)
+              ? (tr("ui.roomview.done.329a4bd", { p0: doneCount, p1: allTools.length }))
               : "";
           return (
           <div className="tc-prog">
             <button className="tc-prog-bar" onClick={() => setExpanded((v) => !v)}>
               <span className="tc-chat-typing"><span /><span /><span /></span>
-              <span className="tc-prog-who" title={Object.values(progress).map((p) => p.name).join("、") + (en ? " working…" : " 正在干活…") + detail}>
-                {Object.values(progress).map((p) => p.name).join("、")} {en ? "working…" : "正在干活…"}{detail}
+              <span className="tc-prog-who" title={Object.values(progress).map((p) => p.name).join("、") + (tr("ui.roomview.working.bb047cb")) + detail}>
+                {Object.values(progress).map((p) => p.name).join("、")} {tr("ui.roomview.working.ec656b1")}{detail}
               </span>
               <svg className={"tc-prog-caret" + (expanded ? " up" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
@@ -470,9 +467,9 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                     {p.tools.length > 0 && (
                       <div className="tc-prog-steps">
                         {p.tools.map((t, i) => {
-                          const label = researchToolLabel(t.name, t.input, en);
+                          const label = researchToolLabel(t.name, t.input, getCurrentLanguage());
                           return (
-                          <div className={"tc-prog-step" + (t.done ? " done" : "") + (t.isError ? " err" : "")} key={i} title={label}>
+                          <div className={"tc-prog-step" + (t.done ? "done" : "") + (t.isError ? " err" : "")} key={i} title={label}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                               {t.done ? <path d="M20 6 9 17l-5-5" /> : <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
                             </svg>
@@ -498,14 +495,14 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         {/* 停止后的「继续」入口：重新点名刚才那几位、发一条「接着做」的指令再跑一轮（不是逐字续跑，半成品没落库）。 */}
         {!running && justStopped && lastWorkersRef.current.length > 0 && (
           <div className="tc-prog-resume">
-            <span className="tc-prog-resume-t">{en ? "Stopped." : "已停止。"}</span>
+            <span className="tc-prog-resume-t">{tr("ui.roomview.stopped.c1ba3b4")}</span>
             <button className="tc-prog-resume-btn" onClick={resume}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v4h4" /></svg>
-              {en ? "Continue" : "继续"}
+              {tr("err.fix.continue")}
             </button>
           </div>
         )}
-        {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (en ? "No one was called on. @ an employee, or set a standing coordinator in the group settings." : "没有人被点名。@某位员工，或在群设置里指定一名常驻协调者。") : hint === "@@queued@@" ? (en ? "Still on the previous message — this one is queued and will run right after." : "正在处理上一条，这条已排队，稍后自动接上。") : hint}</div>}
+        {hint && <div className="tc-chat-hint">{hint === "@@no-responders@@" ? (tr("ui.roomview.no.one.was.called.on.an.a66af92")) : hint === "@@queued@@" ? (tr("ui.roomview.still.on.the.previous.message.this.6b478d8")) : hint}</div>}
         <div ref={endRef} />
       </div>
 
@@ -529,7 +526,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               {cands.map((c, i) => (
                 <button
                   key={c.id}
-                  className={"tc-mention-item" + (c.id === "__all__" ? " all" : "") + (i === mentionIdx ? " on" : "")}
+                  className={"tc-mention-item" + (c.id === "__all__" ? "all" : "") + (i === mentionIdx ? " on" : "")}
                   onMouseEnter={() => setMentionIdx(i)}
                   onMouseDown={(e) => { e.preventDefault(); pickMention(c.name); }}
                 >
@@ -549,7 +546,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
         <textarea
           value={text}
           rows={1}
-          placeholder={en ? "Message the group…  @name to call someone" : "在群里说话…  用 @姓名 点名（含所有人）"}
+          placeholder={tr("ui.roomview.message.the.group.name.to.call.0ed9de8")}
           onChange={(e) => {
             const v = e.target.value;
             setText(v);
@@ -569,11 +566,11 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
           }}
         />
         {running ? (
-          <button className="send-btn stop" onClick={() => { void api.roomAbort(room.id); setJustStopped(true); }} title={en ? "Stop" : "停止"}>
+          <button className="send-btn stop" onClick={() => { void api.roomAbort(room.id); setJustStopped(true); }} title={tr("composer.stop")}>
             <span className="stop-sq" />
           </button>
         ) : (
-          <button className={"send-btn" + (text.trim() ? " active" : "")} disabled={!text.trim()} onClick={send} title={en ? "Send" : "发送"}>
+          <button className={"send-btn" + (text.trim() ? " active" : "")} disabled={!text.trim()} onClick={send} title={tr("ui.app.send.f1004bf")}>
             ↵
           </button>
         )}

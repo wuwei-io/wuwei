@@ -1,3 +1,4 @@
+import { tr } from "../../../src/localization/index.js";
 // AI 员工团队 · 消息投影层
 //
 // ⭐ 整套群聊设计的技术核心。
@@ -46,7 +47,7 @@ export function projectFor(selfId: string, msgs: RoomMessage[]): Message[] {
   // 如果群里最后说话的恰好是这名员工自己（比如他被连续点名两次），补一条推进指令，
   // 而不是把他自己的话改成 user——那会让他误以为是别人在复述他。
   if (out.length && out[out.length - 1].role === "assistant") {
-    out.push(textMsg("user", "（请接着上面的进展继续。）", Date.now()));
+    out.push(textMsg("user", tr("ui.projection.message.ed823285d6"), Date.now()));
   }
   return out;
 }

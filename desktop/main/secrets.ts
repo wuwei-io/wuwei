@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // 本地密钥管理器：加密保险箱 + 分层检测 + 双向脱敏 + 环境变量注入。
 // 目标：敏感密钥统一本地加密存储；发给模型前用占位符替换、模型永远看不到明文；
 // 本机工具执行时通过环境变量/占位符回填，任务照跑。
@@ -11,7 +12,7 @@ const VAULT_PATH = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei", 
 
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入）。下面这些报错/掩码文案会直接显示在密钥面板上，得跟界面语言走。
 // 语言可运行时切换，所以只在调用时求值，不做模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 // 占位符：用不常见的括号包裹，模型极少会去改写它，回填走精确匹配
 const PH_OPEN = "⟦secret:";
@@ -67,10 +68,7 @@ function encrypt(plain: string): string {
   if (!safeStorage.isEncryptionAvailable()) {
     // 极端兜底：系统钥匙串不可用时不明文落盘，宁可报错
     throw new Error(
-      tt(
-        "系统加密不可用(safeStorage)，无法安全存储密钥",
-        "System encryption (safeStorage) isn't available, so secrets can't be stored safely",
-      ),
+      tr("ui.secrets.system.encryption.safestorage.isn.available.so.b3d1182"),
     );
   }
   return safeStorage.encryptString(plain).toString("base64");
@@ -102,7 +100,7 @@ export function listSecrets(): SecretView[] {
       name: e.name,
       envVar: e.envVar,
       // 默认全打码:不露首尾、不泄露长度。真实值仅解锁后可见。
-      masked: plain != null ? "••••••••" : tt("⚠ 无法解密", "⚠ Can't decrypt"),
+      masked: plain != null ? "••••••••" : tr("ui.secrets.can.decrypt.1d6c0ef"),
       note: e.note,
       createdAt: e.createdAt,
     };
@@ -113,7 +111,7 @@ export function listSecrets(): SecretView[] {
 export function addSecret(input: { name?: string; envVar?: string; value: string; note?: string; force?: boolean }): SecretView {
   const v = load();
   const value = String(input.value ?? "");
-  if (!value) throw new Error(tt("密钥值为空", "Secret value is empty"));
+  if (!value) throw new Error(tr("ui.secrets.secret.value.is.empty.52b5a83"));
   // 值去重:已存在同一明文→直接返回既有条目(除非 force 强制新增一条)
   if (!input.force) {
     const dup = plaintextMap().byValue.get(value);
@@ -151,7 +149,7 @@ export function addSecret(input: { name?: string; envVar?: string; value: string
 export function updateSecret(id: string, patch: { name?: string; envVar?: string; note?: string; value?: string }): void {
   const v = load();
   const e = v.entries.find((x) => x.id === id);
-  if (!e) throw new Error(tt("密钥不存在", "Secret not found"));
+  if (!e) throw new Error(tr("ui.secrets.secret.not.found.cdc9da6"));
   if (patch.name != null) e.name = normName(patch.name);
   if (patch.envVar != null) e.envVar = normName(patch.envVar).toUpperCase();
   if (patch.note != null) e.note = patch.note.trim() || undefined;
@@ -246,7 +244,7 @@ export function rehydrate(text: string): string {
 export function revealAll(): { id: string; value: string }[] {
   const byId = new Map<string, string>();
   for (const { e, plain } of plaintextMap().entries) byId.set(e.id, plain);
-  return load().entries.map((e) => ({ id: e.id, value: byId.get(e.id) ?? tt("⚠ 无法解密", "⚠ Can't decrypt") }));
+  return load().entries.map((e) => ({ id: e.id, value: byId.get(e.id) ?? tr("ui.secrets.can.decrypt.1d6c0ef") }));
 }
 
 // ---- 环境变量注入表：给本机 bash 子进程用（走内存缓存，不反复摸钥匙串） ----
@@ -290,20 +288,20 @@ const ZH_EN: [string, string][] = [
   ["证书", "cert"],
   ["令牌", "token"],
   ["接口", "api"],
-  ["邮箱", "email"],
+  [tr("login.email"), "email"],
   ["账号", "account"],
   ["账户", "account"],
-  ["用户", "user"],
+  [tr("ui.app.user.5c3b9c0"), "user"],
   ["生产", "prod"],
   ["线上", "prod"],
   ["预发", "staging"],
-  ["测试", "test"],
+  [tr("ui.app.test.d2d526c"), "test"],
   ["内部", "internal"],
-  ["密钥", "key"],
+  [tr("ui.helpmanualmodal.secrets.keys.691b847"), "key"],
   ["秘钥", "key"],
   ["口令", "password"],
-  ["密码", "password"],
-  ["登录", "login"],
+  [tr("login.password"), "password"],
+  [tr("login.signin"), "login"],
   ["根", "root"],
   ["主", "primary"],
   ["备", "backup"],
@@ -428,9 +426,9 @@ export function detect(text: string): Candidate[] {
 
 // 系统提示：告诉模型密钥都在本地保险箱/环境变量，它无需知道明文
 export const SECRETS_SYSTEM_NOTE =
-  `\n\n## 本地密钥管理\n所有敏感密钥由本地密钥管理器 + 环境变量统一加密管理，你无需、也不会看到具体明文——凡是 ${PH_OPEN}名字${PH_CLOSE} 形式的占位符都是被脱敏的真实密钥，本地执行时会自动回填。` +
-  `需要用到密钥时：优先在 bash 里用环境变量(如 $OPENAI_API_KEY)引用，minicc 会把真实值注入子进程；或直接沿用占位符，写入文件/命令时本地会替换。不要向用户索要或试图打印明文密钥。`;
+  tr("agent.secretsNote", {open:PH_OPEN,close:PH_CLOSE}, "zh");
 // 英文版密钥说明（跟随界面语言）
 export const SECRETS_SYSTEM_NOTE_EN =
-  `\n\n## Local secret management\nAll sensitive secrets are encrypted and managed centrally by a local secret manager plus environment variables, so you neither need nor will ever see the plaintext values — any placeholder in the form ${PH_OPEN}name${PH_CLOSE} is a masked real secret, auto-restored at local execution time.` +
-  ` When you need a secret: prefer referencing it via an env var in bash (e.g. $OPENAI_API_KEY) and the app injects the real value into the child process; or keep the placeholder as-is and it's substituted locally when writing files/commands. Never ask the user for, or try to print, plaintext secrets.`;
+  tr("agent.secretsNote", {open:PH_OPEN,close:PH_CLOSE}, "en");
+
+export function secretsSystemNote(language: string) { return tr("agent.secretsNote", {open:PH_OPEN,close:PH_CLOSE}, language); }

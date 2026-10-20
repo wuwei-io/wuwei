@@ -11,7 +11,7 @@ api.onEvent = callback => {
 contextBridge.exposeInMainWorld('wuwei', api);
 window.addEventListener('DOMContentLoaded', () => { sessionStorage.setItem('wuwei_splash_shown', '1'); });
 try {
-  localStorage.setItem('wuwei_lang', 'zh');
+  localStorage.setItem('wuwei_lang', process.argv.find(arg=>arg.startsWith('--qa-lang='))?.slice('--qa-lang='.length) || 'zh');
   localStorage.setItem('wuwei-onboarding-done', '1');
   sessionStorage.setItem('wuwei_splash_shown', '1');
 } catch {}

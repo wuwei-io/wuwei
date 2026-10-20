@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
 import React, { useEffect, useState } from 'react';
 
 export function PremiumModelNotice({ en, busy, switching, onSwitch }: {
@@ -13,8 +14,8 @@ export function PremiumModelNotice({ en, busy, switching, onSwitch }: {
   }, []);
   if (!visible) return null;
   return <div className="premium-model-current" role="note">
-    <span><strong>{en ? 'Premium model: high cost, fast spending' : '顶级模型：价格高、消耗快'}</strong><span>{busy ? (en ? 'Switching stops this task. Resend to continue with the value model.' : '切换会停止当前任务，重新发送后使用推荐模型。') : (en ? 'For everyday tasks, recommended value models make coins last longer.' : '日常任务建议使用高性价比推荐模型，让无为币更耐用。')}</span></span>
-    <button type="button" disabled={switching} onClick={onSwitch}>{en ? (busy ? 'Stop & switch to value' : 'Switch to value model') : (busy ? '停止并改用推荐模型' : '改用高性价比模型')}</button>
-    <button type="button" className="premium-model-dismiss" aria-label={en ? 'Dismiss reminder' : '关闭提示'} title={en ? 'Dismiss reminder' : '关闭提示'} onClick={() => setVisible(false)}>×</button>
+    <span><strong>{tr("ui.premiummodelnotice.premium.model.high.cost.fast.spending.09e9fbd")}</strong><span>{busy ? (tr("ui.premiummodelnotice.switching.stops.this.task.resend.to.3400539")) : (tr("ui.premiummodelnotice.for.everyday.tasks.recommended.value.models.65109ed"))}</span></span>
+    <button type="button" disabled={switching} onClick={onSwitch}>{busy ? tr("ui.premiummodelnotice.message.84c79db2b6") : tr("ui.premiummodelnotice.message.1abe7bbd28")}</button>
+    <button type="button" className="premium-model-dismiss" aria-label={tr("ui.premiummodelnotice.dismiss.reminder.91d91f5")} title={tr("ui.premiummodelnotice.dismiss.reminder.91d91f5")} onClick={() => setVisible(false)}>×</button>
   </div>;
 }

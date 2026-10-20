@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // 渲染进程可见的 window.wuwei 类型（来自 preload）
 import type { WuweiMe, CatalogProviderDto, ModelPricingData } from "../../main/wuwei-auth.js";
 import type { BillingRequest, BillingResponse } from '../../../src/billing/contracts.js';

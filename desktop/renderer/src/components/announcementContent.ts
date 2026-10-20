@@ -1,3 +1,4 @@
+import { tr } from "../../../../src/localization/index.js";
 export type AnnouncementCard = { title: string; summary: string; details: string; icon: "company" | "image" | "spark" };
 export type AnnouncementContent = { kind: "cards"; cards: AnnouncementCard[]; intro: string; notice: string } | { kind: "plain"; paragraphs: string[] };
 
@@ -5,7 +6,7 @@ export type AnnouncementContent = { kind: "cards"; cards: AnnouncementCard[]; in
 export function splitAnnouncementHeading(title: string, _readReceipt = "") {
   const match = title.match(/(?:^|[\s（(【[])(v?\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?)(?=$|[\s：:）)】\]])/i);
   const version = match?.[1] || "";
-  return { title: version ? title.replace(version, "").replace(/[（(【[]\s*[）)】\]]/g, "").replace(/\s+([：:])/g, "$1").trim() : title.trim() || "产品更新", version: version ? `v${version.replace(/^v/i, "")}` : "" };
+  return { title: version ? title.replace(version, "").replace(/[（(【[]\s*[）)】\]]/g, "").replace(/\s+([：:])/g, "$1").trim() : title.trim() || tr("ui.announcementcontent.message.cd880a1d75"), version: version ? `v${version.replace(/^v/i, "")}` : "" };
 }
 export function safeAnnouncementUrl(url: string): string {
   return /^(https?:\/\/|mailto:)[^\s\u0000-\u001f]+$/i.test(url) ? url : "";

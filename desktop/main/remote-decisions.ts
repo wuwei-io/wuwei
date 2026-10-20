@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 import type { Decision, DecisionResponse } from "../../src/types.js";
 
 export interface RemoteDecisionSource { sessionId?: string; roomId?: string }
@@ -27,7 +28,7 @@ export class RemoteDecisions {
   request(reqId: string, raw: Decision, source: RemoteDecisionSource, smartTimer: boolean,
     signal: AbortSignal, send: Waiting['send']): Promise<DecisionResponse> {
     if (signal.aborted) return Promise.resolve({ action: "deny", reason: "abort" });
-    if (this.waiting.has(raw.permId)) throw new Error("决策编号重复");
+    if (this.waiting.has(raw.permId)) throw new Error(tr("ui.remote-decisions.message.479465245e"));
     const decision = { ...raw, timeoutSec: raw.risk === "low" && smartTimer && this.smartTimerEnabled ? raw.timeoutSec : null };
     return new Promise(resolve => {
       const onAbort = () => this.finish(raw.permId, { action: "deny", reason: "abort" });

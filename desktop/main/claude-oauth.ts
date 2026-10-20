@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // Claude 订阅一键授权：app 内直接跑 Claude Code 的 OAuth（PKCE）流程，
 // 免去手动 `claude setup-token` + 复制粘贴。产出长期 token(sk-ant-oat01…)，
 // 与 provider.ts 里 authMode=oauth 走的 Authorization:Bearer + anthropic-beta:oauth 完全对应。
@@ -20,7 +21,7 @@ const SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_s
 
 // 界面语言（settings.ts 的 applyEnvFromSettings 写入）。授权窗标题是用户能看见的，得跟界面语言走。
 // 语言可运行时切换，所以只在调用时求值，不做模块常量。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -197,7 +198,7 @@ export async function claudeOAuthLogin(): Promise<ClaudeOAuthResult | null> {
   const w = new BrowserWindow({
     width: 520,
     height: 720,
-    title: tt("无为 · 登录授权", "Wuwei · Authorize"),
+    title: tr("ui.claude.oauth.wuwei.authorize.4f84329"),
     ...(existsSync(iconPath) ? { icon: iconPath } : {}),
     autoHideMenuBar: true,
     webPreferences: { partition: "persist:claude-oauth" }, // 持久分区：登录态可复用

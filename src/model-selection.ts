@@ -1,13 +1,8 @@
+import { tr, localizeStoredText } from "./localization/index.js";
 import { hostedModelImageInput } from './model-image-input.js';
 
 export type ModelCategory = 'free' | 'economy' | 'premium' | 'images' | 'connections';
-export const MODEL_CATEGORIES: { id: ModelCategory; zh: string; en: string }[] = [
-  { id:'free', zh:'免费模型', en:'Free models' },
-  { id:'economy', zh:'热门高性价比', en:'Popular value models' },
-  { id:'premium', zh:'顶级模型', en:'Premium models' },
-  { id:'images', zh:'生图模型', en:'Image models' },
-  { id:'connections', zh:'我的接入', en:'My connections' },
-];
+export const MODEL_CATEGORIES: { id: ModelCategory; zh: string; en: string }[] = [{"id":"free","messageKey":"model.category.free"},{"id":"economy","messageKey":"model.category.economy"},{"id":"premium","messageKey":"model.category.premium"},{"id":"images","messageKey":"model.category.images"},{"id":"connections","messageKey":"model.category.connections"}].map(row => ({...row, id:row.id as ModelCategory, get zh(){return tr(row.messageKey);},get en(){return tr(row.messageKey);}}));
 export type ModelChoice = {
   key: string; providerId: string; modelId: string; label: string; labelEn: string;
   category: ModelCategory; rank: number; recommended: boolean; defaultForNewUsers: boolean;
@@ -18,11 +13,15 @@ export type ModelChoice = {
   connectionLabel?: string;
 };
 type Provider = { id:string; hosted:boolean; sort:number; label:string; labelEn?:string|null; models:{id:string;label:string;labelEn?:string|null;label_en?:string|null;free:boolean;anon?:boolean;badge?:string|null;inputModalities?:string[];selection?:{category?:string;rank?:number;recommended?:boolean;defaultForNewUsers?:boolean;hiddenInPicker?:boolean};price?:ModelChoice['price']}[] };
+function englishCatalogLabel(label: string, fallback: string): string {
+  const translated = localizeStoredText(label, 'en');
+  return /[\u3400-\u9fff]/.test(translated) ? fallback : translated;
+}
 export function catalogModelChoices(providers: Provider[], selectedKey: string): ModelChoice[] {
   return providers.flatMap(p=>p.models.filter(m=>!m.selection?.hiddenInPicker || `${p.id}/${m.id}`===selectedKey).map((m,index)=>({
     key:`${p.id}/${m.id}`,providerId:p.id,modelId:m.id,
-    label:(m.free && /自动/.test(m.label) ? m.label.replace(/^免费模型\s*[·・]?\s*/, '') : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),labelEn:(m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),
-    connectionLabel:p.labelEn || p.label,
+    label:(m.free && /自动/.test(m.label) ? m.label.replace(/^免费模型\s*[·・]?\s*/, '') : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),labelEn:(p.hosted ? englishCatalogLabel(m.labelEn || m.label_en || m.label || m.id, m.id) : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),
+    connectionLabel:p.labelEn || (p.hosted ? englishCatalogLabel(p.label, p.id) : p.label),
     category:(m.free?'free':!p.hosted?'connections':m.selection?.category==='economy'?'economy':'premium') as ModelCategory,
     rank:m.selection?.rank ?? p.sort*100+index,recommended:m.selection?.recommended===true,defaultForNewUsers:m.selection?.defaultForNewUsers===true,
     free:m.free,needsLogin:p.hosted && (!m.free || m.anon===false),badge:m.badge,price:m.price,

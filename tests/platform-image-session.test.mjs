@@ -9,7 +9,7 @@ import {createRequire} from 'node:module';
 import {imageToolBalanceFailure} from '../src/usage-limit.ts';
 // Compile with owned dependencies, preserving project's ESM config.
 const out=mkdtempSync(path.join(process.cwd(),'.image-session-'));let create;
-try{execFileSync(process.execPath,['node_modules/typescript/bin/tsc','--target','ES2022','--module','commonjs','--moduleResolution','node','--strict','--skipLibCheck','--esModuleInterop','--outDir',out,'src/imagegen/platform-image-session.ts']);
+try{execFileSync(process.execPath,['node_modules/typescript/bin/tsc','--target','ES2022','--module','commonjs','--moduleResolution','node','--strict','--skipLibCheck','--esModuleInterop','--resolveJsonModule','--outDir',out,'src/imagegen/platform-image-session.ts']);
  const fs=await import('node:fs');fs.writeFileSync(path.join(out,'package.json'),'{"type":"commonjs"}');
  ({createPlatformImageSession:create}=createRequire(import.meta.url)(path.join(out,'imagegen/platform-image-session.js')));
 }finally{rmSync(out,{recursive:true,force:true});}

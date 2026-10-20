@@ -1,3 +1,4 @@
+import { tr } from "../../src/localization/index.js";
 // 更新流量策略：独立于 Electron，可用假更新器/时钟验证。
 export type UpdateState = { available: boolean; downloaded?: boolean; version?: string; notes?: string; error?: string };
 export const DEFAULT_UPDATE_INTERVAL_MS = 2 * 60 * 60 * 1000;
@@ -48,7 +49,7 @@ export function createUpdatePolicy(updater: Updater, options: {
     if (failed && (now() < failed.retryAt || (!manual && failed.count >= 3))) return last;
     try {
       const files = await updater.downloadUpdate(); // SDK 校验并复用跨重启缓存、优先差分。
-      if (!files?.length) throw new Error('更新器未返回有效安装包');
+      if (!files?.length) throw new Error(tr("ui.update-policy.message.4668fd4df1"));
       failures.delete(info.version);
       ready = last = { ...last, downloaded: true };
       options.onReady?.(ready);

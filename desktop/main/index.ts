@@ -1,3 +1,5 @@
+import {localizeToolMetadata} from "../../src/localization/tools.js";
+import { tr, getCurrentLanguage, getLanguages } from "../../src/localization/index.js";
 import { resolveEmployee, employeeLabel, employeeRoster, TEAM_TOOL_EN } from "../../src/team/default-localization.js";
 // Electron 主进程：创建窗口，复用核心(agent/tools/config)，
 // 通过 IPC 把 Agent 流式 hooks 推给渲染进程，权限确认走 IPC 往返。
@@ -327,17 +329,17 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   const decisionHook: ToolContext['requestDecision'] = decision => waitForRemoteResult(decide(decision), executionSignal);
   const permit = onPermission || remoteExecution?.requestPermission || (async (name: string, input: unknown): Promise<'allow' | 'deny'> => {
     const answer = await requestDesktopDecision(`__room_${employee.id}`, executionSignal, localSource,
-      { name, sid: origin?.id || `__room_${employee.id}` })({ permId: randomUUID(), title: `${employee.name} 需要你确认`, question: `是否允许电脑执行 ${name}？`, risk: 'high', options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) });
+      { name, sid: origin?.id || `__room_${employee.id}` })({ permId: randomUUID(), title: tr("ui.index.message.1da10a8938", {p0: employee.name}), question: tr("ui.index.message.1451026b7f", {p0: name}), risk: 'high', options: [{ label: tr("ui.index.message.7caaf0c897"), value: 'deny' }, { label: tr("ui.index.message.fe73513fd6"), value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) });
     return answer.action === 'allow' || answer.value === 'allow' ? 'allow' : 'deny';
   });
-  if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error('本机已关闭远程执行');
+  if (remoteExecution && !remoteEnabled(loadSettings())) throw new Error(tr("ui.index.message.a63bf3cf53"));
   if (remoteExecution && (!remoteExecution.shareSubscription || !remoteShareSubscription(loadSettings())) && !providerOverride &&
       ['claude-oauth', 'codex'].includes(employee.model?.providerId || curProviderId()))
-    throw new Error('本机未同步该员工使用的订阅渠道');
+    throw new Error(tr("ui.index.message.e0fccfc9ef"));
   const employeeProvider = providerOverride || providerForEmployee(employee);
-  if (remoteExecution && employee.model && !employeeProvider) throw new Error('该员工配置的模型未就绪');
+  if (remoteExecution && employee.model && !employeeProvider) throw new Error(tr("ui.index.message.2168cf7bde"));
   const p = employeeProvider || provider;
-  if (!p) throw new Error("没有可用的模型，请先在左下角选一个平台");
+  if (!p) throw new Error(tr("ui.index.message.95634b4b7f"));
   const all = desktopTools();
   let tools = employee.tools?.length ? all.filter((t) => employee.tools!.includes(t.name)) : all;
   if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
@@ -381,8 +383,8 @@ function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
 const conversationReports = new ConversationReports({
   isBusy: sid => runs.has(sid),
   deliver: async (sid, text) => {
-    if (!listSessions().some(s => s.id === sid)) throw new Error('最初派活的会话已不存在。');
-    if (!getAgent(sid)) throw new Error('派活会话暂无可用模型，任务结果无法自动汇报。');
+    if (!listSessions().some(s => s.id === sid)) throw new Error(tr("ui.index.message.e2f2fc5e55"));
+    if (!getAgent(sid)) throw new Error(tr("ui.index.message.ad10caf22a"));
     await startTurn(sid, text);
   },
 });
@@ -405,8 +407,8 @@ const taskReports = new TaskReports({
     } else {
       // 回到最初派活的房间，由派活者验收；不会只停留在他与员工的另一条 DM。
       const roomId = batch.scope.origin.id;
-      if (!loadRooms().some(r => r.id === roomId)) throw new Error('派活房间已不存在，任务结果无法自动汇报。');
-      const messages = appendDmMessage(roomId, { speaker: { id: 'task-report', name: '任务结果', kind: 'agent' }, text });
+      if (!loadRooms().some(r => r.id === roomId)) throw new Error(tr("ui.index.message.ae8d1b9349"));
+      const messages = appendDmMessage(roomId, { speaker: { id: 'task-report', name: tr("ui.index.message.98a89682fc"), kind: 'agent' }, text });
       send('evt:team-room', { roomId, messages, running: true });
       await enqueueEmpTask(batch.scope.ownerId, async () => {
         await runDmTurn(roomId, batch.scope.ownerId, text, teamOrchestratorDeps(), batch.scope.depth,
@@ -421,8 +423,8 @@ const taskReports = new TaskReports({
       // 保留收到的员工资料；模型暂不可用时也不把汇报静默丢弃。
       const a = agents.get(batch.scope.origin.id);
       if (a) { a.setMessages([...a.getMessages(), { role: 'user', content: [{ type: 'text', text }], ts: Date.now() }]); persist(batch.scope.origin.id); }
-      send('evt:error', { sid: batch.scope.origin.id, message: '员工结果已返回，但自动汇报未完成。请在原会话继续验收。' });
-    } else send('evt:team-room-hint', { roomId: batch.scope.origin.id, code: 'task-report-error', hint: '员工结果已返回，但负责人汇报失败，请继续验收。' });
+      send('evt:error', { sid: batch.scope.origin.id, message: tr("ui.index.message.dd69db9e2f") });
+    } else send('evt:team-room-hint', { roomId: batch.scope.origin.id, code: 'task-report-error', hint: tr("ui.index.message.9cf10363d6") });
   },
 });
 
@@ -495,25 +497,25 @@ function mimeFor(path: string): string | null {
 
 // 平台友好名（各兼容端点的 cfg.provider 都是 openai，改用 UI 预设 providerId 显示真实平台）
 const PROVIDER_LABELS: Record<string, string> = {
-  codex: "Codex 订阅",
-  "claude-oauth": "Claude 订阅",
+  get codex() { return tr("ui.index.codex.subscription.9022217"); },
+  get "claude-oauth"() { return tr("set.g.claudeSub"); },
   anthropic: "Claude API",
   openai: "OpenAI",
   deepseek: "DeepSeek",
-  qwen: "通义千问",
-  doubao: "豆包",
+  get qwen() { return tr("ui.index.message.4934a6e4c2"); },
+  get doubao() { return tr("ui.index.message.5d63d1428b"); },
   minimax: "MiniMax",
-  zhipu: "智谱 GLM",
+  get zhipu() { return tr("ui.index.zhipu.glm.214052b"); },
   kimi: "Kimi",
-  hunyuan: "腾讯混元",
+  get hunyuan() { return tr("ui.index.message.3db3bd29be"); },
   grok: "Grok",
-  custom: "自定义端点",
+  get custom() { return tr("ui.index.message.8510597928"); },
 };
 // 无为托管平台(providerId 以 "wuwei-" 开头)的品牌名——底层都走 openai 兼容端点，
 // 不能用 cfg.provider(恒为 openai)当平台名，得按 providerId 映射真实品牌。
 const HOSTED_BRAND: Record<string, string> = {
   deepseek: "DeepSeek",
-  zhipu: "智谱 GLM",
+  get zhipu() { return tr("ui.index.zhipu.glm.214052b"); },
   kimi: "Kimi",
   claude: "Claude",
   gpt: "GPT",
@@ -530,17 +532,17 @@ const PROVIDER_LABELS_EN: Record<string, string> = {
   custom: "Custom endpoint",
 };
 function providerLabel(pid: string): string | undefined {
-  const en = process.env.WUWEI_LANG === "en";
+  const en = getCurrentLanguage() !== "zh";
   return (en && PROVIDER_LABELS_EN[pid]) || PROVIDER_LABELS[pid];
 }
 function labelFor(cfg: ReturnType<typeof loadConfig>, providerId?: string): string {
   if (providerId && PROVIDER_LABELS[providerId]) return providerLabel(providerId)!;
   // 无为托管：显示「无为托管 · 品牌」，别露出底层 openai
   if (providerId && providerId.startsWith("wuwei-")) {
-    if (providerId === "wuwei-free") return tt("无为 · 免费体验", "Wuwei · Free trial");
+    if (providerId === "wuwei-free") return tr("ui.index.wuwei.free.trial.1ffbeb0");
     const base = providerId.slice("wuwei-".length);
     // providerLabel 优先：HOSTED_BRAND 里的 zhipu 是中文「智谱 GLM」，英文得走 PROVIDER_LABELS_EN
-    return `${tt("无为托管", "Wuwei Hosted")} · ${providerLabel(base) || HOSTED_BRAND[base] || base}`;
+    return `${tr("ui.index.wuwei.hosted.afa5b1d")} · ${providerLabel(base) || HOSTED_BRAND[base] || base}`;
   }
   return cfg.provider === "anthropic" ? `anthropic/${cfg.authMode}` : cfg.provider;
 }
@@ -805,12 +807,12 @@ async function zhipuAccount(): Promise<{ name?: string; avatar?: string; balance
 
 async function webLogin(pid: string): Promise<{ name?: string; avatar?: string; token?: string } | null> {
   const cfg = CONSOLE[pid];
-  log("webLogin", "开始", pid, cfg ? "登录页=" + cfg.login : "无该平台配置");
+  log("webLogin", "开始", pid, cfg ? "登录页=" + cfg.login : tr("ui.index.message.f16958ee7c"));
   if (!cfg) return null;
   const w = new BrowserWindow({
     width: 480,
     height: 700,
-    title: tt("登录获取账号信息", "Sign in to fetch account info"),
+    title: tr("ui.index.sign.in.to.fetch.account.info.1abf042"),
     ...(existsSync(join(__dirname, "../../build/icon.png")) ? { icon: join(__dirname, "../../build/icon.png") } : {}),
     webPreferences: { partition: "persist:login-" + pid },
   });
@@ -1052,12 +1054,12 @@ async function emitAccount() {
   const pid = st?.providerId || (loadConfig().provider === "codex" ? "codex" : "");
   const nickname = st?.creds?.[pid]?.nickname || undefined;
   const avatar = st?.creds?.[pid]?.avatar || undefined;
-  log("emitAccount", "平台=", pid, "昵称=", nickname || "无", "头像=", avatar ? "有" : "无");
+  log("emitAccount", "平台=", pid, "昵称=", nickname || tr("acct.userInitial"), "头像=", avatar ? "有" : tr("acct.userInitial"));
   if (pid === "codex" || (!pid && !st)) {
     const a = getAccount();
     send("evt:account", {
       providerId: "codex",
-      label: tt("Codex 订阅", "Codex subscription"),
+      label: tr("ui.index.codex.subscription.9022217"),
       loggedIn: a.loggedIn,
       email: a.email,
       nickname,
@@ -1074,10 +1076,10 @@ async function emitAccount() {
     const acct = readClaudeAccount();
     const nick = acct?.displayName || acct?.email || nickname;
     const plan = acct?.plan;
-    log("claudeAcct", "用户=", nick || "无", "套餐=", plan || "无", "(来源 ~/.claude.json)");
+    log("claudeAcct", "用户=", nick || tr("acct.userInitial"), "套餐=", plan || tr("acct.userInitial"), "(来源 ~/.claude.json)");
     send("evt:account", {
       providerId: pid,
-      label: plan ? `${tt("Claude 订阅", "Claude subscription")} · ${plan}` : tt("Claude 订阅", "Claude subscription"),
+      label: plan ? `${tr("set.g.claudeSub")} · ${plan}` : tr("set.g.claudeSub"),
       loggedIn,
       email: acct?.email || null,
       nickname: nick,
@@ -1096,7 +1098,7 @@ async function emitAccount() {
     const expired = u?.expired;
     send("evt:account", {
       providerId: pid,
-      label: expired ? tt("Kimi Code 订阅 · 额度登录已过期", "Kimi Code subscription · quota login expired") : tt("Kimi Code 订阅", "Kimi Code subscription"),
+      label: expired ? tr("ui.index.kimi.code.subscription.quota.login.expired.826643d") : tr("ui.index.kimi.code.subscription.6e91333"),
       loggedIn,
       email: null,
       nickname,
@@ -1141,13 +1143,13 @@ async function emitAccount() {
       "balance",
       "sid=", currentId.slice(0, 8),
       "zhipu model=", model,
-      "余额=", total != null ? total.toFixed(4) : "无",
+      "余额=", total != null ? total.toFixed(4) : tr("acct.userInitial"),
       "expired=", expired || false,
       "本会话已消耗=", consumed.toFixed(4),
     );
     send("evt:account", {
       providerId: pid,
-      label: expired ? tt("智谱 GLM · 登录已过期", "Zhipu GLM · login expired") : tt("智谱 GLM", "Zhipu GLM"),
+      label: expired ? tr("ui.index.zhipu.glm.login.expired.e366449") : tr("ui.index.zhipu.glm.214052b"),
       loggedIn,
       email: null,
       nickname: nick,
@@ -1238,48 +1240,42 @@ async function emitAccount() {
 
 // 脑网络说明的默认提示词(可在「知识网络」设置里查看/覆盖)。追加的『已沉淀概念』动态目录不含在内。
 export const DEFAULT_BRAIN_NOTE =
-  `\n\n## 本地知识网络（Brain）\n你有一个本地概念知识网络，沉淀着项目/服务器/脚本/部署/注意事项等结构化知识。\n- 涉及具体项目或部署/环境的任务，**开工前先用 brain_recall 检索**，按返回的结构化子图行动，别每次全量翻文档、省 token。\n- 发现值得长期固化的高价值知识（项目背景、git路径、测试/线上环境、部署脚本位置、踩坑注意事项）时，用 brain_learn 记住、brain_link 串联关系；旧信息有误就用同名 brain_learn 覆盖纠正。\n- brain_recall 还会命中知识宫殿等文档库的原文片段（『相关文档』），只给摘要+路径；需要完整内容时用 brain_read_doc 按该路径读全文，不必全量翻。`;
+  tr("agent.brainNote", {}, "zh");
 // 英文版脑网络说明（跟随界面语言）
 export const DEFAULT_BRAIN_NOTE_EN =
-  `\n\n## Local knowledge network (Brain)\nYou have a local concept knowledge network holding structured knowledge about projects/servers/scripts/deployments/caveats.\n- For tasks about a specific project or deployment/environment, **run brain_recall first** and act on the returned structured subgraph — don't re-read whole docs every time (saves tokens).\n- When you find high-value knowledge worth keeping (project background, git paths, test/prod environments, where deploy scripts live, pitfalls), save it with brain_learn and connect relations with brain_link; correct stale info by brain_learn with the same name.\n- brain_recall also surfaces source snippets from doc libraries ("related docs") as summary+path only; when you need the full text, read it by that path with brain_read_doc instead of scanning everything.`;
+  tr("agent.brainNote", {}, "en");
 
 // 构造系统提示词：优先本平台专属覆盖(creds[pid].systemPrompt)，再全局(settings.systemPrompt)，都没有=默认模板；渲染 {model}/{cwd}
 function buildSysPrompt(cwd: string, model: string, providerId?: string): string {
   const st = loadSettings();
-  const lang = st?.app?.lang === "en" ? "en" : st?.app?.lang === "zh" ? "zh" : detectSysLang(); // 未手动设过→按系统语言
+  const lang = st?.app?.lang || detectSysLang(); // 未手动设过→按系统语言
   const override = providerId ? st?.creds?.[providerId]?.systemPrompt : undefined;
   const custom = typeof override === "string" ? override : st?.systemPrompt;
   let base = typeof custom === "string" ? renderPrompt(custom, cwd, model) : systemPrompt(cwd, model, lang);
   // 记忆：始终告知可用 remember 工具，并附上已记住的内容(跨会话)
   const mem = loadMemory().trim();
   base +=
-    lang === "en"
-      ? `\n\n## Long-term memory\nWhen the user says "remember…/from now on…/I prefer…", or shares info worth keeping long-term (preferences, how to address them, facts, project background), call the remember tool; it auto-loads into every future conversation.`
-      : `\n\n## 长期记忆\n用户说“记住…/以后…/我喜欢…”或出现值得长期保留的信息(偏好、称呼、事实、项目背景)时，调用 remember 工具写入；它会在之后每次对话自动加载。`;
-  if (mem) base += lang === "en" ? `\n\nRemembered (follow/refer to actively):\n${mem}` : `\n\n已记住（需主动遵守/参考）：\n${mem}`;
+    tr("ui.index.long.term.memory.when.the.user.82e3dcd");
+  if (mem) base += tr("ui.index.remembered.follow.refer.to.actively.f5690b5", { p0: mem });
   // 本地知识网络（Brain）：概念化的项目/部署知识，按需 recall；提示词可在设置里覆盖。
   // 关掉「脑网络」或非会员：不注入说明、不追加概念目录(brain_* 工具也在别处一并停掉)。
   if (brainAvailable(st)) {
-    base += typeof st?.brainPrompt === "string" ? st.brainPrompt : (lang === "en" ? DEFAULT_BRAIN_NOTE_EN : DEFAULT_BRAIN_NOTE);
+    base += typeof st?.brainPrompt === "string" ? st.brainPrompt : tr("agent.brainNote", {}, lang);
     try {
       const idx = brain.conceptIndex(40);
       // 这段拼在系统提示里，中文会把英文用户的回复语言也带偏，跟着 lang 走
       if (idx.length)
         base +=
-          lang === "en"
-            ? `\nConcepts already stored (expand with brain_recall): ${idx.join(", ")}`
-            : `\n已沉淀的概念（可 brain_recall 展开）：${idx.join("、")}`;
+          tr("ui.index.concepts.already.stored.expand.with.brain.a98ba5c", { p0: (lang !== "zh" ? idx.join(", ") : idx.join("、")) });
     } catch {
       /* brain 不可用不影响主流程 */
     }
   }
   // 密钥说明：告知模型密钥走本地保险箱/环境变量，无需明文；提示词可在设置里覆盖
-  base += typeof st?.secretsPrompt === "string" ? st.secretsPrompt : (lang === "en" ? secrets.SECRETS_SYSTEM_NOTE_EN : secrets.SECRETS_SYSTEM_NOTE);
+  base += typeof st?.secretsPrompt === "string" ? st.secretsPrompt : secrets.secretsSystemNote(lang);
   // 与用户交互：需要用户拍板时必须弹选择框(强引导，否则模型习惯用文字罗列)
   base +=
-    lang === "en"
-      ? `\n\n## Interacting with the user (must follow)\nWhenever you need the user to choose, confirm, or decide among a few concrete options — e.g. "approach A or B", "which file to delete", "continue or not", "which branch" — you **must call the ask_user tool** to show clickable choices. **Do not** list options in prose like "Option A / Option B" or "1. … 2. …" and make the user type. Single-select, multi-select, and multiple questions at once are supported. Only ask in prose when the answer is free text (not picked from options). This overrides your usual habit of asking in prose.`
-      : `\n\n## 与用户交互（务必遵守）\n每当你要让用户在几个明确选项里做选择、确认或拍板——例如“走方案A还是B”“删哪个文件”“要不要继续”“选哪个分支”——你**必须调用 ask_user 工具**弹出可点击选择框，**禁止**在正文里用“方案A/方案B”“1. …2. …”这类文字罗列选项让用户打字。单选/多选/一次多问都支持。只有当答案是自由文本(不是从选项里挑)时，才在正文直接问。这条优先于你平时“用文字提问”的习惯。`;
+    tr("ui.index.interacting.with.the.user.must.follow.4295d0e");
   return base;
 }
 
@@ -1402,10 +1398,7 @@ function clearDeadClaudeOAuth(why: string): void {
   // 只热更「绑在 Claude 订阅」的会话——别把清 token 后重建的 provider 塞给别的平台会话，破坏独立性。
   for (const [sid, a] of agents) if (backendBySid.get(sid) === "claude-oauth") a.setProvider(provider);
   send("evt:error", {
-    message: tt(
-      "Claude 订阅授权已过期，已自动清除失效 token。请在设置里重新授权，或改用 API Key。",
-      "Your Claude subscription authorization expired; the dead token has been cleared. Re-authorize in settings, or switch to an API key.",
-    ),
+    message: tr("ui.index.your.claude.subscription.authorization.expired.the.fb36f89"),
   });
 }
 // 这个错误是不是「OAuth token 已失效」——只认鉴权类信号，别把限流/余额/网络错误也当成失效把 token 清了
@@ -1529,14 +1522,13 @@ function requestShowBrowser() {
 }
 const browserOpenTool: Tool = {
   name: "browser_open",
-  description:
-    "用内置浏览器打开一个网页 URL（能执行 JS，比 web_fetch 更适合动态/需交互页面）。打开后可用 browser_read 读正文、browser_click 点击元素。",
+  get description() { return tr("tool.description.browser_open"); },
   readOnly: true,
   inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
   async run(input): Promise<ToolResult> {
     try {
       const url = String(input.url || "");
-      if (!/^https?:\/\//i.test(url)) return { content: tt("URL 需以 http/https 开头", "URL must start with http/https"), isError: true };
+      if (!/^https?:\/\//i.test(url)) return { content: tr("ui.index.url.must.start.with.http.https.5effd76"), isError: true };
       const wc = getBrowserView().webContents;
       requestShowBrowser(); // 让前端弹出浏览器面板，用户可实时看
       try {
@@ -1546,16 +1538,16 @@ const browserOpenTool: Tool = {
         if (!wc.getURL() || wc.getURL() === "about:blank") throw e;
       }
       return {
-        content: tt(`已打开：${wc.getTitle()}（${wc.getURL()}）。可用 browser_read 读正文、browser_click 点击。`, `Opened: ${wc.getTitle()} (${wc.getURL()}). Use browser_read for text, browser_click to click.`),
+        content: tr("ui.index.opened.use.browser.read.for.text.0a36486", { p0: wc.getTitle(), p1: wc.getURL() }),
       };
     } catch (e: any) {
-      return { content: tt(`打开失败: ${e.message}`, `Open failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.open.failed.b0262bc", { p0: e.message }), isError: true };
     }
   },
 };
 const browserReadTool: Tool = {
   name: "browser_read",
-  description: "读取内置浏览器当前页面的可见正文文本（需先 browser_open）。",
+  get description() { return tr("tool.description.browser_read"); },
   readOnly: true,
   inputSchema: { type: "object", properties: {} },
   async run(): Promise<ToolResult> {
@@ -1563,30 +1555,30 @@ const browserReadTool: Tool = {
       const text = String((await browserExec("document.body ? document.body.innerText : ''")) || "");
       const max = 12000;
       const t = text.trim();
-      return { content: (t.length > max ? t.slice(0, max) + tt(`\n…(已截断，共 ${t.length} 字符)`, `\n…(truncated, ${t.length} chars total)`) : t) || tt("(页面无文本)", "(no page text)") };
+      return { content: (t.length > max ? t.slice(0, max) + tr("ui.index.truncated.chars.total.13a3349", { p0: t.length }) : t) || tr("ui.index.no.page.text.00cf453") };
     } catch (e: any) {
-      return { content: tt(`读取失败: ${e.message}（可能还没 browser_open）`, `Read failed: ${e.message} (maybe browser_open wasn't called yet)`), isError: true };
+      return { content: tr("ui.index.read.failed.maybe.browser.open.wasn.5a0d39b", { p0: e.message }), isError: true };
     }
   },
 };
 const browserClickTool: Tool = {
   name: "browser_click",
-  description: "在内置浏览器当前页面点击匹配 CSS 选择器的元素（按钮/链接等）。点完可再 browser_read 看变化。",
+  get description() { return tr("tool.description.browser_click"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { selector: { type: "string", description: "CSS 选择器" } },
+    properties: { selector: { type: "string", description: tr("tool.parameter.browser_click.selector") } },
     required: ["selector"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     try {
       const sel = String(input.selector || "");
       const r = await browserExec(
         `(()=>{const el=document.querySelector(${JSON.stringify(sel)});if(!el)return 'NOT_FOUND';el.scrollIntoView();el.click();return 'OK';})()`,
       );
-      return r === "OK" ? { content: tt(`已点击 ${sel}`, `Clicked ${sel}`) } : { content: tt(`未找到元素 ${sel}`, `Element not found: ${sel}`), isError: true };
+      return r === "OK" ? { content: tr("ui.index.clicked.858f52e", { p0: sel }) } : { content: tr("ui.index.element.not.found.9e56851", { p0: sel }), isError: true };
     } catch (e: any) {
-      return { content: tt(`点击失败: ${e.message}`, `Click failed: ${e.message}`), isError: true };
+      return { content: tr("ui.index.click.failed.ba0bca0", { p0: e.message }), isError: true };
     }
   },
 };
@@ -1599,7 +1591,7 @@ function resolveCeoId(): string | null {
   if (cfgId && emps.some((e) => e.id === cfgId)) return cfgId;
   const byTitle = emps.find((e) => /ceo/i.test(e.title || ""));
   if (byTitle) return byTitle.id;
-  return resolveEmployee(emps, "wj-ceo")?.id || resolveEmployee(emps, "小笨")?.id || null;
+  return resolveEmployee(emps, "wj-ceo")?.id || resolveEmployee(emps, tr("team.default.wj-ceo.name"))?.id || null;
 }
 
 // 把关链：员工请示(ask_user)先问谁、再问谁。顺序 = 本部门负责人(若 self 在某部门且自己不是负责人) → 公司 CEO。
@@ -1627,7 +1619,7 @@ async function askCeoDecision(
   const qtext = questions
     .map((q: any, i: number) => `${i + 1}. ${q.question}\n   可选：${(q.options || []).map((o: any) => o.label).join(" | ")}${q.multiSelect ? "（可多选）" : ""}`)
     .join("\n");
-  const input = process.env.WUWEI_LANG === "en"
+  const input = getCurrentLanguage() !== "zh"
     ? `You are the company CEO. A teammate requests a decision. Choose from the provided options and give a brief reason. If the chair must decide, reply only ESCALATE: <reason>.
 
 ${qtext}`
@@ -1657,33 +1649,28 @@ ${qtext}`;
 // 走「暂停-回传」范式(同权限确认)：run 返回 Promise 挂 pendingAsk，前端选完 ipc 回来 resolve。
 const askUserTool: Tool = {
   name: "ask_user",
-  description:
-    "【首选交互方式】只要你打算让用户在几个明确选项里选择、确认或拍板，就调用本工具弹出可点击选择框，" +
-    "不要在正文用文字罗列『方案A/方案B』『1./2.』让用户打字。支持单选/多选/一次多个问题。" +
-    "multiSelect=true 允许多选。适合：方案/文件/分支间挑选、确认偏好、二选一、要不要继续等。" +
-    "只有需要用户自由文本作答(非选项)时才在正文直接问。" +
-    '最简调用示例：{"questions":[{"question":"走哪个方案？","options":[{"label":"方案A"},{"label":"方案B"}]}]}',
+  get description() { return tr("tool.description.ask_user"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
       questions: {
         type: "array",
-        description: "要问用户的一个或多个问题",
+        description: tr("tool.parameter.ask_user.questions"),
         items: {
           type: "object",
           properties: {
-            question: { type: "string", description: "问题正文" },
-            header: { type: "string", description: "很短的标签(可选，如「方案」「文件」)" },
-            multiSelect: { type: "boolean", description: "是否允许多选(默认单选)" },
+            question: { type: "string", description: tr("tool.parameter.ask_user.question") },
+            header: { type: "string", description: tr("tool.parameter.ask_user.header") },
+            multiSelect: { type: "boolean", description: tr("tool.parameter.ask_user.multiSelect") },
             options: {
               type: "array",
-              description: "供点击的选项",
+              description: tr("tool.parameter.ask_user.options"),
               items: {
                 type: "object",
                 properties: {
-                  label: { type: "string", description: "选项文字" },
-                  description: { type: "string", description: "选项说明(可选)" },
+                  label: { type: "string", description: tr("tool.parameter.ask_user.label") },
+                  description: { type: "string", description: tr("tool.parameter.ask_user.description") },
                 },
                 required: ["label"],
               },
@@ -1694,22 +1681,22 @@ const askUserTool: Tool = {
       },
     },
     required: ["questions"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     let questions = Array.isArray((input as any).questions) ? (input as any).questions : [];
-    if (!questions.length) return { content: tt("ask_user 需要至少一个带 options 的问题", "ask_user needs at least one question with options"), isError: true };
+    if (!questions.length) return { content: tr("ui.index.ask.user.needs.at.least.one.a5c3295"), isError: true };
 
     // Remote runs must never disappear into the desktop-only legacy ask_user dialog.
     if (ctx.remoteExecution?.requestDecision) {
       const replies: string[] = [];
       for (const question of questions) {
-        const options = (Array.isArray(question.options) ? question.options : []).map((option: any, i: number) => ({ label: String(option.label || `选项 ${i + 1}`), value: `option_${i}`, desc: typeof option.description === 'string' ? option.description : undefined }));
-        if (!options.length) return { content: '问题缺少可选项', isError: true };
-        const answer = await ctx.remoteExecution.requestDecision({ permId: randomUUID(), title: question.header || '需要你决定', question: String(question.question || '请选择') + (question.multiSelect ? '（需要多个选项时请在自定义回复中填写）' : ''), risk: 'high', options, allowCustom: true, timeoutSec: null });
-        if (answer.action === 'deny') return { content: '用户取消了选择，未获同意。' };
+        const options = (Array.isArray(question.options) ? question.options : []).map((option: any, i: number) => ({ label: String(option.label || tr("ui.index.message.c9230e4570", {p0: i + 1})), value: `option_${i}`, desc: typeof option.description === 'string' ? option.description : undefined }));
+        if (!options.length) return { content: tr("ui.index.message.bb4e9548ea"), isError: true };
+        const answer = await ctx.remoteExecution.requestDecision({ permId: randomUUID(), title: question.header || '需要你决定', question: String(question.question || tr("ui.index.message.0591cbc601")) + (question.multiSelect ? tr("ui.index.message.d773fdcc6d") : ''), risk: 'high', options, allowCustom: true, timeoutSec: null });
+        if (answer.action === 'deny') return { content: tr("ui.index.message.24beb7459c") };
         replies.push(`${question.question} → ${answer.text || options.find((option: { value: string }) => option.value === answer.value)?.label || answer.value || answer.action}`);
       }
-      return { content: `用户的选择：\n${replies.join('\n')}` };
+      return { content: tr("ui.index.message.7661439b60", {p0: replies.join('\n')}) };
     }
 
     // ⭐逐级把关：员工请示 → 先问本部门负责人(若有)、再问公司 CEO；哪一级能定就当场替员工拍板、不惊动上面；
@@ -1719,13 +1706,13 @@ const askUserTool: Tool = {
       const chain = resolveGatekeepers(self);
       if (chain.length) {
         const emps = loadEmployees();
-        const askerName = emps.find((e) => e.id === self)?.name || "同事";
+        const askerName = emps.find((e) => e.id === self)?.name || tr("ui.index.message.1aaf07d335");
         const ceoSec = Math.min(60, Math.max(3, Math.round(loadTeamConfig().ceoDecideTimeoutSec ?? 10) || 10));
         const gateSid = ctx.sessionId || turnSid;
         const roleOf = (gkId: string, idx: number) => {
           // 这一级把关人是「部门负责人」还是「CEO」——用于提示与弹窗措辞。
           const myDept = loadDepartments().find((d) => (d.memberIds || []).includes(self) && d.headId === gkId);
-          return myDept ? tt(`${myDept.name}负责人`, `${myDept.name} head`) : "CEO";
+          return myDept ? tr("ui.index.head.0316689", { p0: myDept.name }) : "CEO";
         };
         let lastName = "";
         let lastReason = "";
@@ -1742,16 +1729,16 @@ const askUserTool: Tool = {
             send("evt:ceo-deciding", { sid: gateSid, done: true });
           }
           if (d.text && !d.escalate) {
-            return { content: tt(`已请示${gkRole}「${gkName}」，他替你拍板：\n${d.text}`, `Asked ${gkRole} "${gkName}", decision:\n${d.text}`) };
+            return { content: tr("ui.index.asked.decision.d4a45cc", { p0: gkRole, p1: gkName, p2: d.text }) };
           }
           // 这一级上报/超时 → 记下理由，继续问更上一级；是最后一级就落到董事长。
           lastName = gkName;
           lastReason = d.timedOut
-            ? `${gkRole}「${gkName}」${ceoSec} 秒内没拍板，请你定`
-            : (d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text || `${gkRole}「${gkName}」拿不准，请你定`);
+            ? tr("ui.index.message.c8e303021e", {p0: gkRole, p1: gkName, p2: ceoSec})
+            : (d.text.replace(/[\s\S]*?ESCALATE\s*[:：]\s*/i, "").trim() || d.text || tr("ui.index.message.8880344b95", {p0: gkRole, p1: gkName}));
         }
         if (lastReason && questions[0]) {
-          questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: `【${lastName} 请你定】${lastReason}\n\n${q.question}` } : q));
+          questions = questions.map((q: any, i: number) => (i === 0 ? { ...q, question: tr("ui.index.message.2fc768fb80", {p0: lastName, p1: lastReason, p2: q.question}) } : q));
         }
       }
     }
@@ -1765,15 +1752,15 @@ const askUserTool: Tool = {
       pendingAskSid.set(id, askSid);
       send("evt:ask-user", { sid: askSid, id, questions });
     });
-    if (!answers || answers.cancelled) return { content: tt("用户取消了选择(未作答)。", "User cancelled the selection (no answer).") };
+    if (!answers || answers.cancelled) return { content: tr("ui.index.user.cancelled.the.selection.no.answer.424eefe") };
     const list: { selected?: string[]; text?: string }[] = answers.list || [];
     const lines = questions.map((q: any, i: number) => {
       const a = list[i] || {};
       const parts = [...(a.selected || [])];
       if (a.text) parts.push(a.text); // 用户在「其它」里填的自由文本
-      return `${i + 1}. ${q.question} → ${parts.length ? parts.join(tt("、", ", ")) : tt("(未选)", "(no selection)")}`;
+      return `${i + 1}. ${q.question} → ${parts.length ? parts.join(tr("ui.index.text.6486d4e")) : tr("ui.index.no.selection.7bb79c6")}`;
     });
-    return { content: tt("用户的选择：\n", "User's selections:\n") + lines.join("\n") };
+    return { content: tr("ui.index.user.selections.41dad3e") + lines.join("\n") };
   },
 };
 
@@ -1782,28 +1769,25 @@ const askUserTool: Tool = {
 // 防递归：runDmTurn 跑目标那一轮会剔掉 dm_teammate，目标不能在回信里再私信别人（见 orchestrator）。
 const dmTeammateTool: Tool = {
   name: "dm_teammate",
-  description:
-    "给你团队里的另一名员工发一条私信，并同步拿到对方的回复。用于你需要某位同事的专长帮忙、" +
-    "或要和某人对齐一件事时——直接私聊他，不必经过老板转达。name 填对方的名字（要和团队里的名字完全一致），" +
-    "message 填你要对他说的话。会返回对方的回复给你。",
+  get description() { return tr("tool.description.dm_teammate"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "要私信的同事名字（须与团队成员名完全一致）" },
-      message: { type: "string", description: "你要对他说的话" },
+      name: { type: "string", description: tr("tool.parameter.dm_teammate.name") },
+      message: { type: "string", description: tr("tool.parameter.dm_teammate.message") },
     },
     required: ["name", "message"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const selfId = ctx.employeeId;
     if (!selfId) {
-      return { content: tt("dm_teammate 只能由员工使用（当前会话没有绑定员工身份）。", "dm_teammate can only be used by an employee (this session has no employee identity)."), isError: true };
+      return { content: tr("ui.index.dm.teammate.can.only.be.used.faae5a1"), isError: true };
     }
     const name = String((input as any).name || "").trim();
     const message = String((input as any).message || "").trim();
     if (!name || !message) {
-      return { content: tt("需要提供 name（同事名字）和 message（要说的话）。", "Both name (teammate) and message are required."), isError: true };
+      return { content: tr("ui.index.both.name.teammate.and.message.are.8f8236e"), isError: true };
     }
 
     const all = loadEmployees();
@@ -1815,8 +1799,8 @@ const dmTeammateTool: Tool = {
 
     const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可私信的同事）", "(no other teammates available)");
-      return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
+      const roster = employeeRoster(available, getCurrentLanguage() !== "zh" ? "en" : "zh") || tr("ui.index.no.other.teammates.available.a5dcd04");
+      return { content: tr("ui.index.no.teammate.named.teammates.cfaf909", { p0: name, p1: roster }), isError: true };
     }
 
     const dm = findOrCreateDm(selfId, target.id, [selfName, target.name]);
@@ -1829,7 +1813,7 @@ const dmTeammateTool: Tool = {
     // 深度+1：限制转派链长(小笨→小码→小美)、防无限套娃。要「派活不等他做完」用 assign_task。
     const reply = await runDmTurn(dm.id, target.id, message, teamOrchestratorDeps(ctx), (ctx.dmDepth ?? 0) + 1,
       { taskReportScope: ctx.taskReportScope });
-    return { content: tt(`「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」回复：\n${reply}`, `"${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}" replied:\n${reply}`) };
+    return { content: tr("ui.index.replied.9993b71", { p0: employeeLabel(target, getCurrentLanguage() !== "zh" ? "en" : "zh"), p1: reply }) };
   },
 };
 
@@ -1838,32 +1822,27 @@ const dmTeammateTool: Tool = {
 // 把活排进对方的队列，做完结果落在你俩私聊里。对方在忙就排队，priority=urgent 插到他队列最前(不打断正在跑的)。
 const assignTaskTool: Tool = {
   name: "assign_task",
-  description:
-    "给你团队里的另一名员工【派活】：把一件需要他花时间完成的任务交给他，然后你【不必等他做完】就能继续做别的事。" +
-    "与 dm_teammate 的区别——dm_teammate 是「问一句、同步等他这一句答复」（对齐/问事/验收用）；" +
-    "assign_task 是「把一件活交出去、不等」，员工原始结果留在私聊，同一轮派出的任务及转派任务收齐后会自动送回当前会话唤醒你。你必须验收结果并统一向用户汇报，失败/取消也要说明。" +
-    "他正忙别的活就自动排队（当前这件干完接着干你这件）；priority 填 urgent 表示急事，会插到他队列最前、优先做（但不打断他正在跑的那件）。" +
-    "name 填对方名字（须与团队成员名完全一致），task 填要他做的事（说清目标、验收标准）。",
+  get description() { return tr("tool.description.assign_task"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "要派活的同事名字（须与团队成员名完全一致）" },
-      task: { type: "string", description: "交给他的任务：说清要做什么、目标、验收标准" },
-      priority: { type: "string", enum: ["normal", "urgent"], description: "normal=按顺序排队（默认）；urgent=急事，插到他队列最前优先做" },
+      name: { type: "string", description: tr("tool.parameter.assign_task.name") },
+      task: { type: "string", description: tr("tool.parameter.assign_task.task") },
+      priority: { type: "string", enum: ["normal", "urgent"], description: tr("tool.parameter.assign_task.priority") },
     },
     required: ["name", "task"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const selfId = ctx.employeeId;
     if (!selfId) {
-      return { content: tt("assign_task 只能由员工使用（当前会话没有绑定员工身份）。", "assign_task can only be used by an employee (this session has no employee identity)."), isError: true };
+      return { content: tr("ui.index.assign.task.can.only.be.used.42bb1be"), isError: true };
     }
     const name = String((input as any).name || "").trim();
     const task = String((input as any).task || "").trim();
     const urgent = String((input as any).priority || "normal").trim() === "urgent";
     if (!name || !task) {
-      return { content: tt("需要提供 name（同事名字）和 task（要派的活）。", "Both name (teammate) and task are required."), isError: true };
+      return { content: tr("ui.index.both.name.teammate.and.task.are.d5e5da4"), isError: true };
     }
     if (!ctx.taskReportScope && (!ctx.turnId || (!ctx.reportOrigin && !ctx.sessionId))) {
       return { content: '当前任务缺少可回传的会话，未派发。请在员工会话中重新交代。', isError: true };
@@ -1877,8 +1856,8 @@ const assignTaskTool: Tool = {
 
     const target = resolveEmployee(available, name);
     if (!target) {
-      const roster = employeeRoster(available, process.env.WUWEI_LANG === "en" ? "en" : "zh") || tt("（没有其他可派活的同事）", "(no other teammates available)");
-      return { content: tt(`没找到叫「${name}」的同事。现有同事：${roster}`, `No teammate named "${name}". Teammates: ${roster}`), isError: true };
+      const roster = employeeRoster(available, getCurrentLanguage() !== "zh" ? "en" : "zh") || tr("ui.index.no.other.teammates.available.a37ed73");
+      return { content: tr("ui.index.no.teammate.named.teammates.cfaf909", { p0: name, p1: roster }), isError: true };
     }
 
     const dm = findOrCreateDm(selfId, target.id, [selfName, target.name]);
@@ -1914,11 +1893,11 @@ const assignTaskTool: Tool = {
     });
 
     const where = !busyBefore
-      ? tt("他现在就开始做", "starting now")
+      ? tr("ui.index.starting.now.5aacd55")
       : urgent
-        ? tt("他在忙，已把这件作为急事插到他队列最前，手头这件一完就优先做", "they're busy; queued this as urgent at the front — they'll do it next")
-        : tt(`他在忙，已排进他的队列（前面还有 ${ahead + 1} 件），轮到就做`, `they're busy; queued (about ${ahead + 1} ahead), will do it when free`);
-    return { content: tt(`已把活派给「${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}」：${where}。任务编号${taskId}。本轮全部任务返回后会在原会话自动唤醒你验收并统一向用户汇报，你现在可以接着忙别的。`, `Assigned to "${employeeLabel(target, process.env.WUWEI_LANG === "en" ? "en" : "zh")}": ${where}. Task ${taskId}. After this batch returns, you will be resumed in the original conversation to review and report to the user.`) };
+        ? tr("ui.index.they.re.busy.queued.this.as.fcde4fc")
+        : tr("ui.index.they.re.busy.queued.about.ahead.1117e3c", { p0: ahead + 1 });
+    return { content: tr("ui.index.assigned.to.task.after.this.batch.0df9861", { p0: employeeLabel(target, getCurrentLanguage() !== "zh" ? "en" : "zh"), p1: where, p2: taskId }) };
   },
 };
 
@@ -1927,62 +1906,54 @@ const assignTaskTool: Tool = {
 // 发现可优化用 write_sop 迭代（一事一 SOP，同 taskKey 不重复建）。三个只读工具永久保留（team/index.ts ALWAYS_KEEP）。
 const searchSopTool: Tool = {
   name: "search_sop",
-  description:
-    "搜索公司 SOP 库（标准作业流程）。做任何可能已有标准流程的事（部署/发布/上线/复盘等）前先用它搜一搜，" +
-    "匹配 SOP 的标题、摘要与正文。返回命中的 SOP 列表（id、标题、类别路径、摘要、当前版本号），拿到 id 再用 read_sop 读全文。",
+  get description() { return tr("tool.description.search_sop"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { query: { type: "string", description: "搜索关键词；留空返回全部 SOP" } },
+    properties: { query: { type: "string", description: tr("tool.parameter.search_sop.query") } },
     required: [],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const q = String((input as any).query || "");
     const hits = sopSearch(q);
     if (!hits.length) {
-      return { content: tt(`没有匹配「${q}」的 SOP。可以用 write_sop 把这次的做法沉淀成新 SOP。`, `No SOP matches "${q}". You may use write_sop to capture this process as a new SOP.`) };
+      return { content: tr("ui.index.no.sop.matches.you.may.use.ad67e4b", { p0: q }) };
     }
     const lines = hits.map((h) =>
-      tt(
-        `- [${h.id}] ${h.name}${h.categoryPath ? `（${h.categoryPath}）` : ""} · v${h.currentVersion || 0}${h.summary ? ` — ${h.summary}` : ""}`,
-        `- [${h.id}] ${h.name}${h.categoryPath ? ` (${h.categoryPath})` : ""} · v${h.currentVersion || 0}${h.summary ? ` — ${h.summary}` : ""}`,
-      ),
+      tr("ui.index.text.dd4e96b", { v0: h.id, v1: h.name, v2: (getCurrentLanguage() !== 'zh' ? undefined : h.categoryPath ? `（${h.categoryPath}）` : ""), v3: h.currentVersion || 0, v4: h.summary ? ` — ${h.summary}` : "", v5: (getCurrentLanguage() !== 'zh' ? h.categoryPath ? ` (${h.categoryPath})` : "" : undefined) }),
     );
-    return { content: tt(`命中 ${hits.length} 条 SOP：\n`, `${hits.length} SOP hit(s):\n`) + lines.join("\n") };
+    return { content: tr("ui.index.sop.hit.a6b57ce", { p0: hits.length }) + lines.join("\n") };
   },
 };
 
 const readSopTool: Tool = {
   name: "read_sop",
-  description: "读取某个 SOP 的当前版全文（先用 search_sop 或 list_sops 拿到 id）。读到后请严格照流程做，别凭记忆自由发挥。",
+  get description() { return tr("tool.description.read_sop"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
-    properties: { id: { type: "string", description: "SOP 节点 id（来自 search_sop/list_sops）" } },
+    properties: { id: { type: "string", description: tr("tool.parameter.read_sop.id") } },
     required: ["id"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const id = String((input as any).id || "").trim();
     const node = sopLoadTree().find((n) => n.id === id && n.kind === "sop");
-    if (!node) return { content: tt(`没找到 id 为「${id}」的 SOP。`, `No SOP with id "${id}".`), isError: true };
+    if (!node) return { content: tr("ui.index.no.sop.with.id.53d1c7e", { p0: id }), isError: true };
     const doc = sopReadDoc(id);
     const path = sopCategoryPath(id);
-    const header = tt(
-      `SOP：${node.name}${path ? `（${path}）` : ""} · 当前 v${node.currentVersion || 0}\n\n`,
-      `SOP: ${node.name}${path ? ` (${path})` : ""} · current v${node.currentVersion || 0}\n\n`,
-    );
-    return { content: header + (doc || tt("（该 SOP 还没有正文）", "(this SOP has no content yet)")) };
+    const header = tr("ui.index.sop.current.ca737b1", { p0: node.name, p1: (getCurrentLanguage() !== 'zh' ? path ? ` (${path})` : "" : path ? `（${path}）` : ""), p2: node.currentVersion || 0 });
+    return { content: header + (doc || tr("ui.index.this.sop.has.no.content.yet.37a39ea")) };
   },
 };
 
 const listSopsTool: Tool = {
   name: "list_sops",
-  description: "列出整棵 SOP 目录树（类别与其下的 SOP），用于总览公司有哪些标准流程。",
+  get description() { return tr("tool.description.list_sops"); },
   readOnly: true,
   inputSchema: { type: "object", properties: {}, required: [] },
   async run(): Promise<ToolResult> {
     const nodes = sopLoadTree();
-    if (!nodes.length) return { content: tt("SOP 库还是空的，暂无任何标准流程。", "The SOP library is empty — no standard processes yet.") };
+    if (!nodes.length) return { content: tr("ui.index.the.sop.library.is.empty.no.9d5c75b") };
     // 递归渲染成缩进树
     const byParent = new Map<string, typeof nodes>();
     for (const n of nodes) {
@@ -2001,30 +1972,27 @@ const listSopsTool: Tool = {
       }
     };
     walk("", 0);
-    return { content: tt("SOP 目录树：\n", "SOP directory tree:\n") + lines.join("\n") };
+    return { content: tr("ui.index.sop.directory.tree.4b1ec70") + lines.join("\n") };
   },
 };
 
 const writeSopTool: Tool = {
   name: "write_sop",
-  description:
-    "把一个标准流程沉淀/迭代进 SOP 库。**一事一 SOP**：不传 id 时按 taskKey 去重——taskKey 已存在会报错并引导你改用迭代（别新建重复的）；" +
-    "不存在则新建。传 id = 迭代已有 SOP（覆盖当前版并存一个新版本，历史不丢）。title 是标题，content 是完整 md 正文，" +
-    "category 可选（顶层类别名，自动建/复用），note 可选（本次变更说明）。",
+  get description() { return tr("tool.description.write_sop"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      id: { type: "string", description: "要迭代的 SOP id；新建时留空" },
-      taskKey: { type: "string", description: "一事一 SOP 去重键（新建必填，如 deploy-vercel）；同 key 视为同一件事" },
-      title: { type: "string", description: "SOP 标题" },
-      category: { type: "string", description: "顶层类别名（可选，自动建/复用）" },
-      content: { type: "string", description: "完整 md 正文" },
-      summary: { type: "string", description: "一句话摘要（可选，列表/搜索用）" },
-      note: { type: "string", description: "本次变更说明（可选）" },
+      id: { type: "string", description: tr("tool.parameter.write_sop.id") },
+      taskKey: { type: "string", description: tr("tool.parameter.write_sop.taskKey") },
+      title: { type: "string", description: tr("tool.parameter.write_sop.title") },
+      category: { type: "string", description: tr("tool.parameter.write_sop.category") },
+      content: { type: "string", description: tr("tool.parameter.write_sop.content") },
+      summary: { type: "string", description: tr("tool.parameter.write_sop.summary") },
+      note: { type: "string", description: tr("tool.parameter.write_sop.note") },
     },
     required: ["content"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const a = input as any;
     const id = String(a.id || "").trim();
@@ -2037,19 +2005,16 @@ const writeSopTool: Tool = {
     // 迭代人署名：由哪名员工改的
     const self = ctx.employeeId ? loadEmployees().find((e) => e.id === ctx.employeeId) : null;
     const by = self?.name;
-    const finalNote = note || (by ? tt(`由 ${by} 迭代`, `updated by ${by}`) : undefined);
+    const finalNote = note || (by ? tr("ui.index.updated.by.bfbb631", { p0: by }) : undefined);
 
     let targetId = id;
     if (!targetId) {
       // 新建路径：必须有 taskKey，且去重
-      if (!taskKey) return { content: tt("新建 SOP 需要 taskKey（一事一 SOP 的去重键，如 deploy-vercel）。", "Creating a SOP requires a taskKey (dedup key, e.g. deploy-vercel)."), isError: true };
+      if (!taskKey) return { content: tr("ui.index.creating.sop.requires.taskkey.dedup.key.00a53e6"), isError: true };
       const existing = sopFindByTaskKey(taskKey);
       if (existing) {
         return {
-          content: tt(
-            `已存在 taskKey 为「${taskKey}」的 SOP：「${existing.name}」(id=${existing.id})。一事一 SOP，别新建重复的——请传 id="${existing.id}" 迭代它。`,
-            `A SOP with taskKey "${taskKey}" already exists: "${existing.name}" (id=${existing.id}). One process = one SOP — pass id="${existing.id}" to iterate on it instead of creating a duplicate.`,
-          ),
+          content: tr("ui.index.sop.with.taskkey.already.exists.id.f2c5d38", { p0: taskKey, p1: existing.name, p2: existing.id, p3: existing.id }),
           isError: true,
         };
       }
@@ -2063,17 +2028,14 @@ const writeSopTool: Tool = {
       targetId = created.node.id;
     } else {
       const node = sopLoadTree().find((n) => n.id === targetId && n.kind === "sop");
-      if (!node) return { content: tt(`没找到 id 为「${targetId}」的 SOP。`, `No SOP with id "${targetId}".`), isError: true };
+      if (!node) return { content: tr("ui.index.no.sop.with.id.53d1c7e", { p0: targetId }), isError: true };
       if (summary != null) sopUpdateSummary(targetId, summary);
     }
     const r = sopSaveDoc(targetId, content, finalNote);
-    if (!r.node) return { content: tt("保存失败：SOP 不存在。", "Save failed: SOP not found."), isError: true };
+    if (!r.node) return { content: tr("ui.index.save.failed.sop.not.found.57239b2"), isError: true };
     send("evt:sop", { tree: sopLoadTree() }); // 广播让侧栏/SopView 即时刷新——AI 用 write_sop 写的 SOP 也立刻显示(否则只有手动 IPC 建/改才刷新，AI 写的要重启才见，正是本次修的 bug)
     return {
-      content: tt(
-        `已保存 SOP「${r.node.name}」(id=${targetId})，当前 v${r.version}。`,
-        `Saved SOP "${r.node.name}" (id=${targetId}), now at v${r.version}.`,
-      ),
+      content: tr("ui.index.saved.sop.id.now.at.98e5a0b", { p0: r.node.name, p1: targetId, p2: r.version }),
     };
   },
 };
@@ -2084,97 +2046,93 @@ const clampStr = (v: unknown): string | undefined => { const s = String(v ?? "")
 
 const createEmployeeTool: Tool = {
   name: "create_employee",
-  description:
-    "在一人公司里新建一名 AI 员工(同事)，建完立刻出现在通讯录，无需重启。**别自己去改 employees.json 或用命令行建员工，用这个工具。** " +
-    "name=名字(团队内唯一)，persona=身份与职责(必填，说清他是谁/负责什么/不做什么)；可选 title=职位、blurb=一句话介绍、soul=性格与说话风格、aboutUser=关于老板、memory=长期记忆、icon=图标名。",
+  get description() { return tr("tool.description.create_employee"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "名字，团队内唯一" },
-      title: { type: "string", description: "职位，如「产品」「文案」" },
-      blurb: { type: "string", description: "一句话介绍(卡片副标题)" },
-      persona: { type: "string", description: "身份与职责(必填)：他是谁、负责什么、不做什么" },
-      soul: { type: "string", description: "性格与说话风格(可选)" },
-      aboutUser: { type: "string", description: "关于老板/服务对象(可选)" },
-      memory: { type: "string", description: "长期记忆/背景(可选)" },
-      icon: { type: "string", description: "内置图标名：pen/code/chart/palette/brain/coin/crystal/ring/sprout，缺省用名字首字" },
+      name: { type: "string", description: tr("tool.parameter.create_employee.name") },
+      title: { type: "string", description: tr("tool.parameter.create_employee.title") },
+      blurb: { type: "string", description: tr("tool.parameter.create_employee.blurb") },
+      persona: { type: "string", description: tr("tool.parameter.create_employee.persona") },
+      soul: { type: "string", description: tr("tool.parameter.create_employee.soul") },
+      aboutUser: { type: "string", description: tr("tool.parameter.create_employee.aboutUser") },
+      memory: { type: "string", description: tr("tool.parameter.create_employee.memory") },
+      icon: { type: "string", description: tr("tool.parameter.create_employee.icon") },
     },
     required: ["name", "persona"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const a = input as any;
     const name = clampStr(a.name);
     const persona = clampStr(a.persona);
-    if (!name || !persona) return { content: tt("需要 name(名字) 和 persona(身份与职责)。", "name and persona are required."), isError: true };
+    if (!name || !persona) return { content: tr("ui.index.name.and.persona.are.required.a30fdcd"), isError: true };
     const all = loadEmployees();
-    if (all.some((e) => e.name === name)) return { content: tt(`已经有叫「${name}」的同事了。换个名字，或用 update_employee 改现有那位。`, `A teammate named "${name}" already exists. Use a different name or update_employee.`), isError: true };
+    if (all.some((e) => e.name === name)) return { content: tr("ui.index.teammate.named.already.exists.use.different.c8fb94b", { p0: name }), isError: true };
     const id = "emp-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e4).toString(36);
     const order = all.reduce((m, e) => Math.max(m, e.order ?? -1), -1) + 1; // 排到通讯录末尾
     const emp: Employee = { id, name, persona, title: clampStr(a.title), blurb: clampStr(a.blurb), soul: clampStr(a.soul), aboutUser: clampStr(a.aboutUser), memory: clampStr(a.memory), icon: clampStr(a.icon), order };
     addEmployees([emp]);
     broadcastTeam();
-    return { content: tt(`已新建同事「${name}」${emp.title ? `（${emp.title}）` : ""}，已出现在通讯录，可以直接私信或拉进群。`, `Created teammate "${name}". It now shows in Contacts.`) };
+    return { content: tr("ui.index.created.teammate.it.now.shows.in.e680949", { v0: name, v1: (getCurrentLanguage() !== 'zh' ? undefined : emp.title ? `（${emp.title}）` : "") }) };
   },
 };
 
 const updateEmployeeTool: Tool = {
   name: "update_employee",
-  description:
-    "修改一名现有员工的资料/人格：按 name 定位(要和通讯录里的名字完全一致)，只传要改的字段。可改 newName(改名)、title、blurb、persona、soul、aboutUser、memory、icon。改完通讯录即时刷新。",
+  get description() { return tr("tool.description.update_employee"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "要修改的同事当前名字(须完全一致)" },
-      newName: { type: "string", description: "新名字(可选，改名用)" },
+      name: { type: "string", description: tr("tool.parameter.update_employee.name") },
+      newName: { type: "string", description: tr("tool.parameter.update_employee.newName") },
       title: { type: "string" }, blurb: { type: "string" }, persona: { type: "string" },
       soul: { type: "string" }, aboutUser: { type: "string" }, memory: { type: "string" }, icon: { type: "string" },
     },
     required: ["name"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const a = input as any;
     const name = clampStr(a.name);
-    if (!name) return { content: tt("需要 name(要修改的同事名字)。", "name is required."), isError: true };
+    if (!name) return { content: tr("ui.index.name.is.required.2ff02ed"), isError: true };
     const emp = resolveEmployee(loadEmployees(), name);
-    if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
+    if (!emp) return { content: tr("ui.index.no.teammate.named.292aa26", { p0: name }), isError: true };
     const patch: Record<string, unknown> = {};
     if (a.newName != null) patch.name = clampStr(a.newName);
     for (const k of ["title", "blurb", "persona", "soul", "aboutUser", "memory", "icon"]) if (a[k] != null) patch[k] = clampStr(a[k]);
-    if (patch.name === undefined && "name" in patch) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true };
-    if (patch.persona === undefined && "persona" in patch) return { content: tt("persona 不能清空。", "persona cannot be cleared."), isError: true };
-    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段。", "Nothing to update."), isError: true };
+    if (patch.name === undefined && "name" in patch) return { content: tr("ui.index.newname.cannot.be.empty.3bb0ad1"), isError: true };
+    if (patch.persona === undefined && "persona" in patch) return { content: tr("ui.index.persona.cannot.be.cleared.aa91da5"), isError: true };
+    if (Object.keys(patch).length === 0) return { content: tr("ui.index.nothing.to.update.f01d216"), isError: true };
     updateEmployee(emp.id, patch);
     broadcastTeam();
-    return { content: tt(`已更新同事「${name}」。`, `Updated teammate "${name}".`) };
+    return { content: tr("ui.index.updated.teammate.a1f8e03", { p0: name }) };
   },
 };
 
 const deleteEmployeeTool: Tool = {
   name: "delete_employee",
-  description:
-    "删除一名员工(不可撤销，慎用)：按 name 定位，且必须再传 confirm=true 才真正删除——这是防误删的护栏。删除会移除该员工及其人格文件，通讯录即时刷新。删自己或删掉后没人干活前请先想清楚。",
+  get description() { return tr("tool.description.delete_employee"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      name: { type: "string", description: "要删除的同事名字(须完全一致)" },
-      confirm: { type: "boolean", description: "必须为 true 才执行删除(防误删护栏)" },
+      name: { type: "string", description: tr("tool.parameter.delete_employee.name") },
+      confirm: { type: "boolean", description: tr("tool.parameter.delete_employee.confirm") },
     },
     required: ["name", "confirm"],
-  },
+  }; },
   async run(input, ctx): Promise<ToolResult> {
     const a = input as any;
     const name = clampStr(a.name);
-    if (!name) return { content: tt("需要 name。", "name is required."), isError: true };
-    if (a.confirm !== true) return { content: tt(`未删除：删除是不可撤销操作，请确认后再传 confirm=true。`, "Not deleted: deletion is irreversible, pass confirm=true to proceed."), isError: true };
+    if (!name) return { content: tr("ui.index.name.is.required.e9b58fa"), isError: true };
+    if (a.confirm !== true) return { content: tr("ui.index.not.deleted.deletion.is.irreversible.pass.586afc2"), isError: true };
     const emp = resolveEmployee(loadEmployees(), name);
-    if (!emp) return { content: tt(`没找到叫「${name}」的同事。`, `No teammate named "${name}".`), isError: true };
-    if (ctx.employeeId === emp.id) return { content: tt("不能删除你自己。", "You can't delete yourself."), isError: true };
+    if (!emp) return { content: tr("ui.index.no.teammate.named.292aa26", { p0: name }), isError: true };
+    if (ctx.employeeId === emp.id) return { content: tr("ui.index.you.can.delete.yourself.1964cd8"), isError: true };
     removeEmployee(emp.id);
     broadcastTeam();
-    return { content: tt(`已删除同事「${name}」。`, `Deleted teammate "${name}".`) };
+    return { content: tr("ui.index.deleted.teammate.ff1124f", { p0: name }) };
   },
 };
 
@@ -2182,32 +2140,25 @@ const deleteEmployeeTool: Tool = {
 // 注意：只改 title 字符串(如「技术部主管」)不会真的建部门——那只是文字。真正的组织层级要用本工具写部门记录。
 const manageDepartmentTool: Tool = {
   name: "manage_department",
-  description:
-    "管理公司部门（组织架构）：建部门、设负责人、编成员、改名、删除。" +
-    "通讯录会据此按部门分组显示（部门名 + 负责人标记 + 成员）。" +
-    "重要：光用 update_employee 把某人 title 改成「X部主管」只是文字，不会真建部门——要真正形成层级，必须用本工具。" +
-    "一名员工最多归一个部门（把人编进新部门会自动从旧部门移出）。建议 2 人以上才建部门，扁平管理无需建。" +
-    "action=create 建部门（name 必填，可带 head 负责人、members 成员名单）；" +
-    "update 改部门（按 name 定位，可改 newName/head/members）；delete 删部门（按 name）；list 列出现有部门与成员。" +
-    "head/members 填【员工名字】（须与通讯录一致）。members 是完整名单（会整体替换，不是追加）。",
+  get description() { return tr("tool.description.manage_department"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["create", "update", "delete", "list"], description: "create 建 / update 改 / delete 删 / list 列" },
-      name: { type: "string", description: "部门名（create=新部门名；update/delete=要操作的现有部门名）" },
-      newName: { type: "string", description: "update 改名用的新部门名（可选）" },
-      head: { type: "string", description: "部门负责人的员工名字（可选；会自动并入成员）" },
-      members: { type: "array", items: { type: "string" }, description: "部门成员的员工名字完整名单（整体替换）" },
+      action: { type: "string", enum: ["create", "update", "delete", "list"], description: tr("tool.parameter.manage_department.action") },
+      name: { type: "string", description: tr("tool.parameter.manage_department.name") },
+      newName: { type: "string", description: tr("tool.parameter.manage_department.newName") },
+      head: { type: "string", description: tr("tool.parameter.manage_department.head") },
+      members: { type: "array", items: { type: "string" }, description: tr("tool.parameter.manage_department.members") },
     },
     required: ["action"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
     const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
-    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), getCurrentLanguage() !== "zh" ? "en" : "zh", id);
     // 把一串名字转成 id，顺带收集没找到的名字，提示 AI 名字写错。
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2217,51 +2168,48 @@ const manageDepartmentTool: Tool = {
 
     if (action === "list") {
       const list = loadDepartments();
-      if (!list.length) return { content: tt("目前还没有任何部门（扁平管理）。", "No departments yet (flat structure).") };
-      const lines = list.map((d) => tt(
-        `- ${d.name}：负责人 ${d.headId ? nameById(d.headId) : "（未设）"}；成员 ${(d.memberIds || []).map(nameById).join("、") || "（无）"}`,
-        `- ${d.name}: head ${d.headId ? nameById(d.headId) : "(none)"}; members ${(d.memberIds || []).map(nameById).join(", ") || "(none)"}`,
-      ));
-      return { content: tt(`现有 ${list.length} 个部门：\n`, `${list.length} department(s):\n`) + lines.join("\n") };
+      if (!list.length) return { content: tr("ui.index.no.departments.yet.flat.structure.b45e156") };
+      const lines = list.map((d) => tr("ui.index.head.members.081d6ca", { p0: d.name, p1: (getCurrentLanguage() !== 'zh' ? d.headId ? nameById(d.headId) : "(none)" : d.headId ? nameById(d.headId) : tr("ui.index.message.2840555684")), p2: (getCurrentLanguage() !== 'zh' ? (d.memberIds || []).map(nameById).join(", ") || "(none)" : (d.memberIds || []).map(nameById).join("、") || tr("set.mcp.dNone")) }));
+      return { content: tr("ui.index.department.3fb3495", { p0: list.length }) + lines.join("\n") };
     }
 
     const name = clampStr(a.name);
-    if (!name) return { content: tt("需要 name（部门名）。", "name (department) is required."), isError: true };
+    if (!name) return { content: tr("ui.index.name.department.is.required.e79495e"), isError: true };
 
     if (action === "create") {
-      if (loadDepartments().some((d) => d.name === name)) return { content: tt(`已有叫「${name}」的部门，改它请用 action=update。`, `Department "${name}" already exists; use action=update.`), isError: true };
+      if (loadDepartments().some((d) => d.name === name)) return { content: tr("ui.index.department.already.exists.use.action.update.7a1c7ad", { p0: name }), isError: true };
       const headId = a.head ? idByName(String(a.head)) : undefined;
-      if (a.head && !headId) return { content: tt(`没找到叫「${a.head}」的员工当负责人。`, `No employee named "${a.head}" for head.`), isError: true };
+      if (a.head && !headId) return { content: tr("ui.index.no.employee.named.for.head.8074161", { p0: a.head }), isError: true };
       const { ids: memberIds, missing } = resolveNames(a.members);
       const dept = createDepartment({ name, headId, memberIds });
       broadcastTeam();
-      const warn = missing.length ? tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`) : "";
-      return { content: tt(`已建部门「${dept.name}」，负责人 ${dept.headId ? nameById(dept.headId) : "未设"}，成员 ${(dept.memberIds || []).map(nameById).join("、") || "无"}。通讯录已按部门分组。${warn}`, `Created department "${dept.name}". Contacts now grouped by department.${warn}`) };
+      const warn = missing.length ? tr("ui.index.skipped.unknown.b89b594", { p0: (getCurrentLanguage() !== 'zh' ? missing.join(", ") : missing.join("、")) }) : "";
+      return { content: tr("ui.index.created.department.contacts.now.grouped.by.60ececd", { v0: dept.name, v1: (getCurrentLanguage() !== 'zh' ? undefined : dept.headId ? nameById(dept.headId) : tr("ui.index.message.5c1b8cb271")), v2: (getCurrentLanguage() !== 'zh' ? undefined : (dept.memberIds || []).map(nameById).join("、") || tr("acct.userInitial")), v3: warn }) };
     }
 
     const target = loadDepartments().find((d) => d.name === name);
-    if (!target) return { content: tt(`没找到叫「${name}」的部门。可用 action=list 看现有部门。`, `No department named "${name}". Use action=list.`), isError: true };
+    if (!target) return { content: tr("ui.index.no.department.named.use.action.list.7f586a8", { p0: name }), isError: true };
 
     if (action === "delete") {
       removeDepartment(target.id);
       broadcastTeam();
-      return { content: tt(`已删除部门「${name}」（成员仍在，只是不再归该部门）。`, `Deleted department "${name}".`) };
+      return { content: tr("ui.index.deleted.department.9d72fba", { p0: name }) };
     }
 
     // update
     const patch: Record<string, unknown> = {};
     let warn = "";
-    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true }; patch.name = nn; }
+    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tr("ui.index.newname.cannot.be.empty.3bb0ad1"), isError: true }; patch.name = nn; }
     if (a.head !== undefined) {
       if (!a.head) patch.headId = undefined;
-      else { const hid = idByName(String(a.head)); if (!hid) return { content: tt(`没找到叫「${a.head}」的员工当负责人。`, `No employee named "${a.head}" for head.`), isError: true }; patch.headId = hid; }
+      else { const hid = idByName(String(a.head)); if (!hid) return { content: tr("ui.index.no.employee.named.for.head.8074161", { p0: a.head }), isError: true }; patch.headId = hid; }
     }
-    if (Array.isArray(a.members)) { const { ids, missing } = resolveNames(a.members); patch.memberIds = ids; if (missing.length) warn = tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`); }
-    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段（可传 newName/head/members）。", "Nothing to update (newName/head/members)."), isError: true };
+    if (Array.isArray(a.members)) { const { ids, missing } = resolveNames(a.members); patch.memberIds = ids; if (missing.length) warn = tr("ui.index.skipped.unknown.b89b594", { p0: (getCurrentLanguage() !== 'zh' ? missing.join(", ") : missing.join("、")) }); }
+    if (Object.keys(patch).length === 0) return { content: tr("ui.index.nothing.to.update.newname.head.members.6aaa0d4"), isError: true };
     updateDepartment(target.id, patch);
     broadcastTeam();
     const d2 = loadDepartments().find((d) => d.id === target.id);
-    return { content: tt(`已更新部门「${d2?.name || name}」，负责人 ${d2?.headId ? nameById(d2.headId) : "未设"}，成员 ${(d2?.memberIds || []).map(nameById).join("、") || "无"}。${warn}`, `Updated department "${d2?.name || name}".${warn}`) };
+    return { content: tr("ui.index.updated.department.f8939d5", { v0: d2?.name || name, v1: (getCurrentLanguage() !== 'zh' ? undefined : d2?.headId ? nameById(d2.headId) : tr("ui.index.message.5c1b8cb271")), v2: (getCurrentLanguage() !== 'zh' ? undefined : (d2?.memberIds || []).map(nameById).join("、") || tr("acct.userInitial")), v3: warn }) };
   },
 };
 
@@ -2269,32 +2217,26 @@ const manageDepartmentTool: Tool = {
 // 与 dm_teammate(一对一)、assign_task(单人派活) 互补：多人需要同时看到同一话题并各自响应时建群。
 const manageGroupTool: Tool = {
   name: "manage_group",
-  description:
-    "管理群聊（多人房间）：建群、改群(名/成员/协调者/唤醒数)、删群、列群。" +
-    "与 dm_teammate(一对一问一句)、assign_task(给单人派活)互补——需要多名同事同时看到同一话题、各自响应时用群。" +
-    "建好群后，在群里 @成员 发话题即可唤醒他们（@所有人唤醒全体）；没 @ 人且设了协调者则只协调者应答。" +
-    "action=create 建群(name 必填，members 成员名单必填，可带 coordinator 协调者、maxWake 每轮最多唤醒几人)；" +
-    "update 改群(按 name 定位，可改 newName/members/coordinator/maxWake)；delete 删群(按 name)；list 列出现有群。" +
-    "members/coordinator 填【员工名字】。members 是完整名单(整体替换)。",
+  get description() { return tr("tool.description.manage_group"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["create", "update", "delete", "list"], description: "create 建 / update 改 / delete 删 / list 列" },
-      name: { type: "string", description: "群名（create=新群名；update/delete=要操作的现有群名）" },
-      newName: { type: "string", description: "update 改名用的新群名（可选）" },
-      members: { type: "array", items: { type: "string" }, description: "群成员的员工名字完整名单（整体替换）" },
-      coordinator: { type: "string", description: "常驻协调者的员工名字（没 @ 人时由他应答；可选，须在成员内）" },
-      maxWake: { type: "number", description: "每轮最多唤醒几名成员（默认 3，防一句话惊动全员烧额度）" },
+      action: { type: "string", enum: ["create", "update", "delete", "list"], description: tr("tool.parameter.manage_group.action") },
+      name: { type: "string", description: tr("tool.parameter.manage_group.name") },
+      newName: { type: "string", description: tr("tool.parameter.manage_group.newName") },
+      members: { type: "array", items: { type: "string" }, description: tr("tool.parameter.manage_group.members") },
+      coordinator: { type: "string", description: tr("tool.parameter.manage_group.coordinator") },
+      maxWake: { type: "number", description: tr("tool.parameter.manage_group.maxWake") },
     },
     required: ["action"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const a = input as any;
     const action = String(a.action || "").trim();
     const emps = loadEmployees();
     const idByName = (nm: string) => resolveEmployee(emps, String(nm || ""))?.id;
-    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), process.env.WUWEI_LANG === "en" ? "en" : "zh", id);
+    const nameById = (id: string) => employeeLabel(emps.find((e) => e.id === id), getCurrentLanguage() !== "zh" ? "en" : "zh", id);
     const groupsOf = () => loadRooms().filter((r: any) => r.type !== "dm");
     const resolveNames = (names: unknown): { ids: string[]; missing: string[] } => {
       const ids: string[] = []; const missing: string[] = [];
@@ -2305,54 +2247,51 @@ const manageGroupTool: Tool = {
 
     if (action === "list") {
       const gs = groupsOf();
-      if (!gs.length) return { content: tt("目前还没有群。", "No groups yet.") };
-      const lines = gs.map((r: any) => tt(
-        `- ${r.name}：成员 ${(r.members || []).map(nameById).join("、") || "（无）"}${r.coordinator ? `；协调者 ${nameById(r.coordinator)}` : ""}（每轮最多唤醒 ${r.maxWake ?? 3}）`,
-        `- ${r.name}: members ${(r.members || []).map(nameById).join(", ") || "(none)"}${r.coordinator ? `; coordinator ${nameById(r.coordinator)}` : ""} (maxWake ${r.maxWake ?? 3})`,
-      ));
-      return { content: tt(`现有 ${gs.length} 个群：\n`, `${gs.length} group(s):\n`) + lines.join("\n") };
+      if (!gs.length) return { content: tr("ui.index.no.groups.yet.dbf99fe") };
+      const lines = gs.map((r: any) => tr("ui.index.members.maxwake.2c283c3", { p0: r.name, p1: (getCurrentLanguage() !== 'zh' ? (r.members || []).map(nameById).join(", ") || "(none)" : (r.members || []).map(nameById).join("、") || tr("set.mcp.dNone")), p2: (getCurrentLanguage() !== 'zh' ? r.coordinator ? `; coordinator ${nameById(r.coordinator)}` : "" : r.coordinator ? `；协调者 ${nameById(r.coordinator)}` : ""), p3: r.maxWake ?? 3 }));
+      return { content: tr("ui.index.group.5ec50e7", { p0: gs.length }) + lines.join("\n") };
     }
 
     const name = clampStr(a.name);
-    if (!name) return { content: tt("需要 name（群名）。", "name (group) is required."), isError: true };
+    if (!name) return { content: tr("ui.index.name.group.is.required.30556fc"), isError: true };
 
     if (action === "create") {
       const { ids: memberIds, missing } = resolveNames(a.members);
-      if (memberIds.length < 1) return { content: tt("建群至少要 1 名有效成员（填员工名字）。", "At least 1 valid member required."), isError: true };
+      if (memberIds.length < 1) return { content: tr("ui.index.at.least.valid.member.required.890764d"), isError: true };
       let coordinator: string | undefined;
-      if (a.coordinator) { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tt(`没找到叫「${a.coordinator}」的员工当协调者。`, `No employee named "${a.coordinator}".`), isError: true }; if (!memberIds.includes(cid)) memberIds.push(cid); coordinator = cid; }
+      if (a.coordinator) { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tr("ui.index.no.employee.named.3ca83b8", { p0: a.coordinator }), isError: true }; if (!memberIds.includes(cid)) memberIds.push(cid); coordinator = cid; }
       const room = createRoom(name, memberIds, coordinator);
       if (a.maxWake != null) updateRoom(room.id, { maxWake: clampWake(a.maxWake) });
       send("evt:team-rooms", { rooms: loadRooms() });
-      const warn = missing.length ? tt(`（这些名字没对上、已跳过：${missing.join("、")}）`, ` (skipped unknown: ${missing.join(", ")})`) : "";
-      return { content: tt(`已建群「${name}」，成员 ${memberIds.map(nameById).join("、")}${coordinator ? `，协调者 ${nameById(coordinator)}` : ""}。进群 @成员 发话题即可一起讨论。${warn}`, `Created group "${name}".${warn}`) };
+      const warn = missing.length ? tr("ui.index.skipped.unknown.b89b594", { p0: (getCurrentLanguage() !== 'zh' ? missing.join(", ") : missing.join("、")) }) : "";
+      return { content: tr("ui.index.created.group.5c2ae92", { v0: name, v1: (getCurrentLanguage() !== 'zh' ? undefined : memberIds.map(nameById).join("、")), v2: (getCurrentLanguage() !== 'zh' ? undefined : coordinator ? `，协调者 ${nameById(coordinator)}` : ""), v3: warn }) };
     }
 
     const target = groupsOf().find((r: any) => r.name === name);
-    if (!target) return { content: tt(`没找到叫「${name}」的群。可用 action=list 看现有群。`, `No group named "${name}". Use action=list.`), isError: true };
+    if (!target) return { content: tr("ui.index.no.group.named.use.action.list.addfacb", { p0: name }), isError: true };
 
     if (action === "delete") {
       deleteRoom(target.id);
       send("evt:team-rooms", { rooms: loadRooms() });
-      return { content: tt(`已删除群「${name}」。`, `Deleted group "${name}".`) };
+      return { content: tr("ui.index.deleted.group.2a1813b", { p0: name }) };
     }
 
     // update
     const patch: Record<string, unknown> = {};
     let warn = "";
     let members: string[] = target.members || [];
-    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tt("newName 不能为空。", "newName cannot be empty."), isError: true }; patch.name = nn; }
-    if (Array.isArray(a.members)) { const r = resolveNames(a.members); if (r.ids.length < 1) return { content: tt("群成员不能清空（至少 1 名有效成员）。", "Group must keep ≥1 member."), isError: true }; members = r.ids; patch.members = r.ids; if (r.missing.length) warn = tt(`（这些名字没对上、已跳过：${r.missing.join("、")}）`, ` (skipped unknown: ${r.missing.join(", ")})`); }
+    if (a.newName != null) { const nn = clampStr(a.newName); if (!nn) return { content: tr("ui.index.newname.cannot.be.empty.3bb0ad1"), isError: true }; patch.name = nn; }
+    if (Array.isArray(a.members)) { const r = resolveNames(a.members); if (r.ids.length < 1) return { content: tr("ui.index.group.must.keep.member.1f6100e"), isError: true }; members = r.ids; patch.members = r.ids; if (r.missing.length) warn = tr("ui.index.skipped.unknown.b89b594", { p0: (getCurrentLanguage() !== 'zh' ? r.missing.join(", ") : r.missing.join("、")) }); }
     if (a.coordinator !== undefined) {
       if (!a.coordinator) patch.coordinator = undefined;
-      else { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tt(`没找到叫「${a.coordinator}」的员工当协调者。`, `No employee named "${a.coordinator}".`), isError: true }; if (!members.includes(cid)) { members = [...members, cid]; patch.members = members; } patch.coordinator = cid; }
+      else { const cid = idByName(String(a.coordinator)); if (!cid) return { content: tr("ui.index.no.employee.named.3ca83b8", { p0: a.coordinator }), isError: true }; if (!members.includes(cid)) { members = [...members, cid]; patch.members = members; } patch.coordinator = cid; }
     }
     if (a.maxWake != null) patch.maxWake = clampWake(a.maxWake);
-    if (Object.keys(patch).length === 0) return { content: tt("没有要改的字段（newName/members/coordinator/maxWake）。", "Nothing to update."), isError: true };
+    if (Object.keys(patch).length === 0) return { content: tr("ui.index.nothing.to.update.49f6913"), isError: true };
     updateRoom(target.id, patch as any);
     send("evt:team-rooms", { rooms: loadRooms() });
     const g2 = loadRooms().find((r: any) => r.id === target.id) as any;
-    return { content: tt(`已更新群「${g2?.name || name}」，成员 ${(g2?.members || []).map(nameById).join("、")}${g2?.coordinator ? `，协调者 ${nameById(g2.coordinator)}` : ""}。${warn}`, `Updated group "${g2?.name || name}".${warn}`) };
+    return { content: tr("ui.index.updated.group.0f3bd4f", { v0: g2?.name || name, v1: (getCurrentLanguage() !== 'zh' ? undefined : (g2?.members || []).map(nameById).join("、")), v2: (getCurrentLanguage() !== 'zh' ? undefined : g2?.coordinator ? `，协调者 ${nameById(g2.coordinator)}` : ""), v3: warn }) };
   },
 };
 
@@ -2368,92 +2307,89 @@ function parseTrigger(raw: any): { trigger?: ScheduleTrigger; err?: string } {
   if (kind === "monthly") return { trigger: { kind: "monthly", day: Math.min(31, Math.max(1, Math.floor(Number(t.day) || 1))), ...hm(t.hour, t.minute) } };
   if (kind === "interval") {
     const every = Math.floor(Number(t.everyMinutes) || 0);
-    if (every < MIN_INTERVAL_MINUTES) return { err: tt(`间隔最小 ${MIN_INTERVAL_MINUTES} 分钟。`, `Minimum interval is ${MIN_INTERVAL_MINUTES} minute(s).`) };
+    if (every < MIN_INTERVAL_MINUTES) return { err: tr("ui.index.minimum.interval.is.minute.e375a7b", { p0: MIN_INTERVAL_MINUTES }) };
     return { trigger: { kind: "interval", everyMinutes: every } };
   }
-  return { err: tt("trigger.kind 必须是 daily/weekly/monthly/interval 之一。", "trigger.kind must be one of daily/weekly/monthly/interval.") };
+  return { err: tr("ui.index.trigger.kind.must.be.one.of.664133b") };
 }
 function triggerText(t: ScheduleTrigger, en = false): string {
   const p2 = (n: number) => String(n).padStart(2, "0");
-  const wk = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  if (t.kind === "daily") return en ? `daily ${p2(t.hour)}:${p2(t.minute)}` : `每天 ${p2(t.hour)}:${p2(t.minute)}`;
-  if (t.kind === "weekly") return en ? `${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}` : `每${wk[t.weekday]} ${p2(t.hour)}:${p2(t.minute)}`;
-  if (t.kind === "monthly") return en ? `day ${t.day} ${p2(t.hour)}:${p2(t.minute)}` : `每月${t.day}号 ${p2(t.hour)}:${p2(t.minute)}`;
-  return en ? `every ${t.everyMinutes} min` : `每 ${t.everyMinutes} 分钟`;
+  const wk = [tr("ui.index.sun.a18e87c"), tr("ui.index.mon.30b15fa"), tr("ui.index.tue.9e7b616"), tr("ui.index.wed.fc1b35b"), tr("ui.index.thu.10d2d87"), tr("ui.index.fri.444209f"), tr("ui.index.sat.b3e9391")];
+  if (t.kind === "daily") return tr("ui.index.daily.e4f3761", { p0: p2(t.hour), p1: p2(t.minute) });
+  if (t.kind === "weekly") return tr("ui.index.text.f63cdcd", { p0: wk[t.weekday], p1: p2(t.hour), p2: p2(t.minute) });
+  if (t.kind === "monthly") return tr("ui.index.day.8095ce1", { p0: t.day, p1: p2(t.hour), p2: p2(t.minute) });
+  return tr("ui.index.every.min.6e28d83", { p0: t.everyMinutes });
 }
 
 const createScheduleTool: Tool = {
   name: "create_schedule",
-  description:
-    "给一名员工建定时任务：到点自动唤醒他、按内容执行一轮(结果落在他专属会话)。" +
-    "employeeName=负责人(名字须一致)，name=任务名，trigger=触发规则对象，内容二选一：sopId(引用SOP、执行时读全文，优先) 或 doc(内嵌的执行文档)。" +
-    "trigger.kind: 'daily'{hour,minute} 每天 / 'weekly'{weekday(0=周日…6=周六),hour,minute} 每周 / 'monthly'{day(1-31),hour,minute} 每月 / 'interval'{everyMinutes} 每N分钟(每几小时填 N×60，最小1)。时刻 24 小时制、本机时区。",
+  get description() { return tr("tool.description.create_schedule"); },
   readOnly: false,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      employeeName: { type: "string", description: "负责人名字(须与团队一致)" },
-      name: { type: "string", description: "任务名" },
-      trigger: { type: "object", description: "{kind:'daily'|'weekly'|'monthly'|'interval', ...}，见工具说明" },
-      sopId: { type: "string", description: "引用的 SOP id(可选，优先)" },
-      doc: { type: "string", description: "内嵌执行文档(sopId 缺省时用)" },
-      enabled: { type: "boolean", description: "是否启用，缺省 true" },
+      employeeName: { type: "string", description: tr("tool.parameter.create_schedule.employeeName") },
+      name: { type: "string", description: tr("tool.parameter.create_schedule.name") },
+      trigger: { type: "object", description: tr("tool.parameter.create_schedule.trigger") },
+      sopId: { type: "string", description: tr("tool.parameter.create_schedule.sopId") },
+      doc: { type: "string", description: tr("tool.parameter.create_schedule.doc") },
+      enabled: { type: "boolean", description: tr("tool.parameter.create_schedule.enabled") },
     },
     required: ["employeeName", "name", "trigger"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const a = input as any;
     const employeeName = clampStr(a.employeeName);
     const name = clampStr(a.name);
-    if (!employeeName || !name) return { content: tt("需要 employeeName 和 name。", "employeeName and name are required."), isError: true };
+    if (!employeeName || !name) return { content: tr("ui.index.employeename.and.name.are.required.8e7886a"), isError: true };
     const emp = resolveEmployee(loadEmployees(), employeeName);
-    if (!emp) return { content: tt(`没找到叫「${employeeName}」的同事。`, `No teammate named "${employeeName}".`), isError: true };
+    if (!emp) return { content: tr("ui.index.no.teammate.named.292aa26", { p0: employeeName }), isError: true };
     const sopId = clampStr(a.sopId);
     const doc = clampStr(a.doc);
-    if (!sopId && !doc) return { content: tt("内容二选一：给 sopId(引用SOP) 或 doc(执行文档)。", "Provide either sopId or doc as the task content."), isError: true };
+    if (!sopId && !doc) return { content: tr("ui.index.provide.either.sopid.or.doc.as.5d18722"), isError: true };
     const { trigger, err } = parseTrigger(a.trigger);
-    if (err || !trigger) return { content: err || tt("触发规则无效。", "Invalid trigger."), isError: true };
+    if (err || !trigger) return { content: err || tr("ui.index.invalid.trigger.a9953f4"), isError: true };
     const task = addSchedule({ employeeId: emp.id, name, trigger, sopId, doc, enabled: a.enabled !== false });
     broadcastSchedules();
-    return { content: tt(`已给「${emp.name}」建定时任务「${name}」：${triggerText(trigger)}。${task.enabled ? "已启用" : "已建但暂停"}。`, `Scheduled "${name}" for ${employeeLabel(emp, process.env.WUWEI_LANG === "en" ? "en" : "zh")}: ${triggerText(trigger, true)}.`) };
+    return { content: tr("ui.index.scheduled.for.f36a4ff", { v0: (getCurrentLanguage() !== 'zh' ? undefined : emp.name), v1: name, v2: (getCurrentLanguage() !== 'zh' ? undefined : triggerText(trigger)), v3: (getCurrentLanguage() !== 'zh' ? undefined : task.enabled ? tr("ui.index.message.e05c9ff53c") : tr("ui.index.message.6578d64b4a")), v4: (getCurrentLanguage() !== 'zh' ? employeeLabel(emp, getCurrentLanguage() !== "zh" ? "en" : "zh") : undefined), v5: (getCurrentLanguage() !== 'zh' ? triggerText(trigger, true) : undefined) }) };
   },
 };
 
 const listSchedulesTool: Tool = {
   name: "list_schedules",
-  description: "列出定时任务(可选按 employeeName 过滤)，看有哪些、归谁、什么频率、开没开。",
+  get description() { return tr("tool.description.list_schedules"); },
   readOnly: true,
-  inputSchema: { type: "object", properties: { employeeName: { type: "string", description: "只看某位同事的(可选)" } } },
+  get inputSchema() { return { type: "object", properties: { employeeName: { type: "string", description: tr("tool.parameter.list_schedules.employeeName") } } }; },
   async run(input): Promise<ToolResult> {
     const emps = loadEmployees();
     const filterName = clampStr((input as any).employeeName);
     const fid = filterName ? resolveEmployee(emps, filterName)?.id : undefined;
-    if (filterName && !fid) return { content: tt("员工名不存在或有歧义。", "Employee reference is unknown or ambiguous."), isError: true };
+    if (filterName && !fid) return { content: tr("ui.index.employee.reference.is.unknown.or.ambiguous.9594c56"), isError: true };
     let list = loadSchedules();
     if (filterName) list = list.filter((s) => s.employeeId === fid);
-    if (!list.length) return { content: tt("还没有定时任务。", "No scheduled tasks yet.") };
+    if (!list.length) return { content: tr("ui.index.no.scheduled.tasks.yet.22b2464") };
     const lines = list.map((s) => {
-      const nm = employeeLabel(emps.find((e) => e.id === s.employeeId), process.env.WUWEI_LANG === "en" ? "en" : "zh", s.employeeId);
-      return `· [${s.id}] ${s.name} — ${nm} · ${triggerText(s.trigger)} · ${s.enabled ? "启用" : "暂停"}${s.sopId ? " · 引用SOP" : ""}`;
+      const nm = employeeLabel(emps.find((e) => e.id === s.employeeId), getCurrentLanguage() !== "zh" ? "en" : "zh", s.employeeId);
+      return `· [${s.id}] ${s.name} — ${nm} · ${triggerText(s.trigger)} · ${s.enabled ? tr("ui.app.enabled.02606e2") : tr("ui.app.pause.f55ca3a")}${s.sopId ? tr("ui.index.message.890db50f6a") : ""}`;
     });
-    return { content: (filterName ? `「${filterName}」的定时任务：\n` : "定时任务：\n") + lines.join("\n") };
+    return { content: (filterName ? tr("ui.index.message.cfba4262aa", {p0: filterName}) : tr("ui.index.message.abb64007f2")) + lines.join("\n") };
   },
 };
 
 const deleteScheduleTool: Tool = {
   name: "delete_schedule",
-  description: "删除一个定时任务：传 id(来自 list_schedules)。",
+  get description() { return tr("tool.description.delete_schedule"); },
   readOnly: false,
-  inputSchema: { type: "object", properties: { id: { type: "string", description: "任务 id" } }, required: ["id"] },
+  get inputSchema() { return { type: "object", properties: { id: { type: "string", description: tr("tool.parameter.delete_schedule.id") } }, required: ["id"] }; },
   async run(input): Promise<ToolResult> {
     const id = clampStr((input as any).id);
-    if (!id) return { content: tt("需要 id。", "id is required."), isError: true };
+    if (!id) return { content: tr("ui.index.id.is.required.0c1573a"), isError: true };
     const before = loadSchedules();
     const task = before.find((s) => s.id === id);
-    if (!task) return { content: tt(`没找到 id 为「${id}」的定时任务。`, `No schedule with id "${id}".`), isError: true };
+    if (!task) return { content: tr("ui.index.no.schedule.with.id.f719724", { p0: id }), isError: true };
     removeSchedule(id);
     broadcastSchedules();
-    return { content: tt(`已删除定时任务「${task.name}」。`, `Deleted schedule "${task.name}".`) };
+    return { content: tr("ui.index.deleted.schedule.f888bbd", { p0: task.name }) };
   },
 };
 
@@ -2461,48 +2397,47 @@ const deleteScheduleTool: Tool = {
 // 走 ToolResult.displayImage，只给用户展示；已经自动展示的生成图无需重复发送。
 const sendImageTool: Tool = {
   name: "send_image",
-  description:
-    "把尚未展示的本地图片发到当前对话框里。path=绝对路径，caption=可选说明，单张≤8MB。platform_imagegen 和 codex_imagegen 返回 displayed:true 时图片已展示，直接回复用户，不要调用 send_image。只有尚未展示的图片才用此工具。Send a local image only when it has not been displayed. When platform_imagegen or codex_imagegen returns displayed:true, the image is already visible: reply to the user without calling send_image.",
+  get description() { return tr("tool.description.send_image"); },
   readOnly: true,
-  inputSchema: {
+  get inputSchema() { return {
     type: "object",
     properties: {
-      path: { type: "string", description: "图片文件的绝对路径" },
-      caption: { type: "string", description: "图片说明(可选)" },
+      path: { type: "string", description: tr("tool.parameter.send_image.path") },
+      caption: { type: "string", description: tr("tool.parameter.send_image.caption") },
     },
     required: ["path"],
-  },
+  }; },
   async run(input): Promise<ToolResult> {
     const p = String((input as any).path || "").trim();
-    if (!p) return { content: tt("需要 path(图片路径)。", "path is required."), isError: true };
+    if (!p) return { content: tr("ui.index.path.is.required.7d987fc"), isError: true };
     try {
       const buf = readFileSync(p);
-      if (buf.length > 8 * 1024 * 1024) return { content: tt("图片太大(>8MB)，发不了。", "Image too large (>8MB)."), isError: true };
+      if (buf.length > 8 * 1024 * 1024) return { content: tr("ui.index.image.too.large.mb.eeda6a5"), isError: true };
       const ext = (p.toLowerCase().split(".").pop() || "");
       const mime = ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" } as Record<string, string>)[ext];
-      if (!mime) return { content: tt("只支持 png/jpg/jpeg/gif/webp。", "Only png/jpg/jpeg/gif/webp supported."), isError: true };
+      if (!mime) return { content: tr("ui.index.only.png.jpg.jpeg.gif.webp.0a8fa63"), isError: true };
       const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
       const cap = String((input as any).caption || "").trim();
       // displayImage:只发到对话框给人看、不进模型上下文(避免大图每轮塞进上下文费钱/触发模型报错)。
-      return { content: cap || tt("已把图片发到对话框(可点开看大图)。", "Image sent to the chat."), displayImage: dataUrl };
+      return { content: cap || tr("ui.index.image.sent.to.the.chat.e204bd6"), displayImage: dataUrl };
     } catch (e: any) {
-      return { content: tt(`读不到这张图：${String(e?.message || e).slice(0, 150)}`, `Cannot read image: ${String(e?.message || e).slice(0, 150)}`), isError: true };
+      return { content: tr("ui.index.cannot.read.image.71003a1", { p0: String(e?.message || e).slice(0, 150) }), isError: true };
     }
   },
 };
 
 const sendFileTool: Tool = {
   name: 'send_file', readOnly: false,
-  description: '把已完成的文件交付给用户，手机可从任务产出下载并用系统应用预览或保存。只支持当前工作目录或无为 output 目录内不超过 32 MiB 的普通文件。path 为实际文件路径，不要把仅计划生成的文件当作已交付。',
-  inputSchema: { type: 'object', properties: { path: { type: 'string', description: '实际文件路径' } }, required: ['path'] },
+  get description() { return tr("tool.description.send_file"); },
+  get inputSchema() { return { type: 'object', properties: { path: { type: 'string', description: tr("tool.parameter.send_file.path") } }, required: ['path'] }; },
   async run(input, ctx) {
     const origin = ctx.taskReportScope?.origin || ctx.reportOrigin || (ctx.sessionId ? { kind: 'session' as const, id: ctx.sessionId } : undefined);
-    if (!origin || !ctx.turnId) return { content: '缺少交付会话，未发送文件。', isError: true };
+    if (!origin || !ctx.turnId) return { content: tr("ui.index.message.eaef8d4bd5"), isError: true };
     try {
       ctx.signal?.throwIfAborted();
       const file = remoteArtifacts.publish(String(input.path || ''), [ctx.cwd, join(homedir(), DATA_DIR_NAME, 'output')], origin, ctx.taskReportScope?.turnId || ctx.turnId);
       return { content: JSON.stringify({ delivered: true, file }) };
-    } catch (error) { return { content: String((error as Error).message || '文件交付失败'), isError: true }; }
+    } catch (error) { return { content: String((error as Error).message || tr("ui.index.message.d348407895")), isError: true }; }
   },
 };
 
@@ -2539,105 +2474,24 @@ function wrapSecret(t: Tool): Tool {
 const brainAvailable = brainEnabled;
 // 主进程界面文案双语：按 WUWEI_LANG(设置时写入)出中/英，供返回给渲染层的 reason/message/text 等用。
 function tt(zh: string, en: string): string {
-  return process.env.WUWEI_LANG === "en" ? en : zh;
+  return getCurrentLanguage() !== "zh" ? en : zh;
 }
 // 工具描述/参数说明的英文版（发给模型那份；界面显示侧另有渲染端 TOOL_DESC_EN）。
 // WUWEI_LANG=en 时把内置工具的中文描述替换为英文，让英文用户的模型上下文也全英文。
-const TOOL_DESC_EN_MODEL: Record<string, string> = {
-  read_file: "Read a text file's content with line numbers. For viewing code/files.",
-  write_file: "Write/overwrite a file (creates it and parent dirs if missing).",
-  edit_file: "Make an exact string replacement in a file. old_string must appear exactly once, or it errors.",
-  bash: "Run a shell command in the working dir (bash on macOS/Linux). Returns stdout+stderr. Default timeout 120s.",
-  powershell: "Run native Windows commands (PowerShell first, auto-falls back to cmd). Best for junctions/symlinks, the registry, services/processes, WMI — more reliable than wrapping cmd inside bash. Falls back to a normal shell off Windows.",
-  glob: "Find files by glob pattern (e.g. '**/*.ts'), returns matching paths.",
-  grep: "Search file contents by regex/string, returns matching lines (file:line:content).",
-  remember: "Save a long-term memory (a concise, self-contained sentence); auto-loaded in future chats.",
-  web_search: "Search the web — returns titles/links/snippets of relevant pages.",
-  web_fetch: "Fetch a web page's main text (HTML stripped). For reading docs, articles, API pages.",
-  brain_recall: "Recall relevant concepts and relations from the local Brain (knowledge graph).",
-  brain_learn: "Record or update a high-value concept in the local Brain (same name auto-merges). For durable knowledge: what a project is, git paths, test/prod env, deploy scripts, caveats. attrs holds structured key-values.",
-  brain_link: "Create a relation between two concepts in the Brain.",
-  brain_forget: "Remove a wrong/outdated concept (and all its relations) from the Brain. Use only when sure it's wrong.",
-  brain_read_doc: "Read the full source of a document indexed in the Brain.",
-  ask_user: "[Preferred interaction] Whenever you want the user to pick/confirm among clear options, call this to pop up clickable choices instead of listing 'Option A/B' in prose. Supports single/multi-select and multiple questions.",
-  browser_open: "Open a web page URL in the built-in browser (can run JS; better than web_fetch for dynamic/interactive pages). Then use browser_read for text and browser_click to click.",
-  browser_read: "Read the visible text of the built-in browser's current page (open one first with browser_open).",
-  browser_click: "Click an element matching a CSS selector on the built-in browser's current page (buttons/links etc). Follow with browser_read to see changes.",
-};
+
 // ask_user 的参数说明（嵌套在 questions.items / options.items 里），主进程与设置页共用同一套文案
-const ASK_USER_PARAM_EN: Record<string, string> = {
-  questions: "One or more questions to ask the user",
-  question: "The question text",
-  header: "Very short label (optional, e.g. “Approach”, “File”)",
-  multiSelect: "Allow multiple selections (default: single-select)",
-  options: "Clickable options",
-  label: "Option text",
-  description: "Option explanation (optional)",
-};
-const TOOL_PARAM_EN_MODEL: Record<string, Record<string, string>> = {
-  read_file: { path: "File path (relative or absolute)", offset: "Start line (1-based), optional", limit: "Lines to read, default 2000" },
-  edit_file: { replace_all: "Replace all occurrences, default false" },
-  bash: { timeout_ms: "Timeout in ms, default 120000" },
-  powershell: { command: "Command to run (PowerShell syntax; the same string is run as cmd syntax when falling back)", timeout_ms: "Timeout in ms, default 120000" },
-  glob: { path: "Search root directory, default working dir" },
-  grep: { path: "Directory/file to search, default working dir", glob: "Filter by file type, e.g. '*.ts' (optional)" },
-  web_search: { query: "Search query" },
-  web_fetch: { url: "Web page URL (http/https)" },
-  remember: { text: "One line to remember long-term (concise, self-contained)" },
-  brain_recall: { query: "Topic/concept to recall, e.g. 'figcheck deploy'", limit: "Max concepts to return, default 6" },
-  brain_learn: {
-    name: "Primary concept name, e.g. 'figcheck', 'deploy_view_prod.sh'",
-    type: "Type: project / server / script / caveat / command / concept…",
-    summary: "One-line summary",
-    aliases: "Aliases, optional",
-    attrs: "Structured key-value attributes, e.g. {git: '~/...', test_env: 'fig01'}",
-  },
-  brain_link: { from: "Source concept", relation: "Relation: deploy script / test env / prod server / contains / caveat / related…", to: "Target concept" },
-  brain_forget: { name: "Concept name to remove" },
-  brain_read_doc: { ref: "Document relative path or chunk id (the file value returned by brain_recall)" },
-  browser_click: { selector: "CSS selector" },
-  ask_user: ASK_USER_PARAM_EN,
-};
+
+
 // 深度替换 inputSchema 里所有层级的 description（ask_user 的选项/问题是嵌套在 items 里的，
 // 只译顶层会让英文用户的模型上下文里混着中文字段说明）
-function localizeSchemaEn(name: string, schema: any): any {
-  const pmap = TOOL_PARAM_EN_MODEL[name];
-  if (!pmap || !schema || typeof schema !== "object") return schema;
-  const walk = (node: any): any => {
-    if (!node || typeof node !== "object") return node;
-    const out: any = { ...node };
-    if (out.properties && typeof out.properties === "object") {
-      const props: any = {};
-      for (const [k, v] of Object.entries(out.properties as Record<string, any>)) {
-        const child = walk(v);
-        props[k] = pmap[k] ? { ...child, description: pmap[k] } : child;
-      }
-      out.properties = props;
-    }
-    if (out.items) out.items = walk(out.items);
-    return out;
-  };
-  return walk(schema);
-}
-function englishTeamSchema(schema: any): any {
-  if (!schema || typeof schema !== "object") return schema;
-  const out = { ...schema };
-  if (out.description) delete out.description;
-  if (out.properties) out.properties = Object.fromEntries(Object.entries(out.properties).map(([key, value]) => [key, englishTeamSchema(value)]));
-  if (out.items) out.items = englishTeamSchema(out.items);
-  return out;
-}
-function localizeToolEn(t: Tool): Tool {
-  if (TEAM_TOOL_EN[t.name]) return { ...t, description: TEAM_TOOL_EN[t.name] + " Employee references accept stable IDs, canonical names or unique unmodified default English aliases. Ambiguous references are rejected.", inputSchema: englishTeamSchema(t.inputSchema) };
-  const desc = TOOL_DESC_EN_MODEL[t.name];
-  if (!desc && !TOOL_PARAM_EN_MODEL[t.name]) return t;
-  return { ...t, description: desc ?? t.description, inputSchema: localizeSchemaEn(t.name, t.inputSchema) };
-}
+
+
+function localizeToolEn(t: Tool): Tool { return localizeToolMetadata(t); }
 
 function desktopTools(): Tool[] {
   const brainOn = brainAvailable(loadSettings());
   const base = brainOn ? ALL_TOOLS : ALL_TOOLS.filter((t) => !t.name.startsWith("brain_"));
-  const en = process.env.WUWEI_LANG === "en";
+  const en = getCurrentLanguage() !== "zh";
   // dm_teammate 仅在「AI 员工团队」模块开启时提供（可插拔契约：模块关时工具不出现、不注入）。
   const teamTools = teamEnabled(loadSettings())
     ? [dmTeammateTool, assignTaskTool, searchSopTool, readSopTool, listSopsTool, writeSopTool, createEmployeeTool, updateEmployeeTool, deleteEmployeeTool, manageDepartmentTool, manageGroupTool, createScheduleTool, listSchedulesTool, deleteScheduleTool]
@@ -2837,30 +2691,22 @@ async function maybeSmartTitle(id: string) {
   const firstUser = msgs.find((m: any) => m.role === "user");
   const recent = msgs.slice(-6);
   const picked = firstUser && !recent.includes(firstUser) ? [firstUser, ...recent] : recent;
-  const en = process.env.WUWEI_LANG === "en"; // 标题是给用户看的，必须跟随界面语言
+  const en = getCurrentLanguage() !== "zh"; // 标题是给用户看的，必须跟随界面语言
   const convo = picked
     .map((m: any) => {
       // 剥掉交接前言只留正文；首条(定主题)多给点字数，确保覆盖到"目标+项目"这几节
       const body = stripHandoffWrapper(msgText(m)).trim().slice(0, m === firstUser ? 500 : 200);
-      return `${m.role === "user" ? tt("用户", "User") : tt("助手", "Assistant")}: ${body}`;
+      return `${m.role === "user" ? tr("ui.index.user.b9e9555") : tr("ui.index.assistant.e7461b8")}: ${body}`;
     })
     .filter((s: string) => s.length > 3)
     .join("\n");
   try {
     const res = await provider.complete(
-      tt(
-        "你是会话标注器。根据对话(尤其最新内容)输出两项，用竖线分隔：" +
-          "①4-10 个汉字的简短中文标题(概括当前主题)；②2-6 字的项目/产品名或主题域(用于归类，如某系统名/某功能域，若无明显项目就填通用主题)。" +
-          "严格只输出「标题|项目」，不要任何引号、解释、多余空格。",
-        "You are a conversation labeler. Read the conversation (weighting the latest turns) and output two fields separated by a vertical bar: " +
-          "(1) a short English title, 2-5 words, summarizing the current topic; (2) a 1-3 word project/product name or topic domain used for grouping " +
-          "(e.g. a system or feature area; if there is no obvious project, give a general topic). " +
-          "Output strictly `Title|Project` in English — no quotes, no explanation, nothing else.",
-      ),
+      tr("ui.index.you.are.conversation.labeler.read.the.89f9667"),
       [
         {
           role: "user",
-          content: [{ type: "text", text: tt(`对话:\n${convo}\n\n标题|项目:`, `Conversation:\n${convo}\n\nTitle|Project:`) }],
+          content: [{ type: "text", text: tr("ui.index.conversation.title.project.6fc6f12", { p0: convo }) }],
         },
       ] as any,
       [],
@@ -2911,12 +2757,12 @@ async function suggestNextAction(id: string) {
     return;
   }
   suggestInFlight.add(id);
-  const en = process.env.WUWEI_LANG === "en"; // 建议会原样填进输入框，必须跟随界面语言
+  const en = getCurrentLanguage() !== "zh"; // 建议会原样填进输入框，必须跟随界面语言
   const recent = msgs.slice(-4);
   const convo = recent
     .map((m: any, i: number) =>
       // 最后一条助手回复取「结尾」(下一步问题/待办常在末尾)，中间几条取开头做背景即可。
-      `${m.role === "user" ? tt("用户", "User") : tt("助手", "Assistant")}: ${i === recent.length - 1 ? msgTextTail(m, 600) : msgText(m)}`,
+      `${m.role === "user" ? tr("ui.index.user.b9e9555") : tr("ui.index.assistant.e7461b8")}: ${i === recent.length - 1 ? msgTextTail(m, 600) : msgText(m)}`,
     )
     .filter((s: string) => s.length > 3)
     .join("\n");
@@ -2930,74 +2776,44 @@ async function suggestNextAction(id: string) {
     const plan = g!.plan || [];
     if (plan.length) {
       // 树形计划序列化(缩进带层级)：编号如 1 / 1.2 / 1.2.3，带状态+验收
-      const st = (s: PlanStep) => (s.status === "done" ? tt("✓已完成", "✓done") : s.status === "doing" ? tt("▶进行中", "▶doing") : tt("待办", "todo"));
+      const st = (s: PlanStep) => (s.status === "done" ? tr("ui.index.done.322615f") : s.status === "doing" ? tr("ui.index.doing.e743cc6") : tr("ui.index.todo.8f7a063"));
       const lines: string[] = [];
       const walk = (nodes: PlanStep[], prefix: string, indent: string) => {
         nodes.forEach((s, i) => {
           const no = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
-          lines.push(`${indent}${no}. [${st(s)}] ${s.title}${s.acceptance ? tt(`（验收:${s.acceptance}）`, ` (acceptance: ${s.acceptance})`) : ""}`);
+          lines.push(`${indent}${no}. [${st(s)}] ${s.title}${s.acceptance ? tr("ui.index.acceptance.d0de53c", { p0: s.acceptance }) : ""}`);
           if (s.children?.length) walk(s.children, no, indent + "  ");
         });
       };
       walk(plan, "", "");
-      charterExtra += tt("\n【执行计划】按节点逐步推进(含子节点)：\n", "\n[Plan] advance node by node (with sub-nodes):\n") + lines.join("\n");
+      charterExtra += tr("ui.index.plan.advance.node.by.node.with.744fadf") + lines.join("\n");
     }
     const doTxt = g!.rules?.do?.trim();
     const dontTxt = g!.rules?.dont?.trim();
-    if (doTxt) charterExtra += tt("\n【必须做】", "\n[Must do] ") + doTxt.slice(0, 600);
-    if (dontTxt) charterExtra += tt("\n【绝不做】(碰到就是跑偏)：", "\n[Never do] (touching these means drifting): ") + dontTxt.slice(0, 600);
+    if (doTxt) charterExtra += tr("ui.index.must.do.84b3bd3") + doTxt.slice(0, 600);
+    if (dontTxt) charterExtra += tr("ui.index.never.do.touching.these.means.drifting.dfae4fc") + dontTxt.slice(0, 600);
   }
   const sr = (isUneditedStopRules(stopRules) ? defaultStopRules() : stopRules).trim(); // 智能继续：红线(未改过按当前语言取默认)
   try {
     const res = await provider.complete(
-      tt(
-        "你是输入建议助手。下面对话里，助手『最后一条回复』的结尾通常会提出一个问题、或建议一个待确认的下一步动作。" +
-          "请【只针对助手最后回复结尾的那个问题/下一步】，用中文写出用户最可能的回应(第一人称或祈使句，像用户自己会打的话，不超过20字)——" +
-          "比如结尾问『要我继续部署吗?』就回『继续部署』/『先本地验证』这类。" +
-          "务必忽略对话中间的其它话题，别自己另起一件事。\n" +
-          "输出两行，不要引号、解释或前缀：\n" +
-          "第1行：那句话本身；若结尾没有明确的问题或待确认的下一步(助手在等用户自由发挥)，第1行只写：无\n" +
-          "第2行：只写 AUTO 或 ASK。\n" +
-          "AUTO = 助手只是在确认按它已说明的方案往下推进，且这一步属于寻常低风险的事：本地或测试环境的操作、只读的检查与验证、查资料研究、改代码写文件、跑测试、构建、生成文档、整理数据。" +
-          "助手在结尾列了几条『可选的下一步』让用户挑，也算 AUTO——第1行直接替用户挑最贴近目标的那条说出来，别把选择题原样丢回去。\n" +
-          "ASK = 只有这些才停下来问人：删除/清空/覆盖数据、部署或上线到生产正式环境、发布对外内容、改线上配置或写生产数据库、花钱付款、替用户发邮件或消息、改权限与安全设置、任何不可逆或会影响他人的动作；或者要用户提供只有他才有的东西(账号、密钥、服务器、线下信息)、上一步出错需要用户定夺、几个方案的差别纯粹取决于用户偏好而无从推断。\n" +
-          "『要我继续吗』『下一步做 X 好吗』『可以选 A 或 B』这类一律 AUTO，别当成需要用户拿主意。" +
-          (goalBlock
+      tr("ui.index.you.suggest.what.the.user.will.43d3a6a", { v0: (getCurrentLanguage() !== 'zh' ? undefined : (goalBlock
             ? "\n用户给这个对话定了总目标：" + goalBlock + charterExtra +
               "\n他已经授权你朝这个目标自主推进，所以【朝目标推进的常规步骤一律写 AUTO】，第1行就写出推进下一步该说的话(别问要不要，直接说做什么)。" +
               "\n定第1行前先对照上面的计划与规则自检：现在该落在哪个计划节点？上一步的产出达到那个节点的验收标准了吗(没达到就先补到达标，别急着往下跳)？有没有偏离总目标、或快要碰到「绝不做」？" +
               "——第1行必须是【最贴合当前计划节点、朝总目标推进且不跑偏】的下一步；一旦发现已经跑偏(在做计划外的、对总目标没意义的事)，第1行就直接写把方向拉回目标的纠正动作。只有下面 ASK 的红线才停。"
-            : "") +
-          (sr ? "\n用户自己定的红线(命中就必须写 ASK，优先级最高)：\n" + sr : ""),
-        "You suggest what the user will type next. In the conversation below, the END of the assistant's LAST reply usually asks a question " +
-          "or proposes a next step awaiting confirmation. Answer ONLY that question/next step: write, in English, the reply the user is most likely " +
-          "to type (first person or imperative, the way a user actually types, under 12 words) — e.g. if it ends with 'Want me to deploy?', " +
-          "answer 'Go ahead and deploy' or 'Verify locally first'. Ignore other topics earlier in the conversation and do not start something new.\n" +
-          "Output TWO lines, no quotes, no explanation, no prefix:\n" +
-          "Line 1: that single line; if the ending has no clear question or pending next step (assistant is waiting for the user to lead), write exactly: none\n" +
-          "Line 2: write only AUTO or ASK.\n" +
-          "AUTO = the assistant is just confirming it should proceed along a plan it already described, and this step is ordinary low-risk: local/test-env actions, read-only checks and verification, research, editing code/writing files, running tests, builds, generating docs, organizing data. " +
-          "If the assistant listed a few optional next steps to pick from, that is also AUTO — on line 1 pick the one closest to the goal and say it, don't echo the menu back.\n" +
-          "ASK = stop and ask only for: deleting/clearing/overwriting data, deploying/releasing to production, publishing external content, changing live config or writing to a production DB, spending money, sending mail/messages on the user's behalf, changing permissions/security, anything irreversible or affecting others; or needing something only the user has (account, key, server, offline info), a prior step errored and needs the user to decide, or options differ purely by user preference and can't be inferred.\n" +
-          "'Want me to continue', 'shall I do X next', 'pick A or B' are all AUTO, not user-decision." +
-          (goalBlock
+            : "")), v1: (getCurrentLanguage() !== 'zh' ? undefined : (sr ? "\n用户自己定的红线(命中就必须写 ASK，优先级最高)：\n" + sr : "")), v2: (getCurrentLanguage() !== 'zh' ? (goalBlock
             ? "\nThe user set an overall goal for this conversation: " + goalBlock + charterExtra +
               "\nThey authorized you to drive toward it autonomously, so [ordinary steps advancing the goal are always AUTO]; line 1 states the next step to take (don't ask whether — say what to do)." +
               "\nBefore writing line 1, self-check against the plan and rules above: which plan node should we be on now? Did the last step meet that node's acceptance criteria (if not, finish reaching it before jumping ahead)? Are we drifting from the goal or about to touch a [Never do]?" +
               "—— line 1 MUST be the next step that best fits the current plan node, advances the goal, and does not drift; the moment you notice drift (doing something off-plan and pointless for the goal), line 1 states the corrective action that steers back to the goal. Only the ASK redlines below stop you."
-            : "") +
-          (sr ? "\nThe user's own redlines (hitting any one MUST be ASK, highest priority):\n" + sr : ""),
-      ),
+            : "") : undefined), v3: (getCurrentLanguage() !== 'zh' ? (sr ? "\nThe user's own redlines (hitting any one MUST be ASK, highest priority):\n" + sr : "") : undefined) }),
       [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: tt(
-                `完整对话(供参考):\n${convo}\n\n【助手最后回复的结尾，就针对它作答】:\n${lastReplyTail}\n\n用户接下来最可能输入:`,
-                `Full conversation (for context):\n${convo}\n\n[END of the assistant's last reply — answer THIS]:\n${lastReplyTail}\n\nWhat the user most likely types next:`,
-              ),
+              text: tr("ui.index.full.conversation.for.context.end.of.43273cf", { p0: convo, p1: lastReplyTail }),
             },
           ],
         },
@@ -3042,18 +2858,7 @@ ipcMain.handle("chat:judgeAskRisk", async (_e, questions: any[], rules?: string)
   const userRules = String(rules || "").trim().slice(0, 1500);
   try {
     const res = await provider.complete(
-      tt(
-        "你是安全判官。下面是 AI 想让用户拿主意的一道选择题。判断：如果 AI【不等用户、自己挑一个选项并据此行动】，会不会真的触发【不可逆或影响他人的危险动作】——" +
-          "删除/清空/覆盖数据、部署上线到生产、对外发布、改线上配置或写生产库、花钱付款下单、替用户对外发送、改权限/密钥/密码、git 强推回滚等。" +
-          (userRules ? "\n用户还自定义了必须停下来问他的红线(每行一条，按【意思】判断，不是关键词，别因为选项里只是提到某个字就算命中)：\n" + userRules + "\n" : "") +
-          "关键：只有'自主选下去就会真的执行这类动作/踩中上面红线的意思'才算 RISKY；仅仅选项文字里提到某个词（如只是在讨论用哪种方案、其中一个方案名字带'密钥'或'文件'二字）不算危险。" +
-          "输出两行：第1行只写 RISKY 或 SAFE；第2行仅当 RISKY 时，用不超过15字说清是哪个危险动作/踩了哪条红线。",
-        "You are a safety judge. Below is a multiple-choice question the AI wants the user to decide. Judge: if the AI picks an option ITSELF without waiting and acts on it, " +
-          "would that actually trigger an irreversible or others-affecting dangerous action — deleting/overwriting data, deploying to production, publishing, changing live config or writing to prod DB, spending money, sending on the user's behalf, changing permissions/keys/passwords, git force-push/rollback? " +
-          (userRules ? "\nThe user also set custom redlines (one per line) — judge by MEANING, not keywords; don't flag just because an option mentions a word:\n" + userRules + "\n" : "") +
-          "Key: only RISKY if choosing autonomously would really execute such an action or match a redline's MEANING; merely mentioning a word (e.g. an option named with 'key' or 'file') is NOT dangerous. " +
-          "Output two lines: line 1 only RISKY or SAFE; line 2 only when RISKY, ≤10 words naming the dangerous action/redline.",
-      ),
+      tr("ui.index.you.are.safety.judge.below.is.0b74745", { v0: (getCurrentLanguage() !== 'zh' ? undefined : (userRules ? "\n用户还自定义了必须停下来问他的红线(每行一条，按【意思】判断，不是关键词，别因为选项里只是提到某个字就算命中)：\n" + userRules + "\n" : "")), v1: (getCurrentLanguage() !== 'zh' ? (userRules ? "\nThe user also set custom redlines (one per line) — judge by MEANING, not keywords; don't flag just because an option mentions a word:\n" + userRules + "\n" : "") : undefined) }),
       [{ role: "user", content: [{ type: "text", text: blob }] }] as any,
       [],
       {},
@@ -3061,7 +2866,7 @@ ipcMain.handle("chat:judgeAskRisk", async (_e, questions: any[], rules?: string)
     const whole = (res.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     const lines = whole.split("\n").map((s: string) => s.trim()).filter(Boolean);
     const risky = /\bRISKY\b/i.test(lines[0] || "");
-    return { risky, reason: risky ? (lines[1] || tt("涉及危险动作", "a risky action")) : "" };
+    return { risky, reason: risky ? (lines[1] || tr("ui.index.risky.action.e172e0c")) : "" };
   } catch {
     return { risky: false, reason: "" };
   }
@@ -3190,32 +2995,32 @@ if (!gotLock) {
   const TRAY_MENU_ITEMS = () => [
     {
       id: "show",
-      label: tt("显示主窗口", "Show main window"),
+      label: tr("ui.index.show.main.window.da4e1bd"),
       // 线性窗口图标
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>`,
     },
     {
       id: "settings",
-      label: tt("设置", "Settings"),
+      label: tr("set.title"),
       // 线性齿轮图标
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
     },
     {
       id: "check-update",
-      label: tt("检查更新", "Check for updates"),
+      label: tr("ui.index.check.for.updates.0cb1f6d"),
       // 线性向上箭头/升级图标
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V8"/><path d="m6 12 6-6 6 6"/><path d="M6 4h12"/></svg>`,
     },
     {
       id: "restart",
-      label: tt("重启", "Restart"),
+      label: tr("ui.index.restart.a6668d3"),
       // 线性刷新/重启图标
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>`,
     },
     { id: "sep" },
     {
       id: "quit",
-      label: tt("退出", "Quit"),
+      label: tr("ui.index.quit.9fbbec8"),
       danger: true,
       // 线性电源图标
       icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v8"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>`,
@@ -3390,7 +3195,7 @@ if (!gotLock) {
       const meta = existingId ? listSessions().find(session => session.id === existingId) : undefined;
       const selection = resolveRemoteSelection(detectChannels(settings), channelId, model);
       if (!remoteShareSubscription(settings) && (!selection && ['claude-oauth', 'codex'].includes(meta?.providerId || settings?.providerId || '')))
-        throw new Error('本机未开启同步订阅，请在电脑设置中主动开启或选择非订阅渠道');
+        throw new Error(tr("ui.index.message.7994dc5197"));
       let selected = selection ? null : providerForSession(existingId || '', true);
       if (selection && settings) {
         const ch = selection.channel, slot = settings.creds?.[ch.providerId] || {};
@@ -3402,7 +3207,7 @@ if (!gotLock) {
           selected = makeProvider(loadConfig());
         } finally { applyEnvFromSettings(settings); }
       }
-      if (!selected) throw new Error('所选渠道未就绪，请检查电脑端模型配置');
+      if (!selected) throw new Error(tr("ui.index.message.45c0bf73aa"));
       return { provider: selected, selection };
     };
     setRemoteExecutor(async args => {
@@ -3410,12 +3215,12 @@ if (!gotLock) {
       await ensureFreshClaudeOAuth();
       const remoteSettings = loadSettings();
       const employee = args.employeeId && !args.sessionId ? loadEmployees().find(item => item.id === args.employeeId) : undefined;
-      if (args.employeeId && !args.sessionId && (!teamEnabled(remoteSettings) || !employee)) throw new Error('所选员工未在这台电脑启用');
+      if (args.employeeId && !args.sessionId && (!teamEnabled(remoteSettings) || !employee)) throw new Error(tr("ui.index.message.a20e780624"));
       const employeeBinding = !args.channelId && !args.model ? employee?.model : undefined;
-      if (employeeBinding && !remoteShareSubscription(remoteSettings) && ['claude-oauth', 'codex'].includes(employeeBinding.providerId)) throw new Error('本机未同步该员工使用的订阅渠道');
+      if (employeeBinding && !remoteShareSubscription(remoteSettings) && ['claude-oauth', 'codex'].includes(employeeBinding.providerId)) throw new Error(tr("ui.index.message.e0fccfc9ef"));
       const choice = employeeBinding ? { provider: providerForEmployee(employee!), selection: null } : remoteProvider(args.channelId, args.sessionId, args.model);
       const selected = choice.provider;
-      if (!selected) throw new Error('该员工配置的模型未就绪，请在电脑检查配置');
+      if (!selected) throw new Error(tr("ui.index.message.9776823cfb"));
       const selectedBinding = choice.selection?.channel.providerId || employeeBinding?.providerId;
       const permission = args.onPermission ? async (name: string, input: unknown): Promise<'allow' | 'deny'> => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined;
       const toolNames = new Map<string, string>();
@@ -3447,12 +3252,12 @@ if (!gotLock) {
             backendBySid.set(id, selectedBinding);
           }
           if (args.employeeId && !args.sessionId) {
-            if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
-            if (!employee) throw new Error('所选员工不属于这台电脑');
+            if (!teamEnabled(loadSettings())) throw new Error(tr("ui.index.message.a5a64df91c"));
+            if (!employee) throw new Error(tr("ui.index.message.002d906733"));
             setSessionEmployee(id, employee.id, employee.name);
           }
           const agent = getAgent(id);
-          if (!agent) throw new Error('本机当前没有可用模型');
+          if (!agent) throw new Error(tr("ui.index.message.2ee7195362"));
           agent.setProvider(selected); agent.setSystem(sysForSession(id) + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。');
           await ensureHostedProviderReady(id);
           return agent;
@@ -3468,7 +3273,7 @@ if (!gotLock) {
       return result;
     });
     setRemoteRoomExecutor(async args => {
-      if (!teamEnabled(loadSettings())) throw new Error('本机尚未启用 AI 员工团队');
+      if (!teamEnabled(loadSettings())) throw new Error(tr("ui.index.message.a5a64df91c"));
       const choice = args.channelId || args.model ? remoteProvider(args.channelId, undefined, args.model) : undefined;
       const selected = choice?.provider;
       await runRemoteRoomTurn(args, {
@@ -3478,7 +3283,7 @@ if (!gotLock) {
         runEmployee: employeeArgs => {
           const providerId = employeeArgs.employee.model?.providerId || loadSettings()?.providerId;
           if (!selected && !remoteShareSubscription(loadSettings()) && ['claude-oauth', 'codex'].includes(providerId || ''))
-            throw new Error('本机未同步该员工使用的订阅渠道');
+            throw new Error(tr("ui.index.message.e0fccfc9ef"));
           return runEmployeeTurn({ ...employeeArgs, providerOverride: selected, providerBinding: choice?.selection ? { providerId: choice.selection.channel.providerId, model: choice.selection.model } : undefined, remoteExecution: { signal: args.signal, shareSubscription: remoteShareSubscription(loadSettings()), requestDecision: args.requestDecision, requestPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined } });
         },
       });
@@ -3490,14 +3295,14 @@ if (!gotLock) {
         const list = listSessions()
           .filter((s: any) => !s.employeeId)
           .sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .map((s: any) => ({ id: s.id, title: s.title || "新对话", updatedAt: s.updatedAt || 0,
+          .map((s: any) => ({ id: s.id, title: s.title || tr("ui.app.new.chat.fca06b0"), updatedAt: s.updatedAt || 0,
             run: runs.has(s.id) ? 'running' : 'idle', model: s.model, providerId: s.providerId,
             lastMessage: (agents.get(s.id)?.getDisplayMessages() || loadMessages(s.id)).flatMap((m: any) => m.content || []).filter((b: any) => b.type === 'text').at(-1)?.text?.slice(0, 160) || '' }));
         return { sessions: list };
       }
       if (method === "sessions.messages") {
         const sid = String(params?.sessionId || "");
-        if (!sid) throw new Error("缺少 sessionId");
+        if (!sid) throw new Error(tr("ui.index.message.ba6390b6bf"));
         const all = agents.get(sid)?.getDisplayMessages() || loadMessages(sid);
         const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
         const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i)).filter(m => m.text || m.image);
@@ -3521,7 +3326,7 @@ if (!gotLock) {
       }
       if (method === "team.room.messages") {
         const rid = String(params?.roomId || "");
-        if (!rid) throw new Error("缺少 roomId");
+        if (!rid) throw new Error(tr("ui.index.message.6e52bffecf"));
         const all = loadRoomMessages(rid);
         const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
         const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", images: m.images, error: !!m.error }));
@@ -3529,7 +3334,7 @@ if (!gotLock) {
       }
       if (method === 'team.room.usage') {
         const room = loadRooms().find(room => room.id === params?.roomId);
-        if (!room || !teamEnabled(loadSettings())) throw new Error('该群聊不可用');
+        if (!room || !teamEnabled(loadSettings())) throw new Error(tr("ui.index.message.1593ac90c8"));
         const settings = loadSettings();
         const selected = resolveRemoteSelection(detectChannels(settings), params?.channelId, params?.model);
         return { items: loadEmployees().filter(employee => room.members.includes(employee.id)).map(employee => {
@@ -3549,7 +3354,7 @@ if (!gotLock) {
       }
       if (method === "sop.read") {
         const id = String(params?.id || "");
-        if (!id) throw new Error("缺少 id");
+        if (!id) throw new Error(tr("ui.index.message.c5a6c9e5dd"));
         return { id, content: sopReadDoc(id) || "" };
       }
       if (method === "tasks.running") {
@@ -3557,20 +3362,20 @@ if (!gotLock) {
         const metas = listSessions();
         const tasks = [...runs.keys()].map((id) => {
           const m = metas.find((s: any) => s.id === id);
-          return { id, title: m?.title || "任务", employeeId: m?.employeeId || null, updatedAt: m?.updatedAt || 0 };
+          return { id, title: m?.title || tr("ui.index.message.b094e4ee0b"), employeeId: m?.employeeId || null, updatedAt: m?.updatedAt || 0 };
         });
         const groups = loadRooms().filter(room => room.type !== 'dm' && isRoomRunning(room.id)).map(room => ({ id: room.id, title: room.name, kind: 'room', employeeId: null, updatedAt: room.updatedAt || 0 }));
-        const batches = taskReports.snapshots(true).map(batch => ({ id: batch.scope.turnId, title: `${batch.scope.ownerName} · 员工任务与汇报`, kind: 'batch', employeeId: batch.scope.ownerId, updatedAt: batch.updatedAt }));
+        const batches = taskReports.snapshots(true).map(batch => ({ id: batch.scope.turnId, title: tr("ui.index.message.db6a515b77", {p0: batch.scope.ownerName}), kind: 'batch', employeeId: batch.scope.ownerId, updatedAt: batch.updatedAt }));
         return { tasks: [...tasks, ...groups, ...batches] };
       }
-      if (method === 'tasks.history') return { tasks: taskReports.snapshots().filter(b => !['working', 'reporting'].includes(b.phase)).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30).map(b => ({ id: b.scope.turnId, title: `${b.scope.ownerName} · 员工任务与汇报`, kind: 'batch', employeeId: b.scope.ownerId, updatedAt: b.updatedAt, status: remoteBatchTaskDetail(b).status })) };
+      if (method === 'tasks.history') return { tasks: taskReports.snapshots().filter(b => !['working', 'reporting'].includes(b.phase)).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30).map(b => ({ id: b.scope.turnId, title: tr("ui.index.message.db6a515b77", {p0: b.scope.ownerName}), kind: 'batch', employeeId: b.scope.ownerId, updatedAt: b.updatedAt, status: remoteBatchTaskDetail(b).status })) };
       if (method === 'tasks.detail' || method === 'tasks.stop' || method === 'sessions.usage') {
         const id = String(params?.sessionId || params?.id || '');
         if (params?.kind === 'batch' && method !== 'sessions.usage') {
           const batch = taskReports.snapshots().find(b => b.scope.turnId === id);
-          if (!batch) throw new Error('该任务批次不属于这台电脑，或记录已过期');
+          if (!batch) throw new Error(tr("ui.index.message.d12b69aa17"));
           if (method === 'tasks.stop') {
-            if (batch.phase === 'reporting') throw new Error('员工结果已收齐，正在等待负责人汇报；请查看原会话。');
+            if (batch.phase === 'reporting') throw new Error(tr("ui.index.message.b00a1533a2"));
             const stopped = taskReports.cancel(id);
             return { stopped, running: taskReports.snapshots(true).some(b => b.scope.turnId === id) };
           }
@@ -3578,12 +3383,12 @@ if (!gotLock) {
         }
         if (params?.kind === 'room' && method !== 'sessions.usage') {
           const room = loadRooms().find(r => r.id === id && r.type !== 'dm');
-          if (!room) throw new Error('该群聊不属于这台电脑，或已删除');
+          if (!room) throw new Error(tr("ui.index.message.e8c5925845"));
           if (method === 'tasks.stop') { const wasRunning = isRoomRunning(id); const cancelled = taskReports.cancelOrigin('room', id); abortRoom(id); return { stopped: wasRunning || cancelled, running: isRoomRunning(id) || taskReports.hasPendingOrigin('room', id) }; }
           return remoteRoomTaskDetail(room, loadRoomMessages(id), isRoomRunning(id));
         }
         const meta = listSessions().find(s => s.id === id);
-        if (!meta) throw new Error('该任务不属于这台电脑，或已删除');
+        if (!meta) throw new Error(tr("ui.index.message.9f8f2405c5"));
         const agent = agents.get(id);
         if (method === 'tasks.stop') {
           const cancelled = taskReports.cancelOrigin('session', id);
@@ -3595,21 +3400,21 @@ if (!gotLock) {
         if (method === 'sessions.usage') {
           const providerId = meta.providerId || backendBySid.get(id) || curProviderId();
           const subscription = ['claude-oauth', 'codex'].includes(providerId);
-          if (subscription && !remoteShareSubscription(loadSettings())) throw new Error('本机未同步该订阅渠道');
+          if (subscription && !remoteShareSubscription(loadSettings())) throw new Error(tr("ui.index.message.38b70a1836"));
           const used = agent?.getUsage() || meta.usage;
           return { kind: subscription ? 'subscription' : 'api-key', quota: subscription ? loadRateLimits(providerId) : null,
             context: { usedTokens: used && used.lastInput > 0 ? used.lastInput : null, maxTokens: agent?.getContextBudget().contextWindow || null } };
         }
         return remoteTaskDetail(meta, agent?.getDisplayMessages() || loadMessages(id), runs.has(id),
-          meta.employeeId ? loadEmployees().find(e => e.id === meta.employeeId)?.name || '员工' : 'AI');
+          meta.employeeId ? loadEmployees().find(e => e.id === meta.employeeId)?.name || tr("ui.app.teammates.661ab3c") : 'AI');
       }
       if (method === 'artifacts.read') {
         const origin = params?.origin;
-        if (!origin || !['session', 'room'].includes(origin.kind) || typeof origin.id !== 'string') throw new Error('缺少文件所属会话');
-        if (origin.kind === 'session' ? !listSessions().some(s => s.id === origin.id) : !loadRooms().some(r => r.id === origin.id)) throw new Error('文件所属会话已不存在');
+        if (!origin || !['session', 'room'].includes(origin.kind) || typeof origin.id !== 'string') throw new Error(tr("ui.index.message.58a3d3df55"));
+        if (origin.kind === 'session' ? !listSessions().some(s => s.id === origin.id) : !loadRooms().some(r => r.id === origin.id)) throw new Error(tr("ui.index.message.f1598f041e"));
         return remoteArtifacts.read(String(params?.id || ''), origin, params?.offset, params?.length);
       }
-      throw new Error("不支持的请求: " + method);
+      throw new Error(tr("ui.index.message.18265fa4ba") + method);
     });
     syncTeamModule(loadSettings()); // 可选模块：开了才挂，没开这行之后不留任何痕迹
     loadGoals(); // 智能继续：会话总目标(userData/session-goals.json)
@@ -3780,7 +3585,7 @@ async function ensureHostedProviderReady(targetSid?: string): Promise<void> {
   const sess = await getFreshWuweiSession();
   if (!sess && !isAnonProvider(effProviderId)) {
     send("evt:wuwei-auth-expired");
-    throw new Error(tt("登录已失效，请重新登录。", "Your session has expired. Please sign in again."));
+    throw new Error(tr("ui.index.your.session.has.expired.please.sign.3bf7b7e"));
   }
   const key = sess ? sess.accessToken : `anon-${getDeviceId()}`; // 未登录 → 匿名试用 token
   // 目标会话有自己完整身份 → 用它的身份 + 新鲜网关 token 重建「它自己的」provider，绝不动全局/别的会话
@@ -3839,20 +3644,20 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
   text = secrets.redact(text).text; // 兜底：已入库密钥出现在消息里→占位符替换，永不出网到模型
   const agent = getAgent(useId);
   if (!agent) {
-    send("evt:error", { sid: useId, message: tt("未初始化：缺少模型凭证。请确认 ~/.codex/auth.json 或设置 API key 后重启。", "Not initialized: missing model credentials. Check ~/.codex/auth.json or set an API key, then restart.") });
+    send("evt:error", { sid: useId, message: tr("ui.index.not.initialized.missing.model.credentials.check.83d6b2c") });
     return;
   }
   if (runs.has(useId)) {
     // 该会话已在跑(上一条可能挂住/未返回，如没权限的型号请求卡住)——不再静默丢弃，
     // 给用户明确提示可「停止」后重发，避免"发了没反应"的困惑。
-    send("evt:error", { sid: useId, message: tt("上一条还在处理中（可能卡住了）。请点输入框旁的「停止」结束后再重发。", "The previous message is still running (it may be stuck). Click Stop next to the input, then resend.") });
+    send("evt:error", { sid: useId, message: tr("ui.index.the.previous.message.is.still.running.1df61c0") });
     return;
   }
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
   send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
   const imageSettings = loadSettings();
   const selectedImageSku = imageSettings?.imageMode && !sysOverride ? imageSettings.imageSku : undefined;
-  agent.setSystem((sysOverride ?? sysForSession(useId)) + (selectedImageSku ? tt(`\n用户已选择生图模式，规格为 ${selectedImageSku}。本轮描述用于生成图片，直接调用 platform_imagegen；由工具确认费用。已展示图片不再调用 send_image。`, `\nThe user selected image mode with SKU ${selectedImageSku}. Treat this turn's description as an image request and call platform_imagegen. Let the tool confirm the fee. Do not call send_image after displayed:true.`) : ""));
+  agent.setSystem((sysOverride ?? sysForSession(useId)) + (selectedImageSku ? tr("ui.index.the.user.selected.image.mode.with.768f21e", { p0: selectedImageSku }) : ""));
   const ac = new AbortController();
   runs.set(useId, ac);
   emitTasks();
@@ -3867,7 +3672,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
     await ensureHostedProviderReady(useId);
-    if (selectedImageSku && images?.length) throw new Error(tt('当前生图预设仅支持文字描述，未提交参考图或扣费。','These image presets accept text only. No reference image or paid order was submitted.'));
+    if (selectedImageSku && images?.length) throw new Error(tr("ui.index.these.image.presets.accept.text.only.5ec50c2"));
     const runP = (selectedImageSku
       ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal)
       : agent.send.bind(agent))(
@@ -3896,7 +3701,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
           const id = ++permSeq, permId = randomUUID();
           pendingPermSid.set(id, useId);
           pendingPerm.set(id, action => { answerLocalDecision(permId, { action }); });
-          const waiting = requestLocalDecision({ permId, risk: 'high', title: '需要你确认', question: `是否允许电脑执行 ${tool.name}？`, options: [{ label: '拒绝', value: 'deny' }, { label: '允许执行', value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) }, useId, ac.signal, event => {
+          const waiting = requestLocalDecision({ permId, risk: 'high', title: tr("ui.index.message.47a1580dc5"), question: tr("ui.index.message.1451026b7f", {p0: tool.name}), options: [{ label: tr("ui.index.message.7caaf0c897"), value: 'deny' }, { label: tr("ui.index.message.fe73513fd6"), value: 'allow' }], allowCustom: false, timeoutSec: null, rawDetail: JSON.stringify(input, null, 2) }, useId, ac.signal, event => {
             if (event.type === 'decision-resolved') { pendingPerm.delete(id); pendingPermSid.delete(id); send('evt:permission-resolved', { sid: useId, id }); }
           });
           send('evt:permission-request', { sid: useId, id, name: tool.name, input });
@@ -3974,7 +3779,7 @@ async function startTurn(useId: string, text: string, images?: string[], sysOver
           await ensureFreshClaudeOAuth(true).catch(() => {});
           const s2 = loadSettings();
           const restored = !!(s2?.oauthToken || s2?.creds?.["claude-oauth"]?.oauthToken);
-          if (restored) send("evt:error", { sid: useId, message: tt("授权刚已自动续期，请重新发送这条消息。", "Authorization was just auto-renewed — please resend this message.") });
+          if (restored) send("evt:error", { sid: useId, message: tr("ui.index.authorization.was.just.auto.renewed.please.f6af66e") });
           else clearDeadClaudeOAuth("http-401"); // 内部会发一条「已清除失效 token，请重新授权」的 evt:error
         } else {
           send("evt:error", { sid: useId, message: e.message });
@@ -4065,7 +3870,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   // 用户点停止的意思是"别跑了"，不是"跑完这轮再自动接着跑"。
   if (contSessions.delete(id)) {
     send("evt:cont-off", { sid: id }); // 渲染层同步关掉该会话的自主推进开关，别再自动续跑
-    log("stop", id.slice(0, 8), "已关闭该会话的自主推进");
+    log("stop", id.slice(0, 8), tr("ui.index.message.e545bf9392"));
   }
   // 两段式停止:
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
@@ -4073,7 +3878,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
   if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
     agent.requestSoftStop();
-    log("softStop", id.slice(0, 8), "温和收尾中(再点一次强制停止)");
+    log("softStop", id.slice(0, 8), tr("ui.index.message.95502776e8"));
     return;
   }
   // 只 abort，不立即删 runs——留给 agent.send 的 finally 结算后清理。
@@ -4120,7 +3925,7 @@ ipcMain.on("ask:answer", (_e, id: number, answers: any) => {
       // 这句会作为用户消息显示在对话里，跟随界面语言
       if (agent)
         agent.injectUser(
-          tt("（用户在回答上面的问题时附带了以下截图）", "(The user attached these screenshots along with their answer above.)"),
+          tr("ui.index.the.user.attached.these.screenshots.along.ef336bc"),
           imgs,
         );
     }
@@ -4145,7 +3950,7 @@ function codexAuthHeaders(): Record<string, string> | null {
 }
 ipcMain.handle("codex:reset-credits", async () => {
   const h = codexAuthHeaders();
-  if (!h) return { ok: false, error: tt("无 Codex 登录(~/.codex/auth.json)", "No Codex login (~/.codex/auth.json)") };
+  if (!h) return { ok: false, error: tr("ui.index.no.codex.login.codex.auth.json.a7e6dfa") };
   try {
     const res = await fetch("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", { headers: h });
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
@@ -4157,7 +3962,7 @@ ipcMain.handle("codex:reset-credits", async () => {
 });
 ipcMain.handle("codex:consume-reset", async (_e, creditId: string) => {
   const h = codexAuthHeaders();
-  if (!h) return { ok: false, error: tt("无 Codex 登录", "No Codex login") };
+  if (!h) return { ok: false, error: tr("ui.index.no.codex.login.17ce5ad") };
   try {
     const res = await fetch("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume", {
       method: "POST",
@@ -4209,26 +4014,17 @@ ipcMain.on("report:generate", (_e, group: string, sessionIds: string[]) => {
             .map((b: any) => b.text)
             .join(" ")
             .trim();
-          return t ? `${m.role === "user" ? tt("我", "Me") : tt("助手", "Assistant")}：${t}` : "";
+          return t ? `${m.role === "user" ? tr("ui.index.me.d269d05") : tr("ui.index.assistant.e7461b8")}：${t}` : "";
         })
         .filter(Boolean)
         .join("\n")
         .slice(-2000); // 取末尾(最新进展)，单会话上限约 2000 字
-      return `【${meta?.title || tt("对话", "Chat")}】\n${body || tt("(暂无文字内容)", "(no text content yet)")}`;
+      return `【${meta?.title || tr("ui.index.chat.3b38e74")}】\n${body || tr("ui.index.no.text.content.yet.7bfe00d")}`;
     })
     .join("\n\n----\n\n");
 
   // 日报正文整篇都会显示给用户，语言必须跟界面走
-  const sys = tt(
-    `你是工作日报助手。下面是「${group}」分组下今天多个工作会话的内容。当用户要求生成日报时，` +
-      `请按项目/重点条理清晰地梳理成一份精简中文日报，分三部分：` +
-      `✅ 今日进展与成果（按项目/重点一条条罗列）、📌 待办（接下来要做的）、⚠️ 遗留问题/风险。` +
-      `要求：精简概要、突出重点、条目式，不要逐字复述细节。\n\n=== 会话内容 ===\n${digest}`,
-    `You write daily work reports. Below are today's work sessions from the "${group}" group. When the user asks for a report, ` +
-      `organize it by project/theme into a concise English report with three sections: ` +
-      `✅ Progress & results today (one bullet per project/theme), 📌 Next up (what's still to do), ⚠️ Open issues / risks. ` +
-      `Keep it tight and bulleted — summarize, don't replay the details.\n\n=== Sessions ===\n${digest}`,
-  );
+  const sys = tr("ui.index.you.write.daily.work.reports.below.1bd6926", { v0: group, v1: digest });
 
   // 新开会话并切过去
   const sid = randomUUID();
@@ -4237,7 +4033,7 @@ ipcMain.on("report:generate", (_e, group: string, sessionIds: string[]) => {
   send("evt:session-loaded", { id: sid, messages: [] });
   sendUsageFor(sid);
   // 这句会当成用户气泡显示出来，同样跟随语言
-  void startTurn(sid, tt(`请生成「${group}」今天的工作日报。`, `Write today's work report for "${group}".`), undefined, sys);
+  void startTurn(sid, tr("ui.index.write.today.work.report.for.bb2bfba", { p0: group }), undefined, sys);
 });
 
 // 一键工作交接:把某会话有价值的内容总结成交接文档 → 开一个干净的新会话(继承当前平台/模型)
@@ -4246,7 +4042,7 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
   const srcId = sid || currentId;
   const srcAgent = getAgent(srcId);
   if (!srcAgent) {
-    send("evt:error", { sid: srcId, message: tt("交接失败：源会话未初始化。", "Handoff failed: the source chat isn't initialized.") });
+    send("evt:error", { sid: srcId, message: tr("ui.index.handoff.failed.the.source.chat.isn.d036512") });
     return { ok: false };
   }
   send("evt:handoff", { sid: srcId, phase: "summarizing" }); // UI 提示"正在生成交接文档…"
@@ -4256,12 +4052,12 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
   } catch (e: any) {
     log("handoffError", srcId.slice(0, 8), String(e?.message || e).slice(0, 300));
     send("evt:handoff", { sid: srcId, phase: "error" });
-    send("evt:error", { sid: srcId, message: tt("生成交接文档失败：", "Failed to build the handoff doc: ") + String(e?.message || e).slice(0, 200) });
+    send("evt:error", { sid: srcId, message: tr("ui.index.failed.to.build.the.handoff.doc.92ff4e7") + String(e?.message || e).slice(0, 200) });
     return { ok: false };
   }
   if (!doc.trim()) {
     send("evt:handoff", { sid: srcId, phase: "error" });
-    send("evt:error", { sid: srcId, message: tt("交接文档为空(该会话暂无可提炼的内容)。", "The handoff doc came back empty — nothing to distill from this chat.") });
+    send("evt:error", { sid: srcId, message: tr("ui.index.the.handoff.doc.came.back.empty.fa54c59") });
     return { ok: false };
   }
   // 新会话：显式继承源会话的平台+模型并绑定，交接后保持统一(如源=Claude 订阅+Opus 5 → 新会话也是这套)。
@@ -4289,18 +4085,11 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
   send("evt:handoff", { sid: newId, phase: "done" });
   // 交接开场白会作为新会话的第一条用户消息显示出来，跟随界面语言
   const goalLine = goalCarried
-    ? tt(`【总目标（延续自上一个对话，继续朝它推进）】\n${srcGoal.text}\n\n`, `[Overall goal (carried from the previous chat — keep advancing it)]\n${srcGoal.text}\n\n`)
+    ? tr("ui.index.overall.goal.carried.from.the.previous.7bfbd12", { p0: srcGoal.text })
     : "";
   const firstMsg =
     goalLine +
-    tt(
-      "【工作交接（来自上一个对话）】\n" +
-        "上一个对话的上下文比较杂乱/过长，以下是从中整理出的有价值内容与当前进展。" +
-        "请先理解交接内容，然后**接着把未完成的部分继续做完**；有不确定处再问我。\n\n",
-      "[Handoff from the previous chat]\n" +
-        "The previous chat got long and cluttered; below is what was worth keeping, plus where things stand. " +
-        "Read the handoff first, then **pick up and finish what's still open** — ask me if anything is unclear.\n\n",
-    ) +
+    tr("ui.index.handoff.from.the.previous.chat.the.4f74496") +
     "----\n" +
     doc;
   void startTurn(newId, firstMsg);
@@ -4334,10 +4123,7 @@ ipcMain.on("session:resume", (_e, id: string) => {
   send("evt:sessions", listSessions());
   void startTurn(
     sid,
-    tt(
-      "（这个任务上次运行时被强制中断了。请先回顾上面已完成到哪一步，然后接着把没做完的部分继续完成；若已经做完了，简要说明结果即可。）",
-      "(This task was force-interrupted on its last run. Look back at how far it got, then finish what's still open — if it's already done, just summarize the result.)",
-    ),
+    tr("ui.index.this.task.was.force.interrupted.on.5865f46"),
   );
 });
 
@@ -4593,7 +4379,7 @@ ipcMain.on("settings:set", (_e, s: Settings) => {
       setSessionModel(currentId, s?.model || cfg.model, s?.providerId ?? loadSettings()?.providerId);
     }
   } catch (e: any) {
-    send("evt:error", tt("切换后端失败：", "Failed to switch backend: ") + e.message);
+    send("evt:error", tr("ui.index.failed.to.switch.backend.398c948") + e.message);
   }
 });
 
@@ -4723,7 +4509,7 @@ ipcMain.handle("brain:delete-edge", (_e, id: string) => brain.deleteEdgeFromUI(S
 ipcMain.handle("dialog:select-folder", async () => {
   const parent = win && !win.isDestroyed() ? win : undefined;
   const r = await dialog.showOpenDialog(parent as BrowserWindow, {
-    title: tt("选择文件夹", "Choose a folder"),
+    title: tr("ui.index.choose.folder.e66cd6e"),
     properties: ["openDirectory", "createDirectory"],
   });
   if (r.canceled || r.filePaths.length === 0) return null;
@@ -4747,10 +4533,7 @@ ipcMain.handle("brain:embed-ready", () => brain.embeddingReady());
 ipcMain.handle("brain:build-docs", async (_e, dir: string) => {
   if (conceptState.running)
     throw new Error(
-      tt(
-        "正在抽取概念，请先停止或等它完成再重建索引（两者共用向量模型）",
-        "Concept extraction is running — stop it or let it finish before rebuilding the index (they share the embedding model).",
-      ),
+      tr("ui.index.concept.extraction.is.running.stop.it.159581c"),
     );
   const abs = String(dir).replace(/^~(?=\/|$)/, homedir());
   docBuildState = { building: true, phase: "scan", files: 0, total: 0, done: 0 };
@@ -4810,12 +4593,12 @@ ipcMain.on("brain:stop-concepts", () => {
   conceptCancel = true;
 });
 ipcMain.handle("brain:extract-concepts", (_e, opts: { all?: boolean }) => {
-  if (conceptState.running) return { started: false, reason: tt("已在运行", "Already running") };
-  if (!provider) return { started: false, reason: tt("未配置模型", "No model configured") };
+  if (conceptState.running) return { started: false, reason: tr("ui.index.already.running.8a6e26c") };
+  if (!provider) return { started: false, reason: tr("ui.index.no.model.configured.c05b50f") };
   // 防并发:抽概念时每存一个概念要给它算向量,走的是索引重建正霸占的同一个 worker,
   // 同时跑会互相饿死→龟速。索引没建完先拦住,提示用户等索引跑完再抽。
   if (docBuildState.building)
-    return { started: false, reason: tt("索引正在构建，请等它跑完再抽概念（两者共用向量模型，同时跑会互相拖慢）", "Index is building — wait for it to finish before extracting concepts (they share the embedding model and slow each other down).") };
+    return { started: false, reason: tr("ui.index.index.is.building.wait.for.it.1309c33") };
   void runConceptExtraction(!!opts?.all); // 后台跑,不阻塞;进度走 evt:brain-concepts
   return { started: true };
 });
@@ -4823,24 +4606,13 @@ ipcMain.handle("brain:extract-concepts", (_e, opts: { all?: boolean }) => {
 async function extractOneFile(file: string, body: string): Promise<number> {
   // 抽出来的概念名/类型/摘要会显示在知识网络列表里，还会拼进系统提示 → 跟随界面语言。
   // 另注：原文写死「中文文档片段」，英文文档也会被当中文处理，这里一并改成不限定语种。
-  const sys = tt(
-    "你是知识图谱抽取器。从给定的文档片段中，抽取值得长期记住的【概念节点】与它们之间的【关系】。" +
-      "概念 = 项目/服务器/服务/脚本/工具/命令/注意事项/偏好/抽象概念 等有信息量的实体。" +
-      "只输出一个 JSON 对象，禁止任何解释、禁止代码围栏，格式严格为：" +
-      '{"concepts":[{"name":"规范短名","type":"类型","summary":"一句话摘要","aliases":["别名"]}],"relations":[{"from":"概念A","relation":"关系","to":"概念B"}]}。' +
-      "name 用最规范简短的名字；没有可抽的就返回 {\"concepts\":[],\"relations\":[]}。最多 12 个概念。",
-    "You extract knowledge graphs. From the given document excerpt, pull out the [concept nodes] worth remembering long-term and the [relations] between them. " +
-      "A concept = an informative entity: project / server / service / script / tool / command / caveat / preference / abstract concept, etc. " +
-      "Output a single JSON object — no explanation, no code fences — strictly in this shape: " +
-      '{"concepts":[{"name":"canonical short name","type":"type","summary":"one-line summary","aliases":["alias"]}],"relations":[{"from":"concept A","relation":"relation","to":"concept B"}]}. ' +
-      'Use the most canonical short name; if there is nothing to extract, return {"concepts":[],"relations":[]}. At most 12 concepts. Write names and summaries in English.',
-  );
+  const sys = tr("ui.index.you.extract.knowledge.graphs.from.the.c42314e");
   const res = await provider!.complete(
     sys,
     [
       {
         role: "user",
-        content: [{ type: "text", text: tt(`文档《${file}》片段：\n${body}\n\nJSON:`, `Excerpt from "${file}":\n${body}\n\nJSON:`) }],
+        content: [{ type: "text", text: tr("ui.index.excerpt.from.json.39f1f66", { p0: file, p1: body }) }],
       },
     ] as any,
     [],
@@ -4864,7 +4636,7 @@ async function extractOneFile(file: string, body: string): Promise<number> {
     if (!c?.name) continue;
     await brain.learn({
       name: String(c.name).slice(0, 60),
-      type: c.type ? String(c.type).slice(0, 20) : tt("概念", "concept"),
+      type: c.type ? String(c.type).slice(0, 20) : tr("ui.index.concept.f03a927"),
       summary: c.summary ? String(c.summary).slice(0, 200) : "",
       aliases: Array.isArray(c.aliases) ? c.aliases.slice(0, 8).map((a: any) => String(a).slice(0, 40)) : [],
     });
@@ -4940,7 +4712,7 @@ ipcMain.on("mcp:set", (_e, text: string) => {
     mkdirSync(dirname(MCP_CONFIG_PATH), { recursive: true });
     writeFileSync(MCP_CONFIG_PATH, text, "utf8");
   } catch (e: any) {
-    send("evt:error", tt("写入 MCP 配置失败：", "Failed to write MCP config: ") + e.message);
+    send("evt:error", tr("ui.index.failed.to.write.mcp.config.7a26bb0") + e.message);
     return;
   }
   void connectMcp(() => {
@@ -4994,7 +4766,7 @@ ipcMain.handle("secrets:reveal", async (_e, pw: string) => {
       const p = execFile("/usr/bin/dscl", [".", "-authonly", user, String(pw ?? "")], (err) => resolve(!err));
       p.on("error", () => resolve(false));
     });
-    if (!ok) return { ok: false, error: tt("密码不正确", "Incorrect password") };
+    if (!ok) return { ok: false, error: tr("ui.index.incorrect.password.0e9257e") };
     return { ok: true, items: secrets.revealAll() };
   } catch (e: any) {
     return { ok: false, error: e.message };
@@ -5021,8 +4793,8 @@ ipcMain.handle("tools:get", () => {
     inputSchema: t.inputSchema || { type: "object", properties: {} },
   });
   const groups: { source: string; kind: "builtin" | "browser" | "mcp"; tools: ReturnType<typeof mk>[] }[] = [
-    { source: "内置工具", kind: "builtin", tools: ALL_TOOLS.map(mk) },
-    { source: "浏览器", kind: "browser", tools: BROWSER_TOOLS.map(mk) },
+    { source: tr("ui.index.message.6b2c4f3afc"), kind: "builtin", tools: ALL_TOOLS.map(mk) },
+    { source: tr("set.tools.badgeBrowser"), kind: "browser", tools: BROWSER_TOOLS.map(mk) },
     ...mcpToolsBySource().map((g) => ({
       source: g.server,
       kind: "mcp" as const,
@@ -5072,7 +4844,7 @@ ipcMain.on("browser:detach", () => {
     browserPopWin = new BrowserWindow({
       width: 1040,
       height: 780,
-      title: tt("无为 浏览器", "Wuwei Browser"),
+      title: tr("ui.index.wuwei.browser.ea1ec8c"),
       ...(existsSync(join(__dirname, "../../build/icon.png")) ? { icon: join(__dirname, "../../build/icon.png") } : {}),
     });
     const fit = () => {
@@ -5218,8 +4990,8 @@ async function finishWuweiSignin(
     return {
       error:
         action === "register"
-          ? tt("注册成功，但拉取账号失败，请重开登录", "Signed up, but we couldn't load your account — please sign in again.")
-          : tt("登录成功，但拉取账号失败，请重试", "Signed in, but we couldn't load your account — please try again."),
+          ? tr("ui.index.signed.up.but.we.couldn.load.93299bb")
+          : tr("ui.index.signed.in.but.we.couldn.load.ea8c7e3"),
     };
   }
   applyProFromMe(me);
@@ -5252,7 +5024,7 @@ ipcMain.handle("account:wuwei-me", async () => {
   }
   if (!me || me === "unauthorized") {
     // A failed account read is not proof that the refresh token is invalid.
-    throw new Error(tt("账号暂时无法刷新，请稍后重试。登录凭证已保留。", "Account refresh is temporarily unavailable. Your credentials have been kept; please retry."));
+    throw new Error(tr("ui.index.account.refresh.is.temporarily.unavailable.your.fae7799"));
   }
   const meVal = me;
   applyProFromMe(meVal); // 同步会员态 → 脑网络可用性
@@ -5376,7 +5148,7 @@ function setupUpdater(): void {
   autoUpdater.on("error", (e) => {
     const msg = String(e?.message || e);
     log("updater", "更新出错", msg);
-    void trackClientLog("error", "update", { message: `更新出错: ${msg}`, meta: { phase: "updater-event" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
+    void trackClientLog("error", "update", { message: tr("ui.index.message.753df752a0", {p0: msg}), meta: { phase: "updater-event" }, accessToken: loadWuweiSession()?.accessToken ?? null }).catch(() => {});
   });
   // 不手工删除 pending：SDK 的 update-info.json、安装包与差分基底必须保持完整。
   if (!app.isPackaged) return;
@@ -5409,14 +5181,14 @@ const updatePolicy = createUpdatePolicy(autoUpdater, {
 async function checkAndPrepareUpdate(manual = false) {
   if (IS_TEST || !app.isPackaged) return { available: false };
   const result = await updatePolicy.check(manual);
-  if (result.error) log("updater", "检查/下载失败", result.error);
+  if (result.error) log("updater", tr("ui.index.message.de6e424ea5"), result.error);
   return result;
 }
 // 手动检查绕过常规周期，但复用并发任务、就绪包，遵守下载失败冷却。
 ipcMain.handle("updater:check", async () => checkAndPrepareUpdate(true));
 // 立即安装已下载的更新并重启
 ipcMain.on("updater:install", () => {
-  try { autoUpdater.quitAndInstall(); } catch (e: any) { log("updater", "安装失败", String(e?.message || e)); }
+  try { autoUpdater.quitAndInstall(); } catch (e: any) { log("updater", tr("ui.index.message.f4f028e3ba"), String(e?.message || e)); }
 });
 // 每日签到：带 token 调后端 /api/signin（幂等，当天重复调不重复发）。返回 {success, amount, balanceAfter, streak, message}。
 ipcMain.handle("account:checkin", async () => {
@@ -5667,7 +5439,7 @@ ipcMain.handle(
   "conn:test-key",
   async (_e, key: string, override?: { provider?: string; baseUrl?: string; model?: string }) => {
   const k = (key || "").trim();
-  if (!k) return { ok: false, reason: tt("空 key", "Empty key") };
+  if (!k) return { ok: false, reason: tr("ui.index.empty.key.7dafdb0") };
   try {
     const cfg = loadConfig();
     const tcfg: any = { ...cfg, apiKey: k, authMode: "api-key", oauthToken: "" };
@@ -5683,7 +5455,7 @@ ipcMain.handle(
       signal: ac.signal,
     });
     clearTimeout(timer);
-    return { ok: true, reason: tt("验证通过", "Verified") };
+    return { ok: true, reason: tr("ui.index.verified.5768bc4") };
   } catch (e: any) {
     return { ok: false, reason: (e?.message ? String(e.message) : String(e)).slice(0, 600) };
   }
@@ -5711,23 +5483,23 @@ ipcMain.handle("conn:check", async () => {
   const settings = loadSettings();
   if (settings?.imageMode) {
     const sess = await getFreshWuweiSession().catch(() => null);
-    if (!sess?.accessToken) return { status: "red", reason: tt("请先登录后使用托管生图。", "Sign in to use hosted image generation.") };
+    if (!sess?.accessToken) return { status: "red", reason: tr("ui.index.sign.in.to.use.hosted.image.5b6716d") };
     return checkImageAvailability(new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform'),
       settings.imageSku || '', process.env.WUWEI_LANG === 'en' ? 'en' : 'zh');
   }
   const cfg = loadConfig();
   if (!hasCredential(cfg)) {
-    return { status: "red", reason: tt("当前平台未配置凭证 / 未授权，无法使用。", "This provider has no credentials / isn't authorized — can't be used.") };
+    return { status: "red", reason: tr("ui.index.this.provider.has.no.credentials.isn.362db6c") };
   }
   // 匿名试用平台(未登录)：真实 ping 会走网关匿名分支、白白消耗当日免费次数。
   // 故未登录时不 ping，直接判绿——凭证恒在(anon-<设备id>)，真连通性发消息时自会体现。
   if (isAnonProvider(curProviderId()) && !loadWuweiSession()) {
-    return { status: "green", reason: tt("免费体验就绪（无需登录）。", "Free trial ready (no login needed).") };
+    return { status: "green", reason: tr("ui.index.free.trial.ready.no.login.needed.857cd8b") };
   }
   // 托管平台：ping 前必须先注入新鲜的无为 token 并重建 provider，
   // 否则用的是空/旧 token（token 只在发消息前注入），网关会回 401 invalid_token 而误判「未连通」。
   if (isHostedProvider(curProviderId())) await ensureHostedProviderReady();
-  if (!provider) return { status: "red", reason: tt("未初始化，请检查设置。", "Not initialized — please check settings.") };
+  if (!provider) return { status: "red", reason: tr("ui.index.not.initialized.please.check.settings.d9ba807") };
   try {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 25000);
@@ -5747,10 +5519,10 @@ ipcMain.handle("conn:check", async () => {
     );
     clearTimeout(timer);
     void emitAccount(); // 检测通过后刷新账户/余额(DeepSeek 等计费平台余额也随检测更新)
-    return { status: "green", reason: tt(`已连通 · ${backendLabel} / ${modelLabel}，可随时使用。`, `Connected · ${backendLabel} / ${modelLabel}, ready to use.`) };
+    return { status: "green", reason: tr("ui.index.connected.ready.to.use.4129414", { p0: backendLabel, p1: modelLabel }) };
   } catch (e: any) {
     const msg = (e?.message ? String(e.message) : String(e)).replace(/\[\[gw:[^\]]+\]\]\s*/g, "");
-    return { status: "yellow", reason: tt("已配置但请求报错：", "Configured but the request errored: ") + msg.slice(0, 600) };
+    return { status: "yellow", reason: tr("ui.index.configured.but.the.request.errored.fcc1348") + msg.slice(0, 600) };
   }
 });
 
@@ -5778,8 +5550,8 @@ ipcMain.handle("account:web-login", async (_e, pid: string) => {
     "已存",
     pid,
     "昵称=", c[pid].nickname,
-    "头像=", avatar ? "有" : "无",
-    "token=", c[pid].webToken ? "有" : "无",
+    "头像=", avatar ? "有" : tr("acct.userInitial"),
+    "token=", c[pid].webToken ? "有" : tr("acct.userInitial"),
   );
   void emitAccount();
   return true;
@@ -5873,35 +5645,13 @@ let stopRules = "";
 const stopRulesFile = () => join(app.getPath("userData"), "stop-rules.txt");
 // 首次使用给一份常见红线，省得用户从零写；之后以文件为准(不覆盖他改过的)。
 // 中英各一份；「未改过的默认值」(空 / 恰好等于任一语言默认)跟随界面语言自动切换，改过的一律保留原样。
-const DEFAULT_STOP_RULES_ZH = [
-  "删除或清空任何数据、文件、数据库表、代码分支",
-  "部署上线、发布到生产/正式环境",
-  "修改线上配置，或往生产数据库写数据",
-  "重启、停止、扩缩容任何线上服务或容器",
-  "花钱：付款、下单、买资源、开通付费服务",
-  "替我给别人发邮件、消息、短信、提交工单",
-  "改权限、密钥、账号、安全设置",
-  "git 强制推送、回滚、reset 已推送的提交",
-  "执行 rm -rf、drop table、truncate 这类不可逆命令",
-  "把我的数据或代码上传、公开、分享到外部",
-].join("\n");
-const DEFAULT_STOP_RULES_EN = [
-  "Delete or wipe any data, files, database tables, or code branches",
-  "Deploy or release to production",
-  "Change production config, or write to a production database",
-  "Restart, stop, or scale any live service or container",
-  "Spend money: pay, place orders, buy resources, or enable paid services",
-  "Email, message, or text anyone on my behalf, or file a ticket",
-  "Change permissions, keys, accounts, or security settings",
-  "git force-push, revert, or reset already-pushed commits",
-  "Run irreversible commands like rm -rf, drop table, or truncate",
-  "Upload, publish, or share my data or code externally",
-].join("\n");
-const defaultStopRules = () => (process.env.WUWEI_LANG === "en" ? DEFAULT_STOP_RULES_EN : DEFAULT_STOP_RULES_ZH);
+const DEFAULT_STOP_RULES_ZH = tr("agent.defaultStopRules", {}, "zh");
+const DEFAULT_STOP_RULES_EN = tr("agent.defaultStopRules", {}, "en");
+const defaultStopRules = () => tr("agent.defaultStopRules");
 // 是否「未改过的默认值」：空 or 恰好等于任一语言默认 → 视为没自定义，读取时按当前语言给默认。
 const isUneditedStopRules = (s: string) => {
   const t = (s || "").trim();
-  return t === "" || t === DEFAULT_STOP_RULES_ZH || t === DEFAULT_STOP_RULES_EN;
+  return t === "" || getLanguages().some(locale => t === tr("agent.defaultStopRules", {}, locale.code));
 };
 function loadStopRules() {
   try {
@@ -5962,10 +5712,7 @@ ipcMain.handle("chat:charter-research", async (_e, uiSid: string, prompt: string
   const RESEARCH_TOOL_NAMES = new Set(["web_search", "web_fetch", "read_file", "grep", "glob"]);
   const rTools = desktopTools().filter((t) => RESEARCH_TOOL_NAMES.has(t.name));
   const rMap = new Map(rTools.map((t) => [t.name, t]));
-  const researchSys = tt(
-    "你是联网调研助手。只用 web_search / web_fetch 查资料，禁止写文件、执行命令、改任何东西。做少量精准的 web_search，读几篇关键来源就够，别无限展开。查完按用户要求只输出一个 json 契约块。",
-    "You are a web research assistant. Use only web_search / web_fetch to gather info; never write files, run commands, or change anything. Do a few targeted web_search queries, read a few key sources — don't over-explore. When done, output only one json charter block as the user asked.",
-  );
+  const researchSys = tr("ui.index.you.are.web.research.assistant.use.c8805ca");
   const ra = new Agent(provider, researchSys, rTools, { cwd, sessionId: "__charter_" + sid }, rMap, agentOpts);
   const ac = new AbortController();
   charterResearchRuns.set(sid, ac);
@@ -6167,10 +5914,10 @@ function ensureNanoBrain(cfg: ReturnType<typeof agiCfg>): Promise<void> {
     const deadline = Date.now() + 120000; // 首启可能要训练(几分钟)，给足时间
     while (Date.now() < deadline) {
       if (babyBrainProc && await pingHealth(port)) return;
-      if (!babyBrainProc) throw new Error("nano_baby_gpt 进程已退出(看日志 nano_brain)");
+      if (!babyBrainProc) throw new Error(tr("ui.index.message.e8eedb8fcf"));
       await _sleepBaby(700);
     }
-    throw new Error("nano_baby_gpt(婴儿大脑)启动超时");
+    throw new Error(tr("ui.index.message.ef4bcb287f"));
   })();
   babyBrainStarting = p.finally(() => { babyBrainStarting = null; });
   return babyBrainStarting;
@@ -6182,8 +5929,8 @@ function ensureBabyServer(): Promise<void> {
   if (babyStarting) return babyStarting;
   const p = (async () => {
     const cfg = agiCfg();
-    if (!cfg.babyDir) throw new Error("未配置数字婴儿目录：请在 ~/.wuwei/config.json 的 agi.babyDir 填 d1_digital_baby 的绝对路径");
-    if (!existsSync(join(cfg.babyDir, "baby_server.py"))) throw new Error("找不到 baby_server.py（检查 agi.babyDir 路径是否正确）");
+    if (!cfg.babyDir) throw new Error(tr("ui.index.message.35e953e7a3"));
+    if (!existsSync(join(cfg.babyDir, "baby_server.py"))) throw new Error(tr("ui.index.message.22d1ff3a95"));
     await ensureNanoBrain(cfg); // 先把大脑(本地 nano)拉起来，否则 baby /chat 连不到 LLM
     babyPort = await pickPort();
     const { spawn } = await import("node:child_process");
@@ -6194,10 +5941,10 @@ function ensureBabyServer(): Promise<void> {
     const deadline = Date.now() + 45000; // 给模型加载留足时间
     while (Date.now() < deadline) {
       if (babyProc && await pingHealth(babyPort)) { babyReady = true; return; }
-      if (!babyProc) throw new Error("baby_server 进程已退出");
+      if (!babyProc) throw new Error(tr("ui.index.message.0f622ff325"));
       await _sleepBaby(500);
     }
-    throw new Error("baby_server 启动超时");
+    throw new Error(tr("ui.index.message.64d906c705"));
   })();
   babyStarting = p.finally(() => { babyStarting = null; });
   return babyStarting;
@@ -6218,11 +5965,11 @@ function babyHttp(path: string, body: any, timeoutMs: number): Promise<{ ok: boo
       res.on("data", (c) => (buf += c));
       res.on("end", () => {
         try { const j = JSON.parse(buf); resolve({ ok: !!j.ok, text: String(j.text ?? "") }); }
-        catch { resolve({ ok: false, text: buf || "空响应" }); }
+        catch { resolve({ ok: false, text: buf || tr("ui.index.message.f4966eeb82") }); }
       });
     });
-    req.on("error", (e) => resolve({ ok: false, text: "出错:" + String(e) }));
-    req.on("timeout", () => { req.destroy(); resolve({ ok: false, text: "出错:请求超时" }); });
+    req.on("error", (e) => resolve({ ok: false, text: tr("ui.index.message.90f7ccd4a4") + String(e) }));
+    req.on("timeout", () => { req.destroy(); resolve({ ok: false, text: tr("ui.index.message.835ae6d2a1") }); });
     if (payload) req.write(payload);
     req.end();
   });
@@ -6251,11 +5998,11 @@ function runBaby(args: string[], stdin?: string, timeoutMs = 600000): Promise<{ 
     else if (cmd === "graph") { path = "/graph"; body = undefined; }
     else if (cmd === "pyramid") { path = "/pyramid"; body = undefined; }
     else if (cmd === "reorganize") { path = "/reorganize"; body = {}; }
-    else return { ok: false, out: "未知命令:" + cmd };
+    else return { ok: false, out: tr("ui.index.message.8daa3abc8a") + cmd };
     try {
       await ensureBabyServer();
     } catch (e) {
-      return { ok: false, out: "数字婴儿服务启动失败:" + String(e) };
+      return { ok: false, out: tr("ui.index.message.52d825148d") + String(e) };
     }
     const r = await babyHttp(path, body, timeoutMs);
     return { ok: r.ok, out: r.text };
@@ -6272,7 +6019,7 @@ ipcMain.handle("agi:baby:scold", async () => (await runBaby(["scold"], undefined
 ipcMain.handle("agi:baby:seed", async (_e, concept: string) => (await runBaby(["seed", String(concept || "")], undefined, 60000)).out);
 // 聊天:baby_server /chat 接口
 ipcMain.handle("agi:baby:chat", async (_e, msg: string) => {
-  const r = await runBaby(["chat"], String(msg || "") + "\n退出\n", 300000);
+  const r = await runBaby(["chat"], String(msg || "") + tr("ui.index.message.6b10251273"), 300000);
   const m = r.out.split("👶 >").slice(1).join("👶 >").trim();
   return m || r.out;
 });

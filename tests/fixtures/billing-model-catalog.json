@@ -1,0 +1,448 @@
+[
+  {
+    "id": "wuwei-mimo",
+    "label": "MiMo V2.6 Flash",
+    "labelEn": "MiMo V2.6 Flash",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 11,
+    "models": [
+      {
+        "id": "mimo-v2.6-flash",
+        "label": "MiMo V2.6 Flash",
+        "labelEn": "MiMo V2.6 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 1,
+          "recommended": true,
+          "defaultForNewUsers": true,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 87.23,
+          "output": 187.88,
+          "cache": 1.342
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-deepseek",
+    "label": "DeepSeek V4.1 Flash",
+    "labelEn": "DeepSeek V4.1 Flash",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 12,
+    "models": [
+      {
+        "id": "deepseek-flash",
+        "label": "DeepSeek V4.1 Flash",
+        "labelEn": "DeepSeek V4.1 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 3,
+          "recommended": true,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 200,
+          "output": 800,
+          "cache": 4
+        }
+      },
+      {
+        "id": "deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash（现为 V4.1）",
+        "labelEn": "DeepSeek V4 Flash (now V4.1)",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 99,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": true
+        },
+        "price": {
+          "input": 200,
+          "output": 800,
+          "cache": 4
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-qwen",
+    "label": "Qwen3.8 Flash",
+    "labelEn": "Qwen3.8 Flash",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 13,
+    "models": [
+      {
+        "id": "qwen3-8-flash",
+        "label": "Qwen3.8 Flash",
+        "labelEn": "Qwen3.8 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 4,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 113.9,
+          "output": 357,
+          "cache": null
+        }
+      },
+      {
+        "id": "qwen3-8-max",
+        "label": "Qwen 3.8-Max 通义千问",
+        "labelEn": "Qwen 3.8-Max",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519,
+          "output": 4558,
+          "cache": 303.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-zhipu",
+    "label": "GLM 5.3 Flash",
+    "labelEn": "GLM 5.3 Flash",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 14,
+    "models": [
+      {
+        "id": "glm-5.3-flash",
+        "label": "GLM 5.3 Flash",
+        "labelEn": "GLM 5.3 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 2,
+          "recommended": true,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 113.9,
+          "output": 379.8,
+          "cache": 5.7
+        }
+      },
+      {
+        "id": "glm-5.3",
+        "label": "智谱 GLM-5.3",
+        "labelEn": "Zhipu GLM-5.3",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 560,
+          "output": 1960,
+          "cache": 140
+        }
+      },
+      {
+        "id": "glm-5.2",
+        "label": "智谱 GLM-5.2",
+        "labelEn": "Zhipu GLM-5.2",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 560,
+          "output": 1960,
+          "cache": 140
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-kimi",
+    "label": "无为托管 · Kimi",
+    "labelEn": "Wuwei · Kimi",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 50,
+    "models": [
+      {
+        "id": "kimi-k3",
+        "label": "Kimi K3",
+        "labelEn": "Kimi K3",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -90,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 2160,
+          "output": 10800,
+          "cache": 216
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-gemini",
+    "label": "无为托管 · Gemini",
+    "labelEn": "Wuwei Hosted · Gemini",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 110,
+    "models": [
+      {
+        "id": "gemini-3-8-flash",
+        "label": "Gemini 3.8 Flash",
+        "labelEn": "Gemini 3.8 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": 1004,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": 57
+        }
+      },
+      {
+        "id": "gemini-3-7-flash",
+        "label": "Gemini 3.7 Flash",
+        "labelEn": "Gemini 3.7 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": null
+        }
+      },
+      {
+        "id": "gemini-3-6-flash",
+        "label": "Gemini 3.6 Flash",
+        "labelEn": "Gemini 3.6 Flash",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": 1008,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": 57
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-claude",
+    "label": "无为托管 · Claude",
+    "labelEn": "Wuwei · Claude",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 135,
+    "models": [
+      {
+        "id": "claude-fable-5-1",
+        "label": "Claude Fable 5.1",
+        "labelEn": "Claude Fable 5.1",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -295,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 189.9
+        }
+      },
+      {
+        "id": "claude-fable-5",
+        "label": "Claude Fable 5",
+        "labelEn": "Claude Fable 5",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -290,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 759.6
+        }
+      },
+      {
+        "id": "claude-opus-5-5",
+        "label": "Claude Opus 5.5",
+        "labelEn": "Claude Opus 5.5",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -285,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3038.4,
+          "output": 15192,
+          "cache": 151.9
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-gpt",
+    "label": "无为托管 · GPT",
+    "labelEn": "Wuwei · GPT",
+    "kind": "openai",
+    "baseUrl": "https://qa.invalid/api/gateway/v1",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 136,
+    "models": [
+      {
+        "id": "gpt-6-1-sol",
+        "label": "GPT-6.1 Sol",
+        "labelEn": "GPT-6.1 Sol",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -198,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 76
+        }
+      },
+      {
+        "id": "gpt-6-sol",
+        "label": "GPT-6 Sol",
+        "labelEn": "GPT-6 Sol",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -196,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 76
+        }
+      },
+      {
+        "id": "gpt-6-astra",
+        "label": "GPT-6 Astra",
+        "labelEn": "GPT-6 Astra",
+        "free": false,
+        "anon": false,
+        "selection": {
+          "category": "premium",
+          "rank": -195,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 759.6
+        }
+      }
+    ]
+  }
+]

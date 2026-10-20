@@ -1,3 +1,4 @@
+import { tr, getCurrentLanguage } from "../localization/index.js";
 import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
 import { devGatewayUrl } from '../dev-gateway.js';
 // Provider 实现：把统一的 Message/Tool 语义翻译到具体后端。
@@ -19,7 +20,7 @@ import type {
 // 界面语言（WUWEI_LANG 由主进程 applyEnvFromSettings 写入，CLI 同样可用）。
 // 下面这些 throw 的 message 会被主进程原样 send("evt:error") 到聊天里的红色错误条，所以要跟随语言。
 // 必须在调用处求值：放模块顶层 const 会在加载那刻把语言焊死，切语言不生效。
-const tt = (zh: string, en: string) => (process.env.WUWEI_LANG === "en" ? en : zh);
+
 
 // 无为托管网关的错误码 → 人话提示。网关出错时会返回 {error:{type:"gateway_error",code,...}}，
 // 直接把原始 JSON 甩给用户看不懂(如「OpenAI 兼容端点报错 402: {...}」)，这里翻成中/英友好文案并给出下一步。
@@ -45,44 +46,35 @@ function humanizeGatewayError(status: number, rawBody: string): string | null {
   const coins = (n?: number) => (typeof n === "number" ? String(n) : "");
   switch (code) {
     case "upstream_rate_limited":
-      return tt("模型供应商暂时限流，请稍后重试，或切换其他热门模型。", "The model provider is temporarily rate limited. Retry shortly or choose another popular model.");
+      return tr("err.providerRateLimited");
     case "upstream_error":
-      return tt("模型供应商暂时不可用，请稍后重试或切换其他模型。", "The model provider is temporarily unavailable. Retry shortly or choose another model.");
+      return tr("ui.provider.the.model.provider.is.temporarily.unavailable.cfbc4bc");
     case "auth_unavailable":
-      return tt("账号校验服务暂时连接失败，请稍后重试，无需退出登录。", "The account service is temporarily unreachable. Please retry; you do not need to sign out.");
+      return tr("ui.provider.the.account.service.is.temporarily.unreachable.14847f2");
     case "invalid_token":
     case "no_token":
-      return tt("登录状态已过期，请重新登录后重试。", "Your session has expired. Please sign in again and retry.");
+      return tr("ui.provider.your.session.has.expired.please.sign.586074e");
     case "insufficient_balance": {
-      const need = est != null ? tt(`（本次约需 ${coins(est)} 无为币，`, `(this request needs ~${coins(est)} coins, `) : tt("（", "(");
-      const have = bal != null ? tt(`当前余额 ${coins(bal)}）`, `you have ${coins(bal)})`) : tt("）", ")");
-      return tt(
-        `无为币余额不足以支付本次请求${need}${have}。请前往充值，或改用免费模型继续。`,
-        `Not enough coins for this request ${need}${have}. Please top up, or switch to a free model.`,
-      );
+      const need = est != null ? tr("ui.provider.this.request.needs.coins.34b2098", { p0: coins(est) }) : tr("ui.provider.text.e7b74cb");
+      const have = bal != null ? tr("ui.provider.you.have.06eed9b", { p0: coins(bal) }) : tr("ui.provider.text.36c55ba");
+      return tr("ui.provider.not.enough.coins.for.this.request.c21cc03", { p0: need, p1: have });
     }
     case "daily_cap_reached":
-      return tt(
-        "已达今日使用上限。请明天再试，或到后台/会员页提升每日额度。",
-        "Daily usage limit reached. Try again tomorrow, or raise your daily cap.",
-      );
+      return tr("ui.provider.daily.usage.limit.reached.try.again.9c45008");
     case "free_quota_exhausted":
-      return tt(
-        "免费体验额度已用完。登录并充值即可继续使用付费模型，或换其它免费模型。",
-        "Free trial quota used up. Sign in and top up to use paid models, or switch to another free model.",
-      );
+      return tr("ui.provider.free.trial.quota.used.up.sign.101afcf");
     case "free_daily_cap_reached":
-      return tt("今日免费额度已用完（每人每天有额度上限）。升级会员即可继续，或明天再来。", "Today's free allowance is used up (daily cap per user). Upgrade to keep going, or come back tomorrow.");
+      return tr("ui.provider.today.free.allowance.is.used.up.15511cc");
     case "free_trial_disabled":
-      return tt("免费体验暂时关闭，请登录后使用。", "Free trial is currently off. Please sign in.");
+      return tr("ui.provider.free.trial.is.currently.off.please.2252577");
     case "anon_not_allowed":
     case "anon_login_required":
-      return tt("该模型需登录后免费使用，请先登录。", "Sign in to use this model for free. Please log in first.");
+      return tr("ui.provider.sign.in.to.use.this.model.06cba8b");
     case "model_not_priced":
     case "unknown_hosted_model":
-      return tt("该模型暂不可用，请换一个模型。", "This model is unavailable. Please pick another one.");
+      return tr("ui.provider.this.model.is.unavailable.please.pick.ede5de7");
     default:
-      return tt(`请求被网关拦下（${code || status}）。`, `Request blocked by gateway (${code || status}).`);
+      return tr("ui.provider.request.blocked.by.gateway.75a812f", { p0: code || status });
   }
 }
 
@@ -424,7 +416,7 @@ class OpenAIProvider implements Provider {
         }
       }
       throw new Error(
-        `${tt("OpenAI 兼容端点报错", "OpenAI-compatible endpoint error")} ${res.status}: ${rawBody}`,
+        `${tr("ui.provider.openai.compatible.endpoint.error.6b3c27e")} ${res.status}: ${rawBody}`,
       );
     }
 
@@ -581,10 +573,7 @@ class OpenAIProvider implements Provider {
     // 死循环熔断：取消底层读取(让模型停) + 清掉尾部重复串 + onRecover 替换已显示的脏内容 + 标注。
     if (truncated) {
       try { await reader.cancel(); } catch { /* ignore */ }
-      const note = tt(
-        "\n\n⚠️ 已自动停止：检测到模型在重复输出（可能陷入死循环）。请换个模型或重述需求。",
-        "\n\n⚠️ Auto-stopped: the model kept repeating (possible loop). Try another model or rephrase.",
-      );
+      const note = tr("ui.provider.auto.stopped.the.model.kept.repeating.5bfd4df");
       text = cleanRepeatTail(text) + note;
       handlers.onRecover?.(text); // 把界面上累积的重复串替换成清理后的正文
     }
@@ -701,12 +690,10 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
             const images = content.filter((c: any) => c.type === "image" && !c.displayOnly);
             content = txt;
             if (images.length && vision) {
-              toolImageParts.push({ type: "text", text: tt(
-                `[工具 ${r.tool_use_id} 返回的图片]`, `[Images returned by tool ${r.tool_use_id}]`,
-              ) });
+              toolImageParts.push({ type: "text", text: tr("ui.provider.images.returned.by.tool.a2c0934", { p0: r.tool_use_id }) });
               for (const im of images) toolImageParts.push({ type: "image_url", image_url: { url: capImage(im.dataUrl) } });
             } else if (images.length) {
-              content += tt("\n[附截图，当前模型不支持看图]", "\n[Screenshot attached; this model does not support images]");
+              content += tr("ui.provider.screenshot.attached.this.model.does.not.2e49920");
             }
           }
           out.push({ role: "tool", tool_call_id: r.tool_use_id, content });
@@ -722,7 +709,7 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
         out.push({ role: "user", content: parts });
       } else if (images.length) {
         // 纯文本模型：图片转占位文本，避免 image_url 报 400 卡死历史。
-        const note = images.map(() => tt("[图片]", "[Image]")).join(" ");
+        const note = images.map(() => tr("ui.provider.image.737093d")).join(" ");
         out.push({ role: "user", content: text ? `${text}\n${note}` : note });
       } else if (text || !toolResults.length) {
         out.push({ role: "user", content: text });
@@ -790,7 +777,7 @@ class CodexProvider implements Provider {
 
     if (!res.ok || !res.body) {
       throw new Error(
-        `${tt("Codex 端点", "Codex endpoint")} ${res.status}: ${(await res.text()).slice(0, 400)}`,
+        `${tr("ui.provider.codex.endpoint.80adec7")} ${res.status}: ${(await res.text()).slice(0, 400)}`,
       );
     }
 
@@ -861,7 +848,7 @@ class CodexProvider implements Provider {
             };
           } else if (ev.type === "error" || ev.type === "response.failed") {
             throw new Error(
-              `${tt("Codex 流错误:", "Codex stream error:")} ${JSON.stringify(ev).slice(0, 300)}`,
+              `${tr("ui.provider.codex.stream.error.0496500")} ${JSON.stringify(ev).slice(0, 300)}`,
             );
           }
         }

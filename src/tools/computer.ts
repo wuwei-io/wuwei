@@ -1,3 +1,4 @@
+import { tr } from "../localization/index.js";
 // 电脑操作工具（computer_*）：截屏 + 鼠标 + 键盘，操作整台电脑的任意软件。
 //
 // Windows 专用，零第三方依赖：截屏走 .NET System.Drawing，鼠标/键盘走 user32 P/Invoke，
@@ -15,7 +16,7 @@ const execFileP = promisify(execFile);
 
 const ok = (s: string): ToolResult => ({ content: s });
 const err = (s: string): ToolResult => ({ content: s, isError: true });
-const winOnly = (): ToolResult => err("电脑操作能力目前仅支持 Windows。");
+const winOnly = (): ToolResult => err(tr("ui.computer.message.3a5146c957"));
 
 /** 跑一段 PowerShell，返回 stdout。用 -EncodedCommand(base64 UTF-16LE) 彻底避开引号转义地狱。 */
 async function ps(script: string, signal?: AbortSignal): Promise<string> {
@@ -37,8 +38,7 @@ function escapeSendKeys(s: string): string {
 
 const screenshotTool: Tool = {
   name: "computer_screenshot",
-  description:
-    "截取整个屏幕并返回图片，让你看到当前电脑画面（哪个软件在前台、按钮在哪、内容是什么）。操作电脑前先截图看清楚。",
+  get description() { return tr("tool.description.computer_screenshot"); },
   inputSchema: { type: "object", properties: {} },
   readOnly: true,
   async run(_input, ctx: ToolContext) {
@@ -71,32 +71,31 @@ $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
       const bar = out.indexOf("|");
       const dims = bar > 0 ? out.slice(0, bar) : "";
       const b64 = bar > 0 ? out.slice(bar + 1) : out;
-      if (!b64) return err("截屏失败：没拿到图像");
-      return { content: `已截取全屏${dims ? `（原始 ${dims}，图已等比缩小便于查看；坐标按原始分辨率给）` : ""}`, image: `data:image/png;base64,${b64}` };
+      if (!b64) return err(tr("ui.computer.message.885ac7c165"));
+      return { content: tr("ui.computer.message.333b936543", {p0: dims ? `（原始 ${dims}，图已等比缩小便于查看；坐标按原始分辨率给）` : ""}), image: `data:image/png;base64,${b64}` };
     } catch (e) {
-      return err(`截屏出错：${String((e as Error)?.message || e)}`);
+      return err(tr("ui.computer.message.42d3dafca0", {p0: String((e as Error)?.message || e)}));
     }
   },
 };
 
 const clickTool: Tool = {
   name: "computer_click",
-  description:
-    "把鼠标移到屏幕坐标 (x,y) 并点击。坐标从 computer_screenshot 的画面判断。改变电脑状态，会请求确认。",
-  inputSchema: {
+  get description() { return tr("tool.description.computer_click"); },
+  get inputSchema() { return {
     type: "object",
     properties: {
-      x: { type: "number", description: "屏幕横坐标(像素)" },
-      y: { type: "number", description: "屏幕纵坐标(像素)" },
-      button: { type: "string", description: "left(默认)/right/double", enum: ["left", "right", "double"] },
+      x: { type: "number", description: tr("tool.parameter.computer_click.x") },
+      y: { type: "number", description: tr("tool.parameter.computer_click.y") },
+      button: { type: "string", description: tr("tool.parameter.computer_click.button"), enum: ["left", "right", "double"] },
     },
     required: ["x", "y"],
-  },
+  }; },
   readOnly: false,
   async run(input, ctx: ToolContext) {
     if (process.platform !== "win32") return winOnly();
     const x = Math.round(Number(input.x)), y = Math.round(Number(input.y));
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return err("x,y 必须是数字");
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return err(tr("ui.computer.message.f9acce18e7"));
     const btn = String(input.button || "left");
     // 事件码：left down/up 0x02/0x04，right down/up 0x08/0x10
     const seq = btn === "right" ? "0x08,0x10" : "0x02,0x04";
@@ -111,16 +110,16 @@ public class M{[DllImport("user32.dll")]public static extern bool SetCursorPos(i
 for($i=0;$i -lt ${times};$i++){${seq.split(",").map((c) => `[M]::mouse_event(${c},0,0,0,0)`).join(";")};Start-Sleep -Milliseconds 40}`,
         ctx.signal,
       );
-      return ok(`已在 (${x},${y}) ${btn === "double" ? "双击" : btn === "right" ? "右键" : "点击"}`);
+      return ok(tr("ui.computer.message.8ac0ab1b87", {p0: x, p1: y, p2: btn === "double" ? "双击" : btn === "right" ? "右键" : tr("ui.computer.message.7b07e5296e")}));
     } catch (e) {
-      return err(`点击出错：${String((e as Error)?.message || e)}`);
+      return err(tr("ui.computer.message.6bd6629556", {p0: String((e as Error)?.message || e)}));
     }
   },
 };
 
 const moveTool: Tool = {
   name: "computer_move",
-  description: "把鼠标移到屏幕坐标 (x,y)，不点击（用于悬停出菜单/提示）。会请求确认。",
+  get description() { return tr("tool.description.computer_move"); },
   inputSchema: {
     type: "object",
     properties: { x: { type: "number" }, y: { type: "number" } },
@@ -130,7 +129,7 @@ const moveTool: Tool = {
   async run(input, ctx: ToolContext) {
     if (process.platform !== "win32") return winOnly();
     const x = Math.round(Number(input.x)), y = Math.round(Number(input.y));
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return err("x,y 必须是数字");
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return err(tr("ui.computer.message.f9acce18e7"));
     try {
       await ps(
         `Add-Type @"
@@ -139,26 +138,26 @@ using System.Runtime.InteropServices;public class M{[DllImport("user32.dll")]pub
 [M]::SetCursorPos(${x},${y})`,
         ctx.signal,
       );
-      return ok(`鼠标已移到 (${x},${y})`);
+      return ok(tr("ui.computer.message.ef799f3e76", {p0: x, p1: y}));
     } catch (e) {
-      return err(`移动出错：${String((e as Error)?.message || e)}`);
+      return err(tr("ui.computer.message.45d76080e7", {p0: String((e as Error)?.message || e)}));
     }
   },
 };
 
 const typeTool: Tool = {
   name: "computer_type",
-  description: "在当前焦点处用键盘输入一段文本（先点好输入框再用）。会请求确认。",
-  inputSchema: {
+  get description() { return tr("tool.description.computer_type"); },
+  get inputSchema() { return {
     type: "object",
-    properties: { text: { type: "string", description: "要输入的文本" } },
+    properties: { text: { type: "string", description: tr("tool.parameter.computer_type.text") } },
     required: ["text"],
-  },
+  }; },
   readOnly: false,
   async run(input, ctx: ToolContext) {
     if (process.platform !== "win32") return winOnly();
     const text = String(input.text ?? "");
-    if (!text) return err("text 不能为空");
+    if (!text) return err(tr("ui.computer.message.e665862d3c"));
     try {
       // 转义 SendKeys 特殊字符 → base64(UTF-16LE)传入，避开引号/编码地狱
       const b64 = Buffer.from(escapeSendKeys(text), "utf16le").toString("base64");
@@ -168,27 +167,26 @@ $t = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String("${b6
 [System.Windows.Forms.SendKeys]::SendWait($t)`,
         ctx.signal,
       );
-      return ok(`已输入：${text.slice(0, 60)}${text.length > 60 ? "…" : ""}`);
+      return ok(tr("ui.computer.message.14cde75e6c", {p0: text.slice(0, 60), p1: text.length > 60 ? "…" : ""}));
     } catch (e) {
-      return err(`输入出错：${String((e as Error)?.message || e)}`);
+      return err(tr("ui.computer.message.80149dc8d5", {p0: String((e as Error)?.message || e)}));
     }
   },
 };
 
 const keyTool: Tool = {
   name: "computer_key",
-  description:
-    "按下一个键或组合键，如 Enter、Tab、Esc、Ctrl+A、Ctrl+C、Alt+F4。用 SendKeys 语法：^=Ctrl %=Alt +=Shift，特殊键用 {ENTER}{TAB}{ESC}{F4} 等。会请求确认。",
-  inputSchema: {
+  get description() { return tr("tool.description.computer_key"); },
+  get inputSchema() { return {
     type: "object",
-    properties: { keys: { type: "string", description: "SendKeys 语法的按键，如 ^a、{ENTER}、%{F4}" } },
+    properties: { keys: { type: "string", description: tr("tool.parameter.computer_key.keys") } },
     required: ["keys"],
-  },
+  }; },
   readOnly: false,
   async run(input, ctx: ToolContext) {
     if (process.platform !== "win32") return winOnly();
     const keys = String(input.keys || "");
-    if (!keys) return err("keys 不能为空");
+    if (!keys) return err(tr("ui.computer.message.feb396d61d"));
     try {
       const b64keys = Buffer.from(keys, "utf16le").toString("base64");
       await ps(
@@ -197,9 +195,9 @@ $k = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String("${b6
 [System.Windows.Forms.SendKeys]::SendWait($k)`,
         ctx.signal,
       );
-      return ok(`已按键：${keys}`);
+      return ok(tr("ui.computer.message.bb89d2d52c", {p0: keys}));
     } catch (e) {
-      return err(`按键出错：${String((e as Error)?.message || e)}`);
+      return err(tr("ui.computer.message.9ad6f8ae80", {p0: String((e as Error)?.message || e)}));
     }
   },
 };
