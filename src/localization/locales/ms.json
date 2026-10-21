@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Kualiti lalai",
     "billing.usage.imageBasis": "{model} · {quality} · kira-kira {cost} syiling/imej. Saiz lalai katalog dan arahan ringkas; caj akhir mengikut penggunaan sebenar.",
     "billing.usage.taskBasis": "{model}: contoh tugasan menggunakan {input} token input + {output} output. Kadar sejuta input/output: {inputRate}/{outputRate} syiling; sekitar {cost} syiling/tugasan. Tiada diskaun cache; jumlah dibundarkan ke bawah. Tugasan rumit mungkin memerlukan banyak panggilan; tiada jaminan jumlah selesai.",
-    "billing.usage.tokenBasis": "Termasuk token input dan output pada nisbah 4:1. Tidak termasuk model percuma dan syiling daftar masuk harian."
+    "billing.usage.tokenBasis": "Termasuk token input dan output pada nisbah 4:1. Tidak termasuk model percuma dan syiling daftar masuk harian.",
+    "menu.upgradeEntry": "Naik taraf",
+    "menu.annualDiscount": "Diskaun 50% pelan tahunan"
   }
 }

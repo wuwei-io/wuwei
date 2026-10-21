@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Qualité par défaut",
     "billing.usage.imageBasis": "{model} · {quality} · environ {cost} pièces/image. Taille par défaut du catalogue et consigne courte ; facturation selon l’usage réel.",
     "billing.usage.taskBasis": "{model} : exemple de {input} tokens en entrée + {output} en sortie. Tarifs par million entrée/sortie : {inputRate}/{outputRate} pièces, soit environ {cost} pièces/tâche. Sans remise de cache, nombre arrondi à la baisse. Une tâche complexe peut nécessiter plusieurs appels ; le nombre de tâches terminées n’est pas garanti.",
-    "billing.usage.tokenBasis": "Inclut les tokens d’entrée et de sortie au ratio 4:1. Modèles gratuits et pièces de connexion quotidienne exclus."
+    "billing.usage.tokenBasis": "Inclut les tokens d’entrée et de sortie au ratio 4:1. Modèles gratuits et pièces de connexion quotidienne exclus.",
+    "menu.upgradeEntry": "Améliorer",
+    "menu.annualDiscount": "50 % de réduction sur les forfaits annuels"
   }
 }

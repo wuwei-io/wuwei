@@ -288,7 +288,7 @@
     "set.sec.revealPlain": "查看明文（需本机账号密码）",
     "set.sec.empty": "还没有密钥。把常用密钥加进来,聊天/工具里出现就自动脱敏替换。",
     "set.sec.delete": "删除",
-    "err.insufficientBalance": "无为币余额不足：请点账号头像「充值」后，再使用无为托管模型。",
+    "err.insufficientBalance": "无为币余额不足：请点账号头像「升级」后，再使用无为托管模型。",
     "err.freeQuota": "免费体验次数已用完：登录即可继续使用（注册送 10 无为币，领取后 24 小时有效）。",
     "err.freeDisabled": "免费体验暂未开放：请登录使用，或稍后再试。",
     "err.paidDailyCap": "已达今日付费使用上限，请明天再试或调整使用限额。",
@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "默认画质",
     "billing.usage.imageBasis": "{model} · {quality} · 约 {cost} 币/张。按目录默认尺寸和简短文字提示词估算，最终按实际用量结算。",
     "billing.usage.taskBasis": "{model}：示例每次 {input} 输入 + {output} 输出 Token；每百万输入/输出单价 {inputRate}/{outputRate} 币，约 {cost} 币/次。不计缓存优惠，次数向下取整。复杂任务可能多次调用，不保证完成次数。",
-    "billing.usage.tokenBasis": "包含输入与输出，按 4:1 比例测算。不计免费模型与签到赠送的无为币。"
+    "billing.usage.tokenBasis": "包含输入与输出，按 4:1 比例测算。不计免费模型与签到赠送的无为币。",
+    "menu.upgradeEntry": "升级",
+    "menu.annualDiscount": "年付套餐优惠 50%"
   }
 }

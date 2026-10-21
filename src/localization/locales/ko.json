@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "기본 화질",
     "billing.usage.imageBasis": "{model} · {quality} · 이미지당 약 {cost} 코인. 카탈로그 기본 크기와 짧은 프롬프트 기준이며 실제 사용량으로 정산합니다.",
     "billing.usage.taskBasis": "{model}: 예시 작업당 입력 {input} + 출력 {output} 토큰. 백만 토큰당 입력/출력 {inputRate}/{outputRate} 코인, 작업당 약 {cost} 코인. 캐시 할인 없이 횟수는 내림합니다. 복잡한 작업은 여러 호출이 필요해 완료 횟수를 보장하지 않습니다.",
-    "billing.usage.tokenBasis": "입력과 출력 토큰을 4:1 비율로 포함합니다. 무료 모델 및 일일 출석 코인은 제외합니다."
+    "billing.usage.tokenBasis": "입력과 출력 토큰을 4:1 비율로 포함합니다. 무료 모델 및 일일 출석 코인은 제외합니다.",
+    "menu.upgradeEntry": "업그레이드",
+    "menu.annualDiscount": "연간 요금제 50% 할인"
   }
 }

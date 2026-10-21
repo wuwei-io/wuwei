@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Kualitas bawaan",
     "billing.usage.imageBasis": "{model} · {quality} · sekitar {cost} koin/gambar. Ukuran bawaan dan prompt singkat; tagihan akhir sesuai pemakaian nyata.",
     "billing.usage.taskBasis": "{model}: contoh tugas memakai {input} token masuk + {output} keluar. Tarif per juta masuk/keluar: {inputRate}/{outputRate} koin; sekitar {cost} koin/tugas. Tanpa diskon cache, jumlah dibulatkan ke bawah. Tugas rumit mungkin butuh beberapa panggilan; jumlah tugas selesai tidak dijamin.",
-    "billing.usage.tokenBasis": "Termasuk token masuk dan keluar dengan rasio 4:1. Tidak termasuk model gratis dan koin check-in harian."
+    "billing.usage.tokenBasis": "Termasuk token masuk dan keluar dengan rasio 4:1. Tidak termasuk model gratis dan koin check-in harian.",
+    "menu.upgradeEntry": "Tingkatkan",
+    "menu.annualDiscount": "Diskon 50% paket tahunan"
   }
 }

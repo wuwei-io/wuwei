@@ -205,8 +205,16 @@ app.whenReady().then(async () => {
   });
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
-  const openBilling=async(f,ledger=false)=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
+  const openBilling=async(f,ledger=false)=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js(ledger?'Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()':'document.querySelector("[data-account-upgrade]")?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
 
+
+  for(const lang of ['zh','en','fa'])await run('发布关键：账号菜单升级入口、年付优惠标与菜单顺序 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
+    await f.click('.acct-btn');await f.wait('!!document.querySelector("[data-account-upgrade]")');await delay(180);
+    const g=await f.js('(()=>{const e=document.querySelector("[data-account-upgrade]"),r=e.getBoundingClientRect(),b=e.querySelector(".acct-upgrade-discount").getBoundingClientRect();return {second:document.querySelectorAll(".acct-items .acct-it")[1]===e,inside:b.left>=r.left&&b.right<=r.right&&b.top>=r.top&&b.bottom<=r.bottom,title:e.title,text:e.querySelector(".acct-upgrade-discount").textContent}})()');
+    assert.ok(g.second&&g.inside,JSON.stringify(g));assert.equal(g.text,'−50%');assert.ok(g.title.length>8);
+    fs.writeFileSync(path.join(evidence,'account-upgrade-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await f.click('[data-account-upgrade]');await f.wait('!!document.querySelector(".billing-selector-option")');assert.equal(f.state.orders,0);
+  });
   for(const lang of ['zh','en','fa'])await run('发布关键：完整模型目录、单列用量估算、搜索筛选与套餐联动 '+lang,{
     account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},
     modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),
@@ -253,7 +261,7 @@ app.whenReady().then(async () => {
     const heading=await f.js('document.querySelector(".billing-calendar-heading b").textContent'),expected=await f.js('new Intl.DateTimeFormat('+JSON.stringify(code)+',{calendar:"gregory",year:"numeric",month:"long"}).format(new Date())');assert.equal(heading,expected);await billingHeaderAligned(f);
   });
   await run('发布关键：账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
-    await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Coin details',icon:true},{text:'Top up',icon:true},{text:'Settings',icon:true}]);await f.click('.acct-btn');
+    await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Coin details',icon:true},{text:'Upgrade−50%',icon:true},{text:'Settings',icon:true}]);assert.equal(await f.js('document.querySelector("[data-account-upgrade]").title'),'50% off yearly plans');await delay(180);fs.writeFileSync(path.join(evidence,'account-upgrade-en.png'),(await f.state.win.webContents.capturePage()).toPNG());await f.click('.acct-btn');
     await openBilling(f);await f.wait('document.querySelector(".billing-selector-option") && document.querySelector(".billing-plan-buy")?.disabled===false');
     await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'billing-selector-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
     await billingHeaderAligned(f);

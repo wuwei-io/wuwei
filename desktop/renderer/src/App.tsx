@@ -8025,12 +8025,12 @@ export function App() {
                             <div className="acct-sep" />
                             <div className="acct-items">
                               {(wuwei.flags?.includes('billing_v2') || billingPreview) && <button className="acct-it" onClick={()=>{setShowAcctMenu(false);setBillingPage('ledger');setBillingOpen(true);}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>{tr("ui.app.credit.details.a3a619a")}</button>}
-                              <button className="acct-it" onClick={openPack}>
+                              <button className="acct-it acct-upgrade-action" data-account-upgrade title={tr("menu.annualDiscount")} onClick={openPlan}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="3" y="5" width="18" height="14" rx="2.5" />
                                   <path d="M3 10h18M7 15h4" />
                                 </svg>
-                                {t("menu.donate")}
+                                <span className="acct-upgrade-label">{tr("menu.upgradeEntry")}<span className="acct-upgrade-discount">−50%</span></span>
                               </button>
                               <button
                                 className="acct-it"

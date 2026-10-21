@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Varsayılan kalite",
     "billing.usage.imageBasis": "{model} · {quality} · görsel başına yaklaşık {cost} jeton. Varsayılan boyut ve kısa istem; son ücret gerçek kullanıma bağlıdır.",
     "billing.usage.taskBasis": "{model}: örnek görevde {input} giriş + {output} çıkış tokenı. Milyon giriş/çıkış başına {inputRate}/{outputRate} jeton; yaklaşık {cost} jeton/görev. Önbellek indirimi yoktur, sayı aşağı yuvarlanır. Karmaşık görevler birden çok çağrı gerektirebilir; tamamlanma sayısı garanti edilmez.",
-    "billing.usage.tokenBasis": "Giriş ve çıkış tokenlarını 4:1 oranında içerir. Ücretsiz modeller ve günlük giriş jetonları hariçtir."
+    "billing.usage.tokenBasis": "Giriş ve çıkış tokenlarını 4:1 oranında içerir. Ücretsiz modeller ve günlük giriş jetonları hariçtir.",
+    "menu.upgradeEntry": "Yükselt",
+    "menu.annualDiscount": "Yıllık planlarda %50 indirim"
   }
 }
