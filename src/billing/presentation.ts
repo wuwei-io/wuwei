@@ -33,7 +33,7 @@ export function pageNumbers(current:number,total:number):(number|'…')[] {
 }
 function vendor(model:ModelChoice) {
   const id=model.modelId.toLowerCase();
-  for(const [pattern,name] of [[/claude/,'anthropic'],[/gpt|o[134](?:-|$)|chatgpt/,'openai'],[/gemini/,'google'],[/deepseek/,'deepseek'],[/kimi|moonshot/,'moonshot'],[/glm/,'zhipu'],[/mimo/,'xiaomi'],[/qwen/,'alibaba'],[/grok/,'xai'],[/minimax/,'minimax']] as const)if(pattern.test(id))return name;
+  for(const [pattern,name] of [[/claude/,'anthropic'],[/gpt|o[134](?:-|$)|chatgpt/,'openai'],[/gemini/,'google'],[/deepseek/,'deepseek'],[/kimi|moonshot/,'moonshot'],[/glm/,'zhipu'],[/mimo/,'xiaomi'],[/qwen/,'alibaba'],[/grok/,'xai'],[/minimax/,'minimax'],[/doubao/,'bytedance'],[/nemotron/,'nvidia'],[/step/,'stepfun'],[/mistral/,'mistral'],[/llama/,'meta'],[/cohere|north.*code/,'cohere']] as const)if(pattern.test(id))return name;
   return model.providerId;
 }
 export function modelVendorName(model:ModelChoice) {
@@ -48,4 +48,19 @@ export function showcaseModels(choices:ModelChoice[],limit=10) {
   });
   const seen=new Set<string>();
   return ranked.filter(m=>{const key=vendor(m);if(seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||a.rank-b.rank).slice(0,limit);
+}
+
+/** Full hosted catalog. Auto-routing is a strategy, not another model. */
+export function billingModelCatalog(choices:ModelChoice[]) {
+  const seen=new Set<string>();
+  const available=choices.filter(m=>m.category!=='connections'&&!m.hiddenInPicker&&!/auto[-_]?free/i.test(m.modelId)).filter(m=>{
+    const key=(m.category==='images'?'image:':'chat:')+(m.category==='images'?m.imageModel??m.modelId:m.modelId).toLowerCase();
+    if(seen.has(key))return false;seen.add(key);return true;
+  });
+  const first=showcaseModels(available.filter(m=>m.category!=='images'),50);
+  const priority=['xiaomi','zhipu','deepseek','moonshot','openai','anthropic','google','xai','alibaba','minimax','bytedance','nvidia','stepfun','mistral','meta'];
+  const order=(m:ModelChoice)=>{const i=priority.indexOf(vendor(m));return i<0?99:i;};
+  first.sort((a,b)=>order(a)-order(b));
+  const images=available.filter(m=>m.category==='images'),featured=new Set([...first,...images].map(m=>m.key));
+  return [...first,...images,...available.filter(m=>!featured.has(m.key)).sort((a,b)=>Number(a.free)-Number(b.free)||a.rank-b.rank)];
 }

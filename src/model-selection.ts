@@ -10,6 +10,9 @@ export type ModelChoice = {
   imageInput?: boolean;
   price?: { input: number | null; output: number | null; cache: number | null };
   imageCoins?: number;
+  imageModel?: string;
+  imageQuality?: string;
+  hiddenInPicker?: boolean;
   connectionLabel?: string;
 };
 type Provider = { id:string; hosted:boolean; sort:number; label:string; labelEn?:string|null; models:{id:string;label:string;labelEn?:string|null;label_en?:string|null;free:boolean;anon?:boolean;badge?:string|null;inputModalities?:string[];selection?:{category?:string;rank?:number;recommended?:boolean;defaultForNewUsers?:boolean;hiddenInPicker?:boolean};price?:ModelChoice['price']}[] };
@@ -24,7 +27,7 @@ export function catalogModelChoices(providers: Provider[], selectedKey: string):
     connectionLabel:p.labelEn || (p.hosted ? englishCatalogLabel(p.label, p.id) : p.label),
     category:(m.free?'free':!p.hosted?'connections':m.selection?.category==='economy'?'economy':'premium') as ModelCategory,
     rank:m.selection?.rank ?? p.sort*100+index,recommended:m.selection?.recommended===true,defaultForNewUsers:m.selection?.defaultForNewUsers===true,
-    free:m.free,needsLogin:p.hosted && (!m.free || m.anon===false),badge:m.badge,price:m.price,
+    free:m.free,needsLogin:p.hosted && (!m.free || m.anon===false),badge:m.badge,price:m.price,hiddenInPicker:m.selection?.hiddenInPicker===true,
     imageInput:p.hosted ? hostedModelImageInput(m.id,m.badge,m.inputModalities) : undefined,
   }))).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||a.rank-b.rank);
 }
