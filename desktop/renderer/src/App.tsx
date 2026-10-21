@@ -4241,13 +4241,14 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === "KeyT" || e.key === "t" || e.key === "T")) {
         e.preventDefault();
         const goEn = langRef.current !== "en";
-        changeLang(getCurrentLanguage()); // 切 i18n UI 语言(现有机制)
+        changeLang(goEn ? "en" : "zh"); // 切 i18n UI 语言(现有机制)
         setTranslateMode(goEn); // 状态栏提示
         setTxMode(goEn); // 开/关动态内容翻译覆盖
       }
     };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    // Language switching remains available inside dialogs that stop key bubbling.
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
   }, []);
   // 客户端公告：启动拉取，未读过该版本(version)且 active 才弹；读过存本地，同版本不再弹，后台更新(version 变)则再弹。
   const announcementDeliveryRef = useRef<ReturnType<typeof createAnnouncementDelivery> | null>(null);
@@ -8666,7 +8667,7 @@ export function App() {
                 return (
                   <>
                     <span className="tb-avatar"><EmployeeAvatar icon={curEmp.icon} avatarData={curEmp.avatarData} name={employeeLabel(curEmp, lang)} /></span>
-                    <span className="tb-title-txt">{employeeLabel(curEmp, lang)}</span>
+                    <span className="tb-title-txt">{tx(employeeLabel(curEmp, lang))}</span>
                   </>
                 );
               }
@@ -8675,7 +8676,7 @@ export function App() {
               if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.sops.3f7e53e")}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
               const isDefault = !st || st === tr("ui.app.new.chat.fca06b0", {}, "zh") || st === tr("ui.app.new.chat.fca06b0", {}, "en");
-              return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (tr("splash.brand")) : st}</span></>;
+              return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (tr("splash.brand")) : tx(st)}</span></>;
             })()}
             {/* 群 ⋯ 菜单：群成员 / 清空消息 / 删除群，紧跟群名 */}
             {teamEnabled && appView === "rooms" && activeRoomId && (() => {
