@@ -49,3 +49,7 @@
 @media(min-width:681px) and (max-height:790px){.billing-selector>aside{padding-top:21px;padding-bottom:20px}.billing-selector-head{margin-bottom:13px}.billing-selector-benefits{padding-top:10px}.billing-selector-benefits ul{gap:3px}.billing-selector-benefits li{line-height:16px}.billing-selector-benefits .billing-usage-note{margin-top:7px}}
 @media(max-width:1000px){.billing-catalog-search{flex-basis:130px}.billing-selector-models{column-gap:10px}.billing-selector-models b{font-size:10px}.billing-selector-models .billing-catalog-badge{display:none}}
 @media(max-width:680px),(max-height:620px){.billing-selector-view{height:auto;display:block;overflow:auto}.billing-selector-view .billing-selector{overflow:visible}.billing-catalog-scroll{flex:none;height:240px;min-height:0}.billing-selector>aside{order:1;border-right:0;border-top:1px solid var(--billing-line)}.billing-catalog-controls{flex-wrap:wrap}.billing-catalog-search{max-width:45%}}
+
+/* Keep the short Chinese coin delivery label on one line. */
+.packs .billing-selector-name:lang(zh){min-width:max-content}
+.packs .billing-selector-name:lang(zh) b,.packs .billing-selector-name:lang(zh) small{white-space:nowrap}
