@@ -4,6 +4,8 @@ import { readFileSync, mkdtempSync, writeFileSync, readdirSync, rmSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { editLocalizedEmployeeField, localizeEmployee, localizeTeamApp, resolveEmployee, employeeMentionTargets, employeeRoster, TEAM_TOOL_EN } from '../src/team/default-localization.js';
+import { getLanguages, tr } from '../src/localization/index.js';
+import { systemPrompt } from '../src/agent/prompt.js';
 import { BUILTIN_APPS } from '../desktop/main/team/catalog.js';
 import { parseMentions } from '../desktop/main/team/projection.js';
 const app = BUILTIN_APPS[0];
@@ -68,16 +70,23 @@ test('existing installed persona files switch at assembly only; custom identity 
     const emp = installed[1];
     const identity = join(root, 'team', 'persona', emp.id, 'IDENTITY.md');
     const original = readFileSync(identity, 'utf8');
-    const sys = store.buildEmployeeSystem(emp, 'Current working directory: test', 'existing memory');
+    const sys = store.buildEmployeeSystem(emp, 'Current working directory: test', 'existing memory', undefined, 'en');
     assert.match(sys, /You are Wendy/);
     assert.match(sys, /Reply in English/);
     assert.match(sys, /existing memory/);
     assert.equal(readFileSync(identity, 'utf8'), original);
+    for (const locale of getLanguages()) {
+      const localized = store.buildEmployeeSystem(emp, systemPrompt('qa-cwd','qa-model',locale.code), 'existing memory', undefined, locale.code);
+      assert.ok(localized.includes(localizeEmployee(emp,locale.code).name),locale.code);
+      assert.ok(localized.includes(tr('ui.store.reply.in.english.unless.the.user.2736a52',{},locale.code)),locale.code);
+      assert.ok(localized.includes('qa-cwd')&&localized.includes('existing memory'),locale.code);
+      assert.equal(readFileSync(identity,'utf8'),original);
+    }
     writeFileSync(identity, 'User customized identity');
-    const custom = store.buildEmployeeSystem(emp, 'Current working directory: test', 'memory');
+    const custom = store.buildEmployeeSystem(emp, 'Current working directory: test', 'memory', undefined, 'en');
     assert.match(custom, /User customized identity/);
     assert.equal(readFileSync(identity, 'utf8'), 'User customized identity');
-    assert.match(store.buildEmployeeSystem(emp, '当前工作目录: test', ''), new RegExp(emp.name));
+    assert.match(store.buildEmployeeSystem(emp, '当前工作目录: test', '', undefined, 'zh'), new RegExp(emp.name));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

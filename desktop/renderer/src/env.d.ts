@@ -150,7 +150,7 @@ export interface WuweiApi {
   installUpdate(): void;
   deleteExchange(sid: string, ordinal: number): void;
   bootstrap(): Promise<{ sessions: any[]; groups?: string[]; currentId: string; messages: any[]; usage?: any; rateLimits?: any; interrupted?: { id: string; title: string }[] }>;
-  getSettings(): Promise<{ settings: any; backend: string; model: string; defaultPrompt?: string; defaultBrainPrompt?: string; defaultSecretsPrompt?: string }>;
+  getSettings(): Promise<{ settings: any; systemLanguage?: string; backend: string; model: string; defaultPrompt?: string; defaultBrainPrompt?: string; defaultSecretsPrompt?: string }>;
   setSettings(s: any): void;
   getMemory(): Promise<string>;
   setMemory(text: string): void;
@@ -280,6 +280,8 @@ export interface WuweiApi {
   claudeOauthExchange(code: string): Promise<string | null>;
   readClipboard(): Promise<string>;
   platform: string;
+  systemLanguage?: string;
+  languagePreference?: string;
   winMinimize(): void;
   winMaximize(): void;
   winIsMaximized(): Promise<boolean>;

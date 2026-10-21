@@ -39,7 +39,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
   if (!s) return null; // Ignore already-queued calls from a window being torn down.
   s.calls.push({ method, model: s.settings.model });
   switch (method) {
-    case 'getSettings': { const value = { settings: clone(s.settings), backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
+    case 'getSettings': { const value = { settings: clone(s.settings), systemLanguage:s.systemLanguage, backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
     case 'bootstrap': return { currentId: 'qa-session', sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
@@ -122,7 +122,7 @@ async function boot(options = {}) {
     if (!allow) blocked.push(details.url.split('?')[0]);
     callback({ cancel: !allow });
   });
-  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, additionalArguments: ['--qa-lang='+(options.lang||'zh')], offscreen: options.offscreen??!!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
+  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, additionalArguments: ['--qa-lang='+(options.lang||'zh'),'--qa-system-lang='+(options.systemLanguage||'')], offscreen: options.offscreen??!!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
   // Existing flow fixtures represent a chat whose model has already been chosen.
   // Empty-chat/default tests explicitly supply historyMessages: [].
   const state = { win, account: account(), settings: settings(), historyMessages: [{ role: 'user', content: [{ type: 'text', text: '已有对话，沿用明确选择的模型' }] }], calls: [], modelWrites: [], sent: [], orders: 0, orderSkus: [], permissionReplies: [], decisionReplies: [], defaults: new Set(), errors: [], messages: [], blocked, ...options };
@@ -151,11 +151,38 @@ async function run(name, options, test) {
 async function billingHeaderAligned(f){
   const geometry=await f.js(`(()=>{const bar=document.querySelector('.billing-top').getBoundingClientRect();return Array.from(document.querySelectorAll('#billing-title,.billing-top>div>button:not(.billing-close),.billing-top .billing-close svg')).map(el=>{const r=el.getBoundingClientRect();return{delta:Math.abs((r.top+r.bottom)/2-(bar.top+bar.bottom)/2),inside:r.top>=bar.top&&r.bottom<=bar.bottom}})})()`);
   assert.ok(geometry.length>=3);for(const item of geometry){assert.ok(item.delta<1.1,JSON.stringify(geometry));assert.equal(item.inside,true);}
+  const inset=await f.js(`(()=>{const bar=document.querySelector('.billing-top').getBoundingClientRect(),icon=document.querySelector('.billing-top .billing-close svg').getBoundingClientRect();return {top:icon.top-bar.top,right:bar.right-icon.right}})()`);
+  assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
 
+  const openLanguageSettings=async f=>{await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');await f.click('.set-tabs button:first-child');await f.wait('!!document.querySelector(".language-picker-trigger")');};
+  await run('发布关键：多语言：18种语言搜索、键盘选择、即时切换及原文保留',{lang:'zh'},async f=>{
+    await f.fill('.composer textarea','原始草稿 keep original');await openLanguageSettings(f);
+    await f.click('.language-picker-trigger');await f.wait('document.querySelectorAll(".language-picker-options [role=option]").length===19');
+    await f.fill('.language-picker-search input','рус');assert.equal(await f.js('document.querySelectorAll(".language-picker-options [role=option]").length'),1);
+    f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});await f.wait('document.documentElement.lang==="ru"&&!document.querySelector(".language-picker-popup")');assert.equal(f.state.appLanguage,'ru');
+    const codes=['zh','en','ru','fa','tr','fr','pt-BR','de','ar','es','pl','ja','ko','hi','vi','ms','id','it'];
+    for(const code of codes){
+      await f.click('.language-picker-trigger');await f.wait('!!document.querySelector(".language-picker-popup")');await f.click('.language-picker-options [data-language-code="'+code+'"]');
+      await f.wait('document.documentElement.lang==='+JSON.stringify(code));await delay(35);
+      assert.equal(f.state.appLanguage,code);assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),code);assert.equal(await f.js('document.documentElement.dir'),['ar','fa'].includes(code)?'rtl':'ltr');
+      assert.equal(await f.js('document.querySelector(".composer textarea").value'),'原始草稿 keep original');
+      await f.click('.language-picker-trigger');await f.wait('!!document.querySelector(".language-picker-popup")');
+      const rect=await f.js('(()=>{const r=document.querySelector(".language-picker-popup").getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight}})()');assert.ok(rect.left>=0&&rect.right<=rect.width&&rect.top>=0&&rect.bottom<=rect.height,code+JSON.stringify(rect));
+      if(['zh','en','ru','fa','ja','hi'].includes(code)){await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'language-settings-'+code+'.png'),(await f.state.win.webContents.capturePage()).toPNG());}
+      f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});await f.wait('!document.querySelector(".language-picker-popup")');assert.equal(await f.js('!!document.querySelector(".settings")'),true);
+    }
+    assert.equal(f.state.sent.length,0);await uiLanguage(f,'ru');await delay(60);
+    const press=()=>f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'T',modifiers:['control','shift']});press();await f.wait('document.documentElement.lang==="en"');press();await f.wait('document.documentElement.lang==="ru"');assert.equal(f.state.appLanguage,'ru');
+  });
+  for(const [systemLanguage,expected] of [['ru-RU','ru'],['ja-JP','ja'],['fa-IR','fa']]) await run('发布关键：多语言：默认跟随电脑系统语言 '+expected,{lang:'system',systemLanguage,settings:{...settings(),app:{teamEnabled:false,lang:'system'}}},async f=>{
+    await f.wait('document.documentElement.lang==='+JSON.stringify(expected));assert.equal(f.state.appLanguage,'system');assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),'system');
+    await openLanguageSettings(f);await f.click('.language-picker-trigger');await f.click('.language-picker-options [data-language-code="en"]');await f.wait('document.documentElement.lang==="en"');assert.equal(f.state.appLanguage,'en');
+    await f.click('.language-picker-trigger');await f.click('.language-picker-options [data-language-code="system"]');await f.wait('document.documentElement.lang==='+JSON.stringify(expected));assert.equal(f.state.appLanguage,'system');
+  });
   for (const lang of ['zh','en']) await run('发布关键：侧栏显示：已完成会话保持单行布局、悬停删除和切换交互 '+lang, {
     lang,offscreen:true,settings:{...settings(),app:{teamEnabled:false,lang}},sessions:[
       {id:'qa-session',title:'HAL',createdAt:Date.now(),updatedAt:Date.now()},
@@ -178,7 +205,7 @@ app.whenReady().then(async () => {
   });
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
-  const openBilling=async(f,ledger=false)=>{await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(ledger?(f.state.lang==='en'?'Credit details':'积分明细'):(f.state.lang==='en'?'Top up':'充值'))+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
+  const openBilling=async(f,ledger=false)=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Credit details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
   for(const modifier of ['control','meta'])await run('发布关键：语言快捷键切换界面、弹窗和临时英文显示 '+modifier,{
     offscreen:true,account:clone(billingAccount),sessions:[{id:'qa-session',title:'中文会话标题',createdAt:Date.now(),updatedAt:Date.now()}],
   },async f=>{
@@ -191,6 +218,11 @@ app.whenReady().then(async () => {
     await f.click('.billing-close');press();await f.wait('document.documentElement.lang==="zh"');await f.wait('document.querySelector(".s-title")?.textContent==="中文会话标题"');assert.equal(await f.js('document.querySelector(".tb-title-txt").textContent'),'中文会话标题');assert.match(await f.js('document.querySelector(".msg.user .body").textContent'),/已有对话/);assert.equal(await f.js('document.querySelector(".composer textarea").value'),'这条草稿不能丢失');assert.equal(f.state.sessions[0].title,'中文会话标题');assert.equal(f.state.sent.length,0);
     press();await f.wait('document.documentElement.lang==="en"');f.state.lang='en';await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-payment-choices")');assert.match(await f.js('document.querySelector(".billing-payment-choices").textContent'),/Card \/ PayPal/);assert.doesNotMatch(await f.js('document.querySelector(".billing-payment-layout").textContent'),/[\u3400-\u9fff]/);assert.equal(f.state.orders,0);
     await delay(200);fs.writeFileSync(path.join(evidence,'language-shortcut-'+modifier+'-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+  for(const code of ['ru','fa','ja']) await run('发布关键：多语言付款与日历 '+code,{account:clone(billingAccount),cryptoOnly:true,lang:code,settings:{...settings(),app:{teamEnabled:false,lang:code}}},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button:last-child")');await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');await billingHeaderAligned(f);assert.equal(f.state.orders,1);assert.equal(f.state.billingCalls.find(call=>call.action==='create-order').currency,'USD');
+    await delay(200);fs.writeFileSync(path.join(evidence,'payment-'+code+'.png'),(await f.state.win.webContents.capturePage()).toPNG());await f.click('.billing-close');await openBilling(f,true);await f.wait('!!document.querySelector(".billing-credit-record")');await f.click('.billing-date-trigger');await f.wait('!!document.querySelector(".billing-calendar")');
+    const heading=await f.js('document.querySelector(".billing-calendar-heading b").textContent'),expected=await f.js('new Intl.DateTimeFormat('+JSON.stringify(code)+',{calendar:"gregory",year:"numeric",month:"long"}).format(new Date())');assert.equal(heading,expected);await billingHeaderAligned(f);
   });
   await run('发布关键：账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Credit details',icon:true},{text:'Top up',icon:true},{text:'Settings',icon:true}]);await f.click('.acct-btn');

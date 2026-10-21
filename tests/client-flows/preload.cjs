@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const names = ipcRenderer.sendSync('qa:methods');
 const api = Object.fromEntries(names.map(name => [name, (...args) => ipcRenderer.invoke('qa:api', name, args)]));
 api.platform = 'win32';
+api.systemLanguage = process.argv.find(arg=>arg.startsWith('--qa-system-lang='))?.slice('--qa-system-lang='.length);
 api.onEvent = callback => {
   const listener = (_event, channel, payload) => callback(channel, payload);
   ipcRenderer.on('qa:event', listener);

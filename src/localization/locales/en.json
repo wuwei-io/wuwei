@@ -4,7 +4,9 @@
     "name": "English",
     "nativeName": "English",
     "direction": "ltr",
-    "fallback": "en"
+    "fallback": "en",
+    "order": 1,
+    "complete": true
   },
   "messages": {
     "splash.brand": "Wuwei",
@@ -3241,6 +3243,18 @@
     "billing.payment.webChoice": "Pay on the web with a credit card, debit card or PayPal",
     "billing.payment.cryptoChoice": "Pay with USDT on Solana, BNB Smart Chain or TRON",
     "billing.payment.syncNote": "Payment status syncs automatically. Please pay only once.",
-    "billing.payment.cards": "Cards"
+    "billing.payment.cards": "Cards",
+    "language.interface": "Interface language",
+    "language.description": "Applies instantly. No restart needed.",
+    "language.search": "Search languages",
+    "language.all": "All languages",
+    "language.empty": "No matching languages",
+    "language.instant": "Switch instantly · Keep your content",
+    "language.keepContent": "Changes the interface language. Conversations, files and drafts stay in their original language.",
+    "language.current": "Interface language: {language}",
+    "language.clearSearch": "Clear search",
+    "language.system": "Follow system",
+    "language.systemDetail": "Automatically use your computer’s language",
+    "language.replyPolicy": "Reply in {language} by default. If the user explicitly requests another language, follow that request. Keep code, paths, tool names and protocol identifiers unchanged."
   }
 }

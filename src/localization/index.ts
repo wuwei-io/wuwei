@@ -2,7 +2,7 @@ import { languagePacks } from './registry.generated.js';
 import type { Language, LanguagePack, MessageReference, MessageValues } from './types.js';
 export type { Language, LanguagePack, MessageReference, MessageValues } from './types.js';
 type Environment = {
-  window?: unknown;
+  window?: { wuwei?: { systemLanguage?: string; languagePreference?: string } };
   localStorage?: { getItem(key: string): string | null; setItem(key: string, value: string): void };
   navigator?: { language?: string };
   document?: { documentElement: { lang: string; dir: string } };
@@ -12,25 +12,49 @@ type Environment = {
 const environment = globalThis as unknown as Environment;
 const listeners = new Set<() => void>();
 let override: string | undefined;
+let systemLanguage: string | undefined;
 export const LANGUAGE_STORAGE_KEY = 'wuwei_lang';
-export function getLanguages() { return Object.values(languagePacks).map(pack => ({ ...pack.meta })); }
+export function getLanguages() { return Object.values(languagePacks).map(pack => ({ ...pack.meta })).sort((a,b)=>(a.order ?? 100)-(b.order ?? 100)||a.code.localeCompare(b.code)); }
 export function normalizeLanguage(value?: string | null): Language {
   const normalized = (value || '').replace(/_/g, '-').toLowerCase();
   const codes = Object.keys(languagePacks);
-  return codes.find(code => code.toLowerCase() === normalized) || codes.find(code => code.toLowerCase() === normalized.split('-')[0]) || 'en';
+  return codes.find(code => code.toLowerCase() === normalized) || codes.find(code => code.toLowerCase() === normalized.split('-')[0]) || codes.find(code => code.toLowerCase().split('-')[0] === normalized.split('-')[0]) || 'en';
+}
+export function getLanguagePreference(): string {
+  if (override) return override;
+  const initial = environment.window?.wuwei?.languagePreference;
+  const fallback = typeof initial === 'string' && initial ? initial : 'system';
+  try { return environment.localStorage?.getItem(LANGUAGE_STORAGE_KEY) || fallback; } catch { return fallback; }
+}
+export function setSystemLanguage(value: string) {
+  systemLanguage = value;
+  if (getLanguagePreference() === 'system') {
+    updateDocumentLanguage();
+    for (const listener of listeners) listener();
+  }
+}
+function updateDocumentLanguage() {
+  if (!environment.document) return;
+  const language = getCurrentLanguage();
+  environment.document.documentElement.lang = language;
+  environment.document.documentElement.dir = languagePacks[language].meta.direction;
+}
+function systemLocale() {
+  const initial = environment.window?.wuwei?.systemLanguage;
+  return systemLanguage || (typeof initial === 'string' ? initial : undefined) || environment.navigator?.language;
 }
 export function getCurrentLanguage(): Language {
   if (environment.window || environment.localStorage) {
-    if (override) return normalizeLanguage(override);
-    try { const stored = environment.localStorage?.getItem(LANGUAGE_STORAGE_KEY); if (stored) return normalizeLanguage(stored); } catch { /* storage can be disabled */ }
-    return normalizeLanguage(environment.navigator?.language);
+    const preference = getLanguagePreference();
+    return normalizeLanguage(preference === 'system' ? systemLocale() : preference);
   }
   return normalizeLanguage(environment.process?.env.WUWEI_LANG || override || 'zh');
 }
 export function setCurrentLanguage(value: Language) {
-  const language = normalizeLanguage(value); override = language;
+  const preference = value === 'system' ? 'system' : normalizeLanguage(value);
+  const language = preference === 'system' ? normalizeLanguage(systemLocale()) : preference; override = preference;
   if (environment.window || environment.localStorage) {
-    try { environment.localStorage?.setItem(LANGUAGE_STORAGE_KEY, language); } catch { /* keep the in-memory preference */ }
+    try { environment.localStorage?.setItem(LANGUAGE_STORAGE_KEY, preference); } catch { /* keep the in-memory preference */ }
     if (environment.document) { environment.document.documentElement.lang = language; environment.document.documentElement.dir = languagePacks[language].meta.direction; }
   } else if (environment.process) environment.process.env.WUWEI_LANG = language;
   for (const listener of listeners) listener();
@@ -44,6 +68,11 @@ if (environment.window) environment.addEventListener?.('storage', event => {
     for (const listener of listeners) listener();
   }
 });
+if (environment.window) environment.addEventListener?.('languagechange', () => {
+  systemLanguage = environment.navigator?.language;
+  if (getLanguagePreference() === 'system') setCurrentLanguage('system');
+});
+if (environment.window) updateDocumentLanguage();
 function messageTemplate(key: string, language: string): string | undefined {
   const visited = new Set<string>(); let locale = normalizeLanguage(language);
   while (!visited.has(locale)) {

@@ -1,5 +1,5 @@
 export interface LanguagePack {
-  meta: { code: string; name: string; nativeName: string; direction: 'ltr' | 'rtl'; fallback: string };
+  meta: { code: string; name: string; nativeName: string; direction: 'ltr' | 'rtl'; fallback: string; order?: number; complete?: boolean };
   messages: Record<string, string>;
 }
 export type Language = string;

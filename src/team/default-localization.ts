@@ -1,6 +1,6 @@
 import systemData from "../localization/content/system-data.json";
 import defaultTeam from "../localization/content/default-team.json";
-import { tr, getCurrentLanguage } from "../localization/index.js";
+import { tr, getCurrentLanguage, getLanguages } from "../localization/index.js";
 import type { Employee, TeamApp } from "./types.js";
 export const DEFAULT_TEAM_ID = "wuwei-team-basic";
 const templates = defaultTeam;
@@ -36,7 +36,7 @@ export function resolveEmployee(list: Employee[], input: string): Employee | und
   const key = input.trim();
   const matches = list.filter(e => {
     const t = template(e);
-    return e.id === key || e.name === key || !!(t && e.name === t.baseline.name && t.en.name.toLowerCase() === key.toLowerCase());
+    return e.id === key || e.name === key || !!(t && e.name === t.baseline.name && getLanguages().some(locale => employeeLabel(e, locale.code).toLowerCase() === key.toLowerCase()));
   });
   return matches.length === 1 ? matches[0] : undefined;
 }
@@ -48,7 +48,7 @@ export function employeeRoster(list: Employee[], language: TeamLanguage): string
 export function employeeMentionTargets(list: Employee[]): { id: string; name: string }[] {
   const targets: { id: string; name: string }[] = [];
   for (const e of list) {
-    for (const name of new Set([e.name, employeeLabel(e, "en"), e.id])) {
+    for (const name of new Set([e.name, ...getLanguages().map(locale => employeeLabel(e, locale.code)), e.id])) {
       if (resolveEmployee(list, name)?.id === e.id) targets.push({ id: e.id, name });
     }
   }

@@ -1,8 +1,9 @@
 import { formatCredits } from "../../../src/billing/presentation.js";
 import {localizeToolMetadata} from "../../../src/localization/tools.js";
 import systemData from "../../../src/localization/content/system-data.json";
+import { LanguagePicker } from "./components/LanguagePicker.js";
 import { LanguageSwitcher } from "./components/LanguageSwitcher.js";
-import { tr, getCurrentLanguage, localizeStoredText } from "../../../src/localization/index.js";
+import { tr, getCurrentLanguage, localizeStoredText, setSystemLanguage } from "../../../src/localization/index.js";
 /// <reference types="vite/client" />
 import { employeeSessionTitle } from "../../../src/team/session-title.js";
 import { employeeLabel, localizeEmployee, TEAM_TOOL_EN } from "../../../src/team/default-localization.js";
@@ -27,7 +28,7 @@ import { PremiumModelNotice } from './components/PremiumModelNotice.js';
 import type { Decision } from '../../../src/types.js';
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
-import { getLang, setLang as persistLang, makeT, useLanguage, getLanguages, type Lang, type T } from "./i18n.js";
+import { getLang, setLang as persistLang, makeT, useLanguage, getLanguages, getLanguagePreference, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
 import { researchToolLabel } from "./toolLabel.js";
 import { dedupeDisplayedToolImages } from "./imageResults.js";
@@ -4095,7 +4096,9 @@ export function App() {
   langRef.current = lang;
   const tRef = useRef(t);
   tRef.current = t;
-  function changeLang(l: Lang) {
+  const previewLanguageRef = useRef("zh");
+  function changeLang(l: Lang, preview = false) {
+    if (!preview) { setTranslateMode(false); setTxMode(false); }
     persistLang(l);
 
     // 同步到主进程 settings.app.lang → 刷新 WUWEI_LANG，让主进程 tt()/工具描述/系统提示默认跟随界面语言
@@ -4241,7 +4244,8 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === "KeyT" || e.key === "t" || e.key === "T")) {
         e.preventDefault();
         const goEn = langRef.current !== "en";
-        changeLang(goEn ? "en" : "zh"); // 切 i18n UI 语言(现有机制)
+        if (goEn) previewLanguageRef.current = getLanguagePreference();
+        changeLang(goEn ? "en" : previewLanguageRef.current, true); // 切 i18n UI 语言(现有机制)
         setTranslateMode(goEn); // 状态栏提示
         setTxMode(goEn); // 开/关动态内容翻译覆盖
       }
@@ -4584,6 +4588,7 @@ export function App() {
   // 当前平台预设(用于右下角模型快切列出该平台模型)；设置面板关闭后刷新
   useEffect(() => {
     window.wuwei.getSettings().then((r) => {
+      if (r?.systemLanguage) setSystemLanguage(r.systemLanguage);
       // 首启兜底：从未选过平台(providerId 为空)时默认落到「免费体验(wuwei-free, anon 免登录)」，
       // 让全新未登录用户下载后第一条消息就能直接聊、不撞登录墙(头号转化真凶)。已登录/已选过平台者 providerId 非空不受影响。
       setCurProviderId(r?.settings?.providerId || "wuwei-free");
@@ -5078,8 +5083,7 @@ export function App() {
   // 启动即把当前界面语言同步进主进程 settings.app.lang → WUWEI_LANG，
   // 保证主进程 tt()/工具描述/系统提示默认从一开始就跟随界面语言（此后已持久化，下次启动即正确）。
   useEffect(() => {
-    persistLang(lang);
-    window.wuwei.setAppSettings({ lang });
+    window.wuwei.setAppSettings({ lang: getLanguagePreference() });
   }, [lang]);
 
   // 自动更新：拿版本号 + 监听「发现新版下载中/已下载好」事件
@@ -7060,7 +7064,7 @@ export function App() {
                       >
                         <button
                           className="tool-sub-item"
-                          title={tr("ui.app.chat.with.e3dbfcc", { p0: (lang !== "zh" ? employeeLabel(e, "en") : e.name) })}
+                          title={tr("ui.app.chat.with.e3dbfcc", { p0: (lang !== "zh" ? employeeLabel(e, lang) : e.name) })}
                           onClick={openLatest}
                           onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "employee", id: e.id, name: e.name }); }}
                         >
@@ -7117,7 +7121,7 @@ export function App() {
                                 role="button"
                                 tabIndex={0}
                                 className={"tool-sub-convo tool-sub-dm" + (onDm ? " on" : "")}
-                                title={tr("ui.app.dm.with.75896e4", { p0: (lang !== "zh" ? employeeLabel(other, "en", otherId) : other?.name || otherId) })}
+                                title={tr("ui.app.dm.with.75896e4", { p0: (lang !== "zh" ? employeeLabel(other, lang, otherId) : other?.name || otherId) })}
                                 onClick={() => { setDmSelfId(e.id); setActiveRoomId(r.id); setAppView("rooms"); setAgiView(null); }}
                                 onContextMenu={(ev) => { ev.preventDefault(); setTeamMenu({ x: ev.clientX, y: ev.clientY, kind: "dm", id: r.id, name: other?.name || otherId }); }}
                               >
@@ -14374,7 +14378,7 @@ function SettingsModal({
       const defEn = (r as any)?.defaultPromptEn || defZh;
       setSysPromptDefault(defZh);
       setSysPromptDefaultEn(defEn);
-      const def = lang !== "zh" ? defEn : defZh; // 按当前界面语言选默认
+      const def = tr("agent.defaultPrompt", {}, lang); // 按当前界面语言选默认
       if (typeof s.systemPrompt === "string") {
         setSysPrompt(s.systemPrompt);
         setSysPromptTouched(true);
@@ -14391,7 +14395,7 @@ function SettingsModal({
         setBrainPrompt(s.brainPrompt);
         setBrainPromptTouched(true);
       } else {
-        setBrainPrompt(lang !== "zh" ? bDefEn : bDefZh);
+        setBrainPrompt(tr("agent.brainNote", {}, lang));
         setBrainPromptTouched(false);
       }
       // 密钥说明提示词：同上
@@ -14403,7 +14407,7 @@ function SettingsModal({
         setSecretsPrompt(s.secretsPrompt);
         setSecretsPromptTouched(true);
       } else {
-        setSecretsPrompt(lang !== "zh" ? sDefEn : sDefZh);
+        setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
         setSecretsPromptTouched(false);
       }
     });
@@ -14897,20 +14901,7 @@ function SettingsModal({
           {/* ── 通用：会话分组 + 上下文压缩 + 账号读取 ── */}
           {tab === "general" && (
             <>
-              <div className="app-set-group">{t("language.choose")}</div>
-              <div className="theme-pick" style={{ marginBottom: "16px" }}>
-                {getLanguages().map(({code: l, nativeName}) => (
-                  <button
-                    key={l}
-                    data-language-name={l}
-                    type="button"
-                    className={"theme-opt" + (lang === l ? " on" : "")}
-                    onClick={() => onLang(l)}
-                  >
-                    {nativeName}
-                  </button>
-                ))}
-              </div>
+              <LanguagePicker language={lang} onChange={onLang}/>
               <div className="app-set-group">{t("set.g.grouping")}</div>
               <div className="theme-pick" style={{ marginBottom: "6px" }}>
                 {[
