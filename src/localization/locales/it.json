@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Qualità predefinita",
     "billing.usage.imageBasis": "{model} · {quality} · circa {cost} monete/immagine. Dimensione predefinita e prompt breve; il costo finale dipende dall’uso effettivo.",
     "billing.usage.taskBasis": "{model}: esempio con {input} token in ingresso + {output} in uscita. Prezzi per milione ingresso/uscita: {inputRate}/{outputRate} monete; circa {cost} monete/attività. Senza sconto cache, quantità arrotondata per difetto. Le attività complesse richiedono più chiamate; il numero di completamenti non è garantito.",
-    "billing.usage.tokenBasis": "Include token in ingresso e in uscita nel rapporto 4:1. Esclude modelli gratuiti e monete di accesso giornaliero."
+    "billing.usage.tokenBasis": "Include token in ingresso e in uscita nel rapporto 4:1. Esclude modelli gratuiti e monete di accesso giornaliero.",
+    "menu.upgradeEntry": "Passa di piano",
+    "menu.annualDiscount": "Sconto del 50% sui piani annuali"
   }
 }

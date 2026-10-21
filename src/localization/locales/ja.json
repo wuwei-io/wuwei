@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "標準画質",
     "billing.usage.imageBasis": "{model} · {quality} · 1枚約 {cost} コイン。カタログの標準サイズと短いプロンプトによる推計で、実際の使用量で精算します。",
     "billing.usage.taskBasis": "{model}：1回の例は入力 {input}＋出力 {output} トークン。100万トークン当たり入力/出力 {inputRate}/{outputRate} コイン、1回約 {cost} コイン。キャッシュ割引なし、回数は切り捨て。複雑なタスクは複数回呼び出すため完了件数の保証ではありません。",
-    "billing.usage.tokenBasis": "入力と出力を4:1の比率で含みます。無料モデルや毎日のチェックインで得られるコインは含みません。"
+    "billing.usage.tokenBasis": "入力と出力を4:1の比率で含みます。無料モデルや毎日のチェックインで得られるコインは含みません。",
+    "menu.upgradeEntry": "アップグレード",
+    "menu.annualDiscount": "年払いプランが50%オフ"
   }
 }

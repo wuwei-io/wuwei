@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Standardqualität",
     "billing.usage.imageBasis": "{model} · {quality} · ca. {cost} Münzen/Bild. Standardgröße und kurzer Prompt; abgerechnet wird die tatsächliche Nutzung.",
     "billing.usage.taskBasis": "{model}: Beispiel mit {input} Eingabe- + {output} Ausgabe-Token. Pro Million Eingabe/Ausgabe: {inputRate}/{outputRate} Münzen; ca. {cost} Münzen/Aufgabe. Ohne Cache-Rabatt, Anzahl abgerundet. Komplexe Aufgaben benötigen mehrere Aufrufe; abgeschlossene Aufgaben sind nicht garantiert.",
-    "billing.usage.tokenBasis": "Enthält Eingabe- und Ausgabe-Token im Verhältnis 4:1. Kostenlose Modelle und tägliche Anmelde-Münzen sind ausgeschlossen."
+    "billing.usage.tokenBasis": "Enthält Eingabe- und Ausgabe-Token im Verhältnis 4:1. Kostenlose Modelle und tägliche Anmelde-Münzen sind ausgeschlossen.",
+    "menu.upgradeEntry": "Upgrade",
+    "menu.annualDiscount": "50 % Rabatt auf Jahrespläne"
   }
 }

@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Chất lượng mặc định",
     "billing.usage.imageBasis": "{model} · {quality} · khoảng {cost} xu/ảnh. Dùng kích thước mặc định và mô tả ngắn; phí cuối cùng theo mức dùng thực tế.",
     "billing.usage.taskBasis": "{model}: mỗi tác vụ mẫu dùng {input} token vào + {output} token ra. Giá mỗi triệu token vào/ra: {inputRate}/{outputRate} xu; khoảng {cost} xu/tác vụ. Không tính giảm giá bộ nhớ đệm, số lượng làm tròn xuống. Tác vụ phức tạp có thể gọi nhiều lần, không bảo đảm số tác vụ hoàn thành.",
-    "billing.usage.tokenBasis": "Gồm token vào và ra theo tỷ lệ 4:1. Không tính mô hình miễn phí và xu điểm danh hằng ngày."
+    "billing.usage.tokenBasis": "Gồm token vào và ra theo tỷ lệ 4:1. Không tính mô hình miễn phí và xu điểm danh hằng ngày.",
+    "menu.upgradeEntry": "Nâng cấp",
+    "menu.annualDiscount": "Giảm 50% gói năm"
   }
 }

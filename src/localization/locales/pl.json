@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Domyślna jakość",
     "billing.usage.imageBasis": "{model} · {quality} · około {cost} monet/obraz. Domyślny rozmiar i krótki opis; opłata końcowa zależy od rzeczywistego użycia.",
     "billing.usage.taskBasis": "{model}: przykład zadania to {input} tokenów wejściowych + {output} wyjściowych. Cena za milion wejście/wyjście: {inputRate}/{outputRate} monet; około {cost} monet/zadanie. Bez zniżki pamięci podręcznej, liczba zaokrąglona w dół. Złożone zadania wymagają wielu wywołań; liczba ukończonych zadań nie jest gwarantowana.",
-    "billing.usage.tokenBasis": "Obejmuje tokeny wejściowe i wyjściowe w proporcji 4:1. Nie obejmuje darmowych modeli ani monet za codzienne logowanie."
+    "billing.usage.tokenBasis": "Obejmuje tokeny wejściowe i wyjściowe w proporcji 4:1. Nie obejmuje darmowych modeli ani monet za codzienne logowanie.",
+    "menu.upgradeEntry": "Zmień plan",
+    "menu.annualDiscount": "50% zniżki na plany roczne"
   }
 }

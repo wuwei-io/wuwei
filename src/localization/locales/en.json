@@ -3281,6 +3281,8 @@
     "billing.usage.quality.default": "Default quality",
     "billing.usage.imageBasis": "{model} · {quality} · approx. {cost} coins/image. Uses the catalog’s default size and a short text prompt; actual usage determines the final charge.",
     "billing.usage.taskBasis": "{model}: example task uses {input} input + {output} output tokens. Rates: {inputRate}/{outputRate} coins per million input/output tokens; approx. {cost} coins/task. No cache discount; counts rounded down. Complex tasks can require multiple calls; completion counts are not guaranteed.",
-    "billing.usage.tokenBasis": "Includes input and output tokens in a 4:1 mix. Excludes free models and daily check-in coins."
+    "billing.usage.tokenBasis": "Includes input and output tokens in a 4:1 mix. Excludes free models and daily check-in coins.",
+    "menu.upgradeEntry": "Upgrade",
+    "menu.annualDiscount": "50% off yearly plans"
   }
 }
