@@ -1,0 +1,1303 @@
+[
+  {
+    "id": "wuwei-free",
+    "label": "免费体验（无需登录）",
+    "labelEn": "Free trial (no login)",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "免费体验：无需登录、无需 Key，直接试用智谱免费大模型（GLM-*-Flash）。每台设备每日有限次数，登录后可解锁更多模型与更高额度。",
+    "noteEn": "Free trial: no login, no API key — try Zhipu's free models (GLM-*-Flash) right away. Limited uses per device per day; sign in to unlock more models and higher limits.",
+    "hosted": true,
+    "custom": false,
+    "anon": true,
+    "sort": 0,
+    "models": [
+      {
+        "id": "glm-4.7-flash",
+        "label": "GLM-4.7-Flash",
+        "labelEn": "GLM-4.7-Flash",
+        "label_en": "GLM-4.7-Flash",
+        "free": true,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "free",
+          "rank": 1001,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      },
+      {
+        "id": "openrouter-auto-free",
+        "label": "免费模型 · 自动挑选",
+        "labelEn": "Free · Auto-pick",
+        "label_en": "Free · Auto-pick",
+        "free": true,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "free",
+          "rank": 0,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      },
+      {
+        "id": "nemotron-super-free",
+        "label": "nemotron-super-free",
+        "labelEn": "nemotron-super-free",
+        "label_en": "nemotron-super-free",
+        "free": true,
+        "anon": false,
+        "badge": "new",
+        "selection": {
+          "category": "free",
+          "rank": 1070,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      },
+      {
+        "id": "north-mini-code-free",
+        "label": "Cohere North Code",
+        "labelEn": "Cohere North Code",
+        "label_en": "Cohere North Code",
+        "free": true,
+        "anon": false,
+        "badge": null,
+        "selection": {
+          "category": "free",
+          "rank": 1071,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      },
+      {
+        "id": "nemotron-lightning-free",
+        "label": "Nemotron Lightning",
+        "labelEn": "Nemotron Lightning",
+        "label_en": "Nemotron Lightning",
+        "free": true,
+        "anon": false,
+        "badge": null,
+        "selection": {
+          "category": "free",
+          "rank": 1072,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      },
+      {
+        "id": "nemotron-nano-free",
+        "label": "Nemotron Nano",
+        "labelEn": "Nemotron Nano",
+        "label_en": "Nemotron Nano",
+        "free": true,
+        "anon": false,
+        "badge": null,
+        "selection": {
+          "category": "free",
+          "rank": 1073,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 0,
+          "output": 0,
+          "cache": 0
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-mimo",
+    "label": "MiMo V2.6 Flash",
+    "labelEn": "MiMo V2.6 Flash",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "登录后按量计费。图片能力需对应客户端支持；原生视频/音频仅说明上游能力，当前客户端尚无上传入口。",
+    "noteEn": "Sign in for metered usage. Native video/audio describe upstream capabilities; desktop upload is not available yet.",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 11,
+    "models": [
+      {
+        "id": "mimo-v2.6-flash",
+        "label": "MiMo V2.6 Flash",
+        "labelEn": "MiMo V2.6 Flash",
+        "label_en": "MiMo V2.6 Flash",
+        "free": false,
+        "anon": false,
+        "badge": "图片/Image · 视频待接/Video pending · 音频待接/Audio pending · 1M",
+        "selection": {
+          "category": "economy",
+          "rank": 1,
+          "recommended": true,
+          "defaultForNewUsers": true,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 87.23,
+          "output": 187.88,
+          "cache": 1.342
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-deepseek",
+    "label": "DeepSeek V4.1 Flash",
+    "labelEn": "DeepSeek V4.1 Flash",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "DeepSeek V4 Pro 与 V4.1 Flash；旧 V4 Flash 名称由 V4.1 Flash 提供服务。",
+    "noteEn": "DeepSeek V4 Pro and V4.1 Flash. The legacy V4 Flash alias is served by V4.1 Flash.",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 12,
+    "models": [
+      {
+        "id": "deepseek-flash",
+        "label": "DeepSeek V4.1 Flash",
+        "labelEn": "DeepSeek V4.1 Flash",
+        "label_en": "DeepSeek V4.1 Flash",
+        "free": false,
+        "anon": true,
+        "badge": "图片/Image · 1M",
+        "selection": {
+          "category": "economy",
+          "rank": 3,
+          "recommended": true,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 200,
+          "output": 800,
+          "cache": 4
+        }
+      },
+      {
+        "id": "deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash（现为 V4.1）",
+        "labelEn": "DeepSeek V4 Flash (now V4.1)",
+        "label_en": "DeepSeek V4 Flash (now V4.1)",
+        "free": false,
+        "anon": true,
+        "badge": "hot",
+        "selection": {
+          "category": "economy",
+          "rank": 99,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": true
+        },
+        "price": {
+          "input": 200,
+          "output": 800,
+          "cache": 4
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-qwen",
+    "label": "Qwen3.8 Flash",
+    "labelEn": "Qwen3.8 Flash",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "展示用（客户端可自带 key 接入）",
+    "noteEn": "Showcase (BYO key)",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 13,
+    "models": [
+      {
+        "id": "qwen3-8-flash",
+        "label": "Qwen3.8 Flash",
+        "labelEn": "Qwen3.8 Flash",
+        "label_en": "Qwen3.8 Flash",
+        "free": false,
+        "anon": true,
+        "badge": "图片/Image · 视频待接/Video pending · 1M",
+        "selection": {
+          "category": "economy",
+          "rank": 4,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 113.9,
+          "output": 357,
+          "cache": null
+        }
+      },
+      {
+        "id": "qwen3-8-max",
+        "label": "Qwen 3.8-Max 通义千问",
+        "labelEn": "Qwen 3.8-Max",
+        "label_en": "Qwen 3.8-Max",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519,
+          "output": 4558,
+          "cache": 303.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-zhipu",
+    "label": "GLM 5.3 Flash",
+    "labelEn": "GLM 5.3 Flash",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "无为托管：无需自己的 Key，按 token 扣无为币。智谱 GLM-5.2 旗舰。",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 14,
+    "models": [
+      {
+        "id": "glm-5.3-flash",
+        "label": "GLM 5.3 Flash",
+        "labelEn": "GLM 5.3 Flash",
+        "label_en": "GLM 5.3 Flash",
+        "free": false,
+        "anon": true,
+        "badge": "图片/Image · 视频待接/Video pending · 1M",
+        "selection": {
+          "category": "economy",
+          "rank": 2,
+          "recommended": true,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 113.9,
+          "output": 379.8,
+          "cache": 5.7
+        }
+      },
+      {
+        "id": "glm-5.3",
+        "label": "智谱 GLM-5.3",
+        "labelEn": "Zhipu GLM-5.3",
+        "label_en": "Zhipu GLM-5.3",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "economy",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 560,
+          "output": 1960,
+          "cache": 140
+        }
+      },
+      {
+        "id": "glm-5.2",
+        "label": "智谱 GLM-5.2",
+        "labelEn": "Zhipu GLM-5.2",
+        "label_en": "Zhipu GLM-5.2",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 560,
+          "output": 1960,
+          "cache": 140
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-nvidia",
+    "label": "Nemotron 3.5 Lightning",
+    "labelEn": "Nemotron 3.5 Lightning",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "登录后按量计费。图片能力需对应客户端支持；原生视频/音频仅说明上游能力，当前客户端尚无上传入口。",
+    "noteEn": "Sign in for metered usage. Native video/audio describe upstream capabilities; desktop upload is not available yet.",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 15,
+    "models": [
+      {
+        "id": "nemotron-3.5-lightning",
+        "label": "Nemotron 3.5 Lightning",
+        "labelEn": "Nemotron 3.5 Lightning",
+        "label_en": "Nemotron 3.5 Lightning",
+        "free": false,
+        "anon": false,
+        "badge": "文本/Text · 256K",
+        "selection": {
+          "category": "economy",
+          "rank": 5,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 31.4699,
+          "output": 89.914,
+          "cache": 15.735
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-minimax",
+    "label": "MiniMax M3",
+    "labelEn": "MiniMax M3",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "展示用（客户端可自带 key 接入）",
+    "noteEn": "Showcase (BYO key)",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 16,
+    "models": [
+      {
+        "id": "minimax-m3",
+        "label": "MiniMax M3",
+        "labelEn": "MiniMax M3",
+        "label_en": "MiniMax M3",
+        "free": false,
+        "anon": true,
+        "badge": "图片/Image · 视频待接/Video pending · 1M",
+        "selection": {
+          "category": "economy",
+          "rank": 6,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 227.9,
+          "output": 911.5,
+          "cache": 45.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-stepfun",
+    "label": "Step 5 Preview",
+    "labelEn": "Step 5 Preview",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "登录后按量计费。图片能力需对应客户端支持；原生视频/音频仅说明上游能力，当前客户端尚无上传入口。",
+    "noteEn": "Sign in for metered usage. Native video/audio describe upstream capabilities; desktop upload is not available yet.",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 25,
+    "models": [
+      {
+        "id": "step-5-preview",
+        "label": "Step 5 Preview",
+        "labelEn": "Step 5 Preview",
+        "label_en": "Step 5 Preview",
+        "free": false,
+        "anon": false,
+        "badge": "图片/Image · 视频待接/Video pending · 1M · Preview",
+        "selection": {
+          "category": "economy",
+          "rank": 80,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 671,
+          "output": 1811.7,
+          "cache": 33.55
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-kimi",
+    "label": "无为托管 · Kimi",
+    "labelEn": "Wuwei · Kimi",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "无为托管：无需自己的 Key，按 token 扣无为币。Kimi K3 旗舰。",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 50,
+    "models": [
+      {
+        "id": "kimi-k3",
+        "label": "Kimi K3",
+        "labelEn": "Kimi K3",
+        "label_en": "Kimi K3",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -90,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 2160,
+          "output": 10800,
+          "cache": 216
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-grok",
+    "label": "无为托管 · Grok",
+    "labelEn": "Wuwei Hosted · Grok",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "展示用（客户端可自带 key 接入）",
+    "noteEn": "Showcase (BYO key)",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 90,
+    "models": [
+      {
+        "id": "grok-4.7",
+        "label": "Grok 4.7",
+        "labelEn": "Grok 4.7",
+        "label_en": "Grok 4.7",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": 1002,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 4557.6,
+          "cache": 379.8
+        }
+      },
+      {
+        "id": "grok-4.6",
+        "label": "Grok 4.6",
+        "labelEn": "Grok 4.6",
+        "label_en": "Grok 4.6",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": 1003,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 4557.6,
+          "cache": 151.9
+        }
+      },
+      {
+        "id": "grok-4.5",
+        "label": "Grok 4.5",
+        "labelEn": "Grok 4.5",
+        "label_en": "Grok 4.5",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 4557.6,
+          "cache": 151.9
+        }
+      },
+      {
+        "id": "grok-4-3",
+        "label": "Grok 4.3",
+        "labelEn": "Grok 4.3",
+        "label_en": "Grok 4.3",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 949.5,
+          "output": 1899,
+          "cache": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-doubao",
+    "label": "无为托管 · 豆包",
+    "labelEn": "Wuwei Hosted · Doubao",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 100,
+    "models": [
+      {
+        "id": "doubao-2-1-turbo",
+        "label": "豆包 2.1 Turbo",
+        "labelEn": "Doubao 2.1 Turbo",
+        "label_en": "Doubao 2.1 Turbo",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "economy",
+          "rank": 1003,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 379.8,
+          "output": 1899,
+          "cache": 38
+        }
+      },
+      {
+        "id": "doubao-2-0-mini",
+        "label": "豆包 2.0 Mini",
+        "labelEn": "Doubao 2.0 Mini",
+        "label_en": "Doubao 2.0 Mini",
+        "free": false,
+        "anon": true,
+        "badge": "省",
+        "selection": {
+          "category": "economy",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 76,
+          "output": 303.8,
+          "cache": null
+        }
+      },
+      {
+        "id": "doubao-2-0-lite",
+        "label": "豆包 2.0 Lite",
+        "labelEn": "Doubao 2.0 Lite",
+        "label_en": "Doubao 2.0 Lite",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 189.9,
+          "output": 1519.2,
+          "cache": null
+        }
+      },
+      {
+        "id": "doubao-2-0-code",
+        "label": "豆包 2.0 Code",
+        "labelEn": "Doubao 2.0 Code",
+        "label_en": "Doubao 2.0 Code",
+        "free": false,
+        "anon": true,
+        "badge": "编程",
+        "selection": {
+          "category": "premium",
+          "rank": 1020,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 379.8,
+          "output": 2278.8,
+          "cache": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-gemini",
+    "label": "无为托管 · Gemini",
+    "labelEn": "Wuwei Hosted · Gemini",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 110,
+    "models": [
+      {
+        "id": "gemini-3-8-flash",
+        "label": "Gemini 3.8 Flash",
+        "labelEn": "Gemini 3.8 Flash",
+        "label_en": "Gemini 3.8 Flash",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": 1004,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": 57
+        }
+      },
+      {
+        "id": "gemini-3-7-flash",
+        "label": "Gemini 3.7 Flash",
+        "labelEn": "Gemini 3.7 Flash",
+        "label_en": "Gemini 3.7 Flash",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": 1005,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": null
+        }
+      },
+      {
+        "id": "gemini-3-6-flash",
+        "label": "Gemini 3.6 Flash",
+        "labelEn": "Gemini 3.6 Flash",
+        "label_en": "Gemini 3.6 Flash",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": 1008,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 569.7,
+          "output": 2848.5,
+          "cache": 57
+        }
+      },
+      {
+        "id": "gemini-3-5-flash-lite",
+        "label": "Gemini 3.5 Flash Lite",
+        "labelEn": "Gemini 3.5 Flash Lite",
+        "label_en": "Gemini 3.5 Flash Lite",
+        "free": false,
+        "anon": true,
+        "badge": "省",
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 227.9,
+          "output": 1899,
+          "cache": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-mistral",
+    "label": "无为托管 · Mistral",
+    "labelEn": "Wuwei Hosted · Mistral",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 120,
+    "models": [
+      {
+        "id": "mistral-large",
+        "label": "Mistral Large",
+        "labelEn": "Mistral Large",
+        "label_en": "Mistral Large",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 379.8,
+          "output": 1139.4,
+          "cache": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-llama",
+    "label": "无为托管 · Llama",
+    "labelEn": "Wuwei Hosted · Llama",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 130,
+    "models": [
+      {
+        "id": "llama-4-maverick",
+        "label": "Llama 4 Maverick",
+        "labelEn": "Llama 4 Maverick",
+        "label_en": "Llama 4 Maverick",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "economy",
+          "rank": 1010,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 142.4,
+          "output": 495.6,
+          "cache": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-claude",
+    "label": "无为托管 · Claude",
+    "labelEn": "Wuwei · Claude",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "无为托管：无需自己的 Key，按 token 扣无为币。Claude Opus 4.8。",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 135,
+    "models": [
+      {
+        "id": "claude-fable-5-1",
+        "label": "Claude Fable 5.1",
+        "labelEn": "Claude Fable 5.1",
+        "label_en": "Claude Fable 5.1",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": -295,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 189.9
+        }
+      },
+      {
+        "id": "claude-fable-5",
+        "label": "Claude Fable 5",
+        "labelEn": "Claude Fable 5",
+        "label_en": "Claude Fable 5",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -290,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 759.6
+        }
+      },
+      {
+        "id": "claude-opus-5-5",
+        "label": "Claude Opus 5.5",
+        "labelEn": "Claude Opus 5.5",
+        "label_en": "Claude Opus 5.5",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": -285,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3038.4,
+          "output": 15192,
+          "cache": 151.9
+        }
+      },
+      {
+        "id": "claude-opus-5",
+        "label": "Claude Opus 5",
+        "labelEn": "Claude Opus 5",
+        "label_en": "Claude Opus 5",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -280,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3798,
+          "output": 18990,
+          "cache": 379.8
+        }
+      },
+      {
+        "id": "claude-opus-4-8",
+        "label": "Claude Opus 4.8",
+        "labelEn": "Claude Opus 4.8",
+        "label_en": "Claude Opus 4.8",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -270,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3798,
+          "output": 18990,
+          "cache": 379.8
+        }
+      },
+      {
+        "id": "claude-sonnet-5",
+        "label": "Claude Sonnet 5",
+        "labelEn": "Claude Sonnet 5",
+        "label_en": "Claude Sonnet 5",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -260,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 227.9
+        }
+      },
+      {
+        "id": "claude-opus-4-7",
+        "label": "Claude Opus 4.7",
+        "labelEn": "Claude Opus 4.7",
+        "label_en": "Claude Opus 4.7",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -250,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3798,
+          "output": 18990,
+          "cache": 379.8
+        }
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "labelEn": "Claude Sonnet 4.6",
+        "label_en": "Claude Sonnet 4.6",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -240,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 2278.8,
+          "output": 11394,
+          "cache": 227.9
+        }
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "label": "Claude Haiku 4.5",
+        "labelEn": "Claude Haiku 4.5",
+        "label_en": "Claude Haiku 4.5",
+        "free": false,
+        "anon": true,
+        "badge": "",
+        "selection": {
+          "category": "premium",
+          "rank": -230,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 759.6,
+          "output": 3798,
+          "cache": 76
+        }
+      }
+    ]
+  },
+  {
+    "id": "wuwei-gpt",
+    "label": "无为托管 · GPT",
+    "labelEn": "Wuwei · GPT",
+    "kind": "openai",
+    "baseUrl": "https://wuweiai.io/api/gateway/v1",
+    "keyUrl": "",
+    "keyHint": "",
+    "note": "无为托管：无需自己的 Key，按 token 扣无为币。GPT-5.5 / 5.6。",
+    "noteEn": "",
+    "hosted": true,
+    "custom": false,
+    "anon": false,
+    "sort": 136,
+    "models": [
+      {
+        "id": "gpt-6-1-sol",
+        "label": "GPT-6.1 Sol",
+        "labelEn": "GPT-6.1 Sol",
+        "label_en": "GPT-6.1 Sol",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": -198,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 76
+        }
+      },
+      {
+        "id": "gpt-6-sol",
+        "label": "GPT-6 Sol",
+        "labelEn": "GPT-6 Sol",
+        "label_en": "GPT-6 Sol",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -196,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 76
+        }
+      },
+      {
+        "id": "gpt-6-astra",
+        "label": "GPT-6 Astra",
+        "labelEn": "GPT-6 Astra",
+        "label_en": "GPT-6 Astra",
+        "free": false,
+        "anon": false,
+        "badge": "top",
+        "selection": {
+          "category": "premium",
+          "rank": -195,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 7596,
+          "output": 37980,
+          "cache": 759.6
+        }
+      },
+      {
+        "id": "gpt-6-luna",
+        "label": "GPT-6 Luna",
+        "labelEn": "GPT-6 Luna",
+        "label_en": "GPT-6 Luna",
+        "free": false,
+        "anon": true,
+        "badge": "new",
+        "selection": {
+          "category": "premium",
+          "rank": -194,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 76,
+          "output": 379.8,
+          "cache": 7.6
+        }
+      },
+      {
+        "id": "gpt-5.6",
+        "label": "GPT-5.6 Sol",
+        "labelEn": "GPT-5.6 Sol",
+        "label_en": "GPT-5.6 Sol",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -190,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 7596,
+          "cache": 379.8
+        }
+      },
+      {
+        "id": "gpt-5.6-terra",
+        "label": "GPT-5.6 Terra",
+        "labelEn": "GPT-5.6 Terra",
+        "label_en": "GPT-5.6 Terra",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -180,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 1519.2,
+          "output": 9115.2,
+          "cache": 151.92
+        }
+      },
+      {
+        "id": "gpt-5.6-luna",
+        "label": "GPT-5.6 Luna",
+        "labelEn": "GPT-5.6 Luna",
+        "label_en": "GPT-5.6 Luna",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -170,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 151.9,
+          "output": 911.5,
+          "cache": 15.192
+        }
+      },
+      {
+        "id": "gpt-5.5",
+        "label": "GPT-5.5",
+        "labelEn": "GPT-5.5",
+        "label_en": "GPT-5.5",
+        "free": false,
+        "anon": true,
+        "badge": null,
+        "selection": {
+          "category": "premium",
+          "rank": -100,
+          "recommended": false,
+          "defaultForNewUsers": false,
+          "hiddenInPicker": false
+        },
+        "price": {
+          "input": 3798,
+          "output": 22788,
+          "cache": 379.8
+        }
+      }
+    ]
+  }
+]

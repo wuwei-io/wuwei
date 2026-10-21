@@ -4684,7 +4684,9 @@ export function App() {
     ...catalogModelChoices([...pickerCatalog, ...extraConnections], selectedModelKey),
     ...imageChoices.map((row, index) => ({ key: `wuwei-image/${row.sku_id}`, providerId: "wuwei-image", modelId: row.sku_id,
       label: imageModelLabel(row), labelEn: imageModelLabel(row), category: "images" as const, rank: index, recommended: false, defaultForNewUsers: false,
-      free: false, needsLogin: true, imageCoins: Math.min(...imageCatalog.filter((entry) => entry.model === row.model).map((entry) => entry.coins_per_image)),
+      free: false, needsLogin: true, imageModel: row.model,
+      imageQuality: imageCatalog.filter(entry => entry.model === row.model).sort((a,b) => a.coins_per_image-b.coins_per_image)[0]?.quality,
+      imageCoins: Math.min(...imageCatalog.filter((entry) => entry.model === row.model).map((entry) => entry.coins_per_image)),
     })),
   ];
   const selectedChoice = pickerChoices.find((choice) => choice.key === selectedModelKey);

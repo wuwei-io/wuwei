@@ -6,8 +6,8 @@
     "period": "monthly",
     "usdMinor": 2000,
     "cnyMinor": 13400,
-    "credits": 2000,
-    "memberCredits": 2000,
+    "credits": 4000,
+    "memberCredits": 4000,
     "recommended": false
   },
   {
@@ -17,8 +17,8 @@
     "period": "annual",
     "usdMinor": 12000,
     "cnyMinor": 80400,
-    "credits": 2000,
-    "memberCredits": 2000,
+    "credits": 4000,
+    "memberCredits": 4000,
     "recommended": false
   },
   {
@@ -28,8 +28,8 @@
     "period": "monthly",
     "usdMinor": 4000,
     "cnyMinor": 26800,
-    "credits": 5000,
-    "memberCredits": 5000,
+    "credits": 10000,
+    "memberCredits": 10000,
     "recommended": true
   },
   {
@@ -39,8 +39,8 @@
     "period": "annual",
     "usdMinor": 24000,
     "cnyMinor": 160800,
-    "credits": 5000,
-    "memberCredits": 5000,
+    "credits": 10000,
+    "memberCredits": 10000,
     "recommended": true
   },
   {
@@ -50,8 +50,8 @@
     "period": "monthly",
     "usdMinor": 8000,
     "cnyMinor": 53600,
-    "credits": 10000,
-    "memberCredits": 10000,
+    "credits": 20000,
+    "memberCredits": 20000,
     "recommended": false
   },
   {
@@ -61,8 +61,8 @@
     "period": "annual",
     "usdMinor": 48000,
     "cnyMinor": 321600,
-    "credits": 10000,
-    "memberCredits": 10000,
+    "credits": 20000,
+    "memberCredits": 20000,
     "recommended": false
   },
   {

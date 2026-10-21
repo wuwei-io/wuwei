@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseModels,billingCheckoutUrl} from '../src/billing/presentation.js';
+import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseModels,billingModelCatalog,billingCheckoutUrl} from '../src/billing/presentation.js';
 import type {CreditRecord} from '../src/billing/contracts.js';
 import type {ModelChoice} from '../src/model-selection.js';
 import {billingRequest} from '../desktop/renderer/src/components/billing/request.js';
@@ -48,4 +48,11 @@ test('Persian ledger uses the same Gregorian dates as filtering and always uses 
   const date=new Date('2026-10-20T15:14:12Z');
   const expected=new Intl.DateTimeFormat('fa',{calendar:'gregory',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date);
   assert.equal(formatLedgerTime(date.toISOString(),'fa'),expected);
+});
+
+
+test('full billing catalog excludes connections, hidden aliases and automatic routes, while retaining all vendor variants',()=>{
+ const c=(id:string,category='premium')=>({key:id,modelId:id,providerId:'hosted',category,free:category==='free',rank:1,recommended:false}) as ModelChoice;
+ const models=[c('claude-opus'),c('claude-sonnet'),c('gpt-6'),c('openrouter-auto-free','free'),c('glm-flash','free'),c('byok','connections'),{...c('legacy'),hiddenInPicker:true},c('gpt-6')];
+ const all=billingModelCatalog(models);assert.equal(all.length,4);assert.equal(all.filter(m=>m.modelId.startsWith('claude')).length,2);assert.ok(all.some(m=>m.free));
 });
