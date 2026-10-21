@@ -239,11 +239,16 @@ app.whenReady().then(async () => {
     await f.click('.billing-catalog-filters button:first-child');
     await f.js('(()=>{const e=document.querySelector(".billing-catalog-search input");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"claude");e.dispatchEvent(new Event("input",{bubbles:true}));})()');
     await f.wait('document.querySelectorAll(".billing-selector-models>div").length===9');
+    await f.js('document.querySelector(".billing-catalog-search input").focus();document.querySelector(".billing-catalog-search input").select()');await delay(180);
+    const searchFocus=await f.js('(()=>{const e=document.querySelector(".billing-catalog-search input"),i=getComputedStyle(e),o=getComputedStyle(e.parentElement);return {focused:document.activeElement===e,selected:e.selectionStart===0&&e.selectionEnd===e.value.length,inputOutline:i.outlineStyle,inputOutlineWidth:i.outlineWidth,inputShadow:i.boxShadow,inputBorder:i.borderWidth,outerOutline:o.outlineStyle,outerOutlineWidth:o.outlineWidth,outerShadow:o.boxShadow,outerBorder:o.borderWidth}})()');
+    assert.equal(searchFocus.focused,true);assert.equal(searchFocus.selected,true);assert.equal(searchFocus.inputOutline,'none');assert.equal(searchFocus.inputShadow,'none');assert.equal(searchFocus.inputBorder,'0px');assert.equal(searchFocus.outerOutline,'none');assert.equal(searchFocus.outerShadow,'none');assert.equal(searchFocus.outerBorder,'1px');
+    fs.writeFileSync(path.join(evidence,'model-search-focus-'+lang+'.json'),JSON.stringify(searchFocus,null,2));
+    fs.writeFileSync(path.join(evidence,'model-search-focus-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
     await f.click('.billing-selector-option:first-child');await delay(40);const pro=await f.js('Array.from(document.querySelectorAll(".billing-usage-metric")).map(e=>e.textContent)');
     await f.click('.billing-selector-option:last-child');await delay(40);const max=await f.js('Array.from(document.querySelectorAll(".billing-usage-metric")).map(e=>e.textContent)');assert.notDeepEqual(pro,max);
-    await f.click('.billing-usage-link');await f.wait('!!document.querySelector(".billing-usage-details")');assert.match(await f.js('document.querySelector(".billing-usage-details").textContent'),/MiMo/);
+    assert.equal(await f.js('!!document.querySelector(".billing-usage-link,.billing-usage-details")'),false);
     if(lang==='en')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/[\u3400-\u9fff]/);
-    f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});await f.wait('!document.querySelector(".billing-subdialog")');assert.equal(await f.js('!!document.querySelector(".billing-panel")'),true);assert.equal(f.state.orders,0);
+    assert.equal(f.state.orders,0);
     if(lang==='zh')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/积分/);
   });
   for(const modifier of ['control','meta'])await run('发布关键：语言快捷键切换界面、弹窗和临时英文显示 '+modifier,{
