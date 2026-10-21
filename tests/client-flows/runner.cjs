@@ -149,6 +149,17 @@ async function run(name, options, test) {
   catch (error) { results.push({ name, passed: false, error: error.message, messages: fixture?.state.messages.slice(-15), calls: fixture?.state.calls.slice(-15) }); console.log('FAIL ' + name + ': ' + error.message); if (fixture) fs.writeFileSync(path.join(evidence, 'failure-' + results.length + '.png'), (await fixture.state.win.webContents.capturePage()).toPNG()); }
   finally { fixture?.close(); }
 }
+// Offscreen windows expose their completed frame through paint; capturePage can
+// fail before the first compositor surface exists, especially after resizing.
+async function captureBillingFrame(f){
+  const contents=f.state.win.webContents;
+  if(!contents.isOffscreen())return (await contents.capturePage()).toPNG();
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{contents.removeListener('paint',paint);reject(Error('Timed out waiting for billing screenshot frame'));},5000);
+    const paint=(_event,_dirty,image)=>{if(image.isEmpty())return;clearTimeout(timer);contents.removeListener('paint',paint);resolve(image.toPNG());};
+    contents.on('paint',paint);contents.invalidate();
+  });
+}
 async function billingHeaderAligned(f){
   const geometry=await f.js(`(()=>{const bar=document.querySelector('.billing-top').getBoundingClientRect();return Array.from(document.querySelectorAll('#billing-title,.billing-top>div>button:not(.billing-close),.billing-top .billing-close svg')).map(el=>{const r=el.getBoundingClientRect();return{delta:Math.abs((r.top+r.bottom)/2-(bar.top+bar.bottom)/2),inside:r.top>=bar.top&&r.bottom<=bar.bottom}})})()`);
   assert.ok(geometry.length>=3);for(const item of geometry){assert.ok(item.delta<1.1,JSON.stringify(geometry));assert.equal(item.inside,true);}
@@ -341,9 +352,9 @@ app.whenReady().then(async () => {
     for(const width of [1200,1000,840]){
       f.state.win.setContentSize(width,800);await delay(100);
       const geometry=await f.js(`(()=>{const boxes=Array.from(document.querySelectorAll('.billing-selector-option')).map(e=>{const r=e.getBoundingClientRect(),p=e.querySelector('.billing-selector-price').getBoundingClientRect();return{inside:p.left>=r.left&&p.right<=r.right+1,overflow:e.scrollWidth>e.clientWidth+1}});const pay=document.querySelector('.billing-plan-buy').getBoundingClientRect();return{boxes,payBottom:pay.bottom,height:innerHeight}})()`);
-      assert.ok(geometry.boxes.every(box=>box.inside&&!box.overflow),lang+width+JSON.stringify(geometry));assert.ok(geometry.payBottom<geometry.height,lang+width+JSON.stringify(geometry));await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`annual-prices-${lang}-${width}.png`),(await f.state.win.webContents.capturePage()).toPNG());
+      assert.ok(geometry.boxes.every(box=>box.inside&&!box.overflow),lang+width+JSON.stringify(geometry));assert.ok(geometry.payBottom<geometry.height,lang+width+JSON.stringify(geometry));await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`annual-prices-${lang}-${width}.png`),await captureBillingFrame(f));
     }
-    f.state.win.setContentSize(1200,800);await delay(70);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),6);await delay(150);fs.writeFileSync(path.join(evidence,`annual-comparison-${lang}.png`),(await f.state.win.webContents.capturePage()).toPNG());
+    f.state.win.setContentSize(1200,800);await delay(70);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),6);await delay(150);fs.writeFileSync(path.join(evidence,`annual-comparison-${lang}.png`),await captureBillingFrame(f));
     await f.click('.billing-plans-periods button:first-child');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);await f.click('.billing-plans-periods button:nth-child(3)');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);
     await f.click('.billing-plans-periods button:nth-child(2)');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');await f.click('.billing-plan-card[data-sku="v2_plan_pro_annual"] .billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
     const request=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(request.sku,'v2_plan_pro_annual');assert.equal(request.expected.amountMinor,annual[0]);assert.equal(request.expected.creditsPerGrant,4000);assert.equal(f.state.orders,1);
