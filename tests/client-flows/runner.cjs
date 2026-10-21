@@ -107,7 +107,8 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'brainConceptProgress': return {running:false,phase:'idle',total:0,done:0,created:0,skipped:0};
     case 'secretsList': return {entries:[],available:true};
     case 'getMemory': case 'stopRulesGet': return '';
-    case 'track': case 'rememberSet': case 'draftSet': return true;
+    case 'track': (s.tracked??=[]).push({event:args[0],props:clone(args[1]??{})});return true;
+    case 'rememberSet': case 'draftSet': return true;
     default: s.defaults.add(method); return [];
   }
 });
@@ -146,6 +147,10 @@ async function run(name, options, test) {
   try { fixture = await boot(options); await test(fixture); const fatal = fixture.state.errors.filter(e => /renderer-fatal|Uncaught|Unhandled/.test(e)); assert.deepEqual(fatal, []); results.push({ name, passed: true, mockedOrders: fixture.state.orders, blockedExternalRequests: fixture.state.blocked.length }); console.log('PASS ' + name); }
   catch (error) { results.push({ name, passed: false, error: error.message, messages: fixture?.state.messages.slice(-15), calls: fixture?.state.calls.slice(-15) }); console.log('FAIL ' + name + ': ' + error.message); if (fixture) fs.writeFileSync(path.join(evidence, 'failure-' + results.length + '.png'), (await fixture.state.win.webContents.capturePage()).toPNG()); }
   finally { fixture?.close(); }
+}
+async function billingHeaderAligned(f){
+  const geometry=await f.js(`(()=>{const bar=document.querySelector('.billing-top').getBoundingClientRect();return Array.from(document.querySelectorAll('#billing-title,.billing-top>div>button:not(.billing-close),.billing-top .billing-close svg')).map(el=>{const r=el.getBoundingClientRect();return{delta:Math.abs((r.top+r.bottom)/2-(bar.top+bar.bottom)/2),inside:r.top>=bar.top&&r.bottom<=bar.bottom}})})()`);
+  assert.ok(geometry.length>=3);for(const item of geometry){assert.ok(item.delta<1.1,JSON.stringify(geometry));assert.equal(item.inside,true);}
 }
 app.whenReady().then(async () => {
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -187,56 +192,60 @@ app.whenReady().then(async () => {
     press();await f.wait('document.documentElement.lang==="en"');f.state.lang='en';await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-payment-choices")');assert.match(await f.js('document.querySelector(".billing-payment-choices").textContent'),/Card \/ PayPal/);assert.doesNotMatch(await f.js('document.querySelector(".billing-payment-layout").textContent'),/[\u3400-\u9fff]/);assert.equal(f.state.orders,0);
     await delay(200);fs.writeFileSync(path.join(evidence,'language-shortcut-'+modifier+'-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
   });
-  await run('账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+  await run('发布关键：账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Credit details',icon:true},{text:'Top up',icon:true},{text:'Settings',icon:true}]);await f.click('.acct-btn');
     await openBilling(f);await f.wait('document.querySelector(".billing-selector-option") && document.querySelector(".billing-plan-buy")?.disabled===false');
     await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'billing-selector-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await billingHeaderAligned(f);
     await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button")');await delay(150);fs.writeFileSync(path.join(evidence,'billing-methods-en.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.equal(f.state.orders,0);await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.externalURLs.length,1);
     assert.equal(f.state.orders,1);assert.equal(f.state.billingCalls.find(r=>r.action==='quote').currency,'USD');assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').channel,'paddle');
+    await delay(60);assert.equal(f.state.tracked.filter(x=>x.event==='upgrade_member_click').length,1);assert.equal(f.state.tracked.filter(x=>x.event==='billing_payment_method_select'&&x.props.channel==='paddle').length,1);assert.equal(f.state.tracked.filter(x=>x.event==='billing_checkout_open').length,1);
+    await billingHeaderAligned(f);
     assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/[\u3400-\u9fff]/);await delay(250);fs.writeFileSync(path.join(evidence,'billing-checkout-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
   });
-  await run('账单新版：中文自动显示付款二维码且不重复下单', {account:clone(billingAccount)},async f=>{
+  await run('发布关键：账单新版：中文自动显示付款二维码且不重复下单', {account:clone(billingAccount)},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');
-    assert.equal(f.state.orders,1);await delay(200);fs.writeFileSync(path.join(evidence,'billing-qr-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').currency,'CNY');await uiLanguage(f,'en');await delay(250);assert.equal(f.state.orders,1);assert.match(await f.js('document.querySelector(".billing-live-order").textContent'),/Alipay/);
+    assert.equal(f.state.orders,1);await delay(200);fs.writeFileSync(path.join(evidence,'billing-qr-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').currency,'CNY');assert.equal(f.state.tracked.filter(x=>x.event==='billing_payment_method_select'&&x.props.channel==='alipay'&&x.props.selection==='automatic').length,1);assert.equal(f.state.tracked.filter(x=>x.event==='billing_order_created').length,1);await uiLanguage(f,'en');await delay(250);assert.equal(f.state.orders,1);assert.match(await f.js('document.querySelector(".billing-live-order").textContent'),/Alipay/);
   });
-  await run('账单新版：英文加密付款自动显示地址和二维码', {account:clone(billingAccount),cryptoOnly:true,lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+  await run('发布关键：账单新版：英文加密付款自动显示地址和二维码', {account:clone(billingAccount),cryptoOnly:true,lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button:last-child")');await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.billingCalls.find(r=>r.action==='create-order').channel,'crypto');assert.equal(f.state.orders,1);
+    for(const height of [760,920]){f.state.win.setContentSize(1200,height);await delay(80);await billingHeaderAligned(f);}await delay(50);assert.equal(f.state.tracked.filter(x=>x.event==='billing_payment_method_select'&&x.props.channel==='crypto').length,1);fs.writeFileSync(path.join(evidence,'billing-crypto-header-en.png'),(await f.state.win.webContents.capturePage()).toPNG());assert.ok(!JSON.stringify(f.state.tracked).includes('checkoutUrl'));assert.ok(!JSON.stringify(f.state.tracked).includes('receivingAddress'));
   });
-  await run('账单新版：付款失败可重试且复用订单幂等键', {account:clone(billingAccount),createError:true},async f=>{
+  await run('发布关键：账单新版：付款失败可重试且复用订单幂等键', {account:clone(billingAccount),createError:true},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-error") && !document.querySelector(".billing-checkout .billing-primary").disabled');f.state.createError=false;await f.click('.billing-checkout .billing-primary');await f.wait('!!document.querySelector(".billing-live-order")');const reqs=f.state.billingCalls.filter(r=>r.action==='create-order');assert.equal(reqs.length,2);assert.equal(reqs[0].requestId,reqs[1].requestId);assert.equal(f.state.orders,1);
   });
-  await run('账单新版：报价失败解除加载可再次购买', {account:clone(billingAccount),quoteError:true},async f=>{
+  await run('发布关键：账单新版：报价失败解除加载可再次购买', {account:clone(billingAccount),quoteError:true},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-error") && document.querySelector(".billing-plan-buy")?.disabled===false');f.state.quoteError=false;await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,1);
   });
-  await run('账单新版：加载付款目录不阻止免费体验', {account:clone(billingAccount),billingDelay:1500},async f=>{
+  await run('发布关键：账单新版：加载付款目录不阻止免费体验', {account:clone(billingAccount),billingDelay:1500},async f=>{
     await openBilling(f);await f.click('.billing-selector-free button');await f.wait('!!document.querySelector(".billing-subdialog")');assert.equal(await f.js('document.querySelector(".billing-subdialog .billing-primary").disabled'),false);await f.click('.billing-subdialog .billing-primary');await f.wait('!document.querySelector(".billing-panel")');assert.equal(f.state.orders,0);
   });
-  await run('账单新版：明细三位小数24小时分页和多语言日历', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+  await run('发布关键：账单新版：明细三位小数24小时分页和多语言日历', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await openBilling(f,true);await f.wait('!!document.querySelector(".billing-credit-record")');const text=await f.js('document.querySelector(".billing-ledger").textContent');assert.match(text,/1,578\.363/);assert.match(text,/-0\.03/);assert.doesNotMatch(text,/AM|PM|[\u3400-\u9fff]/);assert.match(text,/101 records · 3 pages/);assert.match(text,/Continuation after tool execution/);
     await f.click('.billing-date-trigger');await f.wait('!!document.querySelector(".billing-calendar")');assert.doesNotMatch(await f.js('document.querySelector(".billing-calendar").textContent'),/[\u3400-\u9fff]/);assert.match(await f.js('document.querySelector(".billing-calendar").textContent'),/Today/);await uiLanguage(f,'zh');await f.wait('document.querySelector(".billing-calendar")?.textContent.includes("今天")');await uiLanguage(f,'en');await f.click('.billing-calendar-actions button');
     await f.click('.billing-pagination button[aria-label="Page 3"]');await f.wait('document.querySelector(".billing-pagination [aria-current=page]")?.textContent==="3"');await f.wait('document.querySelector(".billing-credit-record")?.textContent.includes("Wuwei hosted")');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).offset,100);
     await delay(250);fs.writeFileSync(path.join(evidence,'billing-ledger-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
   });
-  await run('账单新版：套餐比较一屏显示并展示不同厂商', {account:clone(billingAccount)},async f=>{
+  await run('发布关键：账单新版：套餐比较一屏显示并展示不同厂商', {account:clone(billingAccount)},async f=>{
     f.state.win.setContentSize(1200,735);await openBilling(f);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
     await f.js('document.fonts.ready');await delay(250);fs.writeFileSync(path.join(evidence,'billing-comparison-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());
     const layout=await f.js('({viewport:innerHeight,scroll:document.querySelector(".billing-panel").scrollHeight,client:document.querySelector(".billing-panel").clientHeight})');assert.ok(layout.scroll<=layout.client+2,JSON.stringify(layout));assert.equal(await f.js('document.querySelectorAll(".billing-card-benefits").length'),0);
   });
 
-  await run('账单新版：网页和加密支付可切换，切回复用待付款订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+  await run('发布关键：账单新版：网页和加密支付可切换，切回复用待付款订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button")');await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,1);
     await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.orders,2);
     await f.click('.billing-pay-methods button:first-child');await f.wait('document.querySelector(".billing-live-order")?.textContent.includes("Card / PayPal")');assert.equal(f.state.orders,2);assert.equal(f.state.externalURLs.length,2);
   });
-  await run('账单新版：完成付款后再次购买可新建订单', {account:clone(billingAccount)},async f=>{
+  await run('发布关键：账单新版：完成付款后再次购买可新建订单', {account:clone(billingAccount)},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');assert.equal(await f.js('Array.from(document.querySelectorAll(".billing-pay-methods button")).every(button=>button.disabled)'),true);f.state.billingPaid=false;
     await f.click('.billing-top button:first-child');await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');assert.equal(f.state.orders,2);const ids=f.state.billingCalls.filter(r=>r.action==='create-order').map(r=>r.requestId);assert.notEqual(ids[0],ids[1]);
   });
-  await run('账单新版：关闭后迟到的报价不创建订单或重开付款页', {account:clone(billingAccount),quoteDelay:900},async f=>{
+  await run('发布关键：账单新版：关闭后迟到的报价不创建订单或重开付款页', {account:clone(billingAccount),quoteDelay:900},async f=>{
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.click('.billing-close');await delay(1050);assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
   });
 
-  await run('账单新版：切换月付年付积分包，按选中套餐准确报价', {account:clone(billingAccount)},async f=>{
+  await run('发布关键：账单新版：切换月付年付积分包，按选中套餐准确报价', {account:clone(billingAccount)},async f=>{
     await openBilling(f);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');await f.click('.billing-selector-periods button:nth-child(2)');await f.wait('document.querySelector(".billing-selector-option")?.textContent.includes("67")');await f.click('.billing-selector-option:last-child');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');let req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_plan_max_annual');assert.equal(req.expected.amountMinor,321600);assert.equal(req.expected.creditsPerGrant,10000);
     await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_3000');assert.equal(req.expected.amountMinor,33400);assert.equal(req.expected.creditsPerGrant,3000);
   });

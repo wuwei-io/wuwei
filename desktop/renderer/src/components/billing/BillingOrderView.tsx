@@ -4,6 +4,7 @@ import {QRCodeSVG} from 'qrcode.react';
 import type {BillingOrder} from '../../../../../src/billing/contracts.js';
 import {billingRequest} from './request.js';
 import {formatCredits,formatLedgerTime,billingCheckoutUrl} from '../../../../../src/billing/presentation.js';
+import {billingTrack} from './telemetry.js';
 
 export function BillingOrderView({order:initial,lang,onPaid,onNeedLogin}:{order:BillingOrder;lang:string;onPaid:(order:BillingOrder)=>void;onNeedLogin:()=>void}){
   const en=lang !== "zh";
@@ -39,9 +40,11 @@ export function BillingOrderView({order:initial,lang,onPaid,onNeedLogin}:{order:
   const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);if(live.current){setCopied(true);setTimeout(()=>{if(live.current)setCopied(false);},1600);}}catch{if(live.current)setError(tr("ui.billingorderview.copy.failed.please.select.and.copy.5191893"));}};
   const checkout=()=>{
     if(remaining===0)return;
-    try{const url=billingCheckoutUrl(order.checkoutUrl);if(!url)throw Error();window.wuwei.openExternal(url);}
+    try{const url=billingCheckoutUrl(order.checkoutUrl);if(!url)throw Error();billingTrack('billing_checkout_open',{channel:order.channel,sku:order.sku,order_id:order.id,lang});window.wuwei.openExternal(url);}
     catch{setError(tr("ui.billingorderview.payment.link.unavailable.please.contact.support.763c18f"));}
   };
+  const lastStatus=useRef('');
+  useEffect(()=>{if(order.status==='pending'||lastStatus.current===order.status)return;lastStatus.current=order.status;billingTrack('billing_order_status',{status:order.status,channel:order.channel,sku:order.sku,order_id:order.id,lang});},[order.status,order.id]);
   if(order.status==='paid')return <div className="billing-order-state"><span className="billing-paid-symbol">✓</span><h2>{tr("ui.billingorderview.payment.confirmed.5e8bdaf")}</h2>{order.creditsGranted!=null&&<p>{tr("ui.billingorderview.credits.delivered.4279dc3")}: <strong>{formatCredits(order.creditsGranted)}</strong></p>}{order.balance!=null&&<p>{tr("ui.billingorderview.current.credits.18a748e")}: {formatCredits(order.balance)}</p>}{order.creditsGranted===0&&order.startsAt&&<p>{tr("ui.billingorderview.credits.arrive.on.activation.f3aae38")}: {formatLedgerTime(order.startsAt,lang)}</p>}<small>{tr("ui.billingorderview.order.id.5959d9f")}: {order.id}</small><p>{tr("ui.billingorderview.close.this.window.to.continue.your.028cc1b")}</p></div>;
   if(order.status!=='pending')return <div className="billing-order-state"><h2>{order.status==='expired'?tr("ui.billingorderview.order.expired.aaf6b58"):order.status==='refunded'?tr("ui.billingorderview.order.refunded.30fa693"):tr("ui.billingorderview.payment.incomplete.041f155")}</h2><p>{tr("ui.billingorderview.do.not.pay.this.order.if.7aebe55")}</p>{order.status!=='refunded'&&<button onClick={()=>void queryRef.current()} disabled={querying}>{tr("ui.billingorderview.ve.paid.check.again.88e3864")}</button>}{error&&<p role="alert">{localizeStoredText(error, getCurrentLanguage())}</p>}<small>{order.id}</small></div>;
   return <div className={"billing-live-order "+(order.crypto?"billing-crypto-order":"")}>
