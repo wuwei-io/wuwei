@@ -16,6 +16,11 @@ keys and placeholder names. A partial new pack may fall back to English. Run
 registry bundles the new pack and adds it to every language selector automatically.
 Language selection persists locally and synchronizes to the desktop main process.
 
+Ctrl/Command+Shift+T keeps the existing Chinese/English preview toggle. It chooses
+the opposite target language, including inside dialogs, and temporarily translates
+dynamic display text without changing stored titles, messages or input drafts.
+Normal language selection continues to preserve user content as originally written.
+
 React uses `useLanguage()` to subscribe to changes, including in memoized UI.
 Resolve messages when rendering, or store message references and parameters.
 Never resolve menu/catalog labels once at module initialization. Errors that arrive

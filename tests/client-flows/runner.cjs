@@ -53,6 +53,8 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'fetchModels': return [];
     case 'getAppVersion': return '1.7.49';
     case 'getEdition': return 'test';
+    case 'setAppSettings': if(args[0]?.lang)s.appLanguage=args[0].lang;return true;
+    case 'translateBatch': return args[0].map(text=>text==='中文会话标题'?'English preview conversation':text==='已有对话，沿用明确选择的模型'?'Existing conversation, keep the chosen model':'English preview text');
     case 'respondPermission': s.permissionReplies.push(clone(args)); return true;
     case 'respondDecision': s.decisionReplies.push(clone(args)); return true;
     case 'checkConn': return { status: 'green', reason: 'Isolated stub' };
@@ -149,7 +151,7 @@ app.whenReady().then(async () => {
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
 
-  for (const lang of ['zh','en']) await run('侧栏显示：已完成会话保持单行布局、悬停删除和切换交互 '+lang, {
+  for (const lang of ['zh','en']) await run('发布关键：侧栏显示：已完成会话保持单行布局、悬停删除和切换交互 '+lang, {
     lang,offscreen:true,settings:{...settings(),app:{teamEnabled:false,lang}},sessions:[
       {id:'qa-session',title:'HAL',createdAt:Date.now(),updatedAt:Date.now()},
       ...Array.from({length:12},(_,i)=>({id:'done-'+i,title:i%2?'历史已完成任务：知识宫殿资料整理与支付到账记录核对，这是一条很长的标题':'Completed conversation with a very long title that must stay on one line',done:true,createdAt:Date.now()-86400000*(i+1),updatedAt:Date.now()-86400000*(i+1)})),
@@ -172,6 +174,19 @@ app.whenReady().then(async () => {
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
   const openBilling=async(f,ledger=false)=>{await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(ledger?(f.state.lang==='en'?'Credit details':'积分明细'):(f.state.lang==='en'?'Top up':'充值'))+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
+  for(const modifier of ['control','meta'])await run('发布关键：语言快捷键切换界面、弹窗和临时英文显示 '+modifier,{
+    offscreen:true,account:clone(billingAccount),sessions:[{id:'qa-session',title:'中文会话标题',createdAt:Date.now(),updatedAt:Date.now()}],
+  },async f=>{
+    const press=()=>{f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'T',modifiers:[modifier,'shift']});f.state.win.webContents.sendInputEvent({type:'keyUp',keyCode:'T',modifiers:[modifier,'shift']});};
+    await f.fill('.composer textarea','这条草稿不能丢失');await f.js("document.querySelector('.composer textarea').focus()");press();
+    await f.wait('document.documentElement.lang==="en"');assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),'en');await f.wait('document.querySelector(".s-title")?.textContent==="English preview conversation"');await f.wait('document.querySelector(".tb-title-txt")?.textContent==="English preview conversation"');await f.wait('document.querySelector(".msg.user .body")?.textContent.includes("Existing conversation, keep the chosen model")');assert.equal(await f.js('document.querySelector(".new-session").textContent.trim().normalize("NFKC")'),'+ New chat');assert.equal(await f.js('document.querySelector(".composer textarea").value'),'这条草稿不能丢失');assert.equal(f.state.appLanguage,'en');
+    f.state.lang='en';await openBilling(f,true);await f.wait('!!document.querySelector(".billing-credit-record")');assert.doesNotMatch(await f.js('document.querySelector(".billing-ledger").textContent'),/[\u3400-\u9fff]/);
+    press();await f.wait('document.documentElement.lang==="zh"');await f.wait('document.querySelector("#billing-title")?.textContent==="积分明细"');
+    press();await f.wait('document.documentElement.lang==="en"');await f.wait('document.querySelector("#billing-title")?.textContent==="Credit details"');
+    await f.click('.billing-close');press();await f.wait('document.documentElement.lang==="zh"');await f.wait('document.querySelector(".s-title")?.textContent==="中文会话标题"');assert.equal(await f.js('document.querySelector(".tb-title-txt").textContent'),'中文会话标题');assert.match(await f.js('document.querySelector(".msg.user .body").textContent'),/已有对话/);assert.equal(await f.js('document.querySelector(".composer textarea").value'),'这条草稿不能丢失');assert.equal(f.state.sessions[0].title,'中文会话标题');assert.equal(f.state.sent.length,0);
+    press();await f.wait('document.documentElement.lang==="en"');f.state.lang='en';await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-payment-choices")');assert.match(await f.js('document.querySelector(".billing-payment-choices").textContent'),/Card \/ PayPal/);assert.doesNotMatch(await f.js('document.querySelector(".billing-payment-layout").textContent'),/[\u3400-\u9fff]/);assert.equal(f.state.orders,0);
+    await delay(200);fs.writeFileSync(path.join(evidence,'language-shortcut-'+modifier+'-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
   await run('账单新版：英文付款和自动准备 Paddle 订单', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
     await f.click('.acct-btn');assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".acct-items .acct-it")).slice(0,3).map(b=>({text:b.textContent.trim(),icon:!!b.querySelector("svg")}))'),[{text:'Credit details',icon:true},{text:'Top up',icon:true},{text:'Settings',icon:true}]);await f.click('.acct-btn');
     await openBilling(f);await f.wait('document.querySelector(".billing-selector-option") && document.querySelector(".billing-plan-buy")?.disabled===false');
