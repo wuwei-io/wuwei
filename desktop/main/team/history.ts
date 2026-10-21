@@ -17,7 +17,7 @@ export function teamRequestHistory(key: string): (messages: Message[]) => Messag
   return messages => {
     let cached: HistoryDigest | undefined;
     try { cached = JSON.parse(readFileSync(file(key), 'utf8')); } catch { /* Cold/missing/corrupt cache. */ }
-    const result = windowHistory(messages, historyPolicy(loadTeamConfig()), cached, process.env.WUWEI_LANG === 'en');
+    const result = windowHistory(messages, historyPolicy(loadTeamConfig()), cached, process.env.WUWEI_LANG || 'zh');
     if (!result.digest) clearTeamHistoryDigest(key);
     else if (result.digest !== cached) {
       try {

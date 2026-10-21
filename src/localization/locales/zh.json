@@ -4,7 +4,9 @@
     "name": "Chinese",
     "nativeName": "中文",
     "direction": "ltr",
-    "fallback": "en"
+    "fallback": "en",
+    "order": 0,
+    "complete": true
   },
   "messages": {
     "splash.brand": "无为",
@@ -3241,6 +3243,18 @@
     "billing.payment.webChoice": "跳转网页，支持信用卡、借记卡及 PayPal",
     "billing.payment.cryptoChoice": "使用 USDT 付款，支持 Solana、BNB Smart Chain 和 TRON",
     "billing.payment.syncNote": "付款状态自动同步，请勿重复支付",
-    "billing.payment.cards": "银行卡"
+    "billing.payment.cards": "银行卡",
+    "language.interface": "界面语言",
+    "language.description": "立即生效，无需重启。",
+    "language.search": "搜索语言",
+    "language.all": "所有语言",
+    "language.empty": "未找到匹配语言",
+    "language.instant": "即时切换 · 保留对话原文",
+    "language.keepContent": "只切换界面语言，对话、文件和草稿保持原文。",
+    "language.current": "界面语言：{language}",
+    "language.clearSearch": "清除搜索",
+    "language.system": "跟随系统",
+    "language.systemDetail": "自动使用电脑的系统语言",
+    "language.replyPolicy": "默认使用{language}回复；如果用户明确要求其他语言，则遵循用户要求。代码、路径、工具名称和协议标识保持原样。"
   }
 }

@@ -50,3 +50,16 @@ text and numbers on machines without Inter installed. Chinese uses the native
 Chinese font fallback. Code and terminal text retain the monospace stack.
 Its SIL Open Font License is shipped from
 `desktop/renderer/public/third-party/Inter-LICENSE.txt` with the renderer.
+
+
+## Bundled locales and system preference
+
+Shipped language packs declare `meta.complete: true`. They must contain every English key and preserve each interpolation token. Extension packs may still declare partial translations and a fallback. Locale metadata owns display order, native name, direction and fallback; the language picker has no hardcoded language list. New locales require a JSON pack, registry generation and localization checks.
+
+The first launch follows the computer’s preferred system language, resolving regional variants (for example `pt-PT` → `pt-BR`) and falling back to English for unavailable languages. The stored preference `system` remains automatic across restarts. Selecting a language stores an explicit preference; selecting “Follow system” restores automatic mode. Renderer startup uses Electron’s preferred OS language, and preference changes synchronize the main process immediately. Existing preferences remain intact.
+
+UI messages and built-in system prompts use the effective locale. Every agent model request also receives a localized response-language policy, including existing conversations, custom prompts and employee personas. An explicit request from the user for another language takes priority. User messages, files and custom prompts are not rewritten. The English preview shortcut restores the previous language preference when toggled back.
+
+Arabic and Persian set the document direction to RTL. Language names use their native spelling, identifiers retain their spelling, and the ledger’s Gregorian dates retain 24-hour times so calendar filtering stays consistent across locales. Font fallback uses the installed system fonts for non-Latin scripts.
+
+Language packs are bundled and switched locally; no network translation service runs when changing the interface language. Translation validation checks completeness, interpolation, damaged text and technical identifiers. The initial new packs use machine-assisted translation; the release checks validate critical navigation and payment flows and do not substitute for ongoing native-speaker editorial review.

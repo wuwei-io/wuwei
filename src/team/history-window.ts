@@ -36,10 +36,10 @@ function plain(message: Message, limit: number): string {
 const isInput = (m: Message) => m.role === 'user' && !m.content.some(b => b.type === 'tool_result');
 
 /** Request-only projection: original messages (including images/tool output) remain untouched. */
-export function windowHistory(messages: Message[], policy: HistoryPolicy, cached?: HistoryDigest, en = false): {
+export function windowHistory(messages: Message[], policy: HistoryPolicy, cached?: HistoryDigest, language: string | boolean = getCurrentLanguage()): {
   messages: Message[]; digest?: HistoryDigest;
 } {
-  const tr = (key: string, values = {}) => translate(key, values, en ? "en" : "zh");
+  const tr = (key: string, values = {}) => translate(key, values, typeof language === "boolean" ? (language ? "en" : "zh") : language);
   let cut = Math.max(0, messages.length - policy.historyRecentMessages);
   // Keep tool calls paired with every retained result, including parallel calls.
   const calls = new Map<string, number>();
@@ -72,7 +72,7 @@ export function windowHistory(messages: Message[], policy: HistoryPolicy, cached
           // Current screenshots must still reach the vision model. Only old images
           // are replaced; never turn a live screenshot tool into a text-only tool.
           const content = raw.map(b => b.type === 'text' ? { ...b, text: cap(b.text) }
-            : i > latestInput ? b : { type: 'text', text: '[Earlier image]' });
+            : i > latestInput ? b : { type: 'text', text: tr("ui.history.window.earlier.image.retained.in.chat.history.3c4eb96") });
           return { ...block, content: content as unknown as typeof block.content };
         }
         return { ...block, content: cap(String(raw)) };
@@ -98,7 +98,7 @@ export function windowHistory(messages: Message[], policy: HistoryPolicy, cached
     .map(m => `${m.role}: ${plain(m, 180)}`);
   const title = tr("ui.history.window.earlier.history.local.excerpts.may.omit.32bfd59");
   const candidate = excerpt([title, first ? `${tr("ui.history.window.initial.request.1175201")}: ${plain(first, 360)}` : '', ...entries].filter(Boolean).join('\n'), SUMMARY_CHAR_LIMIT);
-  const signature = JSON.stringify([1, cut, en, candidate]);
+  const signature = JSON.stringify([1, cut, language, candidate]);
   const digest = cached?.signature === signature && cached.text === candidate ? cached : { signature, text: candidate };
   return { messages: [{ role: 'user', content: [{ type: 'text', text: digest.text }] }, ...recent], digest };
 }

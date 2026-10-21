@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { getLanguages, localizeStoredText, normalizeLanguage, registerLanguagePack, setCurrentLanguage, subscribeLanguage, tr } from '../src/localization/index.js';
+import { languagePacks } from '../src/localization/registry.generated.js';
 import { makeT } from '../desktop/renderer/src/i18n.js';
 import { LanguageSwitcher } from '../desktop/renderer/src/components/LanguageSwitcher.js';
 import { catalogModelChoices } from '../src/model-selection.js';
@@ -24,6 +25,7 @@ test('system message snapshots follow the chosen language while unknown/user dat
 
 test('a third locale is registered, selectable, interpolated and falls back to English', () => {
   const old = process.env.WUWEI_LANG;
+  const original = languagePacks.ar;
   let notifications = 0;
   const stop = subscribeLanguage(() => notifications++);
   try {
@@ -40,7 +42,7 @@ test('a third locale is registered, selectable, interpolated and falls back to E
     assert.match(markup, /value="ar"/);
     assert.match(markup, /العربية/);
     assert.ok(notifications >= 2);
-  } finally { stop(); if (old == null) delete process.env.WUWEI_LANG; else process.env.WUWEI_LANG = old; }
+  } finally { if (original) registerLanguagePack(original); stop(); if (old == null) delete process.env.WUWEI_LANG; else process.env.WUWEI_LANG = old; }
 });
 
 test('explicit tool-label locale works independently of the process default', () => {

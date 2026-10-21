@@ -318,8 +318,9 @@ export function addEmployees(list: Employee[]): { employees: Employee[]; added: 
  * 身份职责(IDENTITY) + 性格(SOUL) + 关于老板(USER) + 长期记忆(MEMORY)。
  * 只拼有内容的段。放数据层(而非 index)是为了让 index 与 orchestrator 都能引用、避免循环依赖。
  */
-export function buildPersonaBlock(emp: Employee, en = false): string {
-  const tr = (key: string, values = {}) => translate(key, values, en ? "en" : "zh");
+export function buildPersonaBlock(emp: Employee, language: string | boolean = getCurrentLanguage()): string {
+  const locale = typeof language === "boolean" ? (language ? "en" : "zh") : language;
+  const tr = (key: string, values = {}) => translate(key, values, locale);
   const parts = [tr("team.persona.identity", {text:emp.persona})];
   if (emp.soul?.trim()) parts.push(tr("team.persona.soul", {text:emp.soul.trim()}));
   if (emp.aboutUser?.trim()) parts.push(tr("team.persona.user", {text:emp.aboutUser.trim()}));
@@ -344,19 +345,20 @@ export function buildPersonaBlock(emp: Employee, en = false): string {
  * @param dyn     员工聊天中 remember 攒的专属动态记忆(可空)
  * @param sceneBlock 可选场景块(群聊用：告诉他此刻在哪个群、有哪些成员)，接在身份之后
  */
-export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string, sceneBlock?: string): string {
+export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string, sceneBlock?: string, language = getCurrentLanguage()): string {
   // 基础提示词里「当前工作目录 / Current working directory」之前全是"你是无为…"的身份自述，
   // 之后才是纯操作性内容(工具/准则/记忆/密钥/交互)。从这里切开，只保留操作性尾部当运行环境。
   const zhAt = baseSys.indexOf("当前工作目录");
   const enAt = baseSys.indexOf("Current working directory");
-  const cut = zhAt >= 0 ? zhAt : enAt;
-  const en = enAt >= 0 && (zhAt < 0 || enAt < zhAt);
-  const tr = (key: string, values = {}) => translate(key, values, (en ? "en" : "zh"));
+  const directoryLabel = translate("agent.defaultPrompt", {}, language).split("\n").find(line => line.includes("{cwd}"))?.split("{cwd}")[0].trim();
+  const localizedAt = directoryLabel ? baseSys.indexOf(directoryLabel) : -1;
+  const cut = localizedAt >= 0 ? localizedAt : zhAt >= 0 ? zhAt : enAt;
+  const tr = (key: string, values = {}) => translate(key, values, language);
   const operational = cut >= 0 ? baseSys.slice(cut) : baseSys; // 兜底：切不到就整段带上(自定义提示词等)
 
   // A 方案：确保四件套已物化成 .md，并优先用文件内容(手改也生效)，回退 json 字段。
   ensurePersonaFiles(emp);
-  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, (en ? "en" : "zh"));
+  const merged = localizeEmployee({ ...emp, ...readPersonaFiles(emp.id) } as Employee, language);
 
   const title = merged.title ? (tr("ui.store.text.f2cfe6f", { v0: merged.title })) : "";
   const head = tr("ui.store.from.now.on.you.are.real.b863475", { p0: merged.name, p1: title, p2: merged.name, p3: merged.name });
@@ -380,10 +382,10 @@ export function buildEmployeeSystem(emp: Employee, baseSys: string, dyn: string,
   // 身份锁定：放在最末尾。模型对系统提示词结尾权重很高，用它把身份钉死，压过中间大段工具/运行环境描述。
   const endLock = tr("ui.store.identity.lock.final.overrides.everything.above.768828e", { p0: merged.name, p1: title, p2: merged.name, p3: merged.name });
 
-  return `---\n\n${head}\n\n${buildPersonaBlock(merged, en)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}
+  return `---\n\n${head}\n\n${buildPersonaBlock(merged, language)}${memBlock}${scene}${growth}${collab}${sop}${runtimeIntro}${operational}
 
 ${tr("ui.store.reply.in.english.unless.the.user.2736a52")}
-${employeeRoster(loadEmployees(), (en ? "en" : "zh"))}${endLock}`;
+${employeeRoster(loadEmployees(), language)}${endLock}`;
 }
 
 

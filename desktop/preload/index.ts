@@ -112,6 +112,7 @@ contextBridge.exposeInMainWorld("wuweiEdition", {
 });
 
 const api = {
+  languagePreference: process.argv.find(arg => arg.startsWith("--wuwei-language-preference="))?.slice("--wuwei-language-preference=".length),  systemLanguage: process.argv.find(arg => arg.startsWith("--wuwei-system-language="))?.slice("--wuwei-system-language=".length),
   // ——— 产品行为埋点：任意 UI 事件调 window.wuwei.track(event, props?, detail?) → product_events ———
   track: (event: string, props?: Record<string, unknown>, detail?: string) => ipcRenderer.invoke("track", { event, props, detail }) as Promise<boolean>,
   // ——— AGI 板块:数字婴儿 ———
@@ -197,7 +198,7 @@ const api = {
   setCompact: (p: { threshold?: number; msgThreshold?: number }) => ipcRenderer.send("settings:set-compact", p),
   setAskToast: (autoDismiss: boolean, sec: number) =>
     ipcRenderer.send("settings:set-ask-toast", autoDismiss, sec),
-  setAppSettings: (patch: Record<string, boolean>) => ipcRenderer.send("settings:set-app", patch),
+  setAppSettings: (patch: Record<string, boolean | string>) => ipcRenderer.send("settings:set-app", patch),
   // 「AI 员工团队」可选模块（默认关）。开关未开时主进程没注册这些通道，调用会 reject——
   // 渲染层只在开关为真时才会用到它们，整块删掉即可摘除该模块。
   team: {

@@ -1248,7 +1248,7 @@ export const DEFAULT_BRAIN_NOTE_EN =
 // 构造系统提示词：优先本平台专属覆盖(creds[pid].systemPrompt)，再全局(settings.systemPrompt)，都没有=默认模板；渲染 {model}/{cwd}
 function buildSysPrompt(cwd: string, model: string, providerId?: string): string {
   const st = loadSettings();
-  const lang = st?.app?.lang || detectSysLang(); // 未手动设过→按系统语言
+  const lang = st?.app?.lang && st.app.lang !== "system" ? st.app.lang : detectSysLang(); // 未手动设过→按系统语言
   const override = providerId ? st?.creds?.[providerId]?.systemPrompt : undefined;
   const custom = typeof override === "string" ? override : st?.systemPrompt;
   let base = typeof custom === "string" ? renderPrompt(custom, cwd, model) : systemPrompt(cwd, model, lang);
@@ -2920,13 +2920,14 @@ function createWindow() {
     minWidth: 640,
     minHeight: 480,
     title: appDisplayName(), // 任务栏悬停显示的就是它，跟随界面语言
-    backgroundColor: "#16191e", // 无为·玄墨黑，避免加载时白闪
+    backgroundColor: "#f7f6f3", // Match the light client during initial loading
     // 无边框自绘：mac 保留悬浮红绿灯(hiddenInset)，Windows/Linux 全去原生边框+菜单，标题栏自绘
     ...(process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset" as const }
       : { frame: false }),
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
+      additionalArguments: ["--wuwei-system-language=" + (app.getPreferredSystemLanguages()[0] || app.getLocale()), "--wuwei-language-preference=" + (loadSettings()?.app?.lang || "system")],
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -3178,6 +3179,7 @@ if (!gotLock) {
   }
 
   app.whenReady().then(() => {
+    process.env.WUWEI_SYSTEM_LANG = app.getPreferredSystemLanguages()[0] || app.getLocale();
     initializeFirstRunSettings();
     // 所有模型请求统一压缩发送副本：限制长边和编码字节，包含历史附件、截图和手机上传。
     // 小图保持原样；大图优先 PNG，必要时 JPEG/继续缩小，原始展示图不受影响。
@@ -4339,6 +4341,7 @@ ipcMain.handle("session:bootstrap", () => {
 
 ipcMain.handle("settings:get", () => ({
   settings: loadSettings(),
+  systemLanguage: app.getPreferredSystemLanguages()[0] || app.getLocale(),
   backend: backendLabel,
   model: modelLabel,
   defaultPrompt: DEFAULT_SYSTEM_PROMPT, // 中文默认(设置页按界面语言在渲染层实时选)
@@ -4403,6 +4406,7 @@ ipcMain.on(
 ipcMain.on("settings:set-app", (_e, patch: Record<string, boolean | string>) => {
   const s = loadSettings() || ({} as Settings);
   s.app = { ...(s.app || {}), ...patch } as any;
+  if (patch.lang === "system") process.env.WUWEI_SYSTEM_LANG = app.getPreferredSystemLanguages()[0] || app.getLocale();
   saveSettings(s);
   applyEnvFromSettings(s); // 关键：app.lang 变了要刷 WUWEI_LANG，主进程 tt()/工具描述/系统提示默认才跟随界面语言
   // 语言变了，任务栏标题/托盘提示要当场跟上，不用重启

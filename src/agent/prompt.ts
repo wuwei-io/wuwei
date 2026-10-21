@@ -1,4 +1,4 @@
-import { tr as translate, getCurrentLanguage } from "../localization/index.js";
+import { tr as translate, getCurrentLanguage, getLanguages, normalizeLanguage } from "../localization/index.js";
 // 系统提示词：默认模板 + 渲染。用户可在「设置」里查看/修改/清空（覆盖默认）。
 // 占位符：{model}=当前底层模型，{cwd}=当前工作目录。
 // 注意：工具的 schema 仍通过 API 的 tools 参数单独传给模型，不依赖这里。
@@ -15,6 +15,15 @@ export function renderPrompt(template: string, cwd: string, model?: string): str
 // 默认系统提示词（未自定义时用）；lang="en" 用英文模板
 export function systemPrompt(cwd: string, model?: string, lang?: string): string {
   return renderPrompt(translate("agent.defaultPrompt", {}, lang || getCurrentLanguage()), cwd, model);
+}
+
+// Added on every model request, including restored chats and employee/custom prompts.
+// Updating a preference changes future replies without rewriting conversation history.
+export function withResponseLanguage(system: string, lang = getCurrentLanguage()): string {
+  const language = normalizeLanguage(lang);
+  const locale = getLanguages().find(locale => locale.code === language)!;
+  const policy = translate('language.replyPolicy', { language: locale.nativeName }, language);
+  return `${system}\n\n${policy}`;
 }
 
 // Added per model request, including custom prompts and restored conversations.

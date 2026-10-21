@@ -9,7 +9,7 @@ export function formatCredits(value:number, language=getCurrentLanguage()) {
 }
 export function formatLedgerTime(value:string,language=getCurrentLanguage()) {
   const date=new Date(value);
-  return Number.isFinite(date.getTime())?new Intl.DateTimeFormat(language,{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date):'—';
+  return Number.isFinite(date.getTime())?new Intl.DateTimeFormat(language,{calendar:'gregory',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date):'—';
 }
 export function billingCheckoutUrl(value:string|undefined):string|null {
   try{const url=new URL(value??'');return url.protocol==='https:'&&!url.username&&!url.password&&(!url.port||url.port==='443')&&['wuweiai.io','checkout.paddle.com','sandbox-checkout.paddle.com','pay.paddle.io'].includes(url.hostname)?url.href:null;}catch{return null;}

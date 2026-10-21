@@ -6,7 +6,7 @@ test('first run respects system language and explicit choice, never timezone',()
  const oldNav=Object.getOwnPropertyDescriptor(globalThis,'navigator');const oldStore=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
  try {
   let saved=null;Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>saved}});
-  for(const [language,expected] of [['en-US','en'],['zh-CN','zh'],['zh-TW','zh'],['de-DE','en'],['ru-RU','en'],['ja-JP','en'],['','en']]){
+  for(const [language,expected] of [['en-US','en'],['zh-CN','zh'],['zh-TW','zh'],['de-DE','de'],['ru-RU','ru'],['ja-JP','ja'],['ko-KR','ko'],['fa-IR','fa'],['pt-PT','pt-BR'],['','en']]){
    Object.defineProperty(globalThis,'navigator',{configurable:true,value:{language}});assert.equal(getLang(),expected);
   }
   saved='zh';assert.equal(getLang(),'zh');saved='en';assert.equal(getLang(),'en');

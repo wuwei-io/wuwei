@@ -19,12 +19,24 @@ for (const key of new Set([...Object.keys(english), ...Object.keys(chinese)])) {
 for (const [code, pack] of Object.entries(packs)) {
   if (!packs[pack.meta.fallback]) errors.push(`Unknown fallback in ${code}: ${pack.meta.fallback}`);
   for (const key of Object.keys(pack.messages)) if (!(key in english)) errors.push(`Unknown message in ${code}: ${key}`);
-  // Additional locales may be partial: missing keys follow the declared fallback.
+  // Extensions may declare partial packs. Every shipped complete pack must cover all source keys.
+  if (pack.meta.complete) for (const key of Object.keys(english)) {
+    if (!(key in pack.messages)) errors.push(`Missing complete translation in ${code}: ${key}`);
+    else if (english[key]?.trim() && !pack.messages[key]?.trim()) errors.push(`Empty complete translation in ${code}: ${key}`);
+  }
   for (const [key, message] of Object.entries(pack.messages)) {
     if (typeof message !== 'string') errors.push(`Non-string message in ${code}: ${key}`);
     const names = [...message.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)].map(match => match[1]);
     const allowed = new Set([...`${english[key] || ''}${chinese[key] || ''}`.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)].map(match => match[1]));
     for (const name of names) if (!allowed.has(name)) errors.push(`Unknown interpolation ${name} in ${code}: ${key}`);
+    if (pack.meta.complete && !['en','zh'].includes(code)) {
+      const sourceNames = [...(english[key] || '').matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/g)].map(match => match[1]);
+      if (JSON.stringify(names.sort()) !== JSON.stringify(sourceNames.sort())) errors.push(`Changed interpolation in ${code}: ${key}`);
+      if (/ZXQPH\d|[\uE100\uE101]|\uFFFD/.test(message)) errors.push(`Damaged translation in ${code}: ${key}`);
+      for (const token of (english[key] || '').match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|`[^`]+`|https?:\/\/[^\s<>]+/g) || []) {
+        if (!message.includes(token)) errors.push(`Changed technical identifier in ${code}: ${key}: ${token}`);
+      }
+    }
   }
 }
 let checked = 0;

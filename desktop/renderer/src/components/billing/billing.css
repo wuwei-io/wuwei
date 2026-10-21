@@ -16,4 +16,9 @@
 @media(max-width:680px){.billing-calendar{right:auto;left:0;width:280px}.billing-cards .billing-wide{padding:20px 16px}.billing-compact-comparison table{min-width:500px}.billing-page-total{flex-basis:100%}}
 
 /* Header actions share the title's vertical centre at every viewport height. */
-.billing-top{padding:0 15px 0 26px;height:48px;gap:12px}.billing-top>div{align-items:center}.billing-top .billing-close{position:static;display:grid;place-items:center;padding:0;flex-shrink:0;line-height:1}.billing-top .billing-close svg{display:block}
+.billing-top{--billing-header-height:48px;height:var(--billing-header-height);padding:0 calc((var(--billing-header-height) - 30px)/2) 0 26px;gap:12px}.billing-top>div{align-items:center}.billing-top .billing-close{position:static;display:grid;place-items:center;padding:0;flex-shrink:0;line-height:1}.billing-top .billing-close svg{display:block}
+
+/* Keep the shared close control in the upper-right corner in every writing direction. */
+.billing-top{direction:ltr}.billing-top b,.billing-top button:not(.billing-close){unicode-bidi:plaintext}.billing-crypto-address code,.billing-crypto-amount{direction:ltr;unicode-bidi:isolate}
+[dir=rtl] .billing-split>aside,[dir=rtl] .billing-payment-layout>aside{border-right:0;border-left:1px solid var(--billing-line)}
+[dir=rtl] .billing-benefits{padding:0 20px 0 0}[dir=rtl] .billing-benefits li:before{left:auto;right:-20px}

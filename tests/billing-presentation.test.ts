@@ -42,3 +42,10 @@ test('stalled or rejected billing IPC resolves to a retryable error, including l
     assert.deepEqual(await billingRequest({action:'catalog'},10),{error:'network'});
   } finally{(globalThis as any).window=previous;}
 });
+
+
+test('Persian ledger uses the same Gregorian dates as filtering and always uses 24-hour time',()=>{
+  const date=new Date('2026-10-20T15:14:12Z');
+  const expected=new Intl.DateTimeFormat('fa',{calendar:'gregory',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date);
+  assert.equal(formatLedgerTime(date.toISOString(),'fa'),expected);
+});

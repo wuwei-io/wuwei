@@ -8,7 +8,7 @@ const DIR = join(homedir(), process.env.WUWEI_DATA_DIR_NAME || ".wuwei");
 
 // Resolve the user's locale independently of timezone; language packs own fallbacks.
 export function detectSysLang(): string {
-  try { return normalizeLanguage(process.env.LC_ALL || process.env.LANG?.split('.')[0] || Intl.DateTimeFormat().resolvedOptions().locale); }
+  try { return normalizeLanguage(process.env.WUWEI_SYSTEM_LANG || process.env.LC_ALL || process.env.LANG?.split('.')[0] || Intl.DateTimeFormat().resolvedOptions().locale); }
   catch { return 'en'; }
 }
 
@@ -283,7 +283,7 @@ export function applyEnvFromSettings(s: Settings | null) {
   // 界面语言 → env，供 CLI 侧（mcp 状态、remember 的默认记忆头 # 记忆/# Memory）跟随。
   // 用户未手动设过 lang → 按系统语言自动判定（海外默认英文），与 renderer i18n getLang() 一致。
   process.env.WUWEI_LANG =
-    s?.app?.lang ? normalizeLanguage(s.app.lang) : detectSysLang();
+    s?.app?.lang && s.app.lang !== 'system' ? normalizeLanguage(s.app.lang) : detectSysLang();
   // Missing/unreadable/incomplete desktop settings must never infer a costly
   // backend from credentials installed on this computer. Login resolves the
   // recommended value model from the catalog; guests start with anonymous chat.

@@ -85,7 +85,8 @@ test('provider switching refreshes image instructions without advertising unavai
   assert.equal(seen[0].system, seen[1].system);
   assert.ok(seen[0].system.includes('platform_imagegen') && !seen[0].system.includes('codex_imagegen'));
   assert.ok(seen[2].system.includes('codex_imagegen') && !seen[2].system.includes('platform_imagegen'));
-  assert.equal(seen[3].system, 'User custom system');
+  assert.ok(seen[3].system.startsWith('User custom system\n\n'));
+  assert.ok(!seen[3].system.includes('platform_imagegen')&&!seen[3].system.includes('codex_imagegen'));
 });
 
 test('disabled tools do not gain image instructions from provider capability alone', async () => {
@@ -94,5 +95,6 @@ test('disabled tools do not gain image instructions from provider capability alo
     complete: async system => { prompt = system; return done; } };
   const agent = new Agent(provider, 'Custom prompt', [], { cwd: '.' }, new Map(), { compactThreshold: 0 });
   await agent.send('hello', {});
-  assert.equal(prompt, 'Custom prompt');
+  assert.ok(prompt.startsWith('Custom prompt\n\n'));
+  assert.ok(!prompt.includes('platform_imagegen'));
 });
