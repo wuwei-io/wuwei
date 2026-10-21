@@ -150,6 +150,18 @@ jobs:
           AZURE_TS_PROFILE: ${{ secrets.AZURE_TS_PROFILE }}
           AZURE_PUBLISHER_NAME: ${{ secrets.AZURE_PUBLISHER_NAME }}
 
+      - name: Verify packaged Windows renderer and completed-session layout
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          node scripts/verify-packaged-renderer.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-client-flows.mjs .qa-release-sidebar
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          WUWEI_QA_BUILT_RENDERER: '1'
+          WUWEI_QA_FILTER: '侧栏显示'
+
       # 上传安装包 + latest*.yml 到阿里云 OSS（自动更新源 + 官网下载源）。
       # 凭证走仓库 secrets；上传成功后再发布 GitHub Release。
       - name: Upload to Aliyun OSS

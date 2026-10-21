@@ -7396,7 +7396,7 @@ export function App() {
                 className={
                   "session-item" +
                   (s.id === currentId ? " active" : "") +
-                  (s.done ? "done" : "") +
+                  (s.done ? " done" : "") +
                   (s.id === dragId ? " dragging" : "") +
                   (s.id === dragOverId ? " drag-over" : "")
                 }
@@ -7963,7 +7963,7 @@ export function App() {
                                   0 余额非会员额外在下方追加充值引导。 */}
                               <button
                                 type="button"
-                                className={"acct-checkin" + (checkinDone ? "done" : "")}
+                                className={"acct-checkin" + (checkinDone ? " done" : "")}
                                 disabled={checkinDone || checkinBusy}
                                 onClick={doCheckin}
                                 title={
@@ -9297,7 +9297,7 @@ export function App() {
             </div>
           )}
           {goal && (
-            <div className={"goal-bar" + (goal.active ? " on" : "") + (goal.done ? "done" : "")}>
+            <div className={"goal-bar" + (goal.active ? " on" : "") + (goal.done ? " done" : "")}>
               <span className="goal-ico">{goal.done ? "✓" : "◎"}</span>
               <span className="goal-text" title={goal.text}>{goal.text}</span>
               {goal.active ? (

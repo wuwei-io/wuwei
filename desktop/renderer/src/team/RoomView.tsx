@@ -411,7 +411,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                           const ropen = openResults.has(rkey);
                           return (
                             <div className="tc-msg-step" key={i}>
-                              <button className={"tc-prog-step tc-msg-step-head" + (s.isError ? " err" : "done") + (s.result ? " has-result" : "")} title={label} onClick={() => { if (!s.result) return; setOpenResults((o) => { const n = new Set(o); if (n.has(rkey)) n.delete(rkey); else n.add(rkey); return n; }); }}>
+                              <button className={"tc-prog-step tc-msg-step-head" + (s.isError ? " err" : " done") + (s.result ? " has-result" : "")} title={label} onClick={() => { if (!s.result) return; setOpenResults((o) => { const n = new Set(o); if (n.has(rkey)) n.delete(rkey); else n.add(rkey); return n; }); }}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{s.isError ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M20 6 9 17l-5-5" />}</svg>
                                 <span className="tc-prog-step-t">{label}</span>
                                 {s.result && <svg className={"tc-msg-step-caret" + (ropen ? " up" : "")} viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>}
@@ -469,7 +469,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
                         {p.tools.map((t, i) => {
                           const label = researchToolLabel(t.name, t.input, getCurrentLanguage());
                           return (
-                          <div className={"tc-prog-step" + (t.done ? "done" : "") + (t.isError ? " err" : "")} key={i} title={label}>
+                          <div className={"tc-prog-step" + (t.done ? " done" : "") + (t.isError ? " err" : "")} key={i} title={label}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                               {t.done ? <path d="M20 6 9 17l-5-5" /> : <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
                             </svg>
@@ -526,7 +526,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
               {cands.map((c, i) => (
                 <button
                   key={c.id}
-                  className={"tc-mention-item" + (c.id === "__all__" ? "all" : "") + (i === mentionIdx ? " on" : "")}
+                  className={"tc-mention-item" + (c.id === "__all__" ? " all" : "") + (i === mentionIdx ? " on" : "")}
                   onMouseEnter={() => setMentionIdx(i)}
                   onMouseDown={(e) => { e.preventDefault(); pickMention(c.name); }}
                 >
