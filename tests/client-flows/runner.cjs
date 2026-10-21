@@ -42,7 +42,9 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'getSettings': { const value = { settings: clone(s.settings), backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
-    case 'bootstrap': return { currentId: 'qa-session', sessions: [{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }], groups: [], messages: clone(s.historyMessages) };
+    case 'bootstrap': return { currentId: 'qa-session', sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
+    case 'switchSession': s.switchedSession=args[0];return true;
+    case 'deleteSession': s.deletedSession=args[0];return true;
     case 'newSession': emit(s, 'evt:session-loaded', { id: 'qa-new-session', messages: [] }); return true;
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
@@ -117,7 +119,7 @@ async function boot(options = {}) {
     if (!allow) blocked.push(details.url.split('?')[0]);
     callback({ cancel: !allow });
   });
-  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, additionalArguments: ['--qa-lang='+(options.lang||'zh')], offscreen: !!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
+  const win = new BrowserWindow({ width: 1200, height: 920, show: false, webPreferences: { partition, additionalArguments: ['--qa-lang='+(options.lang||'zh')], offscreen: options.offscreen??!!process.env.WUWEI_QA_FILTER, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') } });
   // Existing flow fixtures represent a chat whose model has already been chosen.
   // Empty-chat/default tests explicitly supply historyMessages: [].
   const state = { win, account: account(), settings: settings(), historyMessages: [{ role: 'user', content: [{ type: 'text', text: '已有对话，沿用明确选择的模型' }] }], calls: [], modelWrites: [], sent: [], orders: 0, orderSkus: [], permissionReplies: [], decisionReplies: [], defaults: new Set(), errors: [], messages: [], blocked, ...options };
@@ -136,6 +138,8 @@ async function boot(options = {}) {
 }
 async function run(name, options, test) {
   if (process.env.WUWEI_QA_FILTER && !name.includes(process.env.WUWEI_QA_FILTER)) return;
+  if (process.env.WUWEI_QA_COMPONENT_ONLY==='1'&&!options.developmentOnly) return;
+  if (process.env.WUWEI_QA_BUILT_RENDERER==='1'&&options.developmentOnly) {results.push({name,skipped:true,reason:'Requires Vite component injection; run separately in development mode'});console.log('SKIP '+name+' (Vite component injection)');return;}
   let fixture;
   try { fixture = await boot(options); await test(fixture); const fatal = fixture.state.errors.filter(e => /renderer-fatal|Uncaught|Unhandled/.test(e)); assert.deepEqual(fatal, []); results.push({ name, passed: true, mockedOrders: fixture.state.orders, blockedExternalRequests: fixture.state.blocked.length }); console.log('PASS ' + name); }
   catch (error) { results.push({ name, passed: false, error: error.message, messages: fixture?.state.messages.slice(-15), calls: fixture?.state.calls.slice(-15) }); console.log('FAIL ' + name + ': ' + error.message); if (fixture) fs.writeFileSync(path.join(evidence, 'failure-' + results.length + '.png'), (await fixture.state.win.webContents.capturePage()).toPNG()); }
@@ -144,6 +148,27 @@ async function run(name, options, test) {
 app.whenReady().then(async () => {
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
+
+  for (const lang of ['zh','en']) await run('侧栏显示：已完成会话保持单行布局、悬停删除和切换交互 '+lang, {
+    lang,offscreen:true,settings:{...settings(),app:{teamEnabled:false,lang}},sessions:[
+      {id:'qa-session',title:'HAL',createdAt:Date.now(),updatedAt:Date.now()},
+      ...Array.from({length:12},(_,i)=>({id:'done-'+i,title:i%2?'历史已完成任务：知识宫殿资料整理与支付到账记录核对，这是一条很长的标题':'Completed conversation with a very long title that must stay on one line',done:true,createdAt:Date.now()-86400000*(i+1),updatedAt:Date.now()-86400000*(i+1)})),
+    ],
+  },async f=>{
+    await f.wait('document.querySelectorAll(".session-item.done").length===12');
+    for (const width of [232,180,320]) {
+      await f.js(`document.querySelector('.sidebar').style.width='${width}px'`);
+      const layout=await f.js(`Array.from(document.querySelectorAll('.session-item')).map(row=>{const title=row.querySelector('.s-title'),button=row.querySelector('.s-del'),r=row.getBoundingClientRect(),t=title.getBoundingClientRect(),b=button.getBoundingClientRect();return {display:getComputedStyle(row).display,height:r.height,whiteSpace:getComputedStyle(title).whiteSpace,overflow:getComputedStyle(title).overflow,inside:t.left>=r.left&&t.right<=r.right+1&&b.right<=r.right+1,buttonOpacity:getComputedStyle(button).opacity,border:getComputedStyle(button).borderTopWidth}})`);
+      assert.equal(layout.length,13);for(const row of layout){assert.equal(row.display,'flex');assert.ok(row.height>=30&&row.height<=42,JSON.stringify(row));assert.equal(row.whiteSpace,'nowrap');assert.equal(row.overflow,'hidden');assert.equal(row.inside,true);assert.equal(row.buttonOpacity,'0');assert.equal(row.border,'0px');}
+    }
+    await f.js("document.querySelector('.sidebar').style.width='232px'");await f.js('document.fonts.ready');await delay(250);
+    fs.writeFileSync(path.join(evidence,'sidebar-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    fs.writeFileSync(path.join(evidence,'sidebar-'+lang+'-detail.png'),(await f.state.win.webContents.capturePage({x:0,y:0,width:232,height:Math.min(850,f.state.win.getContentSize()[1])})).toPNG());
+    const point=await f.js("(()=>{const r=document.querySelector('.session-item.done').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
+    f.state.win.webContents.sendInputEvent({type:'mouseMove',...point});await delay(150);assert.equal(await f.js("getComputedStyle(document.querySelector('.session-item.done .s-del')).opacity"),'1');
+    await f.click('.session-item.done');assert.equal(f.state.switchedSession,'done-0');
+    f.state.switchedSession=null;await f.click('.session-item.done .s-del');assert.equal(f.state.deletedSession,'done-0');assert.equal(f.state.switchedSession,null);
+  });
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
   const openBilling=async(f,ledger=false)=>{await f.click('.acct-btn');await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(ledger?(f.state.lang==='en'?'Credit details':'积分明细'):(f.state.lang==='en'?'Top up':'充值'))+')?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
@@ -358,7 +383,7 @@ app.whenReady().then(async () => {
   await run('游客额度用尽的登录弹窗明确免费额度和付费扣币，不暗示顶级模型免费', { account:null, settings:settings('wuwei-free','openrouter-auto-free'), nextError:'[[gw:free_daily_cap_reached]] exhausted' }, async f => {
     await f.send(); await f.wait('document.body.textContent.includes("免费模型有每日额度，付费模型按用量消耗无为币")'); assert.equal(await f.js('document.body.textContent.includes("免费使用更多模型")'),false); assert.equal(f.state.orders,0);
   });
-  await run('员工模型配置复用统一选择与顶级确认，确认前不写入员工草稿', {}, async f => {
+  await run('员工模型配置复用统一选择与顶级确认，确认前不写入员工草稿', {developmentOnly:true}, async f => {
     await f.js(`(async()=>{
       const main=await(await fetch('/src/main.tsx')).text();const paths=[...main.matchAll(/from "([^"]+)"/g)].map(m=>m[1]);
       const React=(await import(paths.find(p=>/\\/react\\.js\\?/.test(p)))).default;const {createRoot}=(await import(paths.find(p=>p.includes('react-dom_client.js')))).default;
@@ -375,7 +400,7 @@ app.whenReady().then(async () => {
       await f.click('#qa-employee [data-action=choose-value]'); await f.wait('document.querySelector("#qa-employee [data-testid=employee-model-picker]")?.textContent.includes("QA Value")'); assert.equal(f.state.modelWrites.length,0); assert.equal(f.state.sent.length,0); assert.equal(f.state.orders,0);
     } finally { await f.js('window.__qaEmployeeDispose?.()'); }
   });
-  await run('顶级确认期间价格变化须重新确认，下架时撤销确认且不选择模型', {}, async f => {
+  await run('顶级确认期间价格变化须重新确认，下架时撤销确认且不选择模型', {developmentOnly:true}, async f => {
     await f.js(`(async()=>{
       const main=await(await fetch('/src/main.tsx')).text();const paths=[...main.matchAll(/from "([^"]+)"/g)].map(m=>m[1]);const React=(await import(paths.find(p=>/\\/react\\.js\\?/.test(p)))).default;const {createRoot}=(await import(paths.find(p=>p.includes('react-dom_client.js')))).default;
       const {ModelPicker}=await import('/src/components/ModelPicker.tsx');const host=document.createElement('div');host.id='qa-price';document.body.append(host);const root=createRoot(host);const chosen=[];
@@ -581,6 +606,6 @@ app.whenReady().then(async () => {
   await run('顶级提醒十秒自动关闭，任务状态变化不会重新出现', { settings: settings('wuwei-claude', 'claude-opus-4-8') }, async f => {
     await f.wait('!!document.querySelector(".premium-model-current")'); await delay(10_100); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); ready(f.state); emit(f.state, 'evt:tasks', { running: ['qa-session'] }); await delay(120); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); assert.equal(f.state.sent.length, 0);
   });
-  fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
-  app.exit(results.every(r => r.passed) ? 0 : 1);
+  fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
+  app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);
 }).catch(error => { console.error(error.stack); app.exit(1); });
