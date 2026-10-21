@@ -4064,8 +4064,6 @@ export function App() {
   const [unavailModel, setUnavailModel] = useState<string | null>(null); // 上游暂不可用(upstream_error)的模型 → 错误栏给「一键换可用模型」引导
   const [showSupport, setShowSupport] = useState(false); // 联系客服弹窗（支付遇到问题 / 账号菜单都可开）
   const [showSupportChat, setShowSupportChat] = useState(false); // 在线客服实时对话窗
-  const [supportUnread, setSupportUnread] = useState(0); // 客服未读回复数（悬浮球红点）
-  const [scLauncherHidden, setScLauncherHidden] = useState(() => localStorage.getItem("wuwei-sc-launcher-hidden") === "1"); // 用户关掉了悬浮球
   const [showLeaveMsg, setShowLeaveMsg] = useState(false); // 留言表单（客服弹窗内点「直接留言」/ 账号菜单「留言反馈」进入）
   const [leaveMsgFromSupport, setLeaveMsgFromSupport] = useState(false); // 区分来源：从客服弹窗进=显返回；从菜单直接进=无返回
   const [showMsgCenter, setShowMsgCenter] = useState(false); // 消息中心弹窗
@@ -4168,15 +4166,6 @@ export function App() {
   // 存 ref 便于「再次点付款先清上一个」+「组件卸载清理」，绝不留下永远跑的定时器。
   const enPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (enPollRef.current) { clearInterval(enPollRef.current); enPollRef.current = null; } }, []);
-  // 后台轮询客服未读（不清未读）：登录 且 聊天窗未开时，每 20s 查一次，有回复亮红点
-  useEffect(() => {
-    if (!wuwei || showSupportChat) return;
-    let alive = true;
-    const check = async () => { const r = await window.wuwei.supportThread(false).catch(() => null); if (alive && r) setSupportUnread(r.unread || 0); };
-    void check();
-    const iv = setInterval(check, 20000);
-    return () => { alive = false; clearInterval(iv); };
-  }, [wuwei, showSupportChat]);
   // 灰度开关（C2）：订阅版是否显示，完全由后端 flags 决定，默认隐藏。客户端只渲染不判定。
   const showSubscription = !!wuwei?.flags?.includes("subscription");
   const [wuweiBusy, setWuweiBusy] = useState(false);
@@ -8081,7 +8070,7 @@ export function App() {
                               </button>
 
                               <button
-                                className="acct-it"
+                                className="acct-it" data-account-support
                                 onClick={() => {
                                   void window.wuwei.track?.("menu_item_click", { item: "support" });
                                   setShowAcctMenu(false);
@@ -10247,28 +10236,6 @@ export function App() {
           onClose={() => setShowModelPricing(false)}
           onContact={() => { setShowModelPricing(false); setShowSupport(true); }}
         />
-      )}
-      {/* 右下角悬浮客服球：常驻入口 + 有回复亮红点。可一键关掉(记住)，之后走账号菜单「联系客服」。 */}
-      {wuwei && !showSupportChat && !scLauncherHidden && (
-        <div className="sc-launcher-wrap">
-          <button
-            className="sc-launcher"
-            title={tr("ui.app.support.chat.94aec4a")}
-            onClick={() => { setSupportUnread(0); setShowSupportChat(true); }}
-          >
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 13v-1a8 8 0 0 1 16 0v1" /><rect x="2.5" y="13" width="4" height="6" rx="1.6" /><rect x="17.5" y="13" width="4" height="6" rx="1.6" /><path d="M20 19a4 4 0 0 1-4 4h-2" />
-            </svg>
-            {supportUnread > 0 && <span className="sc-launcher-dot">{supportUnread > 9 ? "9+" : supportUnread}</span>}
-          </button>
-          <button
-            className="sc-launcher-x"
-            title={tr("ui.app.hide.reach.via.account.menu.cd14e14")}
-            onClick={() => { setScLauncherHidden(true); localStorage.setItem("wuwei-sc-launcher-hidden", "1"); }}
-          >
-            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-          </button>
-        </div>
       )}
       {/* 留言表单：客服弹窗点「直接留言」进入(带返回)；账号菜单「留言反馈」直接进入(无返回) */}
       {showLeaveMsg && (

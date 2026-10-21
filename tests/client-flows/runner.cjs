@@ -49,6 +49,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
+    case 'supportThread': return {messages:[],unread:0};
     case 'getModelPricing': return { providers: [] };
     case 'fetchModels': return [];
     case 'getAppVersion': return '1.7.49';
@@ -214,6 +215,9 @@ app.whenReady().then(async () => {
     assert.ok(g.second&&g.inside,JSON.stringify(g));assert.equal(g.text,'−50%');assert.ok(g.title.length>8);
     fs.writeFileSync(path.join(evidence,'account-upgrade-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
     await f.click('[data-account-upgrade]');await f.wait('!!document.querySelector(".billing-selector-option")');assert.equal(f.state.orders,0);
+    await f.click('.billing-close');assert.equal(await f.js('!!document.querySelector(".sc-launcher-wrap,.sc-launcher")'),false);
+    await f.fill('.composer textarea','QA send control check');assert.equal(await f.js('(()=>{const e=document.querySelector(".composer .send-btn"),r=e.getBoundingClientRect();return e.contains(document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2));})()'),true);
+    await f.click('.acct-btn');await f.click('[data-account-support]');await f.wait('!!document.querySelector(".sc-head")');await f.click('.sc-close');await f.wait('!document.querySelector(".sc-head")');assert.equal(await f.js('!!document.querySelector(".sc-launcher")'),false);
   });
   for(const lang of ['zh','en','fa'])await run('发布关键：完整模型目录、单列用量估算、搜索筛选与套餐联动 '+lang,{
     account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},

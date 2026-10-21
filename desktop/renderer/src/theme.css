@@ -4454,13 +4454,6 @@ body {
 .sc-lb-close { position: fixed; top: 18px; right: 20px; width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255, 255, 255, 0.14); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .sc-lb-close:hover { background: rgba(255, 255, 255, 0.26); }
 /* 右下角悬浮客服球 */
-.sc-launcher-wrap { position: fixed; right: 22px; bottom: 22px; z-index: 45; }
-.sc-launcher-wrap:hover .sc-launcher-x { opacity: 1; pointer-events: auto; }
-.sc-launcher { position: relative; width: 50px; height: 50px; border-radius: 50%; border: none; background: linear-gradient(135deg, #2a2f37, #16191e); color: #fff; cursor: pointer; display: grid; place-items: center; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32); transition: transform 0.12s; }
-.sc-launcher:hover { transform: translateY(-2px); }
-.sc-launcher-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #e5484d; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; border: 2px solid var(--bg, #0e0f12); }
-.sc-launcher-x { position: absolute; top: -6px; left: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: #4a5058; color: #fff; cursor: pointer; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
-.sc-launcher-x:hover { background: #5a616b; }
 /* 弹窗两选项 */
 .pay-opts { padding: 0 26px 8px; display: flex; flex-direction: column; gap: 13px; }
 .pay-opt {
