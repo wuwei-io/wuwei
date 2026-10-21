@@ -1,12 +1,13 @@
 import React from 'react';
 import {tr} from '../../../../../src/localization/index.js';
-import {formatCredits,modelVendorName} from '../../../../../src/billing/presentation.js';
+import {formatCredits,modelVendorName,annualPriceComparison} from '../../../../../src/billing/presentation.js';
 import type {BillingCurrency,BillingPeriod,BillingProduct} from '../../../../../src/billing/contracts.js';
 import type {ModelChoice} from '../../../../../src/model-selection.js';
+import {BillingAnnualTerm} from './BillingAnnualTerm.js';
 import {BillingBrand} from './BillingBrand.js';
 
 export interface BillingPlansProps {
-  lang:string;period:BillingPeriod;currency:BillingCurrency;products:BillingProduct[];member:boolean;
+  lang:string;period:BillingPeriod;currency:BillingCurrency;products:BillingProduct[];catalogProducts:BillingProduct[];member:boolean;
   models:ModelChoice[];busy:boolean;loading:boolean;insufficient?:boolean;balance:number;
   onPeriod:(period:BillingPeriod)=>void;onChoose:(product:BillingProduct)=>void;onFree?:()=>void;onRules:()=>void;
 }
@@ -20,6 +21,7 @@ export function BillingPlans(p:BillingPlansProps){
     {p.loading&&<p role="status" className="billing-plans-loading">{tr('ui.billingpanel.loading.64db553')}</p>}
     <div className="billing-plan-grid">{p.products.map((product,index)=>{
       const annual=product.period==='annual',amount=p.currency==='USD'?product.usdMinor:product.cnyMinor;
+      const comparison=annualPriceComparison(product,p.currency,p.catalogProducts);
       const credits=pack&&p.member?product.memberCredits:product.credits;
       const formatted=money(annual?amount/12:amount,p.currency,p.lang);
       const name=pack?`${formatCredits(product.credits)} ${tr('ui.billingpanel.credits.455609c')}`:product.name;
@@ -27,8 +29,8 @@ export function BillingPlans(p:BillingPlansProps){
       return <article className={'billing-plan-card '+(product.recommended?'recommended':'')} key={product.sku} data-sku={product.sku}>
         {product.recommended&&<span className="billing-plan-ribbon">{tr('ui.billingpanel.recommended.99a8fb6')}</span>}
         <h2>{name}</h2><p className="billing-plan-audience">{tr(pack?'billing.plans.packAudience':`billing.plans.audience.${index}`)}</p>
-        <div className="billing-plan-price"><strong>{formatted}</strong>{!pack&&<span>{tr('ui.billingpanel.mo.00fb449')}</span>}</div>
-        <p className="billing-plan-term">{annual?tr('billing.plans.annualPayment',{price:money(amount,p.currency,p.lang)}):tr('ui.billingpanel.one.time.payment.8890b8e')}</p>
+        <div className="billing-plan-price">{comparison&&<del className="billing-original-monthly">{money(comparison.monthly,p.currency,p.lang)}</del>}<strong>{formatted}</strong>{!pack&&<span>{tr('ui.billingpanel.mo.00fb449')}</span>}</div>
+        <p className={"billing-plan-term"+(annual?" annual":"")}>{annual?<BillingAnnualTerm amount={amount} before={comparison?.annual} money={minor=>money(minor,p.currency,p.lang)} details/>:tr('ui.billingpanel.one.time.payment.8890b8e')}</p>
         <button className="billing-plan-buy" onClick={()=>p.onChoose(product)} disabled={p.busy||p.loading}>{p.busy?tr('set.brain.warming'):tr('billing.plans.choose',{plan:name})}<span aria-hidden="true">→</span></button>
         <div className="billing-plan-allowance"><span>{tr(pack?'billing.plans.packAllowance':'billing.plans.allowance')}</span><div><b>{formatCredits(credits)}</b><small>{tr(pack?'ui.billingpanel.credits.455609c':'ui.billingpanel.credits.month.3093877')}</small></div><p>{tr(pack?(p.member?'billing.plans.bonusIncluded':'billing.plans.bonusEligible'):'billing.plans.saving.'+saving)}</p></div>
         {!pack&&<div className="billing-plan-models" aria-label={tr('billing.plans.models')}>{p.models.slice(0,6).map(model=><span className="billing-plan-model" key={model.key} title={p.lang==='zh'?model.label:model.labelEn}><BillingBrand model={model.modelId} provider={model.providerId}/><small>{modelVendorName(model)}</small></span>)}</div>}

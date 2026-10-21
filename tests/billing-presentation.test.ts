@@ -1,6 +1,8 @@
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
+import type {BillingProduct} from '../src/billing/contracts.js';
 import assert from 'node:assert/strict';
-import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseModels,billingModelCatalog,billingCheckoutUrl} from '../src/billing/presentation.js';
+import {annualPriceComparison,formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseModels,billingModelCatalog,billingCheckoutUrl} from '../src/billing/presentation.js';
 import type {CreditRecord} from '../src/billing/contracts.js';
 import type {ModelChoice} from '../src/model-selection.js';
 import {billingRequest} from '../desktop/renderer/src/components/billing/request.js';
@@ -55,4 +57,15 @@ test('full billing catalog excludes connections, hidden aliases and automatic ro
  const c=(id:string,category='premium')=>({key:id,modelId:id,providerId:'hosted',category,free:category==='free',rank:1,recommended:false}) as ModelChoice;
  const models=[c('claude-opus'),c('claude-sonnet'),c('gpt-6'),c('openrouter-auto-free','free'),c('glm-flash','free'),c('byok','connections'),{...c('legacy'),hiddenInPicker:true},c('gpt-6')];
  const all=billingModelCatalog(models);assert.equal(all.length,4);assert.equal(all.filter(m=>m.modelId.startsWith('claude')).length,2);assert.ok(all.some(m=>m.free));
+});
+
+test('annual list prices come from the matching monthly offer and only describe real savings',()=>{
+  const products=JSON.parse(readFileSync(new URL('./fixtures/billing-products.json',import.meta.url),'utf8')) as BillingProduct[];
+  const annual=products.find(p=>p.sku==='v2_plan_pro_annual')!,monthly=products.find(p=>p.sku==='v2_plan_pro_monthly')!;
+  assert.deepEqual(annualPriceComparison(annual,'USD',products),{monthly:2000,annual:24000});
+  assert.deepEqual(annualPriceComparison(annual,'CNY',products),{monthly:13400,annual:160800});
+  assert.equal(annualPriceComparison(annual,'USD',[]),null);
+  assert.equal(annualPriceComparison(monthly,'USD',products),null);
+  assert.equal(annualPriceComparison(products.find(p=>p.kind==='pack')!,'USD',products),null);
+  for(const amount of [24000,25000,0,-1,NaN])assert.equal(annualPriceComparison({...annual,usdMinor:amount},'USD',products),null);
 });

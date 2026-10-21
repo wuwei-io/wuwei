@@ -53,3 +53,13 @@
 /* Keep the short Chinese coin delivery label on one line. */
 .packs .billing-selector-name:lang(zh){min-width:max-content}
 .packs .billing-selector-name:lang(zh) b,.packs .billing-selector-name:lang(zh) small{white-space:nowrap}
+
+/* Annual comparisons use subdued list prices and a clear annual payable total. */
+.billing-original-monthly,.billing-original-annual{color:#918980;font-weight:500;text-decoration-thickness:1px;font-variant-numeric:tabular-nums}
+.billing-selector-price>.billing-original-monthly{font-size:13px;line-height:20px;margin-inline-end:7px;vertical-align:baseline}
+.billing-selector-price .billing-selector-annual{display:flex;justify-content:flex-end;align-items:baseline;gap:2px 5px;flex-wrap:wrap;white-space:normal}
+.billing-selector-annual .billing-current-annual{font-size:inherit;line-height:inherit;font-weight:600;color:#6b6259}
+.billing-selector-price:has(.billing-selector-annual){max-width:calc(100% - 65px)}
+.billing-plan-price>.billing-original-monthly{font-size:15px;line-height:20px;margin-inline-end:2px}
+.billing-plan-term.annual{display:flex;align-content:flex-start;align-items:baseline;gap:0 5px;flex-wrap:wrap}
+.billing-plan-term .billing-current-annual{font-size:inherit;font-weight:600;color:#665c51}

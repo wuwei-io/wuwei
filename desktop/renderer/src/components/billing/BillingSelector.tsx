@@ -1,7 +1,8 @@
 import React from 'react';
 import {tr} from '../../../../../src/localization/index.js';
-import {formatCredits} from '../../../../../src/billing/presentation.js';
+import {formatCredits,annualPriceComparison} from '../../../../../src/billing/presentation.js';
 import {BillingModelCatalog} from './BillingModelCatalog.js';
+import {BillingAnnualTerm} from './BillingAnnualTerm.js';
 import {BillingUsageLines} from './BillingUsage.js';
 import type {BillingPlansProps} from './BillingPlans.js';
 
@@ -18,8 +19,8 @@ export function BillingSelector(p:BillingPlansProps&{selected:string;onSelect:(s
       <div className="billing-selector-periods" role="tablist" aria-label={tr('ui.billingpanel.billing.period.af01053')}>{(['monthly','annual','pack'] as const).map(period=><button key={period} role="tab" aria-selected={period===p.period} onClick={()=>p.onPeriod(period)}>{tr('billing.plans.period.'+period)}{period==='annual'&&<span>−50%</span>}</button>)}</div>
       {p.loading&&<p role="status">{tr('ui.billingpanel.loading.64db553')}</p>}
       <div className={'billing-selector-options '+(p.period==='pack'?'packs':'')}>{p.products.map(x=>{
-        const amount=p.currency==='USD'?x.usdMinor:x.cnyMinor,active=x.sku===product?.sku;
-        return <button key={x.sku} className={'billing-selector-option '+(active?'selected':'')} aria-pressed={active} onClick={()=>p.onSelect(x.sku)}>{x.recommended&&<span className="billing-selector-ribbon">{tr('ui.billingpanel.recommended.99a8fb6')}</span>}<i aria-hidden="true">{active?'✓':''}</i><span className="billing-selector-name"><b>{x.kind==='plan'?x.name:`${formatCredits(x.credits)} ${tr('ui.billingpanel.credits.455609c')}`}</b><small>{formatCredits(x.kind==='pack'&&p.member?x.memberCredits:x.credits)} {tr(x.kind==='pack'?'ui.billingpanel.credits.delivered.493dda6':'ui.billingpanel.credits.month.3093877')}</small></span><span className="billing-selector-price"><strong>{money(x.period==='annual'?amount/12:amount)}</strong>{x.kind==='plan'&&<span>{tr('ui.billingpanel.mo.00fb449')}</span>}<small>{x.period==='annual'?tr('ui.billingpanel.billed.yearly.ca680b1',{p0:money(amount)}):tr('ui.billingpanel.one.time.payment.8890b8e')}</small></span></button>;
+        const amount=p.currency==='USD'?x.usdMinor:x.cnyMinor,active=x.sku===product?.sku,comparison=annualPriceComparison(x,p.currency,p.catalogProducts);
+        return <button key={x.sku} className={'billing-selector-option '+(active?'selected':'')} aria-pressed={active} onClick={()=>p.onSelect(x.sku)}>{x.recommended&&<span className="billing-selector-ribbon">{tr('ui.billingpanel.recommended.99a8fb6')}</span>}<i aria-hidden="true">{active?'✓':''}</i><span className="billing-selector-name"><b>{x.kind==='plan'?x.name:`${formatCredits(x.credits)} ${tr('ui.billingpanel.credits.455609c')}`}</b><small>{formatCredits(x.kind==='pack'&&p.member?x.memberCredits:x.credits)} {tr(x.kind==='pack'?'ui.billingpanel.credits.delivered.493dda6':'ui.billingpanel.credits.month.3093877')}</small></span><span className="billing-selector-price">{comparison&&<del className="billing-original-monthly">{money(comparison.monthly)}</del>}<strong>{money(x.period==='annual'?amount/12:amount)}</strong>{x.kind==='plan'&&<span>{tr('ui.billingpanel.mo.00fb449')}</span>}<small className={x.period==='annual'?'billing-selector-annual':undefined}>{x.period==='annual'?<BillingAnnualTerm amount={amount} before={comparison?.annual} money={money}/>:tr('ui.billingpanel.one.time.payment.8890b8e')}</small></span></button>;
       })}</div>
       <button className="billing-selector-pay billing-plan-buy" disabled={!product||p.busy||p.loading} onClick={()=>product&&p.onChoose(product)}>{p.busy?tr('set.brain.warming'):tr('ui.billingpanel.continue.to.payment.6194b01')} <span aria-hidden="true">→</span></button><p className="billing-selector-note">{tr('ui.billingpanel.one.time.purchase.no.auto.renewal.9ee6e44')}</p>
       <div className="billing-selector-free"><span>{tr('billing.selector.explore')}</span>{p.onFree&&<button onClick={p.onFree}>{tr('ui.billingpanel.try.free.first.84f4717')}</button>}</div>
