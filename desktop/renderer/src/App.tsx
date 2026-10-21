@@ -1183,7 +1183,7 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49" /></svg>
           </button>
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { pickImgs(e.target.files); e.currentTarget.value = ""; }} />
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={tr("ui.app.type.message.paste.screenshots.directly.0dfb24f")} rows={1}
+          <textarea dir="auto" value={input} onChange={(e) => setInput(e.target.value)} placeholder={tr("ui.app.type.message.paste.screenshots.directly.0dfb24f")} rows={1}
             onPaste={(e) => {
               const items = e.clipboardData?.items;
               if (!items) return;
@@ -1291,7 +1291,7 @@ function LeaveMessageModal({ onClose, onBack, t }: { onClose: () => void; onBack
                   {t("pay.msg.rewardHint")}
                 </span>
               </div>
-              <textarea
+              <textarea dir="auto"
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
                 onPaste={onPaste}
@@ -2561,7 +2561,7 @@ function ScheduleModal({ en, employeeId, task, sopNodes, onClose }: { en: boolea
               </select>
             ) : <p className="st-hint">{tr("ui.app.no.sop.yet.write.one.first.e5161f2")}</p>
           ) : (
-            <textarea className="tc-textarea" rows={5} value={doc} placeholder={tr("ui.app.write.what.to.do.when.triggered.c934baf")} onChange={(e) => setDoc(e.target.value)} />
+            <textarea dir="auto" className="tc-textarea" rows={5} value={doc} placeholder={tr("ui.app.write.what.to.do.when.triggered.c934baf")} onChange={(e) => setDoc(e.target.value)} />
           )}
         </div>
         <label className="sched-enable"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {tr("ui.app.enabled.02606e2")}</label>
@@ -8592,7 +8592,7 @@ export function App() {
                 </div>
                 <div className="by-composer">
                   <div className="input-wrap">
-                    <textarea
+                    <textarea dir="auto"
                       rows={1}
                       value={babyChatInput}
                       placeholder={tr("ui.app.message.11fa2e77fa")}
@@ -9387,7 +9387,7 @@ export function App() {
             </div>
           )}
           <div className="input-wrap">
-            <textarea
+            <textarea dir="auto"
               ref={taRef}
               rows={1}
               placeholder={t("composer.placeholder")}
@@ -9875,7 +9875,7 @@ export function App() {
                       {depth < 3 && <button type="button" className="goal-node-add" title={tr("ui.app.add.sub.node.04101ed")} onClick={() => addChildId(s.id)}>+{tr("ui.app.sub.00e7cfe")}</button>}
                       <button type="button" className="goal-node-del" title={tr("set.mcp.delete")} onClick={() => delStepId(s.id)}>×</button>
                     </div>
-                    <textarea className="goal-node-desc" rows={2} value={s.description || ""} placeholder={tr("ui.app.description.optional.can.be.detailed.6dd52b6")} onChange={(e) => setStepId(s.id, { description: e.target.value })} />
+                    <textarea dir="auto" className="goal-node-desc" rows={2} value={s.description || ""} placeholder={tr("ui.app.description.optional.can.be.detailed.6dd52b6")} onChange={(e) => setStepId(s.id, { description: e.target.value })} />
                     <input className="goal-node-acc" value={s.acceptance} placeholder={tr("ui.app.acceptance.criterion.1424093")} onChange={(e) => setStepId(s.id, { acceptance: e.target.value })} />
                   </div>
                 </div>
@@ -9929,7 +9929,7 @@ export function App() {
               </div>
               {/* 总目标 */}
               <div className="goal-field-label">{tr("ui.app.overall.goal.b2b0bbd")}</div>
-              <textarea
+              <textarea dir="auto"
                 autoFocus
                 rows={3}
                 value={ge.text}
@@ -9982,7 +9982,7 @@ export function App() {
               </button>
               {pasteOpen && (
                 <div className="goal-paste">
-                  <textarea
+                  <textarea dir="auto"
                     className="goal-json-view"
                     rows={8}
                     value={pasteText}
@@ -10025,7 +10025,7 @@ export function App() {
               )}
               {/* 调研结论 */}
               <div className="goal-field-label">{tr("ui.app.research.findings.494f67c")}<span className="goal-field-opt">{tr("ui.app.optional.a52b3ba")}</span></div>
-              <textarea
+              <textarea dir="auto"
                 rows={4}
                 value={ge.research}
                 placeholder={tr("ui.app.findings.from.the.research.above.or.f587b09")}
@@ -10044,11 +10044,11 @@ export function App() {
               <div className="goal-rules">
                 <div className="goal-rules-col">
                   <div className="goal-field-label">{tr("ui.app.must.do.c161293")}</div>
-                  <textarea rows={3} value={ge.ruleDo} placeholder={tr("ui.app.verify.each.step.with.real.data.d2a3210")} onChange={(e) => setGE({ ruleDo: e.target.value })} />
+                  <textarea dir="auto" rows={3} value={ge.ruleDo} placeholder={tr("ui.app.verify.each.step.with.real.data.d2a3210")} onChange={(e) => setGE({ ruleDo: e.target.value })} />
                 </div>
                 <div className="goal-rules-col">
                   <div className="goal-field-label goal-field-dont">{tr("ui.app.never.do.drift.guard.147a137")}</div>
-                  <textarea rows={3} value={ge.ruleDont} placeholder={tr("ui.app.don.turn.this.into.an.unrelated.43a8616")} onChange={(e) => setGE({ ruleDont: e.target.value })} />
+                  <textarea dir="auto" rows={3} value={ge.ruleDont} placeholder={tr("ui.app.don.turn.this.into.an.unrelated.43a8616")} onChange={(e) => setGE({ ruleDont: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -11735,7 +11735,7 @@ function StopRulesSettings({ lang }: { lang: Lang }) {
       <div className="app-set-row" style={{ cursor: "default" }}>
         <div className="app-set-label">{tr("ui.app.when.it.must.stop.and.ask.3e5992f")}</div>
       </div>
-      <textarea
+      <textarea dir="auto"
         rows={5}
         style={{ width: "100%", boxSizing: "border-box", resize: "vertical", background: "var(--bg-input)", color: "var(--text)", border: "1px solid var(--border-strong)", borderRadius: 10, padding: "10px 12px", fontFamily: "var(--sans)", fontSize: 13, lineHeight: 1.6, outline: "none" }}
         value={text}
@@ -12178,7 +12178,7 @@ const AssistantMsg = React.memo(function AssistantMsg({
     <div className="aimsg" data-anchor={anchor}>
       {thinkEl}
       {committed && <MarkdownView text={committed} highlight={false} />}
-      {tail && <div className="md md-streaming">{maskSecrets(tail)}</div>}
+      {tail && <div className="md md-streaming" dir="auto">{maskSecrets(tail)}</div>}
     </div>
   );
 });
@@ -12199,7 +12199,7 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
       <button className={"code-copy" + (done ? " ok" : "")} onClick={copy} title={makeT(getLang())("code.copy")}>
         {done ? (tr("ui.app.copied.2aff14e")) : (tr("pay.support.copy"))}
       </button>
-      <pre ref={ref}>{children}</pre>
+      <pre ref={ref} dir="ltr">{children}</pre>
     </div>
   );
 }
@@ -12215,7 +12215,7 @@ const MarkdownView = React.memo(function MarkdownView({
   const txf = useTx(); // 翻译显示层：翻译态下把消息正文临时译成英文覆盖显示(纯覆盖，不改数据)
   const clean = maskSecrets(tightenMarkdown(txf(text)));
   return (
-    <div className="md">
+    <div className="md" dir="auto">
       <Markdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={highlight ? [rehypeHighlight] : []}
@@ -15706,7 +15706,7 @@ function SettingsModal({
                   {t("set.pr.globalPrompt")}
                   {sysPromptTouched ? t("set.pr.customized") : t("set.pr.default")}
                 </span>
-                <textarea
+                <textarea dir="auto"
                   className="sysprompt-area pp-fill"
                   value={sysPrompt}
                   onChange={(e) => {
@@ -15755,7 +15755,7 @@ function SettingsModal({
               {platPromptOn && (
                 <label className="field pp-grow">
                   <span>{tr("ui.app.text.113068a", { v0: (lang !== "zh" ? undefined : preset.label), v1: (lang !== "zh" ? pLabel(preset, lang) : undefined) })}{t("set.pr.overrideLabelSuffix")}</span>
-                  <textarea
+                  <textarea dir="auto"
                     className="sysprompt-area pp-fill"
                     value={platPrompt}
                     onChange={(e) => setPlatPrompt(e.target.value)}
@@ -15771,7 +15771,7 @@ function SettingsModal({
             <div className="prompt-pane">
               <label className="field pp-grow">
                 <span>{t("set.mem.global")}</span>
-                <textarea
+                <textarea dir="auto"
                   className="sysprompt-area pp-fill"
                   value={memory}
                   onChange={(e) => {
@@ -15875,7 +15875,7 @@ function SettingsModal({
                     <>
                       <label className="field pp-grow">
                         <span>{t("set.brain.promptLabel")} {brainPromptTouched ? t("set.pr.customized") : t("set.pr.default")}</span>
-                        <textarea
+                        <textarea dir="auto"
                           className="sysprompt-area pp-fill"
                           value={brainPrompt}
                           onChange={(e) => {
@@ -16169,7 +16169,7 @@ function SettingsModal({
                           </label>
                           <label className="field">
                             <span>{t("set.brain.fAttrs")}</span>
-                            <textarea
+                            <textarea dir="auto"
                               className="sysprompt-area"
                               style={{ minHeight: 90 }}
                               value={attrsToText(brainDraft.attrs)}
@@ -16617,7 +16617,7 @@ function SettingsModal({
                   </div>
                   {mcpRawEdit && (
                     <>
-                      <textarea
+                      <textarea dir="auto"
                         className="sysprompt-area mcp-raw"
                         value={mcpConfig}
                         onChange={(e) => {
@@ -16813,7 +16813,7 @@ function SettingsModal({
                 </div>
                 {secImportOpen && (
                   <div className="sec-import">
-                    <textarea
+                    <textarea dir="auto"
                       className="sec-import-ta"
                       placeholder={t("set.sec.importPlaceholder")}
                       value={secImportText}
@@ -16974,7 +16974,7 @@ function SettingsModal({
                   {t("set.sec.promptLabel")} {secretsPromptTouched ? t("set.pr.customized") : t("set.pr.default")}{t("set.sec.promptViewEdit")}
                 </summary>
                 <label className="field" style={{ marginTop: 8, display: "block" }}>
-                  <textarea
+                  <textarea dir="auto"
                     className="sysprompt-area"
                     style={{ minHeight: 140, width: "100%" }}
                     value={secretsPrompt}

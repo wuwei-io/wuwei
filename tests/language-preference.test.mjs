@@ -6,12 +6,13 @@ import {Agent} from '../src/agent/loop.ts';
 import {systemPrompt} from '../src/agent/prompt.ts';
 import {getLanguages,setCurrentLanguage,tr,normalizeLanguage} from '../src/localization/index.ts';
 
-test('system mode follows OS changes; explicit preferences persist and RTL initializes before rendering',()=>{
+test('system mode follows OS changes; explicit preferences persist and layout stays stable before rendering',()=>{
   const code=buildSync({entryPoints:['src/localization/index.ts'],bundle:true,format:'cjs',platform:'browser',write:false}).outputFiles[0].text;
   const data=new Map(),events={},context={exports:{},module:{exports:{}},window:{},navigator:{language:'ja-JP'},localStorage:{getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)},document:{documentElement:{lang:'',dir:''}},addEventListener:(event,fn)=>events[event]=fn};
   vm.runInNewContext(code,context);const api=context.module.exports;
   assert.equal(api.getLanguagePreference(),'system');assert.equal(api.getCurrentLanguage(),'ja');assert.equal(context.document.documentElement.lang,'ja');assert.equal(data.size,0);
-  context.navigator.language='fa-IR';events.languagechange();assert.equal(api.getCurrentLanguage(),'fa');assert.equal(context.document.documentElement.dir,'rtl');
+  context.navigator.language='fa-IR';events.languagechange();assert.equal(api.getCurrentLanguage(),'fa');assert.equal(context.document.documentElement.dir,'ltr');
+  api.setCurrentLanguage('ar');assert.equal(context.document.documentElement.dir,'ltr');assert.equal(api.getLanguages().find(locale=>locale.code==='ar').direction,'rtl');
   api.setCurrentLanguage('ru');context.navigator.language='ko-KR';events.languagechange();assert.equal(api.getCurrentLanguage(),'ru');assert.equal(data.get('wuwei_lang'),'ru');
   api.setCurrentLanguage('system');assert.equal(api.getCurrentLanguage(),'ko');assert.equal(data.get('wuwei_lang'),'system');
   api.setSystemLanguage('vi-VN');assert.equal(api.getCurrentLanguage(),'vi');

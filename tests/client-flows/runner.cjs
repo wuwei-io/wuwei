@@ -169,11 +169,19 @@ app.whenReady().then(async () => {
     for(const code of codes){
       await f.click('.language-picker-trigger');await f.wait('!!document.querySelector(".language-picker-popup")');await f.click('.language-picker-options [data-language-code="'+code+'"]');
       await f.wait('document.documentElement.lang==='+JSON.stringify(code));await delay(35);
-      assert.equal(f.state.appLanguage,code);assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),code);assert.equal(await f.js('document.documentElement.dir'),['ar','fa'].includes(code)?'rtl':'ltr');
+      assert.equal(f.state.appLanguage,code);assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),code);assert.equal(await f.js('document.documentElement.dir'),'ltr');
       assert.equal(await f.js('document.querySelector(".composer textarea").value'),'原始草稿 keep original');
+      const layout=await f.js(`(()=>{const r=s=>document.querySelector(s).getBoundingClientRect();return {sidebar:r('.sidebar').left,main:r('.main').left,nav:r('.set-side').left,settings:r('.settings').left,content:r('.set-main').left,close:r('.set-main-head .set-win-btn:last-child').left,windowButtons:r('.win-ctrl').left,inputDir:document.querySelector('.composer textarea').dir,labelDir:getComputedStyle(document.querySelector('.app-set-label')).direction}})()`);
+      assert.ok(layout.sidebar<layout.main&&layout.nav<layout.content,code+JSON.stringify(layout));assert.equal(layout.inputDir,'auto');
+      if(['fa','ar'].includes(code)){
+        assert.equal(layout.labelDir,'rtl');assert.ok(layout.close>layout.content&&layout.windowButtons>layout.main+500,JSON.stringify(layout));
+        await f.fill('.composer textarea',code==='fa'?'سلام، لطفاً کمک کنید.':'مرحباً، الرجاء المساعدة.');assert.equal(await f.js('getComputedStyle(document.querySelector(".composer textarea")).direction'),'rtl');
+        await f.fill('.composer textarea','English draft 123');assert.equal(await f.js('getComputedStyle(document.querySelector(".composer textarea")).direction'),'ltr');await f.fill('.composer textarea','原始草稿 keep original');
+      }
+
       await f.click('.language-picker-trigger');await f.wait('!!document.querySelector(".language-picker-popup")');
       const rect=await f.js('(()=>{const r=document.querySelector(".language-picker-popup").getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight}})()');assert.ok(rect.left>=0&&rect.right<=rect.width&&rect.top>=0&&rect.bottom<=rect.height,code+JSON.stringify(rect));
-      if(['zh','en','ru','fa','ja','hi'].includes(code)){await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'language-settings-'+code+'.png'),(await f.state.win.webContents.capturePage()).toPNG());}
+      if(['zh','en','ru','fa','ar','ja','hi'].includes(code)){await f.js('document.fonts.ready');await delay(200);fs.writeFileSync(path.join(evidence,'language-settings-'+code+'.png'),(await f.state.win.webContents.capturePage()).toPNG());}
       f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});await f.wait('!document.querySelector(".language-picker-popup")');assert.equal(await f.js('!!document.querySelector(".settings")'),true);
     }
     assert.equal(f.state.sent.length,0);await uiLanguage(f,'ru');await delay(60);
@@ -264,8 +272,8 @@ app.whenReady().then(async () => {
     press();await f.wait('document.documentElement.lang==="en"');f.state.lang='en';await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-payment-choices")');assert.match(await f.js('document.querySelector(".billing-payment-choices").textContent'),/Card \/ PayPal/);assert.doesNotMatch(await f.js('document.querySelector(".billing-payment-layout").textContent'),/[\u3400-\u9fff]/);assert.equal(f.state.orders,0);
     await delay(200);fs.writeFileSync(path.join(evidence,'language-shortcut-'+modifier+'-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
   });
-  for(const code of ['ru','fa','ja']) await run('发布关键：多语言付款与日历 '+code,{account:clone(billingAccount),cryptoOnly:true,lang:code,settings:{...settings(),app:{teamEnabled:false,lang:code}}},async f=>{
-    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button:last-child")');await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');await billingHeaderAligned(f);assert.equal(f.state.orders,1);assert.equal(f.state.billingCalls.find(call=>call.action==='create-order').currency,'USD');
+  for(const code of ['ru','fa','ar','ja']) await run('发布关键：多语言付款与日历 '+code,{account:clone(billingAccount),cryptoOnly:true,lang:code,settings:{...settings(),app:{teamEnabled:false,lang:code}}},async f=>{
+    await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-pay-methods button:last-child")');await f.click('.billing-pay-methods button:last-child');await f.wait('!!document.querySelector(".billing-real-qr svg")');await billingHeaderAligned(f);assert.equal(f.state.orders,1);assert.equal(f.state.billingCalls.find(call=>call.action==='create-order').currency,'USD');assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-crypto-address code")).direction'),'ltr');assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-live-order h3")).textAlign'),'center');
     await delay(200);fs.writeFileSync(path.join(evidence,'payment-'+code+'.png'),(await f.state.win.webContents.capturePage()).toPNG());await f.click('.billing-close');await openBilling(f,true);await f.wait('!!document.querySelector(".billing-credit-record")');await f.click('.billing-date-trigger');await f.wait('!!document.querySelector(".billing-calendar")');
     const heading=await f.js('document.querySelector(".billing-calendar-heading b").textContent'),expected=await f.js('new Intl.DateTimeFormat('+JSON.stringify(code)+',{calendar:"gregory",year:"numeric",month:"long"}).format(new Date())');assert.equal(heading,expected);await billingHeaderAligned(f);
   });

@@ -27,7 +27,7 @@ export function LanguagePicker({language,onChange}:{language:Lang;onChange:(lang
       const maxHeight=Math.min(400,Math.max(below,above));
       const height=Math.min(400,Math.max(200,maxHeight));
       const top=below>=Math.min(300,height)||below>=above?rect.bottom+gap:Math.max(edge,rect.top-gap-height);
-      const left=Math.max(edge,Math.min(locale.direction==='rtl'?rect.left:rect.right-width,innerWidth-width-edge));
+      const left=Math.max(edge,Math.min(rect.right-width,innerWidth-width-edge));
       setPosition({top,left,width,maxHeight:Math.max(150,maxHeight)});
     };
     place();window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
@@ -50,16 +50,16 @@ export function LanguagePicker({language,onChange}:{language:Lang;onChange:(lang
       <span data-language-name={preference}>{preference==='system'?t('language.system'):locale.nativeName}</span><span aria-hidden="true">⌄</span>
     </button>
     <p className="language-setting-note">{t('language.keepContent')}</p>
-    {open&&createPortal(<div className="language-picker-popup" ref={popup} style={position} dir={locale.direction} onKeyDown={event=>{
+    {open&&createPortal(<div className="language-picker-popup" ref={popup} style={position} dir="ltr" onKeyDown={event=>{
       if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();setActive(index=>(index+(event.key==='ArrowDown'?1:-1)+visible.length)%Math.max(1,visible.length));}
       else if(event.key==='Enter'&&visible[active]){event.preventDefault();select(visible[active].code);}
       else if(event.key==='Tab')close(true);
     }}>
-      <div className="language-picker-search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input ref={search} type="text" value={query} placeholder={t('language.search')} aria-label={t('language.search')} role="combobox" aria-controls={id} aria-expanded="true" aria-autocomplete="list" aria-activedescendant={visible[active]?`${id}-${visible[active].code}`:undefined} onChange={event=>{setQuery(event.target.value);setActive(0);}}/>{query&&<button type="button" aria-label={t('language.clearSearch')} onClick={()=>{setQuery('');setActive(0);search.current?.focus();}}>×</button>}</div>
+      <div className="language-picker-search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input dir="auto" ref={search} type="text" value={query} placeholder={t('language.search')} aria-label={t('language.search')} role="combobox" aria-controls={id} aria-expanded="true" aria-autocomplete="list" aria-activedescendant={visible[active]?`${id}-${visible[active].code}`:undefined} onChange={event=>{setQuery(event.target.value);setActive(0);}}/>{query&&<button type="button" aria-label={t('language.clearSearch')} onClick={()=>{setQuery('');setActive(0);search.current?.focus();}}>×</button>}</div>
       <div className="language-picker-caption">{t('language.all')}<span>{getLanguages().length}</span></div>
       <div className="language-picker-options" role="listbox" id={id} aria-label={t('language.choose')}>
         {visible.map((entry,index)=><button key={entry.code} id={`${id}-${entry.code}`} role="option" type="button" tabIndex={-1} aria-selected={preference===entry.code} className={index===active?'active':''} data-language-index={index} data-language-code={entry.code} onPointerMove={()=>setActive(index)} onClick={()=>select(entry.code)}>
-          <span className="language-picker-names"><b data-language-name={entry.code} lang={entry.code==='system'?language:entry.code}>{entry.nativeName}</b><small>{entry.code==='system'?entry.name:labels.of(entry.code)}</small></span><span className="language-picker-code" dir="ltr">{entry.code==='system'?'':entry.code.toUpperCase()}</span><span className="language-picker-check" aria-hidden="true">{preference===entry.code?'✓':''}</span>
+          <span className="language-picker-names"><b dir="auto" data-language-name={entry.code} lang={entry.code==='system'?language:entry.code}>{entry.nativeName}</b><small dir={locale.direction}>{entry.code==='system'?entry.name:labels.of(entry.code)}</small></span><span className="language-picker-code" dir="ltr">{entry.code==='system'?'':entry.code.toUpperCase()}</span><span className="language-picker-check" aria-hidden="true">{preference===entry.code?'✓':''}</span>
         </button>)}
         {!visible.length&&<p className="language-picker-empty">{t('language.empty')}</p>}
       </div><div className="language-picker-foot">{t('language.instant')}</div>
