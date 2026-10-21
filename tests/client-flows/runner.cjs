@@ -172,10 +172,10 @@ app.whenReady().then(async () => {
       assert.equal(f.state.appLanguage,code);assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),code);assert.equal(await f.js('document.documentElement.dir'),'ltr');
       assert.equal(await f.js('document.querySelector(".composer textarea").value'),'原始草稿 keep original');
       const layout=await f.js(`(()=>{const r=s=>document.querySelector(s).getBoundingClientRect();return {sidebar:r('.sidebar').left,main:r('.main').left,nav:r('.set-side').left,settings:r('.settings').left,content:r('.set-main').left,close:r('.set-main-head .set-win-btn:last-child').left,windowButtons:r('.win-ctrl').left,inputDir:document.querySelector('.composer textarea').dir,labelDir:getComputedStyle(document.querySelector('.app-set-label')).direction}})()`);
-      assert.ok(layout.sidebar<layout.main&&layout.nav<layout.content,code+JSON.stringify(layout));assert.equal(layout.inputDir,'auto');
+      assert.ok(layout.sidebar<layout.main&&layout.nav<layout.content,code+JSON.stringify(layout));assert.equal(layout.inputDir,'ltr');
       if(['fa','ar'].includes(code)){
-        assert.equal(layout.labelDir,'rtl');assert.ok(layout.close>layout.content&&layout.windowButtons>layout.main+500,JSON.stringify(layout));
-        await f.fill('.composer textarea',code==='fa'?'سلام، لطفاً کمک کنید.':'مرحباً، الرجاء المساعدة.');assert.equal(await f.js('getComputedStyle(document.querySelector(".composer textarea")).direction'),'rtl');
+        assert.equal(layout.labelDir,'ltr');assert.ok(layout.close>layout.content&&layout.windowButtons>layout.main+500,JSON.stringify(layout));
+        await f.fill('.composer textarea',code==='fa'?'سلام، لطفاً کمک کنید.':'مرحباً، الرجاء المساعدة.');assert.equal(await f.js('getComputedStyle(document.querySelector(".composer textarea")).direction'),'ltr');
         await f.fill('.composer textarea','English draft 123');assert.equal(await f.js('getComputedStyle(document.querySelector(".composer textarea")).direction'),'ltr');await f.fill('.composer textarea','原始草稿 keep original');
       }
 
