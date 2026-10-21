@@ -7353,3 +7353,13 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 /* Annual-plan offer stays attached to Upgrade without changing menu row spacing. */
 .acct-upgrade-label{position:relative;display:inline-block;padding-inline-end:34px;line-height:20px}
 .acct-upgrade-discount{position:absolute;inset-inline-end:0;top:-5px;background:#e75561;color:#fff;font-size:9px;font-weight:650;line-height:13px;padding:1px 4px;border-radius:4px;letter-spacing:0;white-space:nowrap;direction:ltr}
+
+/* Reading direction belongs to text, never to the application's layout/chrome. */
+html:is(:lang(fa),:lang(ar)) :is(h1,h2,h3,h4,h5,h6,p,.app-set-label,.app-set-hint,.set-tab,.set-side-title,.language-setting-copy,.language-setting-note,.language-picker-foot,.s-title,.s-note) {
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+.md { unicode-bidi: plaintext; }
+.md :is(p,li,blockquote,h1,h2,h3,h4,h5,h6) { unicode-bidi: plaintext; }
+.md :is(pre,code), .sysprompt-area { unicode-bidi: isolate; }
+.md pre { direction: ltr; text-align: left; }

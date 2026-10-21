@@ -37,7 +37,8 @@ function updateDocumentLanguage() {
   if (!environment.document) return;
   const language = getCurrentLanguage();
   environment.document.documentElement.lang = language;
-  environment.document.documentElement.dir = languagePacks[language].meta.direction;
+  // Keep UI positions stable; individual text containers own their reading direction.
+  environment.document.documentElement.dir = 'ltr';
 }
 function systemLocale() {
   const initial = environment.window?.wuwei?.systemLanguage;
@@ -55,7 +56,7 @@ export function setCurrentLanguage(value: Language) {
   const language = preference === 'system' ? normalizeLanguage(systemLocale()) : preference; override = preference;
   if (environment.window || environment.localStorage) {
     try { environment.localStorage?.setItem(LANGUAGE_STORAGE_KEY, preference); } catch { /* keep the in-memory preference */ }
-    if (environment.document) { environment.document.documentElement.lang = language; environment.document.documentElement.dir = languagePacks[language].meta.direction; }
+    updateDocumentLanguage();
   } else if (environment.process) environment.process.env.WUWEI_LANG = language;
   for (const listener of listeners) listener();
 }
@@ -63,8 +64,7 @@ export function subscribeLanguage(listener: () => void) { listeners.add(listener
 if (environment.window) environment.addEventListener?.('storage', event => {
   if (event.key === LANGUAGE_STORAGE_KEY || event.key == null) {
     override = undefined;
-    const language = getCurrentLanguage();
-    if (environment.document) { environment.document.documentElement.lang = language; environment.document.documentElement.dir = languagePacks[language].meta.direction; }
+    updateDocumentLanguage();
     for (const listener of listeners) listener();
   }
 });
