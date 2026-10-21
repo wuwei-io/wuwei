@@ -11,6 +11,7 @@ import './payment.css';
 import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseModels,billingCheckoutUrl} from '../../../../../src/billing/presentation.js';
 import {BillingDatePicker} from './BillingDatePicker.js';
 import {billingRequest} from './request.js';
+import {billingTrack} from './telemetry.js';
 
 type Props={lang:string;accountId:string;balance:number;models:ModelChoice[];initialPage?:'plans'|'ledger';initialPeriod?:BillingPeriod;insufficient?:boolean;imageMode?:boolean;onClose:()=>void;onNeedLogin:()=>void;onPaid?:()=>void;onSwitch:(choice:ModelChoice)=>Promise<void>};
 const fmt=formatCredits;
@@ -30,7 +31,7 @@ export function BillingPanel(p:Props){
   const openWebAfterPrepare=useRef(false);
   const openWeb=(value:BillingOrder)=>{
     if(!openWebAfterPrepare.current)return;openWebAfterPrepare.current=false;
-    const url=billingCheckoutUrl(value.checkoutUrl);if(url)void window.wuwei.openExternal(url);else setError(tr('ui.billingorderview.payment.link.unavailable.please.contact.support.763c18f'));
+    const url=billingCheckoutUrl(value.checkoutUrl);if(url){billingTrack('billing_checkout_open',{channel:value.channel,sku:value.sku,order_id:value.id,lang:p.lang});void window.wuwei.openExternal(url);}else setError(tr('ui.billingorderview.payment.link.unavailable.please.contact.support.763c18f'));
   };
   const requestIds=useRef(new Map<string,string>()),orderCache=useRef(new Map<string,BillingOrder>());
   const [fallback,setFallback]=useState<ModelChoice|null>(null),[retry,setRetry]=useState(0);
@@ -38,6 +39,7 @@ export function BillingPanel(p:Props){
   const [fromDate,setFromDate]=useState(''),[toDate,setToDate]=useState('');
   const [expanded,setExpanded]=useState<string|null>(null);
   const generation=useRef(0),attemptedOrder=useRef(''),orderInFlight=useRef(new Set<string>());
+  useEffect(()=>{billingTrack('billing_panel_shown',{page:p.initialPage??'plans',lang:p.lang});},[p.accountId]);
   useEffect(()=>()=>{++generation.current;},[]);
   useEffect(()=>{++generation.current;setQuoteBusy(false);setOrderBusy(false);},[selected,period,channel,chain]);
   useEffect(()=>{
@@ -113,10 +115,12 @@ export function BillingPanel(p:Props){
 
   const requestQuote=async(chosen=product)=>{
     if(!chosen||quoteBusy)return;const current=++generation.current;setQuoteBusy(true);setError('');
+    billingTrack(chosen.kind==='pack'?'buy_credits_click':'upgrade_member_click',{sku:chosen.sku,period:chosen.period,currency,lang:p.lang,layout,source:'billing_v2'});
     try{const r=await billingRequest({action:'quote',sku:chosen.sku,currency});if(generation.current!==current)return;
       if('error' in r){if(r.error==='not_logged_in')p.onNeedLogin();throw Error(r.error);}
       if(!('catalogVersion' in r)||r.sku!==chosen.sku||r.currency!==currency)throw Error('invalid_quote');
       attemptedOrder.current='';openWebAfterPrepare.current=false;setChannel(r.currency==='CNY'?'alipay':catalog?.channels.paddle?'paddle':'crypto');setPaymentSelected(r.currency==='CNY');setSelected(chosen.sku);setQuote(r);setOrder(null);setPage('checkout');
+      if(r.currency==='CNY')billingTrack('billing_payment_method_select',{channel:'alipay',selection:'automatic',sku:r.sku,currency:r.currency,lang:p.lang});
     }catch{if(generation.current===current)setError(tr("ui.billingpanel.quote.unavailable.please.retry.49ba615"));}
     finally{if(generation.current===current)setQuoteBusy(false);}
   };
@@ -135,7 +139,7 @@ export function BillingPanel(p:Props){
       if(generation.current!==current)return;
       if('error' in r){if(r.error==='not_logged_in')p.onNeedLogin();if(r.error==='QUOTE_CHANGED'){setQuote(null);setPage('plans');setCatalog(null);setRetry(x=>x+1);throw Error('quote_changed');}throw Error(r.error);}
       if(!('id' in r)||r.sku!==quote.sku||r.currency!==quote.currency||r.amountMinor!==quote.amountMinor||r.channel!==channel)throw Error('invalid_order');
-      orderCache.current.set(key,r);setOrder(r);if(channel==='paddle')openWeb(r);
+      orderCache.current.set(key,r);setOrder(r);billingTrack('billing_order_created',{channel:r.channel,sku:r.sku,order_id:r.id,currency:r.currency,lang:p.lang,...(channel==='crypto'?{chain}:{})});if(channel==='paddle')openWeb(r);
     }catch{if(generation.current===current)setError(tr("ui.billingpanel.unable.to.create.an.order.please.19dc49a"));}
     finally{orderInFlight.current.delete(key);if(generation.current===current)setOrderBusy(false);}
   };
@@ -158,13 +162,12 @@ export function BillingPanel(p:Props){
   };
   const typeName=(r:CreditRecord)=>({gift:tr("ui.billingpanel.grant.d0f6ff5"),earn:tr("ui.billingpanel.grant.d0f6ff5"),spend:tr("ui.billingpanel.usage.b9fbe08"),expire:tr("ui.billingpanel.expired.72d325c"),refund:tr("ui.billingpanel.refund.21eb54f"),adjust:tr("ui.billingpanel.adjustment.37c1a32")}[r.type]??r.type);
   return <div className="billing-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)p.onClose();}}><section ref={panel} onKeyDown={e=>e.stopPropagation()} className={'billing-panel '+(page==='plans'?'billing-plan-view '+(layout==='split'?'billing-selector-view':'') :page==='checkout'?'billing-payment-view':'')} role="dialog" aria-modal="true" aria-labelledby="billing-title">
-    <button className="billing-close" aria-label={tr("msg.close")} onClick={p.onClose}>×</button>
-    <div className="billing-top"><b id="billing-title">{page==='ledger'?tr("ui.app.credit.details.a3a619a"):tr("ui.billingpanel.wuwei.plans.and.payment.4ce473d")}</b><div>{page!=='plans'&&<button onClick={()=>{setPage('plans');setError('');}}>{tr("ui.billingpanel.back.to.plans.f6afada")}</button>}{page==='plans'&&<button onClick={()=>setLayout(layout==='split'?'cards':'split')}>{tr(layout==='split'?'ui.billingpanel.compare.plans.9ce46b0':'ui.billingpanel.compact.layout.5bfae9b')}</button>}<button onClick={()=>{setPage('ledger');setOffset(0);setError('');}}>{tr("ui.app.credit.details.a3a619a")}</button></div></div>
+    <div className="billing-top"><b id="billing-title">{page==='ledger'?tr("ui.app.credit.details.a3a619a"):tr("ui.billingpanel.wuwei.plans.and.payment.4ce473d")}</b><div>{page!=='plans'&&<button onClick={()=>{setPage('plans');setError('');}}>{tr("ui.billingpanel.back.to.plans.f6afada")}</button>}{page==='plans'&&<button onClick={()=>setLayout(layout==='split'?'cards':'split')}>{tr(layout==='split'?'ui.billingpanel.compare.plans.9ce46b0':'ui.billingpanel.compact.layout.5bfae9b')}</button>}<button onClick={()=>{setPage('ledger');setOffset(0);setError('');}}>{tr("ui.app.credit.details.a3a619a")}</button><button className="billing-close" aria-label={tr("msg.close")} onClick={p.onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
     {error&&<div className="billing-error" role="alert">{localizeStoredText(error, getCurrentLanguage())} <button onClick={()=>setRetry(x=>x+1)}>{tr("ui.billingpanel.retry.2cd6945")}</button></div>}
-    {page==='plans'&&(layout==='cards'?<BillingPlans lang={p.lang} period={period} currency={currency} products={products} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={setPeriod} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onRules={()=>setRules(true)}/>:<BillingSelector lang={p.lang} period={period} currency={currency} products={products} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={setPeriod} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{setSelected(sku);setQuote(null);}}/>)}
+    {page==='plans'&&(layout==='cards'?<BillingPlans lang={p.lang} period={period} currency={currency} products={products} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onRules={()=>setRules(true)}/>:<BillingSelector lang={p.lang} period={period} currency={currency} products={products} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{billingTrack('billing_plan_select',{sku,period,lang:p.lang});setSelected(sku);setQuote(null);}}/>)}
     {page==='checkout'&&quote&&<BillingPayment lang={p.lang} quote={quote} order={order} channel={channel} chain={chain} busy={orderBusy} selected={paymentSelected} channels={catalog?.channels??{alipay:false,paddle:false,crypto:false}} ready={!!catalog?.checkoutReady&&!!catalog.channels[channel]}
-      onMethod={next=>{openWebAfterPrepare.current=next==='paddle';setPaymentSelected(true);if(channel!==next){setOrder(null);setChannel(next);}else if(order&&next==='paddle')openWeb(order);}}
-      onChain={next=>{setOrder(null);setChain(next);}} onRetry={()=>void createOrder()} onNeedLogin={p.onNeedLogin}
+      onMethod={next=>{billingTrack('billing_payment_method_select',{channel:next,selection:'manual',sku:quote.sku,currency:quote.currency,lang:p.lang});openWebAfterPrepare.current=next==='paddle';setPaymentSelected(true);if(channel!==next){setOrder(null);setChannel(next);}else if(order&&next==='paddle')openWeb(order);}}
+      onChain={next=>{billingTrack('billing_crypto_network_select',{channel:'crypto',chain:next,sku:quote.sku,lang:p.lang});setOrder(null);setChain(next);}} onRetry={()=>void createOrder()} onNeedLogin={p.onNeedLogin}
       onPaid={confirmed=>{const key=[quote.catalogVersion,quote.sku,quote.currency,quote.amountMinor,quote.creditsPerGrant,quote.startsAt??'',channel,channel==='crypto'?chain:''].join(':');setOrder(confirmed);requestIds.current.delete(key);orderCache.current.delete(key);attemptedOrder.current='';setRetry(x=>x+1);p.onPaid?.();}}/>}
     {page==='ledger'&&<main className="billing-ledger"><h1>{tr("ui.app.credit.details.a3a619a")}</h1><p>{tr("ui.billingpanel.review.grants.usage.expirations.refunds.and.f79df46")}</p><div className="billing-ledger-balance"><span>{tr("ui.billingorderview.current.credits.18a748e")}</span><strong>{fmt(ledger?.balance??p.balance)}</strong></div><div className="billing-filters"><input aria-label={tr("ui.billingpanel.search.records.a47f00e")} placeholder={tr("ui.billingpanel.search.tool.model.or.description.e11f1b1")} value={search} onChange={e=>{setOffset(0);setSearch(e.target.value);}}/><select aria-label={tr("ui.billingpanel.record.type.9b79abc")} value={filter} onChange={e=>{setOffset(0);setFilter(e.target.value);}}>{[['',tr("ui.billingpanel.all.types.2243fd1")],['gift',tr("ui.billingpanel.gifts.e80289f")],['earn',tr("ui.billingpanel.earnings.d100b4f")],['spend',tr("ui.billingpanel.usage.b9fbe08")],['expire',tr("ui.billingpanel.expirations.a0e9e1b")],['refund',tr("ui.billingpanel.refunds.c4d91e4")],['adjust',tr("ui.billingpanel.adjustments.7464596")]].map(([v,n])=><option key={v} value={v}>{n}</option>)}</select><label className="billing-date">{tr("ui.billingpanel.from.9ed312b")}<BillingDatePicker lang={p.lang} label={tr("ui.billingpanel.start.date.5abdf63")} value={fromDate} max={toDate||undefined} onChange={value=>{setOffset(0);setFromDate(value);}}/></label><label className="billing-date">{tr("ui.billingpanel.to.83650ab")}<BillingDatePicker lang={p.lang} label={tr("ui.billingpanel.end.date.2bca364")} value={toDate} min={fromDate||undefined} onChange={value=>{setOffset(0);setToDate(value);}}/></label><button onClick={exportCSV} disabled={!ledger?.records.length}>{tr("ui.billingpanel.export.this.page.as.csv.b0a5612")}</button></div>
       {ledgerBusy&&<p role="status">{tr("ui.billingpanel.loading.64db553")}</p>}{ledger&&!ledger.records.length&&<p className="billing-empty">{tr("ui.billingpanel.no.matching.records.7b0e370")}</p>}
