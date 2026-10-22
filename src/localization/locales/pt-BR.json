@@ -3289,6 +3289,17 @@
     "background.queued": "Tarefa em segundo plano na fila",
     "background.accountChanged": "Sua conta mudou ou a sessão expirou. Reinicie a tarefa.",
     "background.unavailable": "Não foi possível verificar a capacidade em segundo plano. Tente novamente em instantes.",
-    "billing.background.free": "Vagas em segundo plano: {count}"
+    "billing.background.free": "Vagas em segundo plano: {count}",
+    "background.notice.title": "Seu plano {plan} permite {count} tarefas em segundo plano em paralelo",
+    "background.notice.generic": "Sua conta permite {count} tarefas em segundo plano em paralelo",
+    "background.notice.wait": "A tarefa está na fila e começará quando uma vaga ficar livre.",
+    "background.notice.upsell": "A tarefa está na fila. Faça upgrade para ter mais vagas em segundo plano.",
+    "background.notice.upgrade": "Fazer upgrade",
+    "background.notice.view": "Ver tarefas",
+    "background.plan.free": "Grátis",
+    "background.tasks.heading": "Tarefas em segundo plano",
+    "background.tasks.queued": "Na fila",
+    "background.tasks.autoStart": "Inicia automaticamente quando houver uma vaga",
+    "background.tasks.keepRunning": "As tarefas continuam ao fechar este painel"
   }
 }

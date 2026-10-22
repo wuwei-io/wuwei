@@ -3289,6 +3289,17 @@
     "background.queued": "Arka plan görevi kuyrukta",
     "background.accountChanged": "Hesabınız değişti veya oturumunuz sona erdi. Görevi yeniden başlatın.",
     "background.unavailable": "Arka plan kapasitesi doğrulanamadı. Lütfen biraz sonra tekrar deneyin.",
-    "billing.background.free": "Arka plan yuvaları: {count}"
+    "billing.background.free": "Arka plan yuvaları: {count}",
+    "background.notice.title": "Mevcut {plan} planınız aynı anda {count} arka plan görevi destekler",
+    "background.notice.generic": "Hesabınız aynı anda {count} arka plan görevi destekler",
+    "background.notice.wait": "Görev kuyrukta. Bir yuva boşaldığında otomatik başlayacak.",
+    "background.notice.upsell": "Görev kuyrukta. Daha fazla arka plan yuvası için planınızı yükseltin.",
+    "background.notice.upgrade": "Planı yükselt",
+    "background.notice.view": "Görevleri gör",
+    "background.plan.free": "Ücretsiz",
+    "background.tasks.heading": "Arka plan görevleri",
+    "background.tasks.queued": "Kuyrukta",
+    "background.tasks.autoStart": "Yer açılınca otomatik olarak başlar",
+    "background.tasks.keepRunning": "Bu panel kapatıldığında görevler devam eder"
   }
 }

@@ -3289,6 +3289,17 @@
     "background.queued": "Attività in background in coda",
     "background.accountChanged": "L’account è cambiato o la sessione è scaduta. Riavvia l’attività.",
     "background.unavailable": "Impossibile verificare la capacità in background. Riprova tra poco.",
-    "billing.background.free": "Posti in background: {count}"
+    "billing.background.free": "Posti in background: {count}",
+    "background.notice.title": "Il piano {plan} consente {count} attività in background in parallelo",
+    "background.notice.generic": "Il tuo account consente {count} attività in background in parallelo",
+    "background.notice.wait": "L’attività è in coda e partirà appena si libererà un posto.",
+    "background.notice.upsell": "L’attività è in coda. Passa a un piano superiore per più posti in background.",
+    "background.notice.upgrade": "Cambia piano",
+    "background.notice.view": "Vedi attività",
+    "background.plan.free": "Gratuito",
+    "background.tasks.heading": "Attività in background",
+    "background.tasks.queued": "In coda",
+    "background.tasks.autoStart": "Si avvia automaticamente quando si libera un posto",
+    "background.tasks.keepRunning": "Le attività continuano dopo la chiusura del pannello"
   }
 }

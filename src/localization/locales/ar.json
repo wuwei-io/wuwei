@@ -3289,6 +3289,17 @@
     "background.queued": "مهمة الخلفية في الانتظار",
     "background.accountChanged": "تغير الحساب أو انتهت الجلسة. يرجى إعادة بدء المهمة.",
     "background.unavailable": "تعذر التحقق من سعة العمل في الخلفية. يرجى المحاولة بعد قليل.",
-    "billing.background.free": "خانات الخلفية: {count}"
+    "billing.background.free": "خانات الخلفية: {count}",
+    "background.notice.title": "تدعم خطة {plan} الحالية {count} مهام في الخلفية بالتوازي",
+    "background.notice.generic": "يدعم حسابك {count} مهام في الخلفية بالتوازي",
+    "background.notice.wait": "المهمة في قائمة الانتظار وستبدأ تلقائيًا عند توفر خانة.",
+    "background.notice.upsell": "المهمة في الانتظار. قم بترقية الخطة للحصول على خانات خلفية إضافية.",
+    "background.notice.upgrade": "ترقية الخطة",
+    "background.notice.view": "عرض المهام",
+    "background.plan.free": "مجاني",
+    "background.tasks.heading": "مهام الخلفية",
+    "background.tasks.queued": "في الانتظار",
+    "background.tasks.autoStart": "تبدأ تلقائيًا عند توفر مكان",
+    "background.tasks.keepRunning": "تستمر المهام عند إغلاق هذه اللوحة"
   }
 }

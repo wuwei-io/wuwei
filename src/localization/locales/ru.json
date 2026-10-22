@@ -3289,6 +3289,17 @@
     "background.queued": "Фоновая задача в очереди",
     "background.accountChanged": "Аккаунт изменён или сеанс истёк. Запустите задачу заново.",
     "background.unavailable": "Не удалось проверить доступные фоновые места. Повторите попытку позже.",
-    "billing.background.free": "Фоновые места: {count}"
+    "billing.background.free": "Фоновые места: {count}",
+    "background.notice.title": "Ваш тариф {plan} поддерживает {count} фоновых задач одновременно",
+    "background.notice.generic": "Ваш аккаунт поддерживает {count} фоновых задач одновременно",
+    "background.notice.wait": "Задача в очереди и начнётся, когда освободится место.",
+    "background.notice.upsell": "Задача в очереди. Повысьте тариф, чтобы получить больше фоновых мест.",
+    "background.notice.upgrade": "Повысить тариф",
+    "background.notice.view": "Открыть задачи",
+    "background.plan.free": "Бесплатный",
+    "background.tasks.heading": "Фоновые задачи",
+    "background.tasks.queued": "В очереди",
+    "background.tasks.autoStart": "Начнётся автоматически, когда освободится место",
+    "background.tasks.keepRunning": "После закрытия панели задачи продолжат выполняться"
   }
 }

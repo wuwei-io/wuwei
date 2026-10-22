@@ -3289,6 +3289,17 @@
     "background.queued": "Tugas latar belakang dalam baris gilir",
     "background.accountChanged": "Akaun berubah atau sesi tamat. Sila mulakan semula tugas.",
     "background.unavailable": "Kapasiti latar belakang tidak dapat disahkan. Sila cuba sebentar lagi.",
-    "billing.background.free": "Slot latar belakang: {count}"
+    "billing.background.free": "Slot latar belakang: {count}",
+    "background.notice.title": "Pelan {plan} anda menyokong {count} tugas latar belakang serentak",
+    "background.notice.generic": "Akaun anda menyokong {count} tugas latar belakang serentak",
+    "background.notice.wait": "Tugas dalam baris gilir dan akan bermula apabila slot tersedia.",
+    "background.notice.upsell": "Tugas dalam baris gilir. Naik taraf untuk lebih banyak slot latar belakang.",
+    "background.notice.upgrade": "Naik taraf pelan",
+    "background.notice.view": "Lihat tugas",
+    "background.plan.free": "Percuma",
+    "background.tasks.heading": "Tugas latar belakang",
+    "background.tasks.queued": "Dalam baris gilir",
+    "background.tasks.autoStart": "Bermula secara automatik apabila slot tersedia",
+    "background.tasks.keepRunning": "Tugas diteruskan apabila panel ini ditutup"
   }
 }

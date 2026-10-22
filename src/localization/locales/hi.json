@@ -3289,6 +3289,17 @@
     "background.queued": "बैकग्राउंड कार्य कतार में है",
     "background.accountChanged": "खाता बदल गया है या सत्र समाप्त हो गया है। कार्य फिर से शुरू करें।",
     "background.unavailable": "बैकग्राउंड क्षमता की पुष्टि नहीं हो सकी। थोड़ी देर बाद फिर कोशिश करें।",
-    "billing.background.free": "बैकग्राउंड स्लॉट: {count}"
+    "billing.background.free": "बैकग्राउंड स्लॉट: {count}",
+    "background.notice.title": "आपकी {plan} योजना एक साथ {count} बैकग्राउंड कार्य चला सकती है",
+    "background.notice.generic": "आपका खाता एक साथ {count} बैकग्राउंड कार्य चला सकता है",
+    "background.notice.wait": "कार्य कतार में है। स्लॉट खाली होते ही अपने आप शुरू होगा।",
+    "background.notice.upsell": "कार्य कतार में है। अधिक बैकग्राउंड स्लॉट के लिए योजना अपग्रेड करें।",
+    "background.notice.upgrade": "योजना अपग्रेड करें",
+    "background.notice.view": "कार्य देखें",
+    "background.plan.free": "निःशुल्क",
+    "background.tasks.heading": "बैकग्राउंड कार्य",
+    "background.tasks.queued": "कतार में",
+    "background.tasks.autoStart": "जगह खाली होने पर अपने आप शुरू होगा",
+    "background.tasks.keepRunning": "यह पैनल बंद करने पर भी कार्य चलते रहेंगे"
   }
 }

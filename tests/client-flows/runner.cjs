@@ -39,6 +39,13 @@ ipcMain.handle('qa:api', async (event, method, args) => {
   if (!s) return null; // Ignore already-queued calls from a window being torn down.
   s.calls.push({ method, model: s.settings.model });
   switch (method) {
+    case 'backgroundTasks': {const snapshot=clone(s.backgroundTasks??[]);if(s.backgroundDelay)await delay(s.backgroundDelay);return snapshot;}
+    case 'team.state': return {employees:clone(s.teamEmployees??[]),departments:[],apps:[]};
+    case 'team.rooms': return {rooms:clone(s.teamRooms??[])};
+    case 'team.roomMessages': return {messages:[],running:true};
+    case 'team.roomProgress': return {progress:[]};
+    case 'team.sopTree': return {tree:[]};
+    case 'team.scheduleList': return {schedules:[]};
     case 'getSettings': { const value = { settings: clone(s.settings), systemLanguage:s.systemLanguage, backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
@@ -789,9 +796,9 @@ app.whenReady().then(async () => {
     await f.click('.billing-top button:last-child');await f.wait('!document.querySelector(".billing-panel")');
     f.state.win.setContentSize(1200,800);await delay(100);
     fs.writeFileSync(path.join(evidence,'background-client-base-'+lang+'.png'),await captureBillingFrame(f));
-    emit(f.state,'evt:background-queue',{sid:'qa-session',queued:true,limit:1});
+    emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'});
     await f.wait('document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
-    emit(f.state,'evt:background-queue',{sid:'qa-session',queued:false});
+    emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:false,limit:1,tier:'free'});
     await f.wait('!document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
     assert.equal(f.state.orders,0);
   });
@@ -799,6 +806,102 @@ app.whenReady().then(async () => {
     await openBilling(f,false,null);assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);
     await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
     assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);assert.equal(f.state.orders,0);
+  });
+  for(const lang of ['zh','en','fa','ar']) await run('发布关键：并行提示：等级上限、套餐入口、输入保留与自动收起 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await f.fill('.composer textarea','保留这段尚未发送的工作要求');
+    for(const [tier,limit] of [['free',1],['pro',2],['plus',4]]){
+      const event={taskId:'notice-'+tier,sid:'qa-session',accountId:'qa-account',queued:true,limit,tier};
+      emit(f.state,'evt:background-queue',event);
+      await f.wait('document.querySelector(".background-queue-notice")?.dataset.tier==='+JSON.stringify(tier));
+      assert.match(await f.js('document.querySelector(".background-queue-copy strong").textContent'),new RegExp(String(limit)));
+      for(let i=0;i<3;i++)emit(f.state,'evt:background-queue',event);
+      await delay(50);
+      assert.equal((f.state.tracked??[]).filter(e=>e.event==='background_queue_notice_shown'&&e.props.tier===tier).length,1);
+      for(const width of [1200,840]){
+        f.state.win.setContentSize(width,800);await delay(75);
+        const box=await f.js('(()=>{const n=document.querySelector(".background-queue-notice"),b=n.getBoundingClientRect(),t=document.querySelector(".composer textarea").getBoundingClientRect();return {inside:b.left>=0&&b.right<=innerWidth,above:b.bottom<=t.top,overflow:n.scrollWidth>n.clientWidth+2}})()');
+        assert.ok(box.inside&&box.above&&!box.overflow,JSON.stringify(box));
+      }
+      f.state.win.setContentSize(1200,800);await delay(60);
+      if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-notice-'+lang+'.png'),await captureBillingFrame(f));
+      await f.click('.background-queue-action');await f.wait('!!document.querySelector(".billing-panel")');
+      await f.wait('document.querySelector(".billing-selector-periods button:nth-child(2)")?.getAttribute("aria-selected")=="true"');
+      assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留这段尚未发送的工作要求');
+      assert.equal(await f.js('document.querySelector(".background-queue-notice")?.dataset.tier'),tier);
+      if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-open-plans-'+lang+'.png'),await captureBillingFrame(f));
+      assert.equal(f.state.orders,0);await f.click('.billing-top .billing-close');await f.wait('!document.querySelector(".billing-panel")');
+      emit(f.state,'evt:background-queue',{...event,queued:false});await f.wait('!document.querySelector(".background-queue-notice")');
+      emit(f.state,'evt:background-queue',{...event,queued:false,finished:true});
+    }
+    emit(f.state,'evt:background-queue',{taskId:'localized-list',sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'本地任务 / Task'});
+    await f.wait('!!document.querySelector(".background-queue-action")');await f.click('.background-queue-action');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".task-center")).direction'),'ltr');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-title")).textAlign'),'left');
+    assert.equal(await f.js('document.querySelector(".task-center").textContent.includes("background.tasks.")'),false);
+    fs.writeFileSync(path.join(evidence,'background-task-panel-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.tp-close');emit(f.state,'evt:background-queue',{taskId:'localized-list',sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+    assert.equal((f.state.tracked??[]).filter(e=>e.event==='background_queue_upgrade_click').length,3);
+  });
+  await run('发布关键：并行提示：Max查看真实任务且同会话多任务互不清除',{account:clone(billingAccount),backgroundTasks:[{taskId:'max-running',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:false,limit:8,tier:'max',label:'整理客户访谈'},{taskId:'max-waiting',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'分析竞品资料'}]},async f=>{
+    await f.wait('document.querySelector(".background-queue-action")?.textContent.includes("查看任务")');
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    assert.match(await f.js('document.querySelector(".tasks-panel").textContent'),/分析竞品资料/);
+    assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
+    const taskPanelGeometry=()=>f.js('(()=>{const p=document.querySelector(".task-center"),r=p.getBoundingClientRect(),c=document.querySelector(".composer textarea").getBoundingClientRect();return {inside:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,clearInput:r.bottom<=c.top,groups:p.querySelectorAll(".tp-group").length};})()');
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      const geometry=await taskPanelGeometry();assert.ok(geometry.inside&&geometry.clearInput);assert.equal(geometry.groups,2);
+      if(width===840)fs.writeFileSync(path.join(evidence,'background-tasks-narrow.png'),await captureBillingFrame(f));
+    }
+    f.state.win.setContentSize(1200,800);await delay(100);
+    fs.writeFileSync(path.join(evidence,'background-upgrade-max-tasks.png'),await captureBillingFrame(f));
+    const panelRect=await f.js('(()=>{const r=document.querySelector(".task-center").getBoundingClientRect();return {x:Math.floor(r.x)-12,y:Math.floor(r.y)-12,width:Math.ceil(r.width)+24,height:Math.ceil(r.height)+24}})()');
+    fs.writeFileSync(path.join(evidence,'background-tasks-detail.png'),(await f.state.win.webContents.capturePage(panelRect)).toPNG());
+    await f.click('.tp-close');await f.wait('!document.querySelector(".tasks-panel")');
+    assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),true);
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    await f.js('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');await f.wait('!document.querySelector(".tasks-panel")');
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    for(let i=0;i<18;i++)emit(f.state,'evt:background-queue',{taskId:'long-queue-'+i,sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'待处理资料 '+i});
+    await delay(100);assert.ok((await taskPanelGeometry()).inside);
+    assert.equal(await f.js('(()=>{const e=document.querySelector(".tp-groups");return e.scrollHeight>e.clientHeight})()'),true);
+    for(let i=0;i<18;i++)emit(f.state,'evt:background-queue',{taskId:'long-queue-'+i,sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await f.click('.mq-overlay');
+    const second={taskId:'max-waiting-two',sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'检查研究结果'};
+    emit(f.state,'evt:background-queue',second);
+    emit(f.state,'evt:background-queue',{taskId:'max-waiting',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await delay(50);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),true);
+    emit(f.state,'evt:background-queue',{...second,queued:false,finished:true});await f.wait('!document.querySelector(".background-queue-notice")');
+  });
+  await run('发布关键：并行提示：迟到的快照不复活任务且切换账号不串提示',{account:clone(billingAccount),backgroundDelay:1200,backgroundTasks:[{taskId:'late',sid:'qa-session',accountId:'qa-account',queued:true,limit:2,tier:'pro'}]},async f=>{
+    emit(f.state,'evt:background-queue',{taskId:'late',sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await delay(1300);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    emit(f.state,'evt:background-queue',{taskId:'owned',sid:'qa-session',accountId:'qa-account',queued:true,limit:2,tier:'pro'});
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    const other=clone(billingAccount);other.user.id='different-account';emit(f.state,'evt:wuwei-me',other);
+    await f.wait('!document.querySelector(".background-queue-notice")');assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：并行提示：游客升级先登录，登录后打开套餐并保留输入',{lang:'en',account:null,settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await f.fill('.composer textarea','Keep my draft');
+    emit(f.state,'evt:background-queue',{taskId:'guest-queued',sid:'qa-session',accountId:null,queued:true,limit:1,tier:'free'});
+    await f.wait('!!document.querySelector(".background-queue-action")');await f.click('.background-queue-action');
+    await f.wait('!!document.querySelector("input[type=password]")');assert.equal(f.state.orders,0);
+    await f.fill('input[placeholder="Email"]','background-upgrade@example.invalid');await f.fill('input[type=password]','isolated-password');
+    await f.js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Sign in"&&!b.disabled)?.click()');
+    await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.orders,0);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'Keep my draft');
+  });
+  await run('发布关键：并行提示：员工群聊使用真实任务入口和套餐页',{account:clone(billingAccount),settings:{...settings(),app:{teamEnabled:true,lang:'zh'}},teamEmployees:[{id:'worker',name:'研究助手',role:'Researcher',tools:[]}],teamRooms:[{id:'qa-room',type:'group',name:'并行验收群',members:['worker'],createdAt:Date.now(),updatedAt:Date.now()}],backgroundTasks:[{taskId:'room-queued',roomId:'qa-room',accountId:'qa-account',queued:true,limit:2,tier:'pro',label:'研究助手'}]},async f=>{
+    await f.wait('!!document.querySelector(".fs-clickable")');await f.click('.fs-clickable');await f.wait('!!document.querySelector(".tasks-panel")');
+    await f.click('[data-background-task="room-queued"] .tp-title');
+    await f.wait('!!document.querySelector(".tc-room-queue .background-queue-notice")');
+    const geometry=await f.js('(()=>{const a=document.querySelector(".tc-room-queue").getBoundingClientRect(),b=document.querySelector(".tc-composer textarea").getBoundingClientRect();return {visible:a.height>0,above:a.bottom<=b.top};})()');assert.ok(geometry.visible&&geometry.above);
+    fs.writeFileSync(path.join(evidence,'background-upgrade-room.png'),await captureBillingFrame(f));
+    await f.click('.tc-room-queue .background-queue-action');await f.wait('!!document.querySelector(".billing-panel")');
+    assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+    await f.click('.billing-top .billing-close');await f.wait('!!document.querySelector(".tc-room-queue .background-queue-notice")');
+    emit(f.state,'evt:background-queue',{taskId:'room-queued',roomId:'qa-room',accountId:'qa-account',queued:false,finished:true});await f.wait('!document.querySelector(".tc-room-queue .background-queue-notice")');
   });
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);

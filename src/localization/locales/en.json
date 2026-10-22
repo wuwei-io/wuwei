@@ -3289,6 +3289,17 @@
     "background.queued": "Background task queued",
     "background.accountChanged": "Your account changed or your session expired. Please restart the task.",
     "background.unavailable": "Background capacity could not be verified. Please try again shortly.",
-    "billing.background.free": "Background slots: {count}"
+    "billing.background.free": "Background slots: {count}",
+    "background.notice.title": "Your {plan} plan supports {count} background tasks in parallel",
+    "background.notice.generic": "Your account supports {count} background tasks in parallel",
+    "background.notice.wait": "Your task is queued and will start when a slot opens.",
+    "background.notice.upsell": "Your task is queued. Upgrade for more background slots.",
+    "background.notice.upgrade": "Upgrade plan",
+    "background.notice.view": "View tasks",
+    "background.plan.free": "Free",
+    "background.tasks.heading": "Background tasks",
+    "background.tasks.queued": "Queued",
+    "background.tasks.autoStart": "Starts automatically when a slot is available",
+    "background.tasks.keepRunning": "Tasks continue when this panel is closed"
   }
 }

@@ -3289,6 +3289,17 @@
     "background.queued": "Tác vụ nền đang chờ",
     "background.accountChanged": "Tài khoản đã đổi hoặc phiên đăng nhập hết hạn. Hãy khởi động lại tác vụ.",
     "background.unavailable": "Chưa xác minh được suất chạy nền. Vui lòng thử lại sau.",
-    "billing.background.free": "Suất chạy nền: {count}"
+    "billing.background.free": "Suất chạy nền: {count}",
+    "background.notice.title": "Gói {plan} hiện tại hỗ trợ {count} tác vụ nền đồng thời",
+    "background.notice.generic": "Tài khoản hiện tại hỗ trợ {count} tác vụ nền đồng thời",
+    "background.notice.wait": "Tác vụ đã vào hàng đợi và sẽ tự chạy khi có suất trống.",
+    "background.notice.upsell": "Tác vụ đang chờ. Nâng cấp gói để có thêm suất chạy nền.",
+    "background.notice.upgrade": "Nâng cấp gói",
+    "background.notice.view": "Xem tác vụ",
+    "background.plan.free": "Miễn phí",
+    "background.tasks.heading": "Tác vụ nền",
+    "background.tasks.queued": "Đang chờ",
+    "background.tasks.autoStart": "Tự động bắt đầu khi có chỗ trống",
+    "background.tasks.keepRunning": "Tác vụ vẫn tiếp tục khi đóng bảng này"
   }
 }

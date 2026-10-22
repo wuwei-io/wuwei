@@ -3289,6 +3289,17 @@
     "background.queued": "Hintergrundaufgabe wartet",
     "background.accountChanged": "Ihr Konto wurde gewechselt oder die Sitzung ist abgelaufen. Starten Sie die Aufgabe erneut.",
     "background.unavailable": "Die Hintergrundkapazität konnte nicht geprüft werden. Bitte versuchen Sie es gleich erneut.",
-    "billing.background.free": "Hintergrundplätze: {count}"
+    "billing.background.free": "Hintergrundplätze: {count}",
+    "background.notice.title": "Ihr Tarif {plan} unterstützt {count} Hintergrundaufgaben gleichzeitig",
+    "background.notice.generic": "Ihr Konto unterstützt {count} Hintergrundaufgaben gleichzeitig",
+    "background.notice.wait": "Die Aufgabe wartet und startet automatisch, sobald ein Platz frei wird.",
+    "background.notice.upsell": "Die Aufgabe wartet. Ein höherer Tarif bietet mehr Hintergrundplätze.",
+    "background.notice.upgrade": "Tarif upgraden",
+    "background.notice.view": "Aufgaben ansehen",
+    "background.plan.free": "Kostenlos",
+    "background.tasks.heading": "Hintergrundaufgaben",
+    "background.tasks.queued": "In Warteschlange",
+    "background.tasks.autoStart": "Startet automatisch, sobald ein Platz frei wird",
+    "background.tasks.keepRunning": "Aufgaben laufen nach dem Schließen weiter"
   }
 }

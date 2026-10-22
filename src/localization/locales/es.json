@@ -3289,6 +3289,17 @@
     "background.queued": "Tarea en segundo plano en cola",
     "background.accountChanged": "Tu cuenta cambió o la sesión caducó. Reinicia la tarea.",
     "background.unavailable": "No se pudo comprobar la capacidad en segundo plano. Inténtalo de nuevo en un momento.",
-    "billing.background.free": "Plazas en segundo plano: {count}"
+    "billing.background.free": "Plazas en segundo plano: {count}",
+    "background.notice.title": "Tu plan {plan} permite {count} tareas en segundo plano en paralelo",
+    "background.notice.generic": "Tu cuenta permite {count} tareas en segundo plano en paralelo",
+    "background.notice.wait": "La tarea está en cola y comenzará cuando se libere una plaza.",
+    "background.notice.upsell": "La tarea está en cola. Mejora tu plan para tener más plazas en segundo plano.",
+    "background.notice.upgrade": "Mejorar plan",
+    "background.notice.view": "Ver tareas",
+    "background.plan.free": "Gratis",
+    "background.tasks.heading": "Tareas en segundo plano",
+    "background.tasks.queued": "En cola",
+    "background.tasks.autoStart": "Comienza automáticamente cuando haya un puesto libre",
+    "background.tasks.keepRunning": "Las tareas continúan al cerrar este panel"
   }
 }

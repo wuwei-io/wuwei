@@ -163,7 +163,7 @@ import {
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
 import { backgroundTokenSubject, setBackgroundTokenResolver } from "../../src/agent/background.js";
-import { runBackgroundTask } from "./background-tasks.js";
+import { runBackgroundTask, getBackgroundTasks } from "./background-tasks.js";
 import { createHostedSessionState } from "../../src/wuwei-session-state.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
 import { notifyRemote } from './remote-notify.js';
@@ -375,7 +375,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   executionSignal.throwIfAborted();
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
-}, (reportOrigin || taskReportScope?.origin)?.kind === 'room' ? (reportOrigin || taskReportScope?.origin)?.id : undefined);
+}, (reportOrigin || taskReportScope?.origin)?.kind === 'room' ? (reportOrigin || taskReportScope?.origin)?.id : undefined, employee.name, (reportOrigin || taskReportScope?.origin)?.kind === 'session' ? (reportOrigin || taskReportScope?.origin)?.id : undefined);
 
 // 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
 function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
@@ -5336,6 +5336,7 @@ ipcMain.handle("track", (_e, p: { event?: string; props?: Record<string, unknown
 });
 
 // ── 扫码支付：下单 / 轮询。带用户 token 调后端，401 自动 refresh 重试（同 wuwei-me）──
+ipcMain.handle('background:tasks', () => getBackgroundTasks());
 ipcMain.handle('billing:request',async (_e,request:import('../../src/billing/contracts.js').BillingRequest)=>{
   const sess=await getFreshWuweiSession();
   if(!sess) return {error:'not_logged_in'};

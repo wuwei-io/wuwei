@@ -31,6 +31,7 @@ const EVENTS = [
   "evt:wuwei-me",
   "evt:wuwei-auth-expired",
   "evt:tasks",
+  "evt:background-queue",
   "evt:mcp",
   "evt:browser",
   "evt:browser-activity",
@@ -438,6 +439,7 @@ const api = {
   installUpdate: () => ipcRenderer.send("updater:install"),
   // 扫码支付：下单拿二维码串 + 轮询订单状态
   billingRequest: (request:BillingRequest) => ipcRenderer.invoke('billing:request',request) as Promise<BillingResponse>,
+  backgroundTasks: () => ipcRenderer.invoke('background:tasks'),
   payCreate: (sku: string, channel: string) =>
     ipcRenderer.invoke("pay:create", sku, channel) as Promise<{
       orderId?: string;

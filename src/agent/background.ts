@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { tr } from '../localization/index.js';
 import type { Provider } from '../types.js';
 
-type BackgroundContext={id:string;onQueue?:(queued:boolean,limit?:number)=>void};
+type BackgroundContext={id:string;onQueue?:(queued:boolean,limit?:number,tier?:string,accountId?:string|null)=>void};
 const context=new AsyncLocalStorage<BackgroundContext>();
 /** Only autonomous employee/scheduled work enters here. User chat stays outside. */
 export const withBackgroundTask=<T>(value:BackgroundContext,run:()=>Promise<T>)=>context.run(value,run);
@@ -14,7 +14,7 @@ export function backgroundTokenSubject(token:string):string|null {
 let resolveToken=async(token:string)=>token;
 export function setBackgroundTokenResolver(resolver:typeof resolveToken){resolveToken=resolver;}
 
-type LeaseReply={allowed:boolean;unlimited?:boolean;released?:boolean;backgroundParallel?:number|null;retryAfterMs?:number;leaseExpiresAt?:string;error?:string};
+type LeaseReply={allowed:boolean;unlimited?:boolean;released?:boolean;backgroundParallel?:number|null;tier?:string;retryAfterMs?:number;leaseExpiresAt?:string;error?:string};
 type Options={fetch?:typeof fetch;renewMs?:number;retryMs?:number};
 export class BackgroundExecutionClient {
  private guestBusy=false;
@@ -24,7 +24,7 @@ export class BackgroundExecutionClient {
  private async guest<T>(run:(signal:AbortSignal)=>Promise<T>,signal:AbortSignal,queued:BackgroundContext['onQueue']){
   try {
    while(this.guestBusy){
-    queued?.(true,1);
+    queued?.(true,1,'free',null);
     await new Promise<void>((resolve,reject)=>{
      const done=()=>{this.guestWaiters.delete(done);signal.removeEventListener('abort',abort);resolve();};
      const abort=()=>{this.guestWaiters.delete(done);reject(signal.reason);};
@@ -32,9 +32,9 @@ export class BackgroundExecutionClient {
     });
     signal.throwIfAborted();
    }
-   this.guestBusy=true;queued?.(false,1);
+   this.guestBusy=true;queued?.(false,1,'free',null);
    try{return await run(signal);}finally{this.guestBusy=false;for(const wake of this.guestWaiters)wake();}
-  }finally{queued?.(false,1);}
+  }finally{queued?.(false,1,'free',null);}
  }
  async run<T>(token:string,run:(signal:AbortSignal)=>Promise<T>,signal:AbortSignal=new AbortController().signal):Promise<T>{
   const task=context.getStore();
@@ -65,11 +65,12 @@ export class BackgroundExecutionClient {
    let lease=await request('acquire');
    while(!lease.allowed){
     if(lease.error)throw Error(tr('background.unavailable'));
-    task.onQueue?.(true,lease.backgroundParallel??undefined);
+    if(!Number.isSafeInteger(lease.backgroundParallel) || !lease.backgroundParallel || lease.backgroundParallel<1)throw Error(tr('background.unavailable'));
+    task.onQueue?.(true,lease.backgroundParallel,lease.tier,backgroundTokenSubject(token));
     await delay(this.options.retryMs??Math.min(5000,Math.max(500,lease.retryAfterMs??2000)),undefined,{signal:combined});
     lease=await request('acquire');
    }
-   combined.throwIfAborted();task.onQueue?.(false,lease.backgroundParallel??undefined);
+   combined.throwIfAborted();task.onQueue?.(false,lease.backgroundParallel??undefined,lease.tier,backgroundTokenSubject(token));
    if(!lease.unlimited){
     if(!(Date.parse(lease.leaseExpiresAt??'')>Date.now()))throw Error(tr('background.unavailable'));
     const renew=async()=>{

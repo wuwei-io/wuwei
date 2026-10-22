@@ -3289,6 +3289,17 @@
     "background.queued": "バックグラウンドタスクは順番待ちです",
     "background.accountChanged": "アカウントが変更されたか、ログインの有効期限が切れました。タスクを再開してください。",
     "background.unavailable": "バックグラウンドの実行枠を確認できません。しばらくしてから再試行してください。",
-    "billing.background.free": "バックグラウンド実行枠：{count}"
+    "billing.background.free": "バックグラウンド実行枠：{count}",
+    "background.notice.title": "現在の {plan} プランはバックグラウンドで {count} 件を並列実行できます",
+    "background.notice.generic": "このアカウントはバックグラウンドで {count} 件を並列実行できます",
+    "background.notice.wait": "タスクは順番待ちです。枠が空くと自動で開始します。",
+    "background.notice.upsell": "タスクは順番待ちです。アップグレードで同時実行枠を増やせます。",
+    "background.notice.upgrade": "アップグレード",
+    "background.notice.view": "タスクを見る",
+    "background.plan.free": "無料",
+    "background.tasks.heading": "バックグラウンドタスク",
+    "background.tasks.queued": "順番待ち",
+    "background.tasks.autoStart": "空きができると自動的に開始します",
+    "background.tasks.keepRunning": "パネルを閉じてもタスクは続行されます"
   }
 }

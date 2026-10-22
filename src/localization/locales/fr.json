@@ -3289,6 +3289,17 @@
     "background.queued": "Tâche en arrière-plan en attente",
     "background.accountChanged": "Votre compte a changé ou votre session a expiré. Relancez la tâche.",
     "background.unavailable": "Impossible de vérifier la capacité en arrière-plan. Réessayez dans un instant.",
-    "billing.background.free": "Places en arrière-plan : {count}"
+    "billing.background.free": "Places en arrière-plan : {count}",
+    "background.notice.title": "Votre forfait {plan} permet {count} tâches en arrière-plan en parallèle",
+    "background.notice.generic": "Votre compte permet {count} tâches en arrière-plan en parallèle",
+    "background.notice.wait": "La tâche est en attente et démarrera dès qu’une place sera libre.",
+    "background.notice.upsell": "La tâche est en attente. Changez de forfait pour plus de places en arrière-plan.",
+    "background.notice.upgrade": "Changer de forfait",
+    "background.notice.view": "Voir les tâches",
+    "background.plan.free": "Gratuit",
+    "background.tasks.heading": "Tâches en arrière-plan",
+    "background.tasks.queued": "En attente",
+    "background.tasks.autoStart": "Démarre automatiquement dès qu’une place se libère",
+    "background.tasks.keepRunning": "Les tâches continuent après la fermeture du panneau"
   }
 }

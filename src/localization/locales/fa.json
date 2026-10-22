@@ -3289,6 +3289,17 @@
     "background.queued": "کار پس‌زمینه در صف است",
     "background.accountChanged": "حساب تغییر کرده یا نشست منقضی شده است. کار را دوباره آغاز کنید.",
     "background.unavailable": "ظرفیت اجرای پس‌زمینه تأیید نشد. کمی بعد دوباره تلاش کنید.",
-    "billing.background.free": "ظرفیت هم‌زمان پس‌زمینه: {count}"
+    "billing.background.free": "ظرفیت هم‌زمان پس‌زمینه: {count}",
+    "background.notice.title": "طرح {plan} شما از {count} کار پس‌زمینه هم‌زمان پشتیبانی می‌کند",
+    "background.notice.generic": "حساب شما از {count} کار پس‌زمینه هم‌زمان پشتیبانی می‌کند",
+    "background.notice.wait": "کار در صف است و با آزاد شدن ظرفیت خودکار آغاز می‌شود.",
+    "background.notice.upsell": "کار در صف است. برای ظرفیت بیشتر، طرح را ارتقا دهید.",
+    "background.notice.upgrade": "ارتقای طرح",
+    "background.notice.view": "مشاهده کارها",
+    "background.plan.free": "رایگان",
+    "background.tasks.heading": "کارهای پس‌زمینه",
+    "background.tasks.queued": "در صف",
+    "background.tasks.autoStart": "با آزاد شدن ظرفیت، خودکار شروع می‌شود",
+    "background.tasks.keepRunning": "با بستن این پنل، کارها ادامه می‌یابند"
   }
 }

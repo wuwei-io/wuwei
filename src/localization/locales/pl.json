@@ -3289,6 +3289,17 @@
     "background.queued": "Zadanie w tle czeka w kolejce",
     "background.accountChanged": "Konto zostało zmienione lub sesja wygasła. Uruchom zadanie ponownie.",
     "background.unavailable": "Nie udało się sprawdzić dostępnej pojemności w tle. Spróbuj ponownie za chwilę.",
-    "billing.background.free": "Miejsca w tle: {count}"
+    "billing.background.free": "Miejsca w tle: {count}",
+    "background.notice.title": "Twój plan {plan} obsługuje {count} zadań w tle jednocześnie",
+    "background.notice.generic": "Twoje konto obsługuje {count} zadań w tle jednocześnie",
+    "background.notice.wait": "Zadanie jest w kolejce i ruszy, gdy zwolni się miejsce.",
+    "background.notice.upsell": "Zadanie czeka. Zmień plan, aby uzyskać więcej miejsc w tle.",
+    "background.notice.upgrade": "Zmień plan",
+    "background.notice.view": "Zobacz zadania",
+    "background.plan.free": "Bezpłatny",
+    "background.tasks.heading": "Zadania w tle",
+    "background.tasks.queued": "W kolejce",
+    "background.tasks.autoStart": "Rozpocznie się automatycznie po zwolnieniu miejsca",
+    "background.tasks.keepRunning": "Zadania działają dalej po zamknięciu panelu"
   }
 }

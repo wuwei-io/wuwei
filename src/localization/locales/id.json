@@ -3289,6 +3289,17 @@
     "background.queued": "Tugas latar belakang dalam antrean",
     "background.accountChanged": "Akun berubah atau sesi berakhir. Mulai ulang tugas.",
     "background.unavailable": "Kapasitas latar belakang belum dapat diverifikasi. Coba lagi sebentar.",
-    "billing.background.free": "Slot latar belakang: {count}"
+    "billing.background.free": "Slot latar belakang: {count}",
+    "background.notice.title": "Paket {plan} Anda mendukung {count} tugas latar belakang sekaligus",
+    "background.notice.generic": "Akun Anda mendukung {count} tugas latar belakang sekaligus",
+    "background.notice.wait": "Tugas masuk antrean dan akan dimulai saat slot tersedia.",
+    "background.notice.upsell": "Tugas sedang mengantre. Upgrade paket untuk lebih banyak slot latar belakang.",
+    "background.notice.upgrade": "Upgrade paket",
+    "background.notice.view": "Lihat tugas",
+    "background.plan.free": "Gratis",
+    "background.tasks.heading": "Tugas latar belakang",
+    "background.tasks.queued": "Mengantre",
+    "background.tasks.autoStart": "Dimulai otomatis saat slot tersedia",
+    "background.tasks.keepRunning": "Tugas tetap berjalan saat panel ini ditutup"
   }
 }
