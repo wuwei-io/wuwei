@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: esempio con {input} token in ingresso + {output} in uscita. Prezzi per milione ingresso/uscita: {inputRate}/{outputRate} monete; circa {cost} monete/attività. Senza sconto cache, quantità arrotondata per difetto. Le attività complesse richiedono più chiamate; il numero di completamenti non è garantito.",
     "billing.usage.tokenBasis": "Include token in ingresso e in uscita nel rapporto 4:1. Esclude modelli gratuiti e monete di accesso giornaliero.",
     "menu.upgradeEntry": "Passa di piano",
-    "menu.annualDiscount": "Sconto del 50% sui piani annuali"
+    "menu.annualDiscount": "Sconto del 50% sui piani annuali",
+    "billing.background.parallel": "Fino a {count} agenti in background in parallelo",
+    "billing.background.explanation": "La chat normale non occupa posti. Le chiamate al modello in background li occupano; vengono liberati durante l’attesa di strumenti o dell’utente. Il lavoro aggiuntivo entra in coda.",
+    "background.queued": "Attività in background in coda",
+    "background.accountChanged": "L’account è cambiato o la sessione è scaduta. Riavvia l’attività.",
+    "background.unavailable": "Impossibile verificare la capacità in background. Riprova tra poco.",
+    "billing.background.free": "Posti in background: {count}"
   }
 }

@@ -3484,6 +3484,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
 export function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
+  const [backgroundQueued, setBackgroundQueued] = useState<Record<string, boolean>>({});
   const [runningSet, setRunningSet] = useState<Set<string>>(() => new Set()); // 多任务:正在跑的会话id集
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
@@ -5243,6 +5244,11 @@ export function App() {
       { const asid = payload?.sid; if (asid) lastActivityRef.current.set(asid, Date.now()); }
       // 长命令心跳(evt:heartbeat)：只为刷新上面的活动时间而发，无其它语义——刷完即返回，别触发落定/switch
       if (ch === "evt:heartbeat") return;
+      if (ch === 'evt:background-queue') {
+        if (payload?.sid) setBackgroundQueued(previous => { const next = {...previous}; if(payload.queued) next[payload.sid]=true; else delete next[payload.sid]; return next; });
+        return;
+      }
+      if (['evt:done','evt:stopped','evt:error'].includes(ch) && payload?.sid) setBackgroundQueued(previous => { const next={...previous};delete next[payload.sid];return next; });
       // 用户点了停止 → 主进程已摘掉该会话的自主推进，这里把「连推」切回「自动」。
       // 不这么做的话：软停只停当前这一轮，收尾后前端立刻又续下一轮，用户点多少次都追不上
       // (实测连点 5 次仍停不下来，表现就是"点停止没反应、界面像卡死")。
@@ -6844,7 +6850,9 @@ export function App() {
                   setShowUsage(false);
                 }}
               >
-                {roomMode
+                {!roomMode && backgroundQueued[currentId]
+                  ? tr('background.queued')
+                  : roomMode
                   ? `○ ${t("foot.ready")}` /* 群/私聊底栏不显示「员工干活中」(会撑长导致换行)——运行态已由进度块+停止按钮体现，这里只保持默认 */
                   : runningSet.size > 1
                   ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`

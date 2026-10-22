@@ -33,6 +33,7 @@ export interface BillingCatalog {
   member: boolean;
   checkoutReady: boolean;
   channels: Record<BillingChannel, boolean>;
+  backgroundPolicy?: {enabled:boolean;version:string;free:number;plans:Record<string,number>};
 }
 export interface CreditRecord {
   id: string;

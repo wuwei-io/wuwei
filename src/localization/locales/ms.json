@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: contoh tugasan menggunakan {input} token input + {output} output. Kadar sejuta input/output: {inputRate}/{outputRate} syiling; sekitar {cost} syiling/tugasan. Tiada diskaun cache; jumlah dibundarkan ke bawah. Tugasan rumit mungkin memerlukan banyak panggilan; tiada jaminan jumlah selesai.",
     "billing.usage.tokenBasis": "Termasuk token input dan output pada nisbah 4:1. Tidak termasuk model percuma dan syiling daftar masuk harian.",
     "menu.upgradeEntry": "Naik taraf",
-    "menu.annualDiscount": "Diskaun 50% pelan tahunan"
+    "menu.annualDiscount": "Diskaun 50% pelan tahunan",
+    "billing.background.parallel": "Sehingga {count} ejen latar belakang serentak",
+    "billing.background.explanation": "Sembang biasa tidak menggunakan slot. Panggilan model latar belakang menggunakan slot; slot dilepaskan semasa menunggu alat atau pengguna. Kerja tambahan masuk ke baris gilir.",
+    "background.queued": "Tugas latar belakang dalam baris gilir",
+    "background.accountChanged": "Akaun berubah atau sesi tamat. Sila mulakan semula tugas.",
+    "background.unavailable": "Kapasiti latar belakang tidak dapat disahkan. Sila cuba sebentar lagi.",
+    "billing.background.free": "Slot latar belakang: {count}"
   }
 }

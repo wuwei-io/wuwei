@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model} : exemple de {input} tokens en entrée + {output} en sortie. Tarifs par million entrée/sortie : {inputRate}/{outputRate} pièces, soit environ {cost} pièces/tâche. Sans remise de cache, nombre arrondi à la baisse. Une tâche complexe peut nécessiter plusieurs appels ; le nombre de tâches terminées n’est pas garanti.",
     "billing.usage.tokenBasis": "Inclut les tokens d’entrée et de sortie au ratio 4:1. Modèles gratuits et pièces de connexion quotidienne exclus.",
     "menu.upgradeEntry": "Améliorer",
-    "menu.annualDiscount": "50 % de réduction sur les forfaits annuels"
+    "menu.annualDiscount": "50 % de réduction sur les forfaits annuels",
+    "billing.background.parallel": "Jusqu’à {count} agents en arrière-plan en parallèle",
+    "billing.background.explanation": "Le chat normal n’occupe aucun emplacement. Les appels de modèle en arrière-plan en occupent, libérés lors de l’attente d’un outil ou de l’utilisateur. Le surplus est mis en file.",
+    "background.queued": "Tâche en arrière-plan en attente",
+    "background.accountChanged": "Votre compte a changé ou votre session a expiré. Relancez la tâche.",
+    "background.unavailable": "Impossible de vérifier la capacité en arrière-plan. Réessayez dans un instant.",
+    "billing.background.free": "Places en arrière-plan : {count}"
   }
 }

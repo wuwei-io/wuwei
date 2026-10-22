@@ -162,6 +162,8 @@ import {
   type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
+import { backgroundTokenSubject, setBackgroundTokenResolver } from "../../src/agent/background.js";
+import { runBackgroundTask } from "./background-tasks.js";
 import { createHostedSessionState } from "../../src/wuwei-session-state.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
 import { notifyRemote } from './remote-notify.js';
@@ -320,7 +322,7 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
 const roomContextUsage = new Map<string, { providerId: string; model: string; usedTokens: number | null; maxTokens: number | null; capturedAt: number }>();
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => {
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => runBackgroundTask(`__room_${employee.id}`, send, async () => {
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
   const origin = reportOrigin || taskReportScope?.origin;
@@ -373,7 +375,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   executionSignal.throwIfAborted();
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
-};
+}, (reportOrigin || taskReportScope?.origin)?.kind === 'room' ? (reportOrigin || taskReportScope?.origin)?.id : undefined);
 
 // 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
 function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
@@ -385,7 +387,7 @@ const conversationReports = new ConversationReports({
   deliver: async (sid, text) => {
     if (!listSessions().some(s => s.id === sid)) throw new Error(tr("ui.index.message.e2f2fc5e55"));
     if (!getAgent(sid)) throw new Error(tr("ui.index.message.ad10caf22a"));
-    await startTurn(sid, text);
+    await runBackgroundTask(sid, send, () => startTurn(sid, text));
   },
 });
 const taskReportJournal = join(homedir(), DATA_DIR_NAME, 'team', 'task-reports.json');
@@ -480,7 +482,7 @@ function syncTeamModule(s: Settings | null) {
         }
         send("evt:sessions", listSessions());
       }
-      void startTurn(sid, text);
+      void runBackgroundTask(sid, send, () => startTurn(sid!, text));
     },
   });
 }
@@ -1290,6 +1292,15 @@ function syncBrainDocsFlag(st: Settings | null) {
 
 // 给 web_search 工具(同进程共享代码)一个「永远最新」的无为登录 token 取值桥，
 // 用于调无为网关搜索代理(/api/gateway/v1/search)。懒读 session，无需在每个登录/登出点同步。
+setBackgroundTokenResolver(async original => {
+  const expected = backgroundTokenSubject(original);
+  const stored = loadWuweiSession();
+  if (!stored || backgroundTokenSubject(stored.accessToken) !== expected) throw new Error(tr('background.accountChanged'));
+  const fresh = await getFreshWuweiSession();
+  if (!fresh || backgroundTokenSubject(fresh.accessToken) !== expected) throw new Error(tr('background.accountChanged'));
+  return fresh.accessToken;
+});
+
 (globalThis as unknown as { wuweiGwToken?: () => string }).wuweiGwToken = () => {
   try { return loadWuweiSession()?.accessToken || ""; } catch { return ""; }
 };

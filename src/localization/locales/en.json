@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: example task uses {input} input + {output} output tokens. Rates: {inputRate}/{outputRate} coins per million input/output tokens; approx. {cost} coins/task. No cache discount; counts rounded down. Complex tasks can require multiple calls; completion counts are not guaranteed.",
     "billing.usage.tokenBasis": "Includes input and output tokens in a 4:1 mix. Excludes free models and daily check-in coins.",
     "menu.upgradeEntry": "Upgrade",
-    "menu.annualDiscount": "50% off yearly plans"
+    "menu.annualDiscount": "50% off yearly plans",
+    "billing.background.parallel": "Up to {count} background agents in parallel",
+    "billing.background.explanation": "Regular chat uses no slots. Background model calls use slots; tools and user waits release them. Extra work queues automatically.",
+    "background.queued": "Background task queued",
+    "background.accountChanged": "Your account changed or your session expired. Please restart the task.",
+    "background.unavailable": "Background capacity could not be verified. Please try again shortly.",
+    "billing.background.free": "Background slots: {count}"
   }
 }

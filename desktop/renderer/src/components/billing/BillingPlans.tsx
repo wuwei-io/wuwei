@@ -1,13 +1,14 @@
+import { BillingBackground } from './BillingBackground.js';
 import React from 'react';
 import {tr} from '../../../../../src/localization/index.js';
 import {formatCredits,modelVendorName,annualPriceComparison} from '../../../../../src/billing/presentation.js';
-import type {BillingCurrency,BillingPeriod,BillingProduct} from '../../../../../src/billing/contracts.js';
+import type {BillingCatalog,BillingCurrency,BillingPeriod,BillingProduct} from '../../../../../src/billing/contracts.js';
 import type {ModelChoice} from '../../../../../src/model-selection.js';
 import {BillingAnnualTerm} from './BillingAnnualTerm.js';
 import {BillingBrand} from './BillingBrand.js';
 
 export interface BillingPlansProps {
-  lang:string;period:BillingPeriod;currency:BillingCurrency;products:BillingProduct[];catalogProducts:BillingProduct[];member:boolean;
+  backgroundPolicy?:BillingCatalog['backgroundPolicy'];lang:string;period:BillingPeriod;currency:BillingCurrency;products:BillingProduct[];catalogProducts:BillingProduct[];member:boolean;
   models:ModelChoice[];busy:boolean;loading:boolean;insufficient?:boolean;balance:number;
   onPeriod:(period:BillingPeriod)=>void;onChoose:(product:BillingProduct)=>void;onFree?:()=>void;onRules:()=>void;
 }
@@ -34,10 +35,10 @@ export function BillingPlans(p:BillingPlansProps){
         <button className="billing-plan-buy" onClick={()=>p.onChoose(product)} disabled={p.busy||p.loading}>{p.busy?tr('set.brain.warming'):tr('billing.plans.choose',{plan:name})}<span aria-hidden="true">→</span></button>
         <div className="billing-plan-allowance"><span>{tr(pack?'billing.plans.packAllowance':'billing.plans.allowance')}</span><div><b>{formatCredits(credits)}</b><small>{tr(pack?'ui.billingpanel.credits.455609c':'ui.billingpanel.credits.month.3093877')}</small></div><p>{tr(pack?(p.member?'billing.plans.bonusIncluded':'billing.plans.bonusEligible'):'billing.plans.saving.'+saving)}</p></div>
         {!pack&&<div className="billing-plan-models" aria-label={tr('billing.plans.models')}>{p.models.slice(0,6).map(model=><span className="billing-plan-model" key={model.key} title={p.lang==='zh'?model.label:model.labelEn}><BillingBrand model={model.modelId} provider={model.providerId}/><small>{modelVendorName(model)}</small></span>)}</div>}
-        <ul className="billing-plan-features">{(pack?['billing.plans.packUsage','billing.plans.packModels','billing.plans.packExpiry','ui.billingpanel.review.your.credit.and.usage.records.271dfb5']:['ui.billingpanel.choose.value.premium.and.image.models.27d84fc','ui.billingpanel.code.organize.files.and.analyze.information.1f17bcd','billing.plans.tools','ui.billingpanel.review.your.credit.and.usage.records.271dfb5','ui.billingpanel.long.term.memory.and.brain.included.6f640ec']).map(key=><li key={key}><span aria-hidden="true">✓</span><span>{tr(key)}</span></li>)}</ul>
+        <ul className="billing-plan-features">{!pack&&<BillingBackground marker product={product} policy={p.backgroundPolicy}/>}{(pack?['billing.plans.packUsage','billing.plans.packModels','billing.plans.packExpiry','ui.billingpanel.review.your.credit.and.usage.records.271dfb5']:['ui.billingpanel.choose.value.premium.and.image.models.27d84fc','ui.billingpanel.code.organize.files.and.analyze.information.1f17bcd','billing.plans.tools','ui.billingpanel.review.your.credit.and.usage.records.271dfb5','ui.billingpanel.long.term.memory.and.brain.included.6f640ec']).map(key=><li key={key}><span aria-hidden="true">✓</span><span>{tr(key)}</span></li>)}</ul>
       </article>;
     })}</div>
-    <div className="billing-plans-free"><b>{tr('ui.billingpanel.free.e99c08e')}</b><p>{tr('billing.plans.freeCopy')}</p>{p.onFree&&<button onClick={p.onFree}>{tr('ui.billingpanel.try.free.first.84f4717')}</button>}</div>
+    <div className="billing-plans-free"><b>{tr('ui.billingpanel.free.e99c08e')}</b><p>{tr('billing.plans.freeCopy')}{p.backgroundPolicy?.enabled&&<> · {tr('billing.background.free',{count:p.backgroundPolicy.free})}</>}</p>{p.onFree&&<button onClick={p.onFree}>{tr('ui.billingpanel.try.free.first.84f4717')}</button>}</div>
     <div className="billing-plans-foot"><p>{tr('ui.billingpanel.plan.credits.expire.each.monthly.period.15e5dd7')}</p><button onClick={p.onRules}>{tr('billing.plans.usageDetails')} <span aria-hidden="true">↗</span></button></div>
   </main>;
 }

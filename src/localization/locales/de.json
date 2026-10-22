@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: Beispiel mit {input} Eingabe- + {output} Ausgabe-Token. Pro Million Eingabe/Ausgabe: {inputRate}/{outputRate} Münzen; ca. {cost} Münzen/Aufgabe. Ohne Cache-Rabatt, Anzahl abgerundet. Komplexe Aufgaben benötigen mehrere Aufrufe; abgeschlossene Aufgaben sind nicht garantiert.",
     "billing.usage.tokenBasis": "Enthält Eingabe- und Ausgabe-Token im Verhältnis 4:1. Kostenlose Modelle und tägliche Anmelde-Münzen sind ausgeschlossen.",
     "menu.upgradeEntry": "Upgrade",
-    "menu.annualDiscount": "50 % Rabatt auf Jahrespläne"
+    "menu.annualDiscount": "50 % Rabatt auf Jahrespläne",
+    "billing.background.parallel": "Bis zu {count} Hintergrundagenten gleichzeitig",
+    "billing.background.explanation": "Normale Chats belegen keinen Platz. Modellaufrufe im Hintergrund belegen Plätze; beim Warten auf Werkzeuge oder Nutzer werden sie freigegeben. Weitere Aufgaben kommen in die Warteschlange.",
+    "background.queued": "Hintergrundaufgabe wartet",
+    "background.accountChanged": "Ihr Konto wurde gewechselt oder die Sitzung ist abgelaufen. Starten Sie die Aufgabe erneut.",
+    "background.unavailable": "Die Hintergrundkapazität konnte nicht geprüft werden. Bitte versuchen Sie es gleich erneut.",
+    "billing.background.free": "Hintergrundplätze: {count}"
   }
 }

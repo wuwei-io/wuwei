@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: mỗi tác vụ mẫu dùng {input} token vào + {output} token ra. Giá mỗi triệu token vào/ra: {inputRate}/{outputRate} xu; khoảng {cost} xu/tác vụ. Không tính giảm giá bộ nhớ đệm, số lượng làm tròn xuống. Tác vụ phức tạp có thể gọi nhiều lần, không bảo đảm số tác vụ hoàn thành.",
     "billing.usage.tokenBasis": "Gồm token vào và ra theo tỷ lệ 4:1. Không tính mô hình miễn phí và xu điểm danh hằng ngày.",
     "menu.upgradeEntry": "Nâng cấp",
-    "menu.annualDiscount": "Giảm 50% gói năm"
+    "menu.annualDiscount": "Giảm 50% gói năm",
+    "billing.background.parallel": "Tối đa {count} tác nhân chạy nền đồng thời",
+    "billing.background.explanation": "Trò chuyện thường không dùng suất. Lệnh gọi mô hình chạy nền dùng suất; khi chờ công cụ hoặc người dùng, suất được trả lại. Việc vượt giới hạn tự xếp hàng.",
+    "background.queued": "Tác vụ nền đang chờ",
+    "background.accountChanged": "Tài khoản đã đổi hoặc phiên đăng nhập hết hạn. Hãy khởi động lại tác vụ.",
+    "background.unavailable": "Chưa xác minh được suất chạy nền. Vui lòng thử lại sau.",
+    "billing.background.free": "Suất chạy nền: {count}"
   }
 }

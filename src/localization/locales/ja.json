@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}：1回の例は入力 {input}＋出力 {output} トークン。100万トークン当たり入力/出力 {inputRate}/{outputRate} コイン、1回約 {cost} コイン。キャッシュ割引なし、回数は切り捨て。複雑なタスクは複数回呼び出すため完了件数の保証ではありません。",
     "billing.usage.tokenBasis": "入力と出力を4:1の比率で含みます。無料モデルや毎日のチェックインで得られるコインは含みません。",
     "menu.upgradeEntry": "アップグレード",
-    "menu.annualDiscount": "年払いプランが50%オフ"
+    "menu.annualDiscount": "年払いプランが50%オフ",
+    "billing.background.parallel": "バックグラウンド Agent を最大 {count} 件並列実行",
+    "billing.background.explanation": "通常のチャットは枠を使いません。バックグラウンドのモデル呼び出し中のみ使用し、ツールやユーザーの応答待ちでは解放します。上限を超えた処理は順番待ちになります。",
+    "background.queued": "バックグラウンドタスクは順番待ちです",
+    "background.accountChanged": "アカウントが変更されたか、ログインの有効期限が切れました。タスクを再開してください。",
+    "background.unavailable": "バックグラウンドの実行枠を確認できません。しばらくしてから再試行してください。",
+    "billing.background.free": "バックグラウンド実行枠：{count}"
   }
 }

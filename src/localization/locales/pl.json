@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: przykład zadania to {input} tokenów wejściowych + {output} wyjściowych. Cena za milion wejście/wyjście: {inputRate}/{outputRate} monet; około {cost} monet/zadanie. Bez zniżki pamięci podręcznej, liczba zaokrąglona w dół. Złożone zadania wymagają wielu wywołań; liczba ukończonych zadań nie jest gwarantowana.",
     "billing.usage.tokenBasis": "Obejmuje tokeny wejściowe i wyjściowe w proporcji 4:1. Nie obejmuje darmowych modeli ani monet za codzienne logowanie.",
     "menu.upgradeEntry": "Zmień plan",
-    "menu.annualDiscount": "50% zniżki na plany roczne"
+    "menu.annualDiscount": "50% zniżki na plany roczne",
+    "billing.background.parallel": "Do {count} agentów w tle jednocześnie",
+    "billing.background.explanation": "Zwykły czat nie zajmuje miejsc. Wywołania modelu w tle zajmują miejsca zwalniane podczas oczekiwania na narzędzia lub użytkownika. Dodatkowe zadania trafiają do kolejki.",
+    "background.queued": "Zadanie w tle czeka w kolejce",
+    "background.accountChanged": "Konto zostało zmienione lub sesja wygasła. Uruchom zadanie ponownie.",
+    "background.unavailable": "Nie udało się sprawdzić dostępnej pojemności w tle. Spróbuj ponownie za chwilę.",
+    "billing.background.free": "Miejsca w tle: {count}"
   }
 }

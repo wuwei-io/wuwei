@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: ejemplo de {input} tokens de entrada + {output} de salida. Precio por millón entrada/salida: {inputRate}/{outputRate} monedas; unas {cost} monedas/tarea. Sin descuento de caché, cantidades redondeadas hacia abajo. Las tareas complejas pueden necesitar varias llamadas; no se garantiza el número completado.",
     "billing.usage.tokenBasis": "Incluye tokens de entrada y salida en proporción 4:1. Excluye modelos gratuitos y monedas de registro diario.",
     "menu.upgradeEntry": "Mejorar plan",
-    "menu.annualDiscount": "50 % de descuento en planes anuales"
+    "menu.annualDiscount": "50 % de descuento en planes anuales",
+    "billing.background.parallel": "Hasta {count} agentes en segundo plano en paralelo",
+    "billing.background.explanation": "El chat normal no ocupa plazas. Las llamadas al modelo en segundo plano sí; al esperar herramientas o al usuario, las liberan. El trabajo adicional queda en cola.",
+    "background.queued": "Tarea en segundo plano en cola",
+    "background.accountChanged": "Tu cuenta cambió o la sesión caducó. Reinicia la tarea.",
+    "background.unavailable": "No se pudo comprobar la capacidad en segundo plano. Inténtalo de nuevo en un momento.",
+    "billing.background.free": "Plazas en segundo plano: {count}"
   }
 }

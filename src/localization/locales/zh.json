@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}：示例每次 {input} 输入 + {output} 输出 Token；每百万输入/输出单价 {inputRate}/{outputRate} 币，约 {cost} 币/次。不计缓存优惠，次数向下取整。复杂任务可能多次调用，不保证完成次数。",
     "billing.usage.tokenBasis": "包含输入与输出，按 4:1 比例测算。不计免费模型与签到赠送的无为币。",
     "menu.upgradeEntry": "升级",
-    "menu.annualDiscount": "年付套餐优惠 50%"
+    "menu.annualDiscount": "年付套餐优惠 50%",
+    "billing.background.parallel": "最多 {count} 个后台 Agent 并行",
+    "billing.background.explanation": "普通聊天不占名额；后台调用模型时占用，等待工具或用户时释放，超出上限自动排队。",
+    "background.queued": "后台任务排队中",
+    "background.accountChanged": "账号已变更或登录已过期，请重新启动任务。",
+    "background.unavailable": "暂时无法确认后台执行名额，请稍后重试。",
+    "billing.background.free": "后台并行：{count}"
   }
 }

@@ -74,7 +74,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'billingRequest': {
       const req=clone(args[0]);(s.billingCalls??=[]).push(req);
       const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
-      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {version:'qa-v2',products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
+      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {...(s.backgroundPolicy?{backgroundPolicy:s.backgroundPolicy}:{}),version:'qa-v2',products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
       if(req.action==='quote'){
         if(s.quoteDelay)await delay(s.quoteDelay);
         if(s.quoteError)return {error:'network'};
@@ -153,10 +153,13 @@ async function run(name, options, test) {
 // fail before the first compositor surface exists, especially after resizing.
 async function captureBillingFrame(f){
   const contents=f.state.win.webContents;
+  await f.js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  await delay(100);
   if(!contents.isOffscreen())return (await contents.capturePage()).toPNG();
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{contents.removeListener('paint',paint);reject(Error('Timed out waiting for billing screenshot frame'));},5000);
-    const paint=(_event,_dirty,image)=>{if(image.isEmpty())return;clearTimeout(timer);contents.removeListener('paint',paint);resolve(image.toPNG());};
+    let frames=0;
+    const paint=(_event,_dirty,image)=>{if(image.isEmpty())return;if(++frames<2){setImmediate(()=>contents.invalidate());return;}clearTimeout(timer);contents.removeListener('paint',paint);resolve(image.toPNG());};
     contents.on('paint',paint);contents.invalidate();
   });
 }
@@ -763,6 +766,39 @@ app.whenReady().then(async () => {
   });
   await run('顶级提醒十秒自动关闭，任务状态变化不会重新出现', { settings: settings('wuwei-claude', 'claude-opus-4-8') }, async f => {
     await f.wait('!!document.querySelector(".premium-model-current")'); await delay(10_100); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); ready(f.state); emit(f.state, 'evt:tasks', { running: ['qa-session'] }); await delay(120); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); assert.equal(f.state.sent.length, 0);
+  });
+  for(const lang of ['zh','en']) await run('发布关键：后台并行：套餐展示与排队 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await openBilling(f,false,null);
+    await f.wait('!!document.querySelector(".billing-background-feature")');
+    assert.match(await f.js('document.querySelector(".billing-background-feature").textContent'),/4/);
+    await f.click('[data-sku="v2_plan_pro_annual"]');
+    await f.wait('document.querySelector(".billing-background-feature")?.textContent.includes("2")');
+    await f.click('[data-sku="v2_plan_max_annual"]');
+    await f.wait('document.querySelector(".billing-background-feature")?.textContent.includes("8")');
+    f.state.win.setContentSize(1200,800);await f.js('document.fonts.ready');
+    fs.writeFileSync(path.join(evidence,'background-selector-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".billing-background-feature")).map(e=>Number(e.textContent.match(/\\d+/)[0]))'),[2,4,8]);
+    assert.match(await f.js('document.querySelector(".billing-plans-free").textContent'),/1/);
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(80);
+      const boxes=await f.js('Array.from(document.querySelectorAll(".billing-background-feature")).map(e=>({inside:e.getBoundingClientRect().right<=innerWidth,overflow:e.scrollWidth>e.clientWidth+2}))');
+      assert.ok(boxes.every(b=>b.inside&&!b.overflow),JSON.stringify(boxes));
+      fs.writeFileSync(path.join(evidence,'background-cards-'+lang+'-'+width+'.png'),await captureBillingFrame(f));
+    }
+    await f.click('.billing-top button:last-child');await f.wait('!document.querySelector(".billing-panel")');
+    f.state.win.setContentSize(1200,800);await delay(100);
+    fs.writeFileSync(path.join(evidence,'background-client-base-'+lang+'.png'),await captureBillingFrame(f));
+    emit(f.state,'evt:background-queue',{sid:'qa-session',queued:true,limit:1});
+    await f.wait('document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
+    emit(f.state,'evt:background-queue',{sid:'qa-session',queued:false});
+    await f.wait('!document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
+    assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：后台并行：关闭的服务端策略不提前承诺权益',{account:clone(billingAccount),backgroundPolicy:{enabled:false,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await openBilling(f,false,null);assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);assert.equal(f.state.orders,0);
   });
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);

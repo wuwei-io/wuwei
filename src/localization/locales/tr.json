@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: örnek görevde {input} giriş + {output} çıkış tokenı. Milyon giriş/çıkış başına {inputRate}/{outputRate} jeton; yaklaşık {cost} jeton/görev. Önbellek indirimi yoktur, sayı aşağı yuvarlanır. Karmaşık görevler birden çok çağrı gerektirebilir; tamamlanma sayısı garanti edilmez.",
     "billing.usage.tokenBasis": "Giriş ve çıkış tokenlarını 4:1 oranında içerir. Ücretsiz modeller ve günlük giriş jetonları hariçtir.",
     "menu.upgradeEntry": "Yükselt",
-    "menu.annualDiscount": "Yıllık planlarda %50 indirim"
+    "menu.annualDiscount": "Yıllık planlarda %50 indirim",
+    "billing.background.parallel": "Aynı anda en fazla {count} arka plan aracısı",
+    "billing.background.explanation": "Normal sohbet yuva kullanmaz. Arka plandaki model çağrıları yuva kullanır; araç veya kullanıcı beklenirken yuvalar serbest kalır. Ek işler kuyruğa alınır.",
+    "background.queued": "Arka plan görevi kuyrukta",
+    "background.accountChanged": "Hesabınız değişti veya oturumunuz sona erdi. Görevi yeniden başlatın.",
+    "background.unavailable": "Arka plan kapasitesi doğrulanamadı. Lütfen biraz sonra tekrar deneyin.",
+    "billing.background.free": "Arka plan yuvaları: {count}"
   }
 }

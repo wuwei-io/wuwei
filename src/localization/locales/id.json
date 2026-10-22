@@ -3283,6 +3283,12 @@
     "billing.usage.taskBasis": "{model}: contoh tugas memakai {input} token masuk + {output} keluar. Tarif per juta masuk/keluar: {inputRate}/{outputRate} koin; sekitar {cost} koin/tugas. Tanpa diskon cache, jumlah dibulatkan ke bawah. Tugas rumit mungkin butuh beberapa panggilan; jumlah tugas selesai tidak dijamin.",
     "billing.usage.tokenBasis": "Termasuk token masuk dan keluar dengan rasio 4:1. Tidak termasuk model gratis dan koin check-in harian.",
     "menu.upgradeEntry": "Tingkatkan",
-    "menu.annualDiscount": "Diskon 50% paket tahunan"
+    "menu.annualDiscount": "Diskon 50% paket tahunan",
+    "billing.background.parallel": "Hingga {count} agen latar belakang sekaligus",
+    "billing.background.explanation": "Chat biasa tidak memakai slot. Panggilan model di latar belakang memakai slot; slot dilepas saat menunggu alat atau pengguna. Pekerjaan tambahan masuk antrean.",
+    "background.queued": "Tugas latar belakang dalam antrean",
+    "background.accountChanged": "Akun berubah atau sesi berakhir. Mulai ulang tugas.",
+    "background.unavailable": "Kapasitas latar belakang belum dapat diverifikasi. Coba lagi sebentar.",
+    "billing.background.free": "Slot latar belakang: {count}"
   }
 }
