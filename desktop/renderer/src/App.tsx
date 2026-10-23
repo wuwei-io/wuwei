@@ -4133,6 +4133,8 @@ export function App() {
   const executing = busy && !currentQueued;
   const extraBackgroundTasks = visibleBackgroundTasks.filter(task => task.roomId || !task.sid || !runningSet.has(task.sid));
   const activeTaskCount = runningSet.size + extraBackgroundTasks.length;
+  const queuedTaskCount = [...runningSet].filter(sid=>queuedSessionIds.has(sid)).length + extraBackgroundTasks.filter(task=>task.queued).length;
+  const executingTaskCount = activeTaskCount - queuedTaskCount;
   useEffect(()=>{
     if(!backgroundUpgradeAfterLogin)return;
     if(wuwei?.user.id){setBackgroundUpgradeAfterLogin(false);setBillingPage('plans');setBillingOpen(true);}
@@ -6880,12 +6882,12 @@ export function App() {
                   setShowUsage(false);
                 }}
               >
-                {!roomMode && visibleBackgroundTasks.some(task=>task.queued && (task.sid===currentId || task.sourceSid===currentId))
+                {!roomMode && currentQueued
                   ? tr('background.queued')
                   : roomMode
                   ? `○ ${t("foot.ready")}` /* 群/私聊底栏不显示「员工干活中」(会撑长导致换行)——运行态已由进度块+停止按钮体现，这里只保持默认 */
-                  : activeTaskCount > 1
-                  ? `● ${activeTaskCount} ${t("foot.tasksSuffix")}`
+                  : activeTaskCount > 1 || queuedTaskCount > 0
+                  ? [executingTaskCount>0?`● ${executingTaskCount} ${t("foot.tasksSuffix")}`:'',queuedTaskCount>0?`${queuedTaskCount} ${tr('background.tasks.queued')}`:''].filter(Boolean).join(' · ')
                   : busy
                     ? `● ${t("foot.running")}`
                     : activeTaskCount === 1

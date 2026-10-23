@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {setTimeout as delay} from 'node:timers/promises';
 import {applyBackgroundTaskEvent,accountBackgroundTasks,canUpgradeBackgroundTier,type BackgroundTaskEvent} from '../src/billing/background-tasks.js';
 import {runBackgroundTask,getBackgroundTasks} from '../desktop/main/background-tasks.js';
-import {BackgroundExecutionClient} from '../src/agent/background.js';
+import {BackgroundExecutionClient,withBackgroundTask,withoutBackgroundTask,wrapBackgroundProvider,runHostedTurn} from '../src/agent/background.js';
 
 test('one worker completing cannot clear another worker queued in the same room',()=>{
  const a:BackgroundTaskEvent={taskId:'a',roomId:'room',queued:true,limit:2,tier:'pro',accountId:'owner'};
@@ -45,4 +45,51 @@ test('main-process task snapshots carry real server tier, capacity and source, a
  assert.ok(!JSON.stringify(events).includes(token));
  release();await task;assert.deepEqual(getBackgroundTasks(),[]);
  assert.equal(events.at(-1)?.payload.finished,true);
+});
+
+test('a detached request admitted after the workflow finishes cannot resurrect its task row',async()=>{
+ const token=`header.${Buffer.from(JSON.stringify({sub:'owner'})).toString('base64url')}.signature`;
+ let allow!:()=>void;const delayed=new Promise<void>(r=>{allow=r;});
+ let acquisitions=0,late!:Promise<unknown>;
+ const events:any[]=[];
+ const client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:async(_url,init)=>{
+  const {action}=JSON.parse(String(init?.body));
+  if(action==='release')return Response.json({allowed:true,released:true});
+  if(++acquisitions===2)await delayed;
+  return Response.json({allowed:true,backgroundParallel:1,tier:'free',leaseExpiresAt:new Date(Date.now()+120000).toISOString()});
+ }});
+ await runBackgroundTask('finished-chat',(_c,p)=>events.push(p),async()=>{
+  await client.run(token,async()=>{});
+  late=client.run(token,async()=>{});await delay(0);
+ });
+ assert.equal(acquisitions,2);assert.deepEqual(getBackgroundTasks(),[]);
+ const afterFinish=events.length;allow();await late;
+ assert.deepEqual(getBackgroundTasks(),[]);assert.equal(events.length,afterFinish);
+ assert.equal(events.at(-1).finished,true);
+});
+
+test('closed async task contexts do not queue later metadata work',async()=>{
+ const token=`header.${Buffer.from(JSON.stringify({sub:'owner'})).toString('base64url')}.signature`;
+ let allow!:()=>void;const wait=new Promise<void>(r=>{allow=r;});
+ let later!:Promise<unknown>,requests=0;
+ const client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:async()=>{requests++;throw Error('metadata entered task queue');}});
+ await withBackgroundTask({id:'finished'},async()=>{later=wait.then(()=>client.run(token,async()=>42));});
+ allow();assert.equal(await later,42);assert.equal(requests,0);
+});
+
+test('title and next-input metadata explicitly leave a live hosted turn without changing its admission state',async()=>{
+ const token=`header.${Buffer.from(JSON.stringify({sub:'owner'})).toString('base64url')}.signature`;
+ let requests=0,completions=0;
+ const states:boolean[]=[];
+ const client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:async(_url,init)=>{
+  requests++;return Response.json(JSON.parse(String(init?.body)).action==='release'?{allowed:true,released:true}:{allowed:true,backgroundParallel:1,tier:'free',leaseExpiresAt:new Date(Date.now()+120000).toISOString()});
+ }});
+ const provider=wrapBackgroundProvider({name:'hosted',complete:async()=>{completions++;return {content:[],stopReason:'end_turn'};}},token,client);
+ await withBackgroundTask({id:'parent',onQueue:q=>states.push(q)},()=>runHostedTurn(provider,async()=>{
+  await provider.complete('',[],[],{});
+  assert.equal(requests,1);
+  await withoutBackgroundTask(()=>provider.complete('',[],[],{}));
+  assert.equal(requests,1);assert.equal(completions,2);
+ }));
+ assert.equal(requests,2);assert.ok(states.every(q=>!q));
 });

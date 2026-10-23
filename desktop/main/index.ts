@@ -162,7 +162,7 @@ import {
   type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
-import { backgroundTokenSubject, setBackgroundTokenResolver } from "../../src/agent/background.js";
+import { backgroundTokenSubject, setBackgroundTokenResolver, withoutBackgroundTask } from "../../src/agent/background.js";
 import { runBackgroundTask, getBackgroundTasks } from "./background-tasks.js";
 import { createHostedSessionState } from "../../src/wuwei-session-state.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
@@ -2689,7 +2689,8 @@ function msgTextTail(m: any, n: number): string {
     .trim()
     .slice(-n);
 }
-async function maybeSmartTitle(id: string) {
+function maybeSmartTitle(id: string) { return withoutBackgroundTask(() => generateSmartTitle(id)); }
+async function generateSmartTitle(id: string) {
   // Image turns already have a prompt-derived title; do not call a text model for them.
   if (loadSettings()?.imageMode) return;
   if (titleInFlight.has(id) || !provider) return;
@@ -2756,7 +2757,8 @@ async function maybeSmartTitle(id: string) {
 // 输入框「下一步动作」建议：回复完后，用模型根据对话(尤其助手最后回复常以问题/建议结尾)
 // 预测用户接下来最可能输入的一句话，发给前端做幽灵提示(Tab 补全)。无明确下一步则清空。
 const suggestInFlight = new Set<string>();
-async function suggestNextAction(id: string) {
+function suggestNextAction(id: string) { return withoutBackgroundTask(() => generateNextAction(id)); }
+async function generateNextAction(id: string) {
   if (suggestInFlight.has(id) || !provider) return;
   const a0 = agents.get(id);
   if (!a0) return;
@@ -5342,7 +5344,7 @@ ipcMain.handle("track", (_e, p: { event?: string; props?: Record<string, unknown
 });
 
 // ── 扫码支付：下单 / 轮询。带用户 token 调后端，401 自动 refresh 重试（同 wuwei-me）──
-ipcMain.handle('background:tasks', () => getBackgroundTasks());
+ipcMain.handle('background:tasks', () => { emitTasks(); return getBackgroundTasks(); });
 ipcMain.handle('billing:request',async (_e,request:import('../../src/billing/contracts.js').BillingRequest)=>{
   const sess=await getFreshWuweiSession();
   if(!sess) return {error:'not_logged_in'};

@@ -5,9 +5,15 @@ import { tr } from '../localization/index.js';
 import type { Provider } from '../types.js';
 
 type BackgroundContext={id:string;onQueue?:(queued:boolean,limit?:number,tier?:string,accountId?:string|null)=>void};
-const context=new AsyncLocalStorage<BackgroundContext>();
+const context=new AsyncLocalStorage<(BackgroundContext & {active:boolean})|undefined>();
+function currentTask(){const task=context.getStore();return task?.active?task:undefined;}
 /** One independently executing conversation/employee/scheduled turn. */
-export const withBackgroundTask=<T>(value:BackgroundContext,run:()=>Promise<T>)=>context.run(value,run);
+export function withBackgroundTask<T>(value:BackgroundContext,run:()=>Promise<T>){
+ const task={...value,active:true};
+ return context.run(task,async()=>{try{return await run();}finally{task.active=false;}});
+}
+/** Titles and next-input suggestions are metadata, never conversation tasks. */
+export function withoutBackgroundTask<T>(run:()=>Promise<T>){return context.run(undefined,()=>activeTurn.run(undefined,run));}
 export function backgroundTokenSubject(token:string):string|null {
  try {const value=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());return typeof value.sub==='string'?value.sub:null;}catch{return null;}
 }
@@ -39,7 +45,7 @@ export class BackgroundExecutionClient {
   }catch(error){queued?.(false,1,'free',null);throw error;}
  }
  async run<T>(token:string,run:(signal:AbortSignal)=>Promise<T>,signal:AbortSignal=new AbortController().signal):Promise<T>{
-  const task=context.getStore();
+  const task=currentTask();
   if(!task)return run(signal);
   const lease=await this.acquire(token,signal,task.onQueue);
   try{const result=await run(lease.signal);lease.signal.throwIfAborted();return result;}finally{await lease.release();}
@@ -106,6 +112,8 @@ const activeTurn=new AsyncLocalStorage<TurnLease|undefined>();
 /** Hold the slot across model rounds, retries and ordinary tools, rather than
  * admitting another chat while the first one is searching/browsing. */
 class TurnLease {
+ private closed=false;
+ get active(){return !this.closed;}
  private lease?:Lease;
  private acquiring?:Promise<void>;
  private failure=new AbortController();
@@ -114,6 +122,7 @@ class TurnLease {
   this.signal=AbortSignal.any([signal,this.failure.signal]);
  }
  async ensure(){
+  if(this.closed)throw Error(tr('background.unavailable'));
   this.signal.throwIfAborted();
   if(this.lease)return;
   this.acquiring??=this.execution.acquire(this.token,this.signal,this.task.onQueue).then(lease=>{
@@ -130,23 +139,24 @@ class TurnLease {
   this.detach?.();this.detach=undefined;
   const lease=this.lease;this.lease=undefined;await lease?.release();
  }
+ async finish(){this.closed=true;await this.release();}
 }
 
 export async function runHostedTurn<T>(provider:Provider,run:(signal:AbortSignal)=>Promise<T>,signal:AbortSignal=new AbortController().signal):Promise<T>{
  const binding=hostedProviders.get(provider);
  if(!binding)return run(signal); // Direct subscriptions / BYOK never send keys to billing.
- const task=context.getStore()??{id:randomUUID()};
+ const task=currentTask()??{id:randomUUID()};
  const turn=new TurnLease(binding.token,binding.execution,signal,task);
  return activeTurn.run(turn,async()=>{
   try{await turn.ensure();const result=await run(turn.signal);turn.signal.throwIfAborted();return result;}
-  finally{await turn.release();}
+  finally{await turn.finish();}
  });
 }
 
 /** A synchronous employee handoff or user decision is idle, not another running
  * task. Release before waiting, reacquire before the parent can do more work. */
 export async function withoutTurnSlot<T>(run:()=>Promise<T>):Promise<T>{
- const turn=activeTurn.getStore();
+ const stored=activeTurn.getStore(),turn=stored?.active?stored:undefined;
  if(!turn)return run();
  await turn.release();
  const result=await activeTurn.run(undefined,run);
@@ -157,7 +167,7 @@ export function wrapBackgroundProvider(provider:Provider,token:string,execution=
  hostedProviders.set(provider,{token,execution});
  const complete=provider.complete.bind(provider);
  provider.complete=async(system,messages,tools,handlers)=>{
-  const turn=activeTurn.getStore();
+  const stored=activeTurn.getStore(),turn=stored?.active?stored:undefined;
   if(turn && turn.execution===execution && backgroundTokenSubject(turn.token)!==backgroundTokenSubject(token))throw Error(tr('background.accountChanged'));
   if(turn && turn.execution===execution && backgroundTokenSubject(turn.token)===backgroundTokenSubject(token)){
    await turn.ensure();

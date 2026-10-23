@@ -29,7 +29,15 @@ catalog.push({ ...provider('anthropic',false,[model('claude-opus-4-8',false,fals
 const billingProviders=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-model-catalog.json'),'utf8'));
 const billingModelCatalog=[...catalog.filter(p=>!billingProviders.some(b=>b.id===p.id)),...billingProviders];
 const settings = (providerId = 'wuwei-free', model = 'nemotron-super-free') => ({ providerId, model, kind: 'openai', baseUrl: 'https://qa.invalid/api/gateway/v1', creds: {}, modelChoiceExplicit: true, theme: 'light', streamMode: 'instant', app: { teamEnabled: false, lang: 'zh' } });
-function emit(state, channel, payload) { if (!state.win.isDestroyed()) state.win.webContents.send('qa:event', channel, payload); }
+function emit(state, channel, payload) {
+  if(channel==='evt:tasks')state.running=[...(payload.running??[])];
+  if(channel==='evt:background-queue'){
+    const tasks=new Map((state.backgroundTasks??[]).map(task=>[task.taskId,task]));
+    if(payload.finished)tasks.delete(payload.taskId);else tasks.set(payload.taskId,clone(payload));
+    state.backgroundTasks=[...tasks.values()];
+  }
+  if (!state.win.isDestroyed()) state.win.webContents.send('qa:event', channel, payload);
+}
 function ready(state) {
   emit(state, 'evt:ready', { backend: 'openai', model: state.settings.model, cwd: 'D:/QA', contextWindow: 128000 });
   emit(state, 'evt:account', { providerId: state.settings.providerId, model: state.settings.model });
@@ -39,7 +47,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
   if (!s) return null; // Ignore already-queued calls from a window being torn down.
   s.calls.push({ method, model: s.settings.model });
   switch (method) {
-    case 'backgroundTasks': {const snapshot=clone(s.backgroundTasks??[]);if(s.backgroundDelay)await delay(s.backgroundDelay);return snapshot;}
+    case 'backgroundTasks': {emit(s,'evt:tasks',{running:s.running??[]});const snapshot=clone(s.backgroundTasks??[]);if(s.backgroundDelay)await delay(s.backgroundDelay);return snapshot;}
     case 'team.state': return {employees:clone(s.teamEmployees??[]),departments:[],apps:[]};
     case 'team.rooms': return {rooms:clone(s.teamRooms??[])};
     case 'team.roomMessages': return {messages:[],running:true};
@@ -177,6 +185,34 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for(const lostEvents of [false,true])await run('发布关键：任务实时同步：停止移除、排队转运行、快照补偿 '+(lostEvents?'missed-events':'live-events'),{
+    account:account(),running:['first-chat','qa-session'],sessions:[{id:'first-chat',title:'先执行的任务'},{id:'qa-session',title:'后执行的任务'}],
+    backgroundTasks:[{taskId:'first-task',sid:'first-chat',accountId:'qa-account',queued:false,limit:1,tier:'free'},{taskId:'second-task',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}],
+  },async f=>{
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    await f.click('.foot-status .fs-clickable');await f.wait('document.querySelectorAll(".tp-item").length===2');
+    assert.equal(await f.js('document.querySelectorAll(".tp-group.is-queued .tp-item").length'),1);
+    const second={taskId:'second-task',sid:'qa-session',accountId:'qa-account',queued:false,limit:1,tier:'free'};
+    if(lostEvents){f.state.running=['qa-session'];f.state.backgroundTasks=[second];}
+    else{
+      emit(f.state,'evt:tasks',{running:['qa-session']});
+      emit(f.state,'evt:background-queue',{taskId:'first-task',sid:'first-chat',accountId:'qa-account',queued:false,finished:true});
+      emit(f.state,'evt:background-queue',second);
+    }
+    await f.wait('document.querySelectorAll(".tp-item").length===1 && !document.querySelector(".tp-group.is-queued") && !!document.querySelector(".send-btn.stop")',6000);
+    assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    fs.writeFileSync(path.join(evidence,'task-sync-running-'+(lostEvents?'snapshot':'event')+'.png'),await captureBillingFrame(f));
+    // A stale snapshot started before completion must not bring the row back.
+    f.state.backgroundDelay=700;
+    await f.js('window.dispatchEvent(new Event("focus"))');await delay(50);
+    emit(f.state,'evt:tasks',{running:[]});emit(f.state,'evt:background-queue',{...second,finished:true});
+    await f.wait('!document.querySelector(".task-center") && !document.querySelector(".send-btn.stop")');
+    await delay(800);
+    assert.equal(await f.js('!!document.querySelector(".task-center,.thinking,.background-queue-notice")'),false);
+    assert.equal(await f.js('document.querySelector(".foot-status").textContent.includes("排队")'),false);
+    fs.writeFileSync(path.join(evidence,'task-sync-completed-'+(lostEvents?'snapshot':'event')+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
   for(const lang of ['zh','en'])await run('发布关键：支付品牌与核心权益排序加粗 '+lang,{
     account:{...account(),flags:['billing_v2']},lang,settings:{...settings(),app:{teamEnabled:false,lang}},
     modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),
