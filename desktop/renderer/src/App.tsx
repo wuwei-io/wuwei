@@ -1,3 +1,7 @@
+import { BackgroundTasksPanel } from './components/BackgroundTasksPanel.js';
+import { BackgroundQueueNotice } from './components/BackgroundQueueNotice.js';
+import { useBackgroundTasks } from './components/useBackgroundTasks.js';
+import { accountBackgroundTasks } from '../../../src/billing/background-tasks.js';
 import { formatCredits } from "../../../src/billing/presentation.js";
 import {localizeToolMetadata} from "../../../src/localization/tools.js";
 import systemData from "../../../src/localization/content/system-data.json";
@@ -3484,6 +3488,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
 export function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
+  const backgroundTasks = useBackgroundTasks();
   const [runningSet, setRunningSet] = useState<Set<string>>(() => new Set()); // 多任务:正在跑的会话id集
   const [pending, setPending] = useState<Pending | null>(null);
   // AI 弹的选择框：按会话 id 存，避免「A 会话弹的框在 B 会话冒出来」。只有当前会话才直接弹 AskModal。
@@ -4057,6 +4062,7 @@ export function App() {
   const [sopPrompt, setSopPrompt] = useState<SopPromptOpts | null>(null);
   const askPrompt = (opts: SopPromptOpts) => setSopPrompt(opts);
   const [showLoginForm, setShowLoginForm] = useState(false); // 应用内登录框
+  const [backgroundUpgradeAfterLogin,setBackgroundUpgradeAfterLogin] = useState(false);
   const [showLoginIntro, setShowLoginIntro] = useState(false); // 未登录发消息先弹的登录激励卡（点登录再切登录框）
   const [loginIntroReason, setLoginIntroReason] = useState<string | null>(null); // 弹登录卡的具体原因(额度用完/需登录等)，直接显在卡里，别让新用户懵
   const [langSwitchOnCard, setLangSwitchOnCard] = useState(true); // 登录卡小地球语言切换是否显示(后台 catalog flag 控制，缺省显示)
@@ -4119,6 +4125,21 @@ export function App() {
     trialEligible?: boolean; // 从未付费 → 缺币弹 ¥1 体验；否则弹「升级正式会员」
     providers?: { hidden?: string[] };
   } | null>(null);
+  const visibleBackgroundTasks = accountBackgroundTasks(backgroundTasks,wuwei?.user.id);
+  // Keep reserved/queued turns busy for injection and continuation guards, but
+  // only admitted turns show generation controls and model activity.
+  const queuedSessionIds = new Set(visibleBackgroundTasks.filter(task=>task.queued && task.sid).map(task=>task.sid!));
+  const currentQueued = queuedSessionIds.has(currentId);
+  const executing = busy && !currentQueued;
+  const extraBackgroundTasks = visibleBackgroundTasks.filter(task => task.roomId || !task.sid || !runningSet.has(task.sid));
+  const activeTaskCount = runningSet.size + extraBackgroundTasks.length;
+  const queuedTaskCount = [...runningSet].filter(sid=>queuedSessionIds.has(sid)).length + extraBackgroundTasks.filter(task=>task.queued).length;
+  const executingTaskCount = activeTaskCount - queuedTaskCount;
+  useEffect(()=>{
+    if(!backgroundUpgradeAfterLogin)return;
+    if(wuwei?.user.id){setBackgroundUpgradeAfterLogin(false);setBillingPage('plans');setBillingOpen(true);}
+    else if(!showLoginForm)setBackgroundUpgradeAfterLogin(false);
+  },[backgroundUpgradeAfterLogin,showLoginForm,wuwei?.user.id]);
   const [wuweiReady, setWuweiReady] = useState(false);
   const wuweiRef = useRef(wuwei); // 空依赖事件闭包里读最新登录态(否则 wuwei 冻结在挂载时=未登录)
   wuweiRef.current = wuwei;
@@ -4493,6 +4514,16 @@ export function App() {
   const [showConn, setShowConn] = useState(false); // 状态灯说明气泡
   const connCheckSeqRef = useRef(0);
   const thinkStartRef = useRef<number | null>(null); // 本轮开始时间（思考计时）
+  const queueStartedRef = useRef<{sid:string;at:number}|null>(null);
+  useEffect(()=>{
+    if(currentQueued){
+      if(queueStartedRef.current?.sid!==currentId)queueStartedRef.current={sid:currentId,at:Date.now()};
+    }else{
+      const queued=queueStartedRef.current;
+      if(queued?.sid===currentId && busy)thinkStartRef.current=thinkStartRef.current===null?Date.now():thinkStartRef.current+Date.now()-queued.at;
+      queueStartedRef.current=null;
+    }
+  },[currentQueued,currentId,busy]);
   const charsRef = useRef(0); // 本轮已流式字符数（估算 token）
   const turnTextRef = useRef(""); // 本轮已生成的正文(含 instant 模式还没揭示的),供状态栏悬停预览
   // 已"总是允许"的工具（记住授权，跨重启，手动模式下不再提示）
@@ -5243,6 +5274,7 @@ export function App() {
       { const asid = payload?.sid; if (asid) lastActivityRef.current.set(asid, Date.now()); }
       // 长命令心跳(evt:heartbeat)：只为刷新上面的活动时间而发，无其它语义——刷完即返回，别触发落定/switch
       if (ch === "evt:heartbeat") return;
+      if (ch === 'evt:background-queue') return; // handled by useBackgroundTasks
       // 用户点了停止 → 主进程已摘掉该会话的自主推进，这里把「连推」切回「自动」。
       // 不这么做的话：软停只停当前这一轮，收尾后前端立刻又续下一轮，用户点多少次都追不上
       // (实测连点 5 次仍停不下来，表现就是"点停止没反应、界面像卡死")。
@@ -6664,6 +6696,12 @@ export function App() {
 
   // 共享底栏：主对话 composer-foot 抽成渲染函数，群/私聊(RoomView) 复用同一套。
   // opts.roomMode：隐藏 mode-mini(那是主会话 per-session 模式，对群无意义)；opts.contextK：群自己的上下文估算值。
+  const openBackgroundPlans = () => {
+    setShowTasks(false);setShowAcctMenu(false);setCoinPackOpen(false);setPlanOpen(false);setCoinShortage(null);
+    if(!wuwei){setBackgroundUpgradeAfterLogin(true);setShowLoginForm(true);return;}
+    setBillingPage('plans');setBillingOpen(true);
+  };
+  const renderBackgroundQueue = (sid?:string,roomId?:string) => <BackgroundQueueNotice tasks={visibleBackgroundTasks} sid={sid} roomId={roomId} onUpgrade={openBackgroundPlans} onViewTasks={()=>{setShowUsage(false);setShowTasks(true);}}/>;
   const renderComposerFoot = (opts?: { roomMode?: boolean; contextK?: number; roomRunning?: boolean }) => {
     const roomMode = !!opts?.roomMode;
     const roomRunning = !!opts?.roomRunning; // 群/私聊底栏那颗灯：反映「本房间 turn」运行态，而非主会话 runningSet(否则误导排障)
@@ -6835,22 +6873,24 @@ export function App() {
               onClick={() => setShowUsage((v) => !v)}
             >
               <span
-                className={"fs-hit" + (busy || runningSet.size > 0 ? " fs-busy" : "") + (runningSet.size > 0 ? " fs-clickable" : "")}
-                title={runningSet.size > 0 ? (tr("ui.app.click.to.view.stop.running.tasks.97f6493")) : undefined}
+                className={"fs-hit" + (busy || activeTaskCount > 0 ? " fs-busy" : "") + (activeTaskCount > 0 ? " fs-clickable" : "")}
+                title={activeTaskCount > 0 ? (tr("ui.app.click.to.view.stop.running.tasks.97f6493")) : undefined}
                 onClick={(e) => {
-                  if (runningSet.size === 0) return;
+                  if (activeTaskCount === 0) return;
                   e.stopPropagation(); // 别触发用量面板
                   setShowTasks((v) => !v);
                   setShowUsage(false);
                 }}
               >
-                {roomMode
+                {!roomMode && currentQueued
+                  ? tr('background.queued')
+                  : roomMode
                   ? `○ ${t("foot.ready")}` /* 群/私聊底栏不显示「员工干活中」(会撑长导致换行)——运行态已由进度块+停止按钮体现，这里只保持默认 */
-                  : runningSet.size > 1
-                  ? `● ${runningSet.size} ${t("foot.tasksSuffix")}`
+                  : activeTaskCount > 1 || queuedTaskCount > 0
+                  ? [executingTaskCount>0?`● ${executingTaskCount} ${t("foot.tasksSuffix")}`:'',queuedTaskCount>0?`${queuedTaskCount} ${tr('background.tasks.queued')}`:''].filter(Boolean).join(' · ')
                   : busy
                     ? `● ${t("foot.running")}`
-                    : runningSet.size === 1
+                    : activeTaskCount === 1
                       ? `● ${t("foot.bgRunning")}`
                       : `○ ${t("foot.ready")}`}
               </span>
@@ -7418,7 +7458,7 @@ export function App() {
                   setCtxMenu({ sid: s.id, x: e.clientX, y: e.clientY });
                 }}
               >
-                {runningSet.has(s.id) && <span className="s-run" title={t("thinking.running")} />}
+                {runningSet.has(s.id) && <span className={'s-run'+(queuedSessionIds.has(s.id)?' s-queued':'')} title={queuedSessionIds.has(s.id)?tr('background.queued'):t("thinking.running")} />}
                 {s.priorityTag && (
                   <span
                     className={"s-prio p" + (s.priority || 0)}
@@ -8348,6 +8388,7 @@ export function App() {
                   initialRoomId={activeRoomId}
                   dmSelfId={dmSelfId}
                   renderMd={(t) => <MarkdownView text={t} />}
+                  renderBackgroundQueue={roomId=>renderBackgroundQueue(undefined,roomId)}
                   onBack={() => setAppView("store")}
                   renderRoomAsk={(memberIds, anchorRef) => {
                     // 群/私聊里成员的会话 sid 是 __room_<empId>；找本群哪位成员正在 ask_user 或被 CEO 把关。
@@ -8993,7 +9034,7 @@ export function App() {
                           key={j}
                           text={(b.item as Extract<Item, { type: "assistant" }>).text}
                           anchor={(b.item as Extract<Item, { type: "assistant" }>).anchor}
-                          streaming={busy && lastTurn && j === t.blocks.length - 1}
+                          streaming={executing && lastTurn && j === t.blocks.length - 1}
                         />
                       ) : (
                         <ToolGroup key={j} tools={b.tools} />
@@ -9075,7 +9116,7 @@ export function App() {
               );
             });
           })()}
-          {busy && !pending && (
+          {executing && !pending && (
             <ThinkingBar startRef={thinkStartRef} charsRef={charsRef} textRef={turnTextRef} items={items} />
           )}
         </div>
@@ -9101,6 +9142,7 @@ export function App() {
         )}
 
         <div className="composer" ref={composerRef}>
+          {appView===null && renderBackgroundQueue(currentId)}
           {selectedChoice?.category === 'premium' && <PremiumModelNotice key={selectedModelKey} en={lang !== "zh"} busy={busy} switching={valueSwitchBusy} onSwitch={()=>void switchToRecommendedValue()} />}
           {/* 鉴权提示条：检测到缺授权后常驻，直到授权成功或用户手动 × 关闭 */}
           {needAuth && !authDismissed && (
@@ -9413,11 +9455,11 @@ export function App() {
                 }
               }}
             />
-            {busy ? (
+            {executing ? (
               <button className="send-btn stop" onClick={stop} title={t("composer.stop")}>
                 <span className="stop-sq" />
               </button>
-            ) : modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
+            ) : !currentQueued && modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
               // 自主推进模式开着、此刻没在跑、输入框空 → 显示「待续跑」转圈，明确表示"活着、稍后自动继续"，
               // 避免两轮空档里显示成普通发送图标、让人误以为停了。点它可立即续跑，不必等看门狗。
               <button
@@ -9444,44 +9486,32 @@ export function App() {
           {appView === null && renderComposerFoot()}
         </div>
 
-        {showTasks && runningSet.size > 0 && (
-          <>
-            <div className="mq-overlay" onClick={() => setShowTasks(false)} />
-            <div className="tasks-panel">
-              <div className="tp-head">{tr("ui.app.running.tasks.73db050", { p0: runningSet.size })}</div>
-              {[...runningSet].map((sid) => {
-                const meta = sessions.find((s) => s.id === sid);
-                const title = meta?.title || (sid === currentId ? (tr("ui.app.current.chat.be080be")) : (tr("ui.app.untitled.chat.228167e")));
-                return (
-                  <div key={sid} className={"tp-item" + (sid === currentId ? " cur" : "")}>
-                    <span className="tp-dot" />
-                    <span
-                      className="tp-title"
-                      title={t("tasks.switchTo")}
-                      onClick={() => {
-                        if (sid !== currentId) window.wuwei.switchSession(sid);
-                        setShowTasks(false);
-                      }}
-                    >
-                      {title}
-                    </span>
-                    <button
-                      className="tp-stop"
-                      title={t("tasks.stopThis")}
-                      onClick={() => window.wuwei.stop(sid)}
-                    >
-                      {tr("composer.stop")}
-                    </button>
-                  </div>
-                );
-              })}
-              <div className="tp-foot">
-                <button className="tp-stopall" onClick={() => [...runningSet].forEach((s) => window.wuwei.stop(s))}>
-                  {tr("ui.app.stop.all.1b2f691")}
-                </button>
-              </div>
-            </div>
-          </>
+        {showTasks && (runningSet.size > 0 || extraBackgroundTasks.length > 0) && (
+          <BackgroundTasksPanel
+            heading={visibleBackgroundTasks.length ? undefined : tr("ui.app.running.tasks.73db050", { p0: runningSet.size })}
+            onClose={() => setShowTasks(false)}
+            onStopAll={runningSet.size > 0 && extraBackgroundTasks.length === 0 ? () => [...runningSet].forEach(sid => window.wuwei.stop(sid)) : undefined}
+            rows={[
+              ...[...runningSet].map(sid => ({
+                id: sid,
+                title: sessions.find(session => session.id === sid)?.title || tr(sid === currentId ? 'ui.app.current.chat.be080be' : 'ui.app.untitled.chat.228167e'),
+                queued: visibleBackgroundTasks.some(task => task.sid === sid && task.queued),
+                onOpen: () => { if (sid !== currentId) window.wuwei.switchSession(sid); setShowTasks(false); },
+                onStop: () => { void window.wuwei.stop(sid); },
+              })),
+              ...extraBackgroundTasks.map(task => ({
+                id: task.taskId,
+                backgroundId: task.taskId,
+                title: task.label || sessions.find(session => session.id === (task.sourceSid || task.sid))?.title || tr('background.tasks.heading'),
+                queued: task.queued,
+                onOpen: task.roomId || ((task.sourceSid || task.sid) && sessions.some(session => session.id === (task.sourceSid || task.sid))) ? () => {
+                  if (task.roomId) { setActiveRoomId(task.roomId); setAppView('rooms'); setAgiView(null); }
+                  else if ((task.sourceSid || task.sid) && (task.sourceSid || task.sid) !== currentId) window.wuwei.switchSession((task.sourceSid || task.sid)!);
+                  setShowTasks(false);
+                } : undefined,
+              })),
+            ]}
+          />
         )}
 
         {showUsage && (
@@ -10512,7 +10542,7 @@ export function App() {
       {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage || coinPackOpen || planOpen))) && (
         <BillingPanel key={wuwei.user.id}
           lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
-          initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"monthly"}
+          initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"annual"}
           insufficient={!!coinShortage&&!coinShortage.browse} imageMode={imageMode}
           onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage("close");}}
           onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}

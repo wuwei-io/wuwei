@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: مثال المهمة {input} رمز إدخال + {output} إخراج. سعر المليون إدخال/إخراج {inputRate}/{outputRate} عملة؛ نحو {cost} عملة للمهمة. دون خصم التخزين المؤقت مع تقريب العدد لأسفل. قد تتطلب المهام المعقدة عدة استدعاءات؛ لا نضمن عدد المهام المكتملة.",
     "billing.usage.tokenBasis": "يشمل رموز الإدخال والإخراج بنسبة 4:1. يستثني النماذج المجانية وعملات تسجيل الحضور اليومي.",
     "menu.upgradeEntry": "ترقية",
-    "menu.annualDiscount": "خصم 50% على الخطط السنوية"
+    "menu.annualDiscount": "خصم 50% على الخطط السنوية",
+    "billing.background.parallel": "حتى {count} محادثات أو مهام في وقت واحد",
+    "billing.background.explanation": "تشترك المحادثات ومهام الخلفية في خانات التنفيذ، بما في ذلك البحث والتصفح. يتم تحرير الخانة مؤقتًا عند انتظار قرار المستخدم أو رد زميل متزامن. تنتظر المهام الزائدة تلقائيًا.",
+    "background.queued": "المهمة في الانتظار",
+    "background.accountChanged": "تغير الحساب أو انتهت الجلسة. يرجى إعادة بدء المهمة.",
+    "background.unavailable": "تعذر التحقق من سعة المهام. يرجى المحاولة مجددًا قريبًا.",
+    "billing.background.free": "المهام المتزامنة: {count}",
+    "background.notice.title": "تدعم خطة {plan} عدد {count} من المحادثات أو المهام في وقت واحد",
+    "background.notice.generic": "يدعم حسابك {count} من المحادثات أو المهام في وقت واحد",
+    "background.notice.wait": "المهمة في قائمة الانتظار وستبدأ تلقائيًا عند توفر خانة.",
+    "background.notice.upsell": "ستبدأ المهمة عند توفر خانة. قم بالترقية لتشغيل المزيد من المهام في وقت واحد.",
+    "background.notice.upgrade": "ترقية الخطة",
+    "background.notice.view": "عرض المهام",
+    "background.plan.free": "مجاني",
+    "background.tasks.heading": "المهام",
+    "background.tasks.queued": "في الانتظار",
+    "background.tasks.autoStart": "تبدأ تلقائيًا عند توفر مكان",
+    "background.tasks.keepRunning": "تستمر المهام عند إغلاق هذه اللوحة"
   }
 }

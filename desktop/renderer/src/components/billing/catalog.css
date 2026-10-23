@@ -6,33 +6,33 @@
 .billing-selector-head{align-items:center;gap:14px;flex-shrink:0;margin-bottom:18px}
 .billing-selector-head h2{font-size:16px;line-height:24px}
 .billing-selector-head p{font-size:10px;line-height:17px;margin-top:4px}
-.billing-catalog-total{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;width:54px;height:47px;border:1px solid #e5ddd1;border-radius:9px;background:#fcfaf6;color:#9c8c79}
-.billing-catalog-total b{font-size:21px;font-weight:550;line-height:24px;letter-spacing:-.04em;color:#786b5b}
+.billing-catalog-total{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;width:54px;height:47px;border:1px solid var(--billing-line);border-radius:9px;background:var(--billing-paper);color:var(--billing-muted)}
+.billing-catalog-total b{font-size:21px;font-weight:550;line-height:24px;letter-spacing:-.04em;color:var(--billing-ink)}
 .billing-catalog-total small{font-size:8px;line-height:14px}
 .billing-catalog-controls{display:flex;align-items:center;gap:10px;margin-bottom:11px;flex-shrink:0}
 .billing-catalog-filters{display:flex;align-items:center;gap:3px;min-width:0;overflow-x:auto;scrollbar-width:none}
-.billing-catalog-filters button{padding:6px 7px;flex-shrink:0;white-space:nowrap;border-radius:5px;font-size:10px;line-height:14px;color:#978d80}
-.billing-catalog-filters button small{display:inline;margin-inline-start:3px;font-size:8px;color:#ada294}
-.billing-catalog-filters button[aria-selected=true]{color:#9b5437;background:#efe6da;font-weight:600}
-.billing-catalog-search{display:flex;align-items:center;gap:6px;flex:0 0 150px;max-width:40%;margin-inline-start:auto;padding:6px 7px;border:1px solid #e6dfd5;background:#fbfaf8;border-radius:6px;color:#b3a795;min-width:0}
+.billing-catalog-filters button{padding:6px 7px;flex-shrink:0;white-space:nowrap;border-radius:5px;font-size:10px;line-height:14px;color:var(--billing-muted)}
+.billing-catalog-filters button small{display:inline;margin-inline-start:3px;font-size:8px;color:var(--text-muted)}
+.billing-catalog-filters button[aria-selected=true]{color:var(--billing-accent);background:var(--accent-soft);font-weight:600}
+.billing-catalog-search{display:flex;align-items:center;gap:6px;flex:0 0 150px;max-width:40%;margin-inline-start:auto;padding:6px 7px;border:1px solid var(--billing-line);background:var(--billing-paper);border-radius:6px;color:var(--text-muted);min-width:0}
 .billing-catalog-search svg{flex-shrink:0}
 .billing-catalog-search input{border:0;background:none;padding:0;outline:none;width:100%;min-width:0;font-size:10px;line-height:14px;color:var(--billing-ink)}
 .billing-panel .billing-catalog-search input:focus,.billing-panel .billing-catalog-search input:focus-visible{outline:0;box-shadow:none}
-.billing-catalog-search input::placeholder{color:#a99e90}
-.billing-catalog-scroll{flex:1;min-height:72px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#d6c8b7 transparent;padding-inline-end:7px}
+.billing-catalog-search input::placeholder{color:var(--text-muted)}
+.billing-catalog-scroll{flex:1;min-height:72px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;padding-inline-end:7px}
 .billing-selector-models{column-gap:20px;row-gap:1px;align-content:start}
 .billing-selector-models>div{min-height:29px;padding:4px 1px;gap:8px;line-height:20px}
-.billing-selector-models>div:hover{background:#f0eae1;border-radius:4px}
+.billing-selector-models>div:hover{background:var(--accent-soft);border-radius:4px}
 .billing-selector-models .billing-brand{width:20px;height:20px;border-radius:5px;flex-shrink:0}
 .billing-selector-models .billing-brand img{width:17px;height:17px}
 .billing-selector-models b{font-size:11px;line-height:20px;min-width:0;font-weight:550;letter-spacing:-.02em}
-.billing-selector-models .billing-catalog-badge{display:inline;font-size:8px;line-height:14px;white-space:nowrap;border-radius:3px;background:#efe6d8;color:#9c805b;padding:0 4px;flex-shrink:0;margin-inline-start:auto}
-.billing-selector-models .billing-catalog-badge.image{background:#e9eef1;color:#6e8491}
-.billing-selector-models .billing-catalog-badge.free{background:#eaf0e6;color:#7b8b6a}
-.billing-selector-models i{margin-inline-start:auto;font-size:12px;line-height:12px;font-weight:400;flex-shrink:0;color:#b2764e}
+.billing-selector-models .billing-catalog-badge{display:inline;font-size:8px;line-height:14px;white-space:nowrap;border-radius:3px;background:var(--accent-soft);color:var(--billing-accent);padding:0 4px;flex-shrink:0;margin-inline-start:auto}
+.billing-selector-models .billing-catalog-badge.image{background:var(--accent-soft);color:var(--billing-accent)}
+.billing-selector-models .billing-catalog-badge.free{background:var(--green-bg);color:var(--green)}
+.billing-selector-models i{margin-inline-start:auto;font-size:12px;line-height:12px;font-weight:400;flex-shrink:0;color:var(--billing-accent)}
 .billing-selector-models div:has(.billing-catalog-badge) i{margin-inline-start:0}
-.billing-catalog-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;color:#a69a8a;font-size:9px;line-height:18px;flex-shrink:0}
-.billing-catalog-foot button{font-size:9px;color:#ae7857;padding:0;white-space:nowrap}
+.billing-catalog-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;color:var(--billing-muted);font-size:9px;line-height:18px;flex-shrink:0}
+.billing-catalog-foot button{font-size:9px;color:var(--billing-accent);padding:0;white-space:nowrap}
 .billing-catalog-empty{text-align:center;font-size:11px;padding:25px 8px}
 .billing-selector-benefits{flex-shrink:0;margin-top:12px;padding-top:13px}
 .billing-selector-benefits h3{font-size:12px;line-height:18px;margin-bottom:3px}
@@ -43,9 +43,29 @@
 .billing-selector-benefits ul{grid-template-columns:1fr;margin-top:9px;padding-inline-start:18px;gap:5px}
 .billing-selector-benefits li{font-size:10.5px;line-height:17px}
 .billing-selector-benefits li:before{inset-inline-start:-18px}
-.billing-selector-benefits .billing-usage-metric{font-weight:550;color:#4e453b;font-variant-numeric:tabular-nums}
-.billing-selector-benefits .billing-usage-note{font-size:8.5px;line-height:14px;margin-top:9px;color:#a2988b}
+.billing-selector-benefits .billing-usage-metric{font-weight:550;color:var(--billing-ink);font-variant-numeric:tabular-nums}
+.billing-selector-benefits .billing-usage-note{font-size:8.5px;line-height:14px;margin-top:9px;color:var(--billing-muted)}
 [dir=rtl] .billing-selector>aside{border-right:0;border-left:1px solid var(--billing-line)}
 @media(min-width:681px) and (max-height:790px){.billing-selector>aside{padding-top:21px;padding-bottom:20px}.billing-selector-head{margin-bottom:13px}.billing-selector-benefits{padding-top:10px}.billing-selector-benefits ul{gap:3px}.billing-selector-benefits li{line-height:16px}.billing-selector-benefits .billing-usage-note{margin-top:7px}}
 @media(max-width:1000px){.billing-catalog-search{flex-basis:130px}.billing-selector-models{column-gap:10px}.billing-selector-models b{font-size:10px}.billing-selector-models .billing-catalog-badge{display:none}}
 @media(max-width:680px),(max-height:620px){.billing-selector-view{height:auto;display:block;overflow:auto}.billing-selector-view .billing-selector{overflow:visible}.billing-catalog-scroll{flex:none;height:240px;min-height:0}.billing-selector>aside{order:1;border-right:0;border-top:1px solid var(--billing-line)}.billing-catalog-controls{flex-wrap:wrap}.billing-catalog-search{max-width:45%}}
+
+/* Keep the short Chinese coin delivery label on one line. */
+.packs .billing-selector-name:lang(zh){min-width:max-content}
+.packs .billing-selector-name:lang(zh) b,.packs .billing-selector-name:lang(zh) small{white-space:nowrap}
+
+/* Annual comparisons use subdued list prices and a clear annual payable total. */
+.billing-original-monthly,.billing-original-annual{color:var(--billing-muted);font-weight:500;text-decoration-thickness:1px;font-variant-numeric:tabular-nums}
+.billing-selector-price>.billing-original-monthly{font-size:13px;line-height:20px;margin-inline-end:7px;vertical-align:baseline}
+.billing-selector-price .billing-selector-annual{display:flex;justify-content:flex-end;align-items:baseline;gap:2px 5px;flex-wrap:wrap;white-space:normal}
+.billing-selector-annual .billing-current-annual{font-size:inherit;line-height:inherit;font-weight:600;color:var(--billing-muted)}
+.billing-selector-price:has(.billing-selector-annual){max-width:calc(100% - 65px)}
+.billing-plan-price>.billing-original-monthly{font-size:15px;line-height:20px;margin-inline-end:2px}
+.billing-plan-term.annual{display:flex;align-content:flex-start;align-items:baseline;gap:0 5px;flex-wrap:wrap}
+.billing-plan-term .billing-current-annual{font-size:inherit;font-weight:600;color:var(--billing-muted)}
+
+/* Core benefits lead the list; value and concurrency receive the same emphasis. */
+.billing-selector-benefits li.billing-core-feature{color:var(--billing-ink);font-weight:600}
+.billing-selector-benefits li.billing-core-feature strong,.billing-plan-features .billing-core-feature strong{font:inherit;font-weight:600;color:var(--billing-ink)}
+.billing-selector-benefits .billing-usage-note{color:var(--billing-muted)}
+.billing-panel .billing-close:focus-visible{outline:none;box-shadow:none;background:var(--billing-soft)}

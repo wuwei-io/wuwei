@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: exemplo com {input} tokens de entrada + {output} de saída. Preço por milhão entrada/saída: {inputRate}/{outputRate} moedas; cerca de {cost} moedas/tarefa. Sem desconto de cache, quantidade arredondada para baixo. Tarefas complexas podem exigir várias chamadas; a quantidade concluída não é garantida.",
     "billing.usage.tokenBasis": "Inclui tokens de entrada e saída na proporção 4:1. Exclui modelos gratuitos e moedas de check-in diário.",
     "menu.upgradeEntry": "Fazer upgrade",
-    "menu.annualDiscount": "50% de desconto nos planos anuais"
+    "menu.annualDiscount": "50% de desconto nos planos anuais",
+    "billing.background.parallel": "Até {count} conversas ou tarefas ao mesmo tempo",
+    "billing.background.explanation": "Conversas e tarefas em segundo plano compartilham vagas, inclusive durante buscas e navegação. Esperar uma decisão do usuário ou uma resposta síncrona de um colega libera a vaga temporariamente. Tarefas extras entram na fila automaticamente.",
+    "background.queued": "Tarefa na fila",
+    "background.accountChanged": "Sua conta mudou ou a sessão expirou. Reinicie a tarefa.",
+    "background.unavailable": "Não foi possível verificar a capacidade de tarefas. Tente novamente em instantes.",
+    "billing.background.free": "Tarefas simultâneas: {count}",
+    "background.notice.title": "Seu plano {plan} permite {count} conversas ou tarefas ao mesmo tempo",
+    "background.notice.generic": "Sua conta permite {count} conversas ou tarefas ao mesmo tempo",
+    "background.notice.wait": "A tarefa está na fila e começará quando uma vaga ficar livre.",
+    "background.notice.upsell": "A tarefa começará quando houver uma vaga. Faça upgrade para executar mais tarefas ao mesmo tempo.",
+    "background.notice.upgrade": "Fazer upgrade",
+    "background.notice.view": "Ver tarefas",
+    "background.plan.free": "Grátis",
+    "background.tasks.heading": "Tarefas",
+    "background.tasks.queued": "Na fila",
+    "background.tasks.autoStart": "Inicia automaticamente quando houver uma vaga",
+    "background.tasks.keepRunning": "As tarefas continuam ao fechar este painel"
   }
 }

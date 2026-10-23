@@ -1,6 +1,6 @@
 import { getCurrentLanguage, tr, localizeStoredText } from '../localization/index.js';
 import aliases from '../localization/content/billing-records.json';
-import type { CreditRecord } from './contracts.js';
+import type { BillingProduct, BillingCurrency, CreditRecord } from './contracts.js';
 import type { ModelChoice } from '../model-selection.js';
 
 /** Display precision only. Never use this value to calculate charges or write a ledger. */
@@ -63,4 +63,14 @@ export function billingModelCatalog(choices:ModelChoice[]) {
   first.sort((a,b)=>order(a)-order(b));
   const images=available.filter(m=>m.category==='images'),featured=new Set([...first,...images].map(m=>m.key));
   return [...first,...images,...available.filter(m=>!featured.has(m.key)).sort((a,b)=>Number(a.free)-Number(b.free)||a.rank-b.rank)];
+}
+
+/** Compare an annual offer with this catalog's actual monthly plan, not an invented list price. */
+export function annualPriceComparison(product:BillingProduct,currency:BillingCurrency,products:readonly BillingProduct[]) {
+  if(product.kind!=='plan'||product.period!=='annual')return null;
+  const monthly=products.find(p=>p.kind==='plan'&&p.period==='monthly'&&p.name===product.name);
+  if(!monthly)return null;
+  const regular=currency==='USD'?monthly.usdMinor:monthly.cnyMinor,annual=currency==='USD'?product.usdMinor:product.cnyMinor;
+  if(!Number.isSafeInteger(regular)||!Number.isSafeInteger(regular*12)||!Number.isSafeInteger(annual)||regular<=0||annual<=0||annual>=regular*12)return null;
+  return {monthly:regular,annual:regular*12};
 }

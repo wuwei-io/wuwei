@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: esempio con {input} token in ingresso + {output} in uscita. Prezzi per milione ingresso/uscita: {inputRate}/{outputRate} monete; circa {cost} monete/attività. Senza sconto cache, quantità arrotondata per difetto. Le attività complesse richiedono più chiamate; il numero di completamenti non è garantito.",
     "billing.usage.tokenBasis": "Include token in ingresso e in uscita nel rapporto 4:1. Esclude modelli gratuiti e monete di accesso giornaliero.",
     "menu.upgradeEntry": "Passa di piano",
-    "menu.annualDiscount": "Sconto del 50% sui piani annuali"
+    "menu.annualDiscount": "Sconto del 50% sui piani annuali",
+    "billing.background.parallel": "Fino a {count} chat o attività contemporaneamente",
+    "billing.background.explanation": "Chat e attività in background condividono gli slot, anche durante ricerche e navigazione. L’attesa di una decisione o di una risposta sincrona di un collega libera temporaneamente lo slot. Le attività aggiuntive vengono messe in coda.",
+    "background.queued": "Attività in coda",
+    "background.accountChanged": "L’account è cambiato o la sessione è scaduta. Riavvia l’attività.",
+    "background.unavailable": "Impossibile verificare la capacità delle attività. Riprova tra poco.",
+    "billing.background.free": "Attività simultanee: {count}",
+    "background.notice.title": "Il piano {plan} supporta {count} chat o attività contemporaneamente",
+    "background.notice.generic": "Il tuo account supporta {count} chat o attività contemporaneamente",
+    "background.notice.wait": "L’attività è in coda e partirà appena si libererà un posto.",
+    "background.notice.upsell": "L’attività inizierà quando si libera uno slot. Passa a un piano superiore per più attività simultanee.",
+    "background.notice.upgrade": "Cambia piano",
+    "background.notice.view": "Vedi attività",
+    "background.plan.free": "Gratuito",
+    "background.tasks.heading": "Attività",
+    "background.tasks.queued": "In coda",
+    "background.tasks.autoStart": "Si avvia automaticamente quando si libera un posto",
+    "background.tasks.keepRunning": "Le attività continuano dopo la chiusura del pannello"
   }
 }

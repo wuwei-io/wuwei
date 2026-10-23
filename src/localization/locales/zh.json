@@ -1744,7 +1744,7 @@
     "ui.billingpanel.active.members.get.more.credits.at.1e4c762": "有效会员同价多得 50% 无为币",
     "ui.billingpanel.active.members.receive.bonus.credits.49addd8": "有效会员购买无为币包，可获 50% 加赠",
     "ui.billingpanel.recommended.99a8fb6": "推荐",
-    "ui.billingpanel.credits.delivered.493dda6": "无为币到账",
+    "ui.billingpanel.credits.delivered.493dda6": "币到账",
     "ui.billingpanel.credits.month.3093877": "币 / 月",
     "ui.billingpanel.mo.00fb449": "/月",
     "ui.billingpanel.billed.yearly.ca680b1": "年付合计 {p0}",
@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}：示例每次 {input} 输入 + {output} 输出 Token；每百万输入/输出单价 {inputRate}/{outputRate} 币，约 {cost} 币/次。不计缓存优惠，次数向下取整。复杂任务可能多次调用，不保证完成次数。",
     "billing.usage.tokenBasis": "包含输入与输出，按 4:1 比例测算。不计免费模型与签到赠送的无为币。",
     "menu.upgradeEntry": "升级",
-    "menu.annualDiscount": "年付套餐优惠 50%"
+    "menu.annualDiscount": "年付套餐优惠 50%",
+    "billing.background.parallel": "最多 {count} 个会话或任务同时执行",
+    "billing.background.explanation": "普通会话与后台任务共享并发名额，执行搜索、浏览器等工具时仍占用。等待用户确认或同步等待员工回复时暂时释放；超出上限自动排队。",
+    "background.queued": "任务排队中",
+    "background.accountChanged": "账号已变更或登录已过期，请重新启动任务。",
+    "background.unavailable": "暂时无法确认执行名额，请稍后重试。",
+    "billing.background.free": "同时执行：{count}",
+    "background.notice.title": "当前 {plan} 支持 {count} 个会话或任务同时执行",
+    "background.notice.generic": "当前账号支持 {count} 个会话或任务同时执行",
+    "background.notice.wait": "新任务已加入队列，空出名额后自动开始。",
+    "background.notice.upsell": "新任务正在排队，空出名额后自动开始。升级套餐可同时执行更多任务。",
+    "background.notice.upgrade": "升级套餐",
+    "background.notice.view": "查看任务",
+    "background.plan.free": "免费版",
+    "background.tasks.heading": "执行任务",
+    "background.tasks.queued": "排队中",
+    "background.tasks.autoStart": "空出名额后自动开始",
+    "background.tasks.keepRunning": "关闭面板后，任务仍会继续执行"
   }
 }

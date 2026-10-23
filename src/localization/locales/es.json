@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: ejemplo de {input} tokens de entrada + {output} de salida. Precio por millón entrada/salida: {inputRate}/{outputRate} monedas; unas {cost} monedas/tarea. Sin descuento de caché, cantidades redondeadas hacia abajo. Las tareas complejas pueden necesitar varias llamadas; no se garantiza el número completado.",
     "billing.usage.tokenBasis": "Incluye tokens de entrada y salida en proporción 4:1. Excluye modelos gratuitos y monedas de registro diario.",
     "menu.upgradeEntry": "Mejorar plan",
-    "menu.annualDiscount": "50 % de descuento en planes anuales"
+    "menu.annualDiscount": "50 % de descuento en planes anuales",
+    "billing.background.parallel": "Hasta {count} chats o tareas a la vez",
+    "billing.background.explanation": "Los chats y las tareas en segundo plano comparten plazas, incluso durante búsquedas y navegación. Esperar una decisión del usuario o una respuesta síncrona de un compañero libera la plaza temporalmente. Las tareas adicionales entran en cola.",
+    "background.queued": "Tarea en cola",
+    "background.accountChanged": "Tu cuenta cambió o la sesión caducó. Reinicia la tarea.",
+    "background.unavailable": "No se pudo verificar la capacidad de tareas. Inténtalo de nuevo en unos momentos.",
+    "billing.background.free": "Tareas simultáneas: {count}",
+    "background.notice.title": "Tu plan {plan} admite {count} chats o tareas a la vez",
+    "background.notice.generic": "Tu cuenta admite {count} chats o tareas a la vez",
+    "background.notice.wait": "La tarea está en cola y comenzará cuando se libere una plaza.",
+    "background.notice.upsell": "La tarea comenzará cuando haya una plaza libre. Mejora tu plan para ejecutar más tareas a la vez.",
+    "background.notice.upgrade": "Mejorar plan",
+    "background.notice.view": "Ver tareas",
+    "background.plan.free": "Gratis",
+    "background.tasks.heading": "Tareas",
+    "background.tasks.queued": "En cola",
+    "background.tasks.autoStart": "Comienza automáticamente cuando haya un puesto libre",
+    "background.tasks.keepRunning": "Las tareas continúan al cerrar este panel"
   }
 }

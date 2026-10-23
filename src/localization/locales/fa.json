@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: نمونهٔ هر کار {input} توکن ورودی + {output} خروجی. نرخ هر میلیون ورودی/خروجی {inputRate}/{outputRate} سکه؛ حدود {cost} سکه برای هر کار. بدون تخفیف کش و با گردکردن تعداد به پایین. کار پیچیده ممکن است چند فراخوانی بخواهد؛ تعداد تکمیل تضمین نمی‌شود.",
     "billing.usage.tokenBasis": "توکن‌های ورودی و خروجی با نسبت 4:1 محاسبه می‌شوند. مدل‌های رایگان و سکه‌های ورود روزانه منظور نشده‌اند.",
     "menu.upgradeEntry": "ارتقا",
-    "menu.annualDiscount": "۵۰٪ تخفیف طرح‌های سالانه"
+    "menu.annualDiscount": "۵۰٪ تخفیف طرح‌های سالانه",
+    "billing.background.parallel": "حداکثر {count} گفتگو یا کار هم‌زمان",
+    "billing.background.explanation": "گفتگوها و کارهای پس‌زمینه ظرفیت مشترک دارند؛ جستجو و مرورگر نیز ظرفیت را اشغال می‌کنند. هنگام انتظار برای تصمیم کاربر یا پاسخ هم‌زمان همکار، ظرفیت موقتاً آزاد می‌شود. کارهای اضافی خودکار در صف قرار می‌گیرند.",
+    "background.queued": "کار در صف است",
+    "background.accountChanged": "حساب تغییر کرده یا نشست منقضی شده است. کار را دوباره آغاز کنید.",
+    "background.unavailable": "امکان بررسی ظرفیت اجرا وجود ندارد. کمی بعد دوباره تلاش کنید.",
+    "billing.background.free": "کارهای هم‌زمان: {count}",
+    "background.notice.title": "طرح {plan} شما از {count} گفتگو یا کار هم‌زمان پشتیبانی می‌کند",
+    "background.notice.generic": "حساب شما از {count} گفتگو یا کار هم‌زمان پشتیبانی می‌کند",
+    "background.notice.wait": "کار در صف است و با آزاد شدن ظرفیت خودکار آغاز می‌شود.",
+    "background.notice.upsell": "کار با آزاد شدن ظرفیت شروع می‌شود. برای اجرای هم‌زمان کارهای بیشتر، طرح را ارتقا دهید.",
+    "background.notice.upgrade": "ارتقای طرح",
+    "background.notice.view": "مشاهده کارها",
+    "background.plan.free": "رایگان",
+    "background.tasks.heading": "کارها",
+    "background.tasks.queued": "در صف",
+    "background.tasks.autoStart": "با آزاد شدن ظرفیت، خودکار شروع می‌شود",
+    "background.tasks.keepRunning": "با بستن این پنل، کارها ادامه می‌یابند"
   }
 }

@@ -2,6 +2,7 @@
 // 渲染进程可见的 window.wuwei 类型（来自 preload）
 import type { WuweiMe, CatalogProviderDto, ModelPricingData } from "../../main/wuwei-auth.js";
 import type { BillingRequest, BillingResponse } from '../../../src/billing/contracts.js';
+import type { BackgroundTaskEntry } from '../../../src/billing/background-tasks.js';
 
 // 会话总目标"任务契约"：目标 + 调研 + 规则(要做/不做) + 分步计划(每步带验收标准)
 export interface PlanStep { id: string; title: string; acceptance: string; status: "todo" | "doing" | "done"; description?: string; children?: PlanStep[] }
@@ -249,6 +250,7 @@ export interface WuweiApi {
     message?: string;
   }>;
   billingRequest(request:BillingRequest):Promise<BillingResponse>;
+  backgroundTasks():Promise<BackgroundTaskEntry[]>;
   payCryptoCreate(sku: string): Promise<{
     orderId?: string;
     invoiceUrl?: string;

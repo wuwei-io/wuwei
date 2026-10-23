@@ -19,6 +19,7 @@ import { researchToolLabel, toolInputPreview } from "../toolLabel.js";
 // dmSelfId：进入私聊(type==="dm")时「当前视角是哪名员工」。人类在私聊里发言时用它算出「对方」=要唤醒回复的成员。
 type Props = { en: boolean; employees: Employee[]; onBack: () => void; initialRoomId?: string | null; dmSelfId?: string | null; footer?: (ctx: { contextK: number; running: boolean }) => ReactNode; renderMd?: (text: string) => ReactNode;
   // 群/私聊里某成员(sid=__room_<empId>)发起 ask_user/CEO 把关时，由 App 渲染选择框/拍板提示，锚定到本群输入框。
+  renderBackgroundQueue?: (roomId:string)=>ReactNode;
   renderRoomAsk?: (memberIds: string[], anchor: RefObject<HTMLDivElement | null>) => ReactNode };
 
 // 群/私聊没有主进程回报的精确 token 数(那是 per-session 的)，这里按消息文本长度粗估：
@@ -34,7 +35,7 @@ function estimateRoomContextK(msgs: { text?: string }[]): number {
   return tokens / 1000;
 }
 
-export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd, renderRoomAsk }: Props) {
+export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, footer, renderMd, renderRoomAsk, renderBackgroundQueue }: Props) {
   const tx = useTx(); // 翻译显示层：翻译态下群名/员工名/发言人名临时译成英文覆盖显示(纯覆盖，不改数据)
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cur, setCur] = useState<string | null>(null);
@@ -517,6 +518,7 @@ export function RoomView({ en, employees, onBack, initialRoomId, dmSelfId, foote
       {room && renderRoomAsk?.(room.members, composerRef)}
 
       {/* 输入框：抄主对话框风格——整体一个大圆角框，发送/停止按钮内嵌右下，对齐 */}
+      {room && renderBackgroundQueue && <div className="tc-room-queue">{renderBackgroundQueue(room.id)}</div>}
       <div className="tc-composer" ref={composerRef}>
         {/* @ 补全：输入 @ 弹出成员 + 所有人。鼠标点选或键盘 ↑↓ 高亮 + Enter 选中 */}
         {mention !== null && mentionCands.length > 0 && (() => {

@@ -23,7 +23,8 @@ const child = spawn(require('electron'), [path.join(repo, 'tests/client-flows/ru
 const chunks = [];
 child.stdout.on('data', data => { chunks.push(data); process.stdout.write(data); });
 child.stderr.on('data', data => { chunks.push(data); process.stderr.write(data); });
-const timeout = setTimeout(() => child.kill(), 180_000);
+// Full billing, localization and queue coverage now exceeds three minutes.
+const timeout = setTimeout(() => child.kill(), 600_000);
 let code;
 try {
   code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', value => resolve(value ?? 1)); });

@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: उदाहरण में प्रति कार्य {input} इनपुट + {output} आउटपुट टोकन। प्रति दस लाख इनपुट/आउटपुट दर {inputRate}/{outputRate} कॉइन; लगभग {cost} कॉइन/कार्य। कैश छूट नहीं, संख्या नीचे पूर्णांकित है। जटिल कार्य में कई कॉल हो सकती हैं; पूर्ण कार्यों की गारंटी नहीं।",
     "billing.usage.tokenBasis": "इनपुट और आउटपुट टोकन 4:1 अनुपात में शामिल हैं। निःशुल्क मॉडल और दैनिक चेक-इन कॉइन शामिल नहीं हैं।",
     "menu.upgradeEntry": "अपग्रेड करें",
-    "menu.annualDiscount": "वार्षिक प्लान पर 50% की छूट"
+    "menu.annualDiscount": "वार्षिक प्लान पर 50% की छूट",
+    "billing.background.parallel": "एक साथ अधिकतम {count} चैट या कार्य",
+    "billing.background.explanation": "चैट और पृष्ठभूमि कार्य साझा स्लॉट उपयोग करते हैं, खोज और ब्राउज़िंग के दौरान भी। उपयोगकर्ता के निर्णय या सहकर्मी के समकालिक उत्तर की प्रतीक्षा में स्लॉट अस्थायी रूप से खाली होता है। अतिरिक्त कार्य अपने आप कतार में लगते हैं।",
+    "background.queued": "कार्य कतार में है",
+    "background.accountChanged": "खाता बदल गया है या सत्र समाप्त हो गया है। कार्य फिर से शुरू करें।",
+    "background.unavailable": "कार्य क्षमता सत्यापित नहीं हो सकी। कृपया थोड़ी देर बाद फिर प्रयास करें।",
+    "billing.background.free": "समवर्ती कार्य: {count}",
+    "background.notice.title": "आपकी {plan} योजना एक साथ {count} चैट या कार्य की अनुमति देती है",
+    "background.notice.generic": "आपका खाता एक साथ {count} चैट या कार्य की अनुमति देता है",
+    "background.notice.wait": "कार्य कतार में है। स्लॉट खाली होते ही अपने आप शुरू होगा।",
+    "background.notice.upsell": "स्लॉट खाली होने पर कार्य शुरू होगा। अधिक कार्य एक साथ चलाने के लिए अपग्रेड करें।",
+    "background.notice.upgrade": "योजना अपग्रेड करें",
+    "background.notice.view": "कार्य देखें",
+    "background.plan.free": "निःशुल्क",
+    "background.tasks.heading": "कार्य",
+    "background.tasks.queued": "कतार में",
+    "background.tasks.autoStart": "जगह खाली होने पर अपने आप शुरू होगा",
+    "background.tasks.keepRunning": "यह पैनल बंद करने पर भी कार्य चलते रहेंगे"
   }
 }

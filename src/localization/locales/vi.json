@@ -3283,6 +3283,23 @@
     "billing.usage.taskBasis": "{model}: mỗi tác vụ mẫu dùng {input} token vào + {output} token ra. Giá mỗi triệu token vào/ra: {inputRate}/{outputRate} xu; khoảng {cost} xu/tác vụ. Không tính giảm giá bộ nhớ đệm, số lượng làm tròn xuống. Tác vụ phức tạp có thể gọi nhiều lần, không bảo đảm số tác vụ hoàn thành.",
     "billing.usage.tokenBasis": "Gồm token vào và ra theo tỷ lệ 4:1. Không tính mô hình miễn phí và xu điểm danh hằng ngày.",
     "menu.upgradeEntry": "Nâng cấp",
-    "menu.annualDiscount": "Giảm 50% gói năm"
+    "menu.annualDiscount": "Giảm 50% gói năm",
+    "billing.background.parallel": "Tối đa {count} cuộc trò chuyện hoặc tác vụ cùng lúc",
+    "billing.background.explanation": "Trò chuyện và tác vụ nền dùng chung suất thực thi, kể cả khi tìm kiếm hoặc duyệt web. Khi chờ quyết định của người dùng hoặc phản hồi đồng bộ từ đồng nghiệp, suất được tạm trả lại. Tác vụ vượt giới hạn tự động xếp hàng.",
+    "background.queued": "Tác vụ đang xếp hàng",
+    "background.accountChanged": "Tài khoản đã đổi hoặc phiên đăng nhập hết hạn. Hãy khởi động lại tác vụ.",
+    "background.unavailable": "Không thể xác minh giới hạn tác vụ. Vui lòng thử lại sau ít phút.",
+    "billing.background.free": "Tác vụ đồng thời: {count}",
+    "background.notice.title": "Gói {plan} hỗ trợ {count} cuộc trò chuyện hoặc tác vụ cùng lúc",
+    "background.notice.generic": "Tài khoản hỗ trợ {count} cuộc trò chuyện hoặc tác vụ cùng lúc",
+    "background.notice.wait": "Tác vụ đã vào hàng đợi và sẽ tự chạy khi có suất trống.",
+    "background.notice.upsell": "Tác vụ sẽ bắt đầu khi có suất trống. Nâng cấp để chạy nhiều tác vụ cùng lúc hơn.",
+    "background.notice.upgrade": "Nâng cấp gói",
+    "background.notice.view": "Xem tác vụ",
+    "background.plan.free": "Miễn phí",
+    "background.tasks.heading": "Tác vụ",
+    "background.tasks.queued": "Đang chờ",
+    "background.tasks.autoStart": "Tự động bắt đầu khi có chỗ trống",
+    "background.tasks.keepRunning": "Tác vụ vẫn tiếp tục khi đóng bảng này"
   }
 }

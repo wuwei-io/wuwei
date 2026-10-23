@@ -1,6 +1,7 @@
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
 import { devGatewayUrl } from '../dev-gateway.js';
+import { wrapBackgroundProvider } from './background.js';
 // Provider 实现：把统一的 Message/Tool 语义翻译到具体后端。
 // - AnthropicProvider：原生 Anthropic Messages API（流式）
 // - OpenAIProvider：任意 OpenAI 兼容 /chat/completions（本地 vLLM 等），做消息与工具的双向转换
@@ -922,7 +923,7 @@ export function makeProvider(cfg: Config): Provider {
   }
   p.contextWindow = cfg.contextWindow;
   p.compactThreshold = cfg.compactThreshold;
-  return p;
+  return cfg.provider==='openai' && isWuweiHostedGateway(cfg.baseUrl) ? wrapBackgroundProvider(p,cfg.apiKey) : p;
 }
 
 // Accept the catalog's versioned gateway URL while keeping website credentials

@@ -29,7 +29,15 @@ catalog.push({ ...provider('anthropic',false,[model('claude-opus-4-8',false,fals
 const billingProviders=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-model-catalog.json'),'utf8'));
 const billingModelCatalog=[...catalog.filter(p=>!billingProviders.some(b=>b.id===p.id)),...billingProviders];
 const settings = (providerId = 'wuwei-free', model = 'nemotron-super-free') => ({ providerId, model, kind: 'openai', baseUrl: 'https://qa.invalid/api/gateway/v1', creds: {}, modelChoiceExplicit: true, theme: 'light', streamMode: 'instant', app: { teamEnabled: false, lang: 'zh' } });
-function emit(state, channel, payload) { if (!state.win.isDestroyed()) state.win.webContents.send('qa:event', channel, payload); }
+function emit(state, channel, payload) {
+  if(channel==='evt:tasks')state.running=[...(payload.running??[])];
+  if(channel==='evt:background-queue'){
+    const tasks=new Map((state.backgroundTasks??[]).map(task=>[task.taskId,task]));
+    if(payload.finished)tasks.delete(payload.taskId);else tasks.set(payload.taskId,clone(payload));
+    state.backgroundTasks=[...tasks.values()];
+  }
+  if (!state.win.isDestroyed()) state.win.webContents.send('qa:event', channel, payload);
+}
 function ready(state) {
   emit(state, 'evt:ready', { backend: 'openai', model: state.settings.model, cwd: 'D:/QA', contextWindow: 128000 });
   emit(state, 'evt:account', { providerId: state.settings.providerId, model: state.settings.model });
@@ -39,6 +47,13 @@ ipcMain.handle('qa:api', async (event, method, args) => {
   if (!s) return null; // Ignore already-queued calls from a window being torn down.
   s.calls.push({ method, model: s.settings.model });
   switch (method) {
+    case 'backgroundTasks': {emit(s,'evt:tasks',{running:s.running??[]});const snapshot=clone(s.backgroundTasks??[]);if(s.backgroundDelay)await delay(s.backgroundDelay);return snapshot;}
+    case 'team.state': return {employees:clone(s.teamEmployees??[]),departments:[],apps:[]};
+    case 'team.rooms': return {rooms:clone(s.teamRooms??[])};
+    case 'team.roomMessages': return {messages:[],running:true};
+    case 'team.roomProgress': return {progress:[]};
+    case 'team.sopTree': return {tree:[]};
+    case 'team.scheduleList': return {schedules:[]};
     case 'getSettings': { const value = { settings: clone(s.settings), systemLanguage:s.systemLanguage, backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
@@ -74,11 +89,11 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'billingRequest': {
       const req=clone(args[0]);(s.billingCalls??=[]).push(req);
       const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
-      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {version:'qa-v2',products,member:false,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
+      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {...(s.backgroundPolicy?{backgroundPolicy:s.backgroundPolicy}:{}),version:'qa-v2',products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
       if(req.action==='quote'){
         if(s.quoteDelay)await delay(s.quoteDelay);
         if(s.quoteError)return {error:'network'};
-        const p=products.find(p=>p.sku===req.sku);return {catalogVersion:'qa-v2',...p,currency:req.currency,amountMinor:req.currency==='USD'?p.usdMinor:p.cnyMinor,creditsPerGrant:p.credits,grantCount:p.period==='annual'?12:1,expiryMonths:p.kind==='pack'?6:1,memberBonus:false,autoRenew:false};
+        const p=products.find(p=>p.sku===req.sku);return {catalogVersion:'qa-v2',...p,currency:req.currency,amountMinor:req.currency==='USD'?p.usdMinor:p.cnyMinor,creditsPerGrant:p.kind==='pack'&&s.billingMember?p.memberCredits:p.credits,grantCount:p.period==='annual'?12:1,expiryMonths:p.kind==='pack'?6:1,memberBonus:p.kind==='pack'&&!!s.billingMember,autoRenew:false};
       }
       if(req.action==='create-order'){
         if(s.createError)return {error:'network'};
@@ -149,6 +164,20 @@ async function run(name, options, test) {
   catch (error) { results.push({ name, passed: false, error: error.message, messages: fixture?.state.messages.slice(-15), calls: fixture?.state.calls.slice(-15) }); console.log('FAIL ' + name + ': ' + error.message); if (fixture) fs.writeFileSync(path.join(evidence, 'failure-' + results.length + '.png'), (await fixture.state.win.webContents.capturePage()).toPNG()); }
   finally { fixture?.close(); }
 }
+// Offscreen windows expose their completed frame through paint; capturePage can
+// fail before the first compositor surface exists, especially after resizing.
+async function captureBillingFrame(f){
+  const contents=f.state.win.webContents;
+  await f.js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  await delay(100);
+  if(!contents.isOffscreen())return (await contents.capturePage()).toPNG();
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{contents.removeListener('paint',paint);reject(Error('Timed out waiting for billing screenshot frame'));},5000);
+    let frames=0;
+    const paint=(_event,_dirty,image)=>{if(image.isEmpty())return;if(++frames<2){setImmediate(()=>contents.invalidate());return;}clearTimeout(timer);contents.removeListener('paint',paint);resolve(image.toPNG());};
+    contents.on('paint',paint);contents.invalidate();
+  });
+}
 async function billingHeaderAligned(f){
   const geometry=await f.js(`(()=>{const bar=document.querySelector('.billing-top').getBoundingClientRect();return Array.from(document.querySelectorAll('#billing-title,.billing-top>div>button:not(.billing-close),.billing-top .billing-close svg')).map(el=>{const r=el.getBoundingClientRect();return{delta:Math.abs((r.top+r.bottom)/2-(bar.top+bar.bottom)/2),inside:r.top>=bar.top&&r.bottom<=bar.bottom}})})()`);
   assert.ok(geometry.length>=3);for(const item of geometry){assert.ok(item.delta<1.1,JSON.stringify(geometry));assert.equal(item.inside,true);}
@@ -156,6 +185,114 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for(const lostEvents of [false,true])await run('发布关键：任务实时同步：停止移除、排队转运行、快照补偿 '+(lostEvents?'missed-events':'live-events'),{
+    account:account(),running:['first-chat','qa-session'],sessions:[{id:'first-chat',title:'先执行的任务'},{id:'qa-session',title:'后执行的任务'}],
+    backgroundTasks:[{taskId:'first-task',sid:'first-chat',accountId:'qa-account',queued:false,limit:1,tier:'free'},{taskId:'second-task',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}],
+  },async f=>{
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    await f.click('.foot-status .fs-clickable');await f.wait('document.querySelectorAll(".tp-item").length===2');
+    assert.equal(await f.js('document.querySelectorAll(".tp-group.is-queued .tp-item").length'),1);
+    const second={taskId:'second-task',sid:'qa-session',accountId:'qa-account',queued:false,limit:1,tier:'free'};
+    if(lostEvents){f.state.running=['qa-session'];f.state.backgroundTasks=[second];}
+    else{
+      emit(f.state,'evt:tasks',{running:['qa-session']});
+      emit(f.state,'evt:background-queue',{taskId:'first-task',sid:'first-chat',accountId:'qa-account',queued:false,finished:true});
+      emit(f.state,'evt:background-queue',second);
+    }
+    await f.wait('document.querySelectorAll(".tp-item").length===1 && !document.querySelector(".tp-group.is-queued") && !!document.querySelector(".send-btn.stop")',6000);
+    assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    fs.writeFileSync(path.join(evidence,'task-sync-running-'+(lostEvents?'snapshot':'event')+'.png'),await captureBillingFrame(f));
+    // A stale snapshot started before completion must not bring the row back.
+    f.state.backgroundDelay=700;
+    await f.js('window.dispatchEvent(new Event("focus"))');await delay(50);
+    emit(f.state,'evt:tasks',{running:[]});emit(f.state,'evt:background-queue',{...second,finished:true});
+    await f.wait('!document.querySelector(".task-center") && !document.querySelector(".send-btn.stop")');
+    await delay(800);
+    assert.equal(await f.js('!!document.querySelector(".task-center,.thinking,.background-queue-notice")'),false);
+    assert.equal(await f.js('document.querySelector(".foot-status").textContent.includes("排队")'),false);
+    fs.writeFileSync(path.join(evidence,'task-sync-completed-'+(lostEvents?'snapshot':'event')+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
+  for(const lang of ['zh','en'])await run('发布关键：支付品牌与核心权益排序加粗 '+lang,{
+    account:{...account(),flags:['billing_v2']},lang,settings:{...settings(),app:{teamEnabled:false,lang}},
+    modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),
+    imageCatalog:[{sku_id:'test-image',model:'gpt-image-1',quality:'low',coins_per_image:8}],
+    backgroundPolicy:{enabled:true,version:'qa-v1',free:1,plans:{Pro:2,Plus:4,Max:8}},
+  },async f=>{
+    // Exercise the real split selector and card view, with no order creation.
+    await f.click('.acct-btn');await f.click('[data-account-upgrade]');
+    await f.wait('!!document.querySelector(".billing-selector-benefits .billing-background-feature")');
+    const inspect=()=>f.js('(()=>{const rows=[...document.querySelectorAll(".billing-selector-benefits li")];return rows.map(e=>({kind:e.dataset.usageKind || (e.classList.contains("billing-value-feature")?"value":e.classList.contains("billing-background-feature")?"parallel":"common"),weight:Number(getComputedStyle(e.querySelector("strong")||e).fontWeight),text:e.textContent}))})()');
+    let rows=await inspect();assert.deepEqual(rows.slice(0,5).map(r=>r.kind),['tasks','tokens','images','value','parallel']);
+    assert.ok(rows.slice(0,5).every(r=>r.weight>=600));assert.ok(rows.slice(5).every(r=>r.weight<600));
+    assert.match(rows[3].text,/20/);assert.match(rows[4].text,/4/);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-pay")).backgroundColor'),'rgb(192, 95, 60)');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-option.selected")).borderTopColor'),'rgb(39, 74, 99)','selected plan border');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-credits strong")).color'),'rgb(39, 74, 99)','coin amount color');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector>aside")).backgroundColor'),'rgb(244, 246, 248)');
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      assert.equal(await f.js('(()=>{const e=document.querySelector(".billing-selector-benefits");return e.scrollWidth<=e.clientWidth+1})()'),true);
+      fs.writeFileSync(path.join(evidence,'payment-brand-benefits-'+lang+'-'+width+'.png'),await captureBillingFrame(f));
+    }
+    await f.click('[data-sku="v2_plan_pro_annual"]');rows=await inspect();assert.deepEqual(rows.slice(0,4).map(r=>r.kind),['tasks','tokens','images','parallel']);assert.match(rows[3].text,/2/);
+    await f.click('[data-sku="v2_plan_max_annual"]');rows=await inspect();assert.deepEqual(rows.slice(0,5).map(r=>r.kind),['tasks','tokens','images','value','parallel']);assert.match(rows[4].text,/8/);
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-plan-card.recommended")).borderTopColor'),'rgb(39, 74, 99)','recommended card border');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-plan-buy")).backgroundColor'),'rgb(192, 95, 60)');
+    fs.writeFileSync(path.join(evidence,'payment-brand-cards-'+lang+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.orders,0);
+  });
+  for(const theme of ['light','dark']) await run('发布关键：并行品牌：月白玄墨与靛青、单个朱赭操作 '+theme,{account:account(),settings:{...settings(),theme},backgroundTasks:[{taskId:'brand-queued',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}]},async f=>{
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    // The product currently forces light mode. Exercise legacy dark CSS tokens
+    // in this isolated renderer without re-enabling the removed theme setting.
+    if(theme==='dark')await f.js('document.documentElement.dataset.theme="dark"');
+    const colors=await f.js('(()=>{const q=document.querySelector(".background-queue-notice"),b=document.querySelector(".background-queue-action"),i=document.querySelector(".background-queue-icon");return {theme:document.documentElement.dataset.theme,surface:getComputedStyle(q).backgroundColor,icon:getComputedStyle(i).color,cta:getComputedStyle(b).backgroundColor,font:getComputedStyle(q).fontFamily,stroke:i.querySelector("svg").getAttribute("stroke-width")}})()');
+    assert.equal(colors.theme,theme);assert.equal(colors.surface,theme==='light'?'rgb(255, 255, 255)':'rgb(30, 35, 43)');
+    assert.equal(colors.icon,theme==='light'?'rgb(39, 74, 99)':'rgb(111, 159, 173)');
+    assert.equal(colors.cta,'rgb(192, 95, 60)');assert.match(colors.font,/Inter/);assert.equal(colors.stroke,'1.75');
+    fs.writeFileSync(path.join(evidence,'brand-queue-'+theme+'.png'),await captureBillingFrame(f));
+    await f.click('.foot-status .fs-clickable');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-heading-icon")).color'),colors.icon);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-close")).outlineStyle'),'none');
+    fs.writeFileSync(path.join(evidence,'brand-tasks-'+theme+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+  });
+  for(const lang of ['zh','en']) await run('发布关键：并行排队：输入框待发送、提示可关闭、获得名额自动运行 '+lang,{account:account(),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
+    const queued={taskId:'ordinary-queued',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'};
+    emit(f.state,'evt:tasks',{running:['qa-session','other-session']});
+    emit(f.state,'evt:background-queue',queued);
+    await f.wait('!!document.querySelector(".background-queue-notice") && !document.querySelector(".thinking") && !document.querySelector(".send-btn.stop")');
+    assert.equal(await f.js('!!document.querySelector(".send-btn.cont-wait")'),false);
+    assert.equal(await f.js('document.querySelector(".send-btn").disabled'),true);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".s-run.s-queued")).animationName'),'none');
+    await f.fill('.composer textarea','稍后继续输入的补充说明');
+    fs.writeFileSync(path.join(evidence,'ordinary-chat-queued-'+lang+'.png'),await captureBillingFrame(f));
+    const stops=f.state.calls.filter(c=>c.method==='stop').length;
+    await f.click('.background-queue-dismiss');await f.wait('!document.querySelector(".background-queue-notice")');
+    for(let i=0;i<3;i++)emit(f.state,'evt:background-queue',queued);
+    await delay(60);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'稍后继续输入的补充说明');
+    assert.equal(f.state.calls.filter(c=>c.method==='stop').length,stops);
+    assert.equal(f.state.sent.length,0);
+    await f.click('.foot-status .fs-clickable');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('document.querySelectorAll(".tp-group.is-queued .tp-item").length'),1);
+    assert.deepEqual(await f.js('(()=>{const c=getComputedStyle(document.querySelector(".tp-close"));return {outline:c.outlineStyle,shadow:c.boxShadow,border:c.borderTopWidth}})()'),{outline:'none',shadow:'none',border:'0px'});
+    fs.writeFileSync(path.join(evidence,'task-panel-close-focus-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.tp-close');
+    emit(f.state,'evt:background-queue',{...queued,queued:false});
+    await f.wait('!!document.querySelector(".thinking") && !!document.querySelector(".send-btn.stop")');
+    assert.equal(await f.js('!!document.querySelector(".s-run.s-queued")'),false);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'稍后继续输入的补充说明');
+    assert.equal(f.state.sent.length,0); // Main resumes the queued turn; renderer never resends it.
+    emit(f.state,'evt:done',{sid:'qa-session'});emit(f.state,'evt:tasks',{running:[]});
+    emit(f.state,'evt:background-queue',{...queued,queued:false,finished:true});
+    await f.wait('!document.querySelector(".thinking") && !document.querySelector(".send-btn.stop")');
+    emit(f.state,'evt:background-queue',{...queued,taskId:'new-request'});
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    assert.equal(f.state.orders,0);
+  });
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
 
@@ -214,7 +351,7 @@ app.whenReady().then(async () => {
   });
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
-  const openBilling=async(f,ledger=false)=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js(ledger?'Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()':'document.querySelector("[data-account-upgrade]")?.click()');await f.wait('!!document.querySelector(".billing-panel")');};
+  const openBilling=async(f,ledger=false,period='monthly')=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js(ledger?'Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()':'document.querySelector("[data-account-upgrade]")?.click()');await f.wait('!!document.querySelector(".billing-panel")');if(!ledger&&period){await f.wait('!!document.querySelector(".billing-selector-periods")');await f.click('.billing-selector-periods button:nth-child('+(['monthly','annual','pack'].indexOf(period)+1)+')');await f.wait('document.querySelector(".billing-selector-periods button:nth-child('+(['monthly','annual','pack'].indexOf(period)+1)+')")?.getAttribute("aria-selected")==="true"');}};
 
 
   for(const lang of ['zh','en','fa'])await run('发布关键：账号菜单升级入口、年付优惠标与菜单顺序 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
@@ -330,9 +467,47 @@ app.whenReady().then(async () => {
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.click('.billing-close');await delay(1050);assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
   });
 
+  for(const lang of ['zh','en','fa','ar'])await run('发布关键：年付默认选中、双划线原价和实际年付金额 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]},async f=>{
+    await openBilling(f,false,null);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');
+    assert.equal(await f.js('document.querySelector(".billing-selector-periods button:nth-child(2)").getAttribute("aria-selected")'),'true');
+    assert.match(await f.js('document.querySelector(".billing-selector-option.selected .billing-selector-name b").textContent'),/Plus/);
+    const monthly=lang==='zh'?[13400,26800,53600]:[2000,4000,8000],annual=lang==='zh'?[80400,160800,321600]:[12000,24000,48000];
+    const format=async amount=>f.js(`new Intl.NumberFormat(${JSON.stringify(lang)},{style:'currency',currency:${JSON.stringify(lang==='zh'?'CNY':'USD')},maximumFractionDigits:0}).format(${amount}/100)`);
+    const displayed=await f.js(`Array.from(document.querySelectorAll('.billing-selector-option')).map(e=>({oldMonth:e.querySelector('.billing-original-monthly').textContent,oldYear:e.querySelector('.billing-original-annual').textContent,month:e.querySelector('.billing-selector-price strong').textContent,year:e.querySelector('.billing-current-annual').textContent,lines:Array.from(e.querySelectorAll('del')).map(d=>getComputedStyle(d).textDecorationLine)}))`);
+    for(const [index,row] of displayed.entries()){assert.equal(row.oldMonth,await format(monthly[index]));assert.equal(row.oldYear,await format(monthly[index]*12));assert.equal(row.month,await format(annual[index]/12));assert.equal(row.year,await format(annual[index]));assert.ok(row.lines.every(line=>line.includes('line-through')));}
+    for(const width of [1200,1000,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      const geometry=await f.js(`(()=>{const boxes=Array.from(document.querySelectorAll('.billing-selector-option')).map(e=>{const r=e.getBoundingClientRect(),p=e.querySelector('.billing-selector-price').getBoundingClientRect();return{inside:p.left>=r.left&&p.right<=r.right+1,overflow:e.scrollWidth>e.clientWidth+1}});const pay=document.querySelector('.billing-plan-buy').getBoundingClientRect();return{boxes,payBottom:pay.bottom,height:innerHeight}})()`);
+      assert.ok(geometry.boxes.every(box=>box.inside&&!box.overflow),lang+width+JSON.stringify(geometry));assert.ok(geometry.payBottom<geometry.height,lang+width+JSON.stringify(geometry));await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`annual-prices-${lang}-${width}.png`),await captureBillingFrame(f));
+    }
+    f.state.win.setContentSize(1200,800);await delay(70);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),6);await delay(150);fs.writeFileSync(path.join(evidence,`annual-comparison-${lang}.png`),await captureBillingFrame(f));
+    await f.click('.billing-plans-periods button:first-child');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);await f.click('.billing-plans-periods button:nth-child(3)');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);
+    await f.click('.billing-plans-periods button:nth-child(2)');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');await f.click('.billing-plan-card[data-sku="v2_plan_pro_annual"] .billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
+    const request=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(request.sku,'v2_plan_pro_annual');assert.equal(request.expected.amountMinor,annual[0]);assert.equal(request.expected.creditsPerGrant,4000);assert.equal(f.state.orders,1);
+  });
+
+  for(const lang of ['zh','en'])for(const member of [false,true])await run('发布关键：币包额度翻倍、单行到账说明和付款报价 '+lang+' '+(member?'member':'standard'),{account:clone(billingAccount),billingMember:member,lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]} ,async f=>{
+    await openBilling(f);await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
+    const expected=[3000,6000,10000,16000];
+    for(const width of [1200,1000,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      const g=await f.js(`Array.from(document.querySelectorAll('.billing-selector-option')).map(el=>{const n=el.querySelector('.billing-selector-name small'),name=el.querySelector('.billing-selector-name b'),r=n.getBoundingClientRect(),card=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(n);const text=range.getBoundingClientRect();return {title:name.textContent,text:n.textContent,height:text.height,line:parseFloat(getComputedStyle(n).lineHeight),inside:text.left>=card.left&&text.right<=card.right+1,whiteSpace:getComputedStyle(n).whiteSpace}})`);
+      assert.equal(g.length,4);for(const [index,row] of g.entries()){assert.ok(row.inside,lang+width+JSON.stringify(row));if(lang==='zh'){assert.equal(row.text,new Intl.NumberFormat('en-US').format(expected[index]*(member?1.5:1))+' 币到账');assert.equal(row.whiteSpace,'nowrap');assert.ok(row.height<=row.line+1,JSON.stringify(row));}}
+      await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`coin-packs-${lang}-${member?'member':'standard'}-${width}.png`),await captureBillingFrame(f));
+    }
+    f.state.win.setContentSize(1200,800);await delay(70);
+    for(const [index,credits] of expected.entries()){
+      await f.click('.billing-selector-option:nth-child('+(index+1)+')');assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat('en-US').format(credits*(member?1.5:1)));
+      assert.equal(await f.js('document.querySelectorAll(".billing-usage-metric").length'),3);assert.ok((await f.js("document.querySelector('.billing-usage-metric[data-usage-kind=images]').textContent")).includes(new Intl.NumberFormat(lang).format(Math.floor(credits*(member?1.5:1)/8))));
+      await f.click('.billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
+      const req=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(req.expected.creditsPerGrant,credits*(member?1.5:1));assert.equal(req.expected.amountMinor,(lang==='zh'?[20000,33400,46800,66900]:[2990,4990,6990,9990])[index]);assert.equal(req.sku,['v2_pack_1500','v2_pack_3000','v2_pack_5000','v2_pack_8000'][index]);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
+    }
+    assert.equal(f.state.orders,4);
+  });
+
   await run('发布关键：账单新版：切换月付年付积分包，按选中套餐准确报价', {account:clone(billingAccount)},async f=>{
     await openBilling(f);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');await f.click('.billing-selector-periods button:nth-child(2)');await f.wait('document.querySelector(".billing-selector-option")?.textContent.includes("67")');await f.click('.billing-selector-option:last-child');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');let req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_plan_max_annual');assert.equal(req.expected.amountMinor,321600);assert.equal(req.expected.creditsPerGrant,20000);
-    await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_3000');assert.equal(req.expected.amountMinor,33400);assert.equal(req.expected.creditsPerGrant,3000);
+    await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_3000');assert.equal(req.expected.amountMinor,33400);assert.equal(req.expected.creditsPerGrant,6000);
   });
   await run('多语言：已打开额度登录卡和历史系统提示同步切换', {account:null,settings:settings('wuwei-free','glm-4.7-flash'),nextError:'[[gw:free_daily_cap_reached]] 今日免费额度已用完：明日自动恢复，登录可解锁更高额度。'}, async f=>{
     await f.send();await f.wait('!!document.querySelector(".login-intro-reason")');
@@ -714,6 +889,135 @@ app.whenReady().then(async () => {
   });
   await run('顶级提醒十秒自动关闭，任务状态变化不会重新出现', { settings: settings('wuwei-claude', 'claude-opus-4-8') }, async f => {
     await f.wait('!!document.querySelector(".premium-model-current")'); await delay(10_100); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); ready(f.state); emit(f.state, 'evt:tasks', { running: ['qa-session'] }); await delay(120); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); assert.equal(f.state.sent.length, 0);
+  });
+  for(const lang of ['zh','en']) await run('发布关键：后台并行：套餐展示与排队 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await openBilling(f,false,null);
+    await f.wait('!!document.querySelector(".billing-background-feature")');
+    assert.match(await f.js('document.querySelector(".billing-background-feature").textContent'),/4/);
+    await f.click('[data-sku="v2_plan_pro_annual"]');
+    await f.wait('document.querySelector(".billing-background-feature")?.textContent.includes("2")');
+    await f.click('[data-sku="v2_plan_max_annual"]');
+    await f.wait('document.querySelector(".billing-background-feature")?.textContent.includes("8")');
+    f.state.win.setContentSize(1200,800);await f.js('document.fonts.ready');
+    fs.writeFileSync(path.join(evidence,'background-selector-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".billing-background-feature")).map(e=>Number(e.textContent.match(/\\d+/)[0]))'),[2,4,8]);
+    assert.match(await f.js('document.querySelector(".billing-plans-free").textContent'),/1/);
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(80);
+      const boxes=await f.js('Array.from(document.querySelectorAll(".billing-background-feature")).map(e=>({inside:e.getBoundingClientRect().right<=innerWidth,overflow:e.scrollWidth>e.clientWidth+2}))');
+      assert.ok(boxes.every(b=>b.inside&&!b.overflow),JSON.stringify(boxes));
+      fs.writeFileSync(path.join(evidence,'background-cards-'+lang+'-'+width+'.png'),await captureBillingFrame(f));
+    }
+    await f.click('.billing-top button:last-child');await f.wait('!document.querySelector(".billing-panel")');
+    f.state.win.setContentSize(1200,800);await delay(100);
+    fs.writeFileSync(path.join(evidence,'background-client-base-'+lang+'.png'),await captureBillingFrame(f));
+    emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'});
+    await f.wait('document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'任务排队中':'Task queued')+')');
+    emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:false,limit:1,tier:'free'});
+    await f.wait('!document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'任务排队中':'Task queued')+')');
+    assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：后台并行：关闭的服务端策略不提前承诺权益',{account:clone(billingAccount),backgroundPolicy:{enabled:false,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await openBilling(f,false,null);assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);assert.equal(f.state.orders,0);
+  });
+  for(const lang of ['zh','en','fa','ar']) await run('发布关键：并行提示：等级上限、套餐入口、输入保留与自动收起 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
+    await f.fill('.composer textarea','保留这段尚未发送的工作要求');
+    for(const [tier,limit] of [['free',1],['pro',2],['plus',4]]){
+      const event={taskId:'notice-'+tier,sid:'qa-session',accountId:'qa-account',queued:true,limit,tier};
+      emit(f.state,'evt:background-queue',event);
+      await f.wait('document.querySelector(".background-queue-notice")?.dataset.tier==='+JSON.stringify(tier));
+      assert.match(await f.js('document.querySelector(".background-queue-copy strong").textContent'),new RegExp(String(limit)));
+      for(let i=0;i<3;i++)emit(f.state,'evt:background-queue',event);
+      await delay(50);
+      assert.equal((f.state.tracked??[]).filter(e=>e.event==='background_queue_notice_shown'&&e.props.tier===tier).length,1);
+      for(const width of [1200,840]){
+        f.state.win.setContentSize(width,800);await delay(75);
+        const box=await f.js('(()=>{const n=document.querySelector(".background-queue-notice"),b=n.getBoundingClientRect(),t=document.querySelector(".composer textarea").getBoundingClientRect();return {inside:b.left>=0&&b.right<=innerWidth,above:b.bottom<=t.top,overflow:n.scrollWidth>n.clientWidth+2}})()');
+        assert.ok(box.inside&&box.above&&!box.overflow,JSON.stringify(box));
+      }
+      f.state.win.setContentSize(1200,800);await delay(60);
+      if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-notice-'+lang+'.png'),await captureBillingFrame(f));
+      await f.click('.background-queue-action');await f.wait('!!document.querySelector(".billing-panel")');
+      await f.wait('document.querySelector(".billing-selector-periods button:nth-child(2)")?.getAttribute("aria-selected")=="true"');
+      assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留这段尚未发送的工作要求');
+      assert.equal(await f.js('document.querySelector(".background-queue-notice")?.dataset.tier'),tier);
+      if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-open-plans-'+lang+'.png'),await captureBillingFrame(f));
+      assert.equal(f.state.orders,0);await f.click('.billing-top .billing-close');await f.wait('!document.querySelector(".billing-panel")');
+      emit(f.state,'evt:background-queue',{...event,queued:false});await f.wait('!document.querySelector(".background-queue-notice")');
+      emit(f.state,'evt:background-queue',{...event,queued:false,finished:true});
+    }
+    emit(f.state,'evt:background-queue',{taskId:'localized-list',sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'本地任务 / Task'});
+    await f.wait('!!document.querySelector(".background-queue-action")');await f.click('.background-queue-action');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".task-center")).direction'),'ltr');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-title")).textAlign'),'left');
+    assert.equal(await f.js('document.querySelector(".task-center").textContent.includes("background.tasks.")'),false);
+    fs.writeFileSync(path.join(evidence,'background-task-panel-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.tp-close');emit(f.state,'evt:background-queue',{taskId:'localized-list',sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+    assert.equal((f.state.tracked??[]).filter(e=>e.event==='background_queue_upgrade_click').length,3);
+  });
+  await run('发布关键：并行提示：Max查看真实任务且同会话多任务互不清除',{account:clone(billingAccount),backgroundTasks:[{taskId:'max-running',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:false,limit:8,tier:'max',label:'整理客户访谈'},{taskId:'max-waiting',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'分析竞品资料'}]},async f=>{
+    await f.wait('document.querySelector(".background-queue-action")?.textContent.includes("查看任务")');
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    assert.match(await f.js('document.querySelector(".tasks-panel").textContent'),/分析竞品资料/);
+    assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
+    const taskPanelGeometry=()=>f.js('(()=>{const p=document.querySelector(".task-center"),r=p.getBoundingClientRect(),c=document.querySelector(".composer textarea").getBoundingClientRect();return {inside:r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight,clearInput:r.bottom<=c.top,groups:p.querySelectorAll(".tp-group").length};})()');
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      const geometry=await taskPanelGeometry();assert.ok(geometry.inside&&geometry.clearInput);assert.equal(geometry.groups,2);
+      if(width===840)fs.writeFileSync(path.join(evidence,'background-tasks-narrow.png'),await captureBillingFrame(f));
+    }
+    f.state.win.setContentSize(1200,800);await delay(100);
+    fs.writeFileSync(path.join(evidence,'background-upgrade-max-tasks.png'),await captureBillingFrame(f));
+    const panelRect=await f.js('(()=>{const r=document.querySelector(".task-center").getBoundingClientRect();return {x:Math.floor(r.x)-12,y:Math.floor(r.y)-12,width:Math.ceil(r.width)+24,height:Math.ceil(r.height)+24}})()');
+    fs.writeFileSync(path.join(evidence,'background-tasks-detail.png'),(await f.state.win.webContents.capturePage(panelRect)).toPNG());
+    await f.click('.tp-close');await f.wait('!document.querySelector(".tasks-panel")');
+    assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),true);
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    await f.js('document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');await f.wait('!document.querySelector(".tasks-panel")');
+    await f.click('.background-queue-action');await f.wait('!!document.querySelector(".tasks-panel")');
+    for(let i=0;i<18;i++)emit(f.state,'evt:background-queue',{taskId:'long-queue-'+i,sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'待处理资料 '+i});
+    await delay(100);assert.ok((await taskPanelGeometry()).inside);
+    assert.equal(await f.js('(()=>{const e=document.querySelector(".tp-groups");return e.scrollHeight>e.clientHeight})()'),true);
+    for(let i=0;i<18;i++)emit(f.state,'evt:background-queue',{taskId:'long-queue-'+i,sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await f.click('.mq-overlay');
+    const second={taskId:'max-waiting-two',sid:'qa-session',accountId:'qa-account',queued:true,limit:8,tier:'max',label:'检查研究结果'};
+    emit(f.state,'evt:background-queue',second);
+    emit(f.state,'evt:background-queue',{taskId:'max-waiting',sid:'__room_worker',sourceSid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await delay(50);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),true);
+    emit(f.state,'evt:background-queue',{...second,queued:false,finished:true});await f.wait('!document.querySelector(".background-queue-notice")');
+  });
+  await run('发布关键：并行提示：迟到的快照不复活任务且切换账号不串提示',{account:clone(billingAccount),backgroundDelay:1200,backgroundTasks:[{taskId:'late',sid:'qa-session',accountId:'qa-account',queued:true,limit:2,tier:'pro'}]},async f=>{
+    emit(f.state,'evt:background-queue',{taskId:'late',sid:'qa-session',accountId:'qa-account',queued:false,finished:true});
+    await delay(1300);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    emit(f.state,'evt:background-queue',{taskId:'owned',sid:'qa-session',accountId:'qa-account',queued:true,limit:2,tier:'pro'});
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    const other=clone(billingAccount);other.user.id='different-account';emit(f.state,'evt:wuwei-me',other);
+    await f.wait('!document.querySelector(".background-queue-notice")');assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：并行提示：游客升级先登录，登录后打开套餐并保留输入',{lang:'en',account:null,settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await f.fill('.composer textarea','Keep my draft');
+    emit(f.state,'evt:background-queue',{taskId:'guest-queued',sid:'qa-session',accountId:null,queued:true,limit:1,tier:'free'});
+    await f.wait('!!document.querySelector(".background-queue-action")');await f.click('.background-queue-action');
+    await f.wait('!!document.querySelector("input[type=password]")');assert.equal(f.state.orders,0);
+    await f.fill('input[placeholder="Email"]','background-upgrade@example.invalid');await f.fill('input[type=password]','isolated-password');
+    await f.js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Sign in"&&!b.disabled)?.click()');
+    await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.orders,0);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'Keep my draft');
+  });
+  await run('发布关键：并行提示：员工群聊使用真实任务入口和套餐页',{account:clone(billingAccount),settings:{...settings(),app:{teamEnabled:true,lang:'zh'}},teamEmployees:[{id:'worker',name:'研究助手',role:'Researcher',tools:[]}],teamRooms:[{id:'qa-room',type:'group',name:'并行验收群',members:['worker'],createdAt:Date.now(),updatedAt:Date.now()}],backgroundTasks:[{taskId:'room-queued',roomId:'qa-room',accountId:'qa-account',queued:true,limit:2,tier:'pro',label:'研究助手'}]},async f=>{
+    await f.wait('!!document.querySelector(".fs-clickable")');await f.click('.fs-clickable');await f.wait('!!document.querySelector(".tasks-panel")');
+    await f.click('[data-background-task="room-queued"] .tp-title');
+    await f.wait('!!document.querySelector(".tc-room-queue .background-queue-notice")');
+    const geometry=await f.js('(()=>{const a=document.querySelector(".tc-room-queue").getBoundingClientRect(),b=document.querySelector(".tc-composer textarea").getBoundingClientRect();return {visible:a.height>0,above:a.bottom<=b.top};})()');assert.ok(geometry.visible&&geometry.above);
+    fs.writeFileSync(path.join(evidence,'background-upgrade-room.png'),await captureBillingFrame(f));
+    await f.click('.tc-room-queue .background-queue-action');await f.wait('!!document.querySelector(".billing-panel")');
+    assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+    await f.click('.billing-top .billing-close');await f.wait('!!document.querySelector(".tc-room-queue .background-queue-notice")');
+    emit(f.state,'evt:background-queue',{taskId:'room-queued',roomId:'qa-room',accountId:'qa-account',queued:false,finished:true});await f.wait('!document.querySelector(".tc-room-queue .background-queue-notice")');
   });
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);

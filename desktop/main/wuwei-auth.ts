@@ -35,9 +35,9 @@ export async function wuweiBillingRequest(accessToken:string, request:BillingReq
       signal:AbortSignal.timeout(15000),
     });
     if(response.status===401) return 'unauthorized';
-    const value=await response.json().catch(()=>null);
+    const value=await response.json().catch(()=>null) as Record<string,unknown>|null;
     if(!response.ok || !value || typeof value!=='object') return {error:typeof value?.error==='string'?value.error:'billing_unavailable'};
-    return value as BillingResponse;
+    return value as unknown as BillingResponse;
   }catch{return {error:'network'};}
 }
 

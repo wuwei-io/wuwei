@@ -162,6 +162,8 @@ import {
   type WuweiMe,
 } from "./wuwei-auth.js";
 import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-session.js";
+import { backgroundTokenSubject, setBackgroundTokenResolver, withoutBackgroundTask } from "../../src/agent/background.js";
+import { runBackgroundTask, getBackgroundTasks } from "./background-tasks.js";
 import { createHostedSessionState } from "../../src/wuwei-session-state.js";
 import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
 import { notifyRemote } from './remote-notify.js';
@@ -320,7 +322,7 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
 const roomContextUsage = new Map<string, { providerId: string; model: string; usedTokens: number | null; maxTokens: number | null; capturedAt: number }>();
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => {
+const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => runBackgroundTask(`__room_${employee.id}`, send, async () => {
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
   const origin = reportOrigin || taskReportScope?.origin;
@@ -373,7 +375,7 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   executionSignal.throwIfAborted();
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
-};
+}, (reportOrigin || taskReportScope?.origin)?.kind === 'room' ? (reportOrigin || taskReportScope?.origin)?.id : undefined, employee.name, (reportOrigin || taskReportScope?.origin)?.kind === 'session' ? (reportOrigin || taskReportScope?.origin)?.id : undefined);
 
 // 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
 function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
@@ -480,7 +482,7 @@ function syncTeamModule(s: Settings | null) {
         }
         send("evt:sessions", listSessions());
       }
-      void startTurn(sid, text);
+      void startTurn(sid!, text);
     },
   });
 }
@@ -1290,6 +1292,15 @@ function syncBrainDocsFlag(st: Settings | null) {
 
 // 给 web_search 工具(同进程共享代码)一个「永远最新」的无为登录 token 取值桥，
 // 用于调无为网关搜索代理(/api/gateway/v1/search)。懒读 session，无需在每个登录/登出点同步。
+setBackgroundTokenResolver(async original => {
+  const expected = backgroundTokenSubject(original);
+  const stored = loadWuweiSession();
+  if (!stored || backgroundTokenSubject(stored.accessToken) !== expected) throw new Error(tr('background.accountChanged'));
+  const fresh = await getFreshWuweiSession();
+  if (!fresh || backgroundTokenSubject(fresh.accessToken) !== expected) throw new Error(tr('background.accountChanged'));
+  return fresh.accessToken;
+});
+
 (globalThis as unknown as { wuweiGwToken?: () => string }).wuweiGwToken = () => {
   try { return loadWuweiSession()?.accessToken || ""; } catch { return ""; }
 };
@@ -2678,7 +2689,8 @@ function msgTextTail(m: any, n: number): string {
     .trim()
     .slice(-n);
 }
-async function maybeSmartTitle(id: string) {
+function maybeSmartTitle(id: string) { return withoutBackgroundTask(() => generateSmartTitle(id)); }
+async function generateSmartTitle(id: string) {
   // Image turns already have a prompt-derived title; do not call a text model for them.
   if (loadSettings()?.imageMode) return;
   if (titleInFlight.has(id) || !provider) return;
@@ -2745,7 +2757,8 @@ async function maybeSmartTitle(id: string) {
 // 输入框「下一步动作」建议：回复完后，用模型根据对话(尤其助手最后回复常以问题/建议结尾)
 // 预测用户接下来最可能输入的一句话，发给前端做幽灵提示(Tab 补全)。无明确下一步则清空。
 const suggestInFlight = new Set<string>();
-async function suggestNextAction(id: string) {
+function suggestNextAction(id: string) { return withoutBackgroundTask(() => generateNextAction(id)); }
+async function generateNextAction(id: string) {
   if (suggestInFlight.has(id) || !provider) return;
   const a0 = agents.get(id);
   if (!a0) return;
@@ -3641,7 +3654,13 @@ async function refreshWuweiMe(): Promise<void> {
   }
 }
 
-async function startTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+function startTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+  // Every independent chat (manual send, idle injection, continuation, schedule
+  // and report) has the same account-wide admission and queue UI.
+  return runBackgroundTask(useId, send, () => executeTurn(useId, text, images, sysOverride));
+}
+
+async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
   turnSid = useId; // 供 ask_user 工具的事件带上会话 id
   text = secrets.redact(text).text; // 兜底：已入库密钥出现在消息里→占位符替换，永不出网到模型
   const agent = getAgent(useId);
@@ -3878,7 +3897,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
-  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
+  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && !getBackgroundTasks().some(task => task.sid === id && task.queued) && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
     agent.requestSoftStop();
     log("softStop", id.slice(0, 8), tr("ui.index.message.95502776e8"));
     return;
@@ -5325,6 +5344,7 @@ ipcMain.handle("track", (_e, p: { event?: string; props?: Record<string, unknown
 });
 
 // ── 扫码支付：下单 / 轮询。带用户 token 调后端，401 自动 refresh 重试（同 wuwei-me）──
+ipcMain.handle('background:tasks', () => { emitTasks(); return getBackgroundTasks(); });
 ipcMain.handle('billing:request',async (_e,request:import('../../src/billing/contracts.js').BillingRequest)=>{
   const sess=await getFreshWuweiSession();
   if(!sess) return {error:'not_logged_in'};
