@@ -4126,6 +4126,11 @@ export function App() {
     providers?: { hidden?: string[] };
   } | null>(null);
   const visibleBackgroundTasks = accountBackgroundTasks(backgroundTasks,wuwei?.user.id);
+  // Keep reserved/queued turns busy for injection and continuation guards, but
+  // only admitted turns show generation controls and model activity.
+  const queuedSessionIds = new Set(visibleBackgroundTasks.filter(task=>task.queued && task.sid).map(task=>task.sid!));
+  const currentQueued = queuedSessionIds.has(currentId);
+  const executing = busy && !currentQueued;
   const extraBackgroundTasks = visibleBackgroundTasks.filter(task => task.roomId || !task.sid || !runningSet.has(task.sid));
   const activeTaskCount = runningSet.size + extraBackgroundTasks.length;
   useEffect(()=>{
@@ -4507,6 +4512,16 @@ export function App() {
   const [showConn, setShowConn] = useState(false); // 状态灯说明气泡
   const connCheckSeqRef = useRef(0);
   const thinkStartRef = useRef<number | null>(null); // 本轮开始时间（思考计时）
+  const queueStartedRef = useRef<{sid:string;at:number}|null>(null);
+  useEffect(()=>{
+    if(currentQueued){
+      if(queueStartedRef.current?.sid!==currentId)queueStartedRef.current={sid:currentId,at:Date.now()};
+    }else{
+      const queued=queueStartedRef.current;
+      if(queued?.sid===currentId && busy)thinkStartRef.current=thinkStartRef.current===null?Date.now():thinkStartRef.current+Date.now()-queued.at;
+      queueStartedRef.current=null;
+    }
+  },[currentQueued,currentId,busy]);
   const charsRef = useRef(0); // 本轮已流式字符数（估算 token）
   const turnTextRef = useRef(""); // 本轮已生成的正文(含 instant 模式还没揭示的),供状态栏悬停预览
   // 已"总是允许"的工具（记住授权，跨重启，手动模式下不再提示）
@@ -7441,7 +7456,7 @@ export function App() {
                   setCtxMenu({ sid: s.id, x: e.clientX, y: e.clientY });
                 }}
               >
-                {runningSet.has(s.id) && <span className="s-run" title={t("thinking.running")} />}
+                {runningSet.has(s.id) && <span className={'s-run'+(queuedSessionIds.has(s.id)?' s-queued':'')} title={queuedSessionIds.has(s.id)?tr('background.queued'):t("thinking.running")} />}
                 {s.priorityTag && (
                   <span
                     className={"s-prio p" + (s.priority || 0)}
@@ -9017,7 +9032,7 @@ export function App() {
                           key={j}
                           text={(b.item as Extract<Item, { type: "assistant" }>).text}
                           anchor={(b.item as Extract<Item, { type: "assistant" }>).anchor}
-                          streaming={busy && lastTurn && j === t.blocks.length - 1}
+                          streaming={executing && lastTurn && j === t.blocks.length - 1}
                         />
                       ) : (
                         <ToolGroup key={j} tools={b.tools} />
@@ -9099,7 +9114,7 @@ export function App() {
               );
             });
           })()}
-          {busy && !pending && (
+          {executing && !pending && (
             <ThinkingBar startRef={thinkStartRef} charsRef={charsRef} textRef={turnTextRef} items={items} />
           )}
         </div>
@@ -9438,11 +9453,11 @@ export function App() {
                 }
               }}
             />
-            {busy ? (
+            {executing ? (
               <button className="send-btn stop" onClick={stop} title={t("composer.stop")}>
                 <span className="stop-sq" />
               </button>
-            ) : modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
+            ) : !currentQueued && modeOf(currentId) === "cont" && !input.trim() && pendingImages.length === 0 ? (
               // 自主推进模式开着、此刻没在跑、输入框空 → 显示「待续跑」转圈，明确表示"活着、稍后自动继续"，
               // 避免两轮空档里显示成普通发送图标、让人误以为停了。点它可立即续跑，不必等看门狗。
               <button

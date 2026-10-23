@@ -12,7 +12,7 @@ export interface TaskPanelRow {
 }
 
 function TaskIcon({ queued = false }: { queued?: boolean }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     {queued ? <><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5l3 1.8"/></> : <><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M9 5V3m6 2V3M8 10h8m-8 4h5"/></>}
   </svg>;
 }

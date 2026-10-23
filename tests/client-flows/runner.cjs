@@ -177,6 +177,56 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for(const theme of ['light','dark']) await run('发布关键：并行品牌：月白玄墨与靛青、单个朱赭操作 '+theme,{account:account(),settings:{...settings(),theme},backgroundTasks:[{taskId:'brand-queued',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}]},async f=>{
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    // The product currently forces light mode. Exercise legacy dark CSS tokens
+    // in this isolated renderer without re-enabling the removed theme setting.
+    if(theme==='dark')await f.js('document.documentElement.dataset.theme="dark"');
+    const colors=await f.js('(()=>{const q=document.querySelector(".background-queue-notice"),b=document.querySelector(".background-queue-action"),i=document.querySelector(".background-queue-icon");return {theme:document.documentElement.dataset.theme,surface:getComputedStyle(q).backgroundColor,icon:getComputedStyle(i).color,cta:getComputedStyle(b).backgroundColor,font:getComputedStyle(q).fontFamily,stroke:i.querySelector("svg").getAttribute("stroke-width")}})()');
+    assert.equal(colors.theme,theme);assert.equal(colors.surface,theme==='light'?'rgb(255, 255, 255)':'rgb(30, 35, 43)');
+    assert.equal(colors.icon,theme==='light'?'rgb(39, 74, 99)':'rgb(111, 159, 173)');
+    assert.equal(colors.cta,'rgb(192, 95, 60)');assert.match(colors.font,/Inter/);assert.equal(colors.stroke,'1.75');
+    fs.writeFileSync(path.join(evidence,'brand-queue-'+theme+'.png'),await captureBillingFrame(f));
+    await f.click('.foot-status .fs-clickable');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-heading-icon")).color'),colors.icon);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".tp-close")).outlineStyle'),'none');
+    fs.writeFileSync(path.join(evidence,'brand-tasks-'+theme+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+  });
+  for(const lang of ['zh','en']) await run('发布关键：并行排队：输入框待发送、提示可关闭、获得名额自动运行 '+lang,{account:account(),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
+    const queued={taskId:'ordinary-queued',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'};
+    emit(f.state,'evt:tasks',{running:['qa-session','other-session']});
+    emit(f.state,'evt:background-queue',queued);
+    await f.wait('!!document.querySelector(".background-queue-notice") && !document.querySelector(".thinking") && !document.querySelector(".send-btn.stop")');
+    assert.equal(await f.js('!!document.querySelector(".send-btn.cont-wait")'),false);
+    assert.equal(await f.js('document.querySelector(".send-btn").disabled'),true);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".s-run.s-queued")).animationName'),'none');
+    await f.fill('.composer textarea','稍后继续输入的补充说明');
+    fs.writeFileSync(path.join(evidence,'ordinary-chat-queued-'+lang+'.png'),await captureBillingFrame(f));
+    const stops=f.state.calls.filter(c=>c.method==='stop').length;
+    await f.click('.background-queue-dismiss');await f.wait('!document.querySelector(".background-queue-notice")');
+    for(let i=0;i<3;i++)emit(f.state,'evt:background-queue',queued);
+    await delay(60);assert.equal(await f.js('!!document.querySelector(".background-queue-notice")'),false);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'稍后继续输入的补充说明');
+    assert.equal(f.state.calls.filter(c=>c.method==='stop').length,stops);
+    assert.equal(f.state.sent.length,0);
+    await f.click('.foot-status .fs-clickable');await f.wait('!!document.querySelector(".task-center")');
+    assert.equal(await f.js('document.querySelectorAll(".tp-group.is-queued .tp-item").length'),1);
+    assert.deepEqual(await f.js('(()=>{const c=getComputedStyle(document.querySelector(".tp-close"));return {outline:c.outlineStyle,shadow:c.boxShadow,border:c.borderTopWidth}})()'),{outline:'none',shadow:'none',border:'0px'});
+    fs.writeFileSync(path.join(evidence,'task-panel-close-focus-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.tp-close');
+    emit(f.state,'evt:background-queue',{...queued,queued:false});
+    await f.wait('!!document.querySelector(".thinking") && !!document.querySelector(".send-btn.stop")');
+    assert.equal(await f.js('!!document.querySelector(".s-run.s-queued")'),false);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'稍后继续输入的补充说明');
+    assert.equal(f.state.sent.length,0); // Main resumes the queued turn; renderer never resends it.
+    emit(f.state,'evt:done',{sid:'qa-session'});emit(f.state,'evt:tasks',{running:[]});
+    emit(f.state,'evt:background-queue',{...queued,queued:false,finished:true});
+    await f.wait('!document.querySelector(".thinking") && !document.querySelector(".send-btn.stop")');
+    emit(f.state,'evt:background-queue',{...queued,taskId:'new-request'});
+    await f.wait('!!document.querySelector(".background-queue-notice")');
+    assert.equal(f.state.orders,0);
+  });
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
 
