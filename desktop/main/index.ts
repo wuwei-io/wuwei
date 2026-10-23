@@ -387,7 +387,7 @@ const conversationReports = new ConversationReports({
   deliver: async (sid, text) => {
     if (!listSessions().some(s => s.id === sid)) throw new Error(tr("ui.index.message.e2f2fc5e55"));
     if (!getAgent(sid)) throw new Error(tr("ui.index.message.ad10caf22a"));
-    await runBackgroundTask(sid, send, () => startTurn(sid, text));
+    await startTurn(sid, text);
   },
 });
 const taskReportJournal = join(homedir(), DATA_DIR_NAME, 'team', 'task-reports.json');
@@ -482,7 +482,7 @@ function syncTeamModule(s: Settings | null) {
         }
         send("evt:sessions", listSessions());
       }
-      void runBackgroundTask(sid, send, () => startTurn(sid!, text));
+      void startTurn(sid!, text);
     },
   });
 }
@@ -3652,7 +3652,13 @@ async function refreshWuweiMe(): Promise<void> {
   }
 }
 
-async function startTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+function startTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+  // Every independent chat (manual send, idle injection, continuation, schedule
+  // and report) has the same account-wide admission and queue UI.
+  return runBackgroundTask(useId, send, () => executeTurn(useId, text, images, sysOverride));
+}
+
+async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
   turnSid = useId; // 供 ask_user 工具的事件带上会话 id
   text = secrets.redact(text).text; // 兜底：已入库密钥出现在消息里→占位符替换，永不出网到模型
   const agent = getAgent(useId);
@@ -3889,7 +3895,7 @@ ipcMain.on("chat:stop", (_e, sid?: string) => {
   //  第一次点 → 温和收尾:不切断当前输出，让模型把这轮自然吐完、完整落历史后在下个边界停。
   //    历史尾部是完整的助手消息(非截断)，下次发消息无缝接续，不再产生 (已停止) 截断疤。
   //  第二次点(或已在收尾/卡权限)→ 强制中断(abort)，兜底救卡死的工具/流。
-  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
+  if (ac && agent && !ac.signal.aborted && !agent.isSoftStopping() && !getBackgroundTasks().some(task => task.sid === id && task.queued) && ![...pendingPermSid.values(), ...pendingAskSid.values(), ...desktopDecisionSids.values()].includes(id)) {
     agent.requestSoftStop();
     log("softStop", id.slice(0, 8), tr("ui.index.message.95502776e8"));
     return;

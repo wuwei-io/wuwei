@@ -797,9 +797,9 @@ app.whenReady().then(async () => {
     f.state.win.setContentSize(1200,800);await delay(100);
     fs.writeFileSync(path.join(evidence,'background-client-base-'+lang+'.png'),await captureBillingFrame(f));
     emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'});
-    await f.wait('document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
+    await f.wait('document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'任务排队中':'Task queued')+')');
     emit(f.state,'evt:background-queue',{taskId:'qa-waiting',sid:'qa-session',accountId:'qa-account',queued:false,limit:1,tier:'free'});
-    await f.wait('!document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'后台任务排队中':'Background task queued')+')');
+    await f.wait('!document.querySelector(".foot-status")?.textContent.includes('+JSON.stringify(lang==='zh'?'任务排队中':'Task queued')+')');
     assert.equal(f.state.orders,0);
   });
   await run('发布关键：后台并行：关闭的服务端策略不提前承诺权益',{account:clone(billingAccount),backgroundPolicy:{enabled:false,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{

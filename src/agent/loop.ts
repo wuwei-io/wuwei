@@ -2,6 +2,7 @@ import { tr, getCurrentLanguage } from "../localization/index.js";
 import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
 import { withImageToolInstructions, withResponseLanguage } from './prompt.js';
 import { randomUUID } from 'node:crypto';
+import { runHostedTurn, withoutTurnSlot } from './background.js';
 // Agent 主循环：Claude Code 的心脏。
 //   组装消息 → 请求模型 → 若要调工具则执行并回灌 → 循环 → 直到模型给最终文字。
 // P2：累计 token 用量 + 上下文过长时自动压缩（把旧历史总结成一段，保留最近若干条）。
@@ -373,10 +374,12 @@ export class Agent {
     this.ensureCanAcceptUser();
     this.messages.push({role:'user',content:[{type:'text',text:prompt}],ts:Date.now()});
     const id = randomUUID(), input = {action:'generate',sku_id:sku,prompt};
-    this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
-    hooks.onToolStart?.(id,tool.name,input);
-    try {
-      const out = await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,requestDecision:hooks.requestDecision || this.ctx.requestDecision});
+    try { await runHostedTurn(this.provider, async signal => {
+      this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
+      hooks.onToolStart?.(id,tool.name,input);
+      const decide=hooks.requestDecision || this.ctx.requestDecision;
+      const out = await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,
+        requestDecision:decide?request=>withoutTurnSlot(()=>decide(request)):undefined});
       hooks.onToolEnd?.(id,out.content,!!out.isError,out.displayImage);
       const content = out.displayImage ? [{type:'text',text:out.content},{type:'image',dataUrl:out.displayImage,displayOnly:true}] : out.content;
       this.messages.push({role:'user',content:[{type:'tool_result',tool_use_id:id,content,is_error:!!out.isError} as any],ts:Date.now()});
@@ -388,7 +391,7 @@ export class Agent {
       hooks.onText?.(reply);
       hooks.onStep?.();
       if (!signal?.aborted) hooks.onAssistantDone?.();
-    } finally { hooks.onTurnEnd?.(turnId); }
+    }, signal); } finally { hooks.onTurnEnd?.(turnId); }
   }
 
   private async sendTurn(
@@ -406,6 +409,11 @@ export class Agent {
     this.messages.push({ role: "user", content: userContent, ts: Date.now() });
     this.round = { input: 0, output: 0, cacheHit: 0, cacheMiss: 0, steps: 0, lastInput: 0 }; // 本轮清零重记
     this.softStop = false; // 新一轮开始，清掉上一轮可能残留的软停止标志
+    // Persist the user's message immediately; admission delays only execution.
+    return runHostedTurn(this.provider, signal => this.executeTurn(hooks, signal, turnId), signal);
+  }
+
+  private async executeTurn(hooks: AgentHooks, signal: AbortSignal, turnId?: string): Promise<void> {
     const displayedImages = new Set<string>(); // 本回合展示图去重；下一回合用户仍可要求重发。
     const displayedImagePaths = new Set<string>();
 
@@ -556,6 +564,11 @@ export class Agent {
       // 结果按原顺序回填(并行也不乱序)；只读工具并行跑，写类工具串行(防写竞态/保权限提示有序)
       const resultsBlocks: ContentBlock[] = new Array(toolUses.length);
       const parallelJobs: Promise<void>[] = [];
+      const drainTools = async () => {
+        const results = await Promise.allSettled(parallelJobs.splice(0));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure?.status === 'rejected') throw failure.reason;
+      };
       for (let idx = 0; idx < toolUses.length; idx++) {
         const call = toolUses[idx];
         // Bind a new generation to the user's picker selection, while preserving recovery of old orders.
@@ -588,8 +601,11 @@ export class Agent {
           continue;
         }
 
+        // Finish outstanding read tools before any operation that can hand its
+        // slot to a child/user wait. They must not keep running without a lease.
+        if (!tool.readOnly || ['dm_teammate','ask_user','ask_decision'].includes(tool.name)) await drainTools();
         if (!tool.readOnly && hooks.requestPermission) {
-          const decision = await hooks.requestPermission(tool, call.input);
+          const decision = await withoutTurnSlot(() => hooks.requestPermission!(tool, call.input));
           if (decision === "deny") {
             resultsBlocks[idx] = {
               type: "tool_result",
@@ -603,11 +619,13 @@ export class Agent {
 
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
-          const out = await tool.run(call.input, { ...this.ctx, signal, turnId,
+          const execute = () => tool.run(call.input, { ...this.ctx, signal, turnId,
             remoteExecution: hooks.remoteExecution || this.ctx.remoteExecution,
-            requestDecision: hooks.requestDecision || this.ctx.requestDecision,
+            requestDecision: (hooks.requestDecision || this.ctx.requestDecision)
+              ? request => withoutTurnSlot(() => (hooks.requestDecision || this.ctx.requestDecision)!(request)) : undefined,
             platformImage: stepProvider.platformImage,
             generateImage: stepProvider.generateImage?.bind(stepProvider) }); // 按本轮后端绑定，切换/并发不串账号
+          const out = await (['dm_teammate','ask_user'].includes(tool.name) ? withoutTurnSlot(execute) : execute());
           let displayImage = out.displayImage;
           if (displayImage && !out.image) {
             if (displayedImages.has(displayImage)) displayImage = undefined;
@@ -635,7 +653,7 @@ export class Agent {
         if (tool.readOnly) parallelJobs.push(job); // 只读：并行
         else await job; // 写类：等它跑完再继续下一个，串行执行
       }
-      await Promise.all(parallelJobs); // 等所有并行只读工具收齐
+      await drainTools(); // 包括失败时也等所有工具结束，再释放本轮名额
       // 兜底：任何漏填的位补上占位结果，确保 tool_use↔tool_result 一一配对(否则下次请求 400)
       for (let idx = 0; idx < toolUses.length; idx++) {
         if (!resultsBlocks[idx]) {

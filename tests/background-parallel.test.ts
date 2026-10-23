@@ -28,14 +28,14 @@ for(const limit of [1,2,4,8])test(`background capacity ${limit}: excess work que
  hold.resolve();await Promise.all(calls);
  assert.equal(peak,limit);assert.equal(fixture.peak,limit);assert.equal(finished,limit+2);assert.equal(fixture.active.size,0);
 });
-test('foreground and BYOK provider calls never enter the hosted admission queue',async()=>{
+test('auxiliary provider calls outside a turn and BYOK calls do not acquire a task slot',async()=>{
  let api=0;
  const client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:async()=>{api++;throw Error('unexpected');}});
  assert.equal(await client.run(token,async()=>42),42);assert.equal(api,0);
  const provider:Provider={name:'BYOK',complete:async()=>({content:[],stopReason:'end_turn'})};
  await withBackgroundTask({id:'byok'},()=>provider.complete('',[],[],{}));assert.equal(api,0);
 });
-test('waiting tools and nested employee work cannot hold a parent slot hostage',async()=>{
+test('individual fallback model calls release their slot before a separate child call',async()=>{
  const fixture=server(1),client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:fixture.fetch,retryMs:1});
  await withBackgroundTask({id:'parent'},async()=>{
   await client.run(token,async()=>{assert.equal(fixture.active.size,1);});
@@ -98,16 +98,16 @@ test('a hosted provider preserves methods and foreground request handlers',async
  await wrapped.complete('',[],[],{signal:stop.signal});assert.equal(wrapped.contextWindow,1000);assert.equal((seen[0] as {signal:AbortSignal}).signal,stop.signal);
 });
 
-test('actual hosted provider wrappers share the background pool while chat stays available',async()=>{
+test('standalone provider wrappers share the pool only inside an explicit task scope',async()=>{
  const fixture=server(1),client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:fixture.fetch,retryMs:1});
  const hold=deferred();let calls=0;
  const make=()=>wrapBackgroundProvider({name:'hosted',complete:async()=>{calls++;await hold.promise;return {content:[],stopReason:'end_turn'};}},token,client);
  const first=withBackgroundTask({id:'employee'},()=>make().complete('',[],[],{}));
  await delay(5);
  const second=withBackgroundTask({id:'schedule'},()=>make().complete('',[],[],{}));
- const chat=make().complete('',[],[],{});
- await delay(5);assert.equal(calls,2); // one background plus unrestricted foreground
- hold.resolve();await Promise.all([first,second,chat]);assert.equal(calls,3);assert.equal(fixture.peak,1);
+ const auxiliary=make().complete('',[],[],{}); // Titles/metadata; Agent.send uses runHostedTurn instead.
+ await delay(5);assert.equal(calls,2);
+ hold.resolve();await Promise.all([first,second,auxiliary]);assert.equal(calls,3);assert.equal(fixture.peak,1);
 });
 test('an account change cannot move queued work to a different wallet',async()=>{
  const fixture=server(1),client=new BackgroundExecutionClient('https://isolated.invalid',{fetch:fixture.fetch});
