@@ -177,6 +177,36 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for(const lang of ['zh','en'])await run('发布关键：支付品牌与核心权益排序加粗 '+lang,{
+    account:{...account(),flags:['billing_v2']},lang,settings:{...settings(),app:{teamEnabled:false,lang}},
+    modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),
+    imageCatalog:[{sku_id:'test-image',model:'gpt-image-1',quality:'low',coins_per_image:8}],
+    backgroundPolicy:{enabled:true,version:'qa-v1',free:1,plans:{Pro:2,Plus:4,Max:8}},
+  },async f=>{
+    // Exercise the real split selector and card view, with no order creation.
+    await f.click('.acct-btn');await f.click('[data-account-upgrade]');
+    await f.wait('!!document.querySelector(".billing-selector-benefits .billing-background-feature")');
+    const inspect=()=>f.js('(()=>{const rows=[...document.querySelectorAll(".billing-selector-benefits li")];return rows.map(e=>({kind:e.dataset.usageKind || (e.classList.contains("billing-value-feature")?"value":e.classList.contains("billing-background-feature")?"parallel":"common"),weight:Number(getComputedStyle(e.querySelector("strong")||e).fontWeight),text:e.textContent}))})()');
+    let rows=await inspect();assert.deepEqual(rows.slice(0,5).map(r=>r.kind),['tasks','tokens','images','value','parallel']);
+    assert.ok(rows.slice(0,5).every(r=>r.weight>=600));assert.ok(rows.slice(5).every(r=>r.weight<600));
+    assert.match(rows[3].text,/20/);assert.match(rows[4].text,/4/);
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-pay")).backgroundColor'),'rgb(192, 95, 60)');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-option.selected")).borderTopColor'),'rgb(39, 74, 99)','selected plan border');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-credits strong")).color'),'rgb(39, 74, 99)','coin amount color');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector>aside")).backgroundColor'),'rgb(244, 246, 248)');
+    for(const width of [1200,840]){
+      f.state.win.setContentSize(width,800);await delay(100);
+      assert.equal(await f.js('(()=>{const e=document.querySelector(".billing-selector-benefits");return e.scrollWidth<=e.clientWidth+1})()'),true);
+      fs.writeFileSync(path.join(evidence,'payment-brand-benefits-'+lang+'-'+width+'.png'),await captureBillingFrame(f));
+    }
+    await f.click('[data-sku="v2_plan_pro_annual"]');rows=await inspect();assert.deepEqual(rows.slice(0,4).map(r=>r.kind),['tasks','tokens','images','parallel']);assert.match(rows[3].text,/2/);
+    await f.click('[data-sku="v2_plan_max_annual"]');rows=await inspect();assert.deepEqual(rows.slice(0,5).map(r=>r.kind),['tasks','tokens','images','value','parallel']);assert.match(rows[4].text,/8/);
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-plan-card.recommended")).borderTopColor'),'rgb(39, 74, 99)','recommended card border');
+    assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-plan-buy")).backgroundColor'),'rgb(192, 95, 60)');
+    fs.writeFileSync(path.join(evidence,'payment-brand-cards-'+lang+'.png'),await captureBillingFrame(f));
+    assert.equal(f.state.orders,0);
+  });
   for(const theme of ['light','dark']) await run('发布关键：并行品牌：月白玄墨与靛青、单个朱赭操作 '+theme,{account:account(),settings:{...settings(),theme},backgroundTasks:[{taskId:'brand-queued',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}]},async f=>{
     await f.wait('!!document.querySelector(".background-queue-notice")');
     // The product currently forces light mode. Exercise legacy dark CSS tokens
@@ -427,12 +457,12 @@ app.whenReady().then(async () => {
       f.state.win.setContentSize(width,800);await delay(100);
       const g=await f.js(`Array.from(document.querySelectorAll('.billing-selector-option')).map(el=>{const n=el.querySelector('.billing-selector-name small'),name=el.querySelector('.billing-selector-name b'),r=n.getBoundingClientRect(),card=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(n);const text=range.getBoundingClientRect();return {title:name.textContent,text:n.textContent,height:text.height,line:parseFloat(getComputedStyle(n).lineHeight),inside:text.left>=card.left&&text.right<=card.right+1,whiteSpace:getComputedStyle(n).whiteSpace}})`);
       assert.equal(g.length,4);for(const [index,row] of g.entries()){assert.ok(row.inside,lang+width+JSON.stringify(row));if(lang==='zh'){assert.equal(row.text,new Intl.NumberFormat('en-US').format(expected[index]*(member?1.5:1))+' 币到账');assert.equal(row.whiteSpace,'nowrap');assert.ok(row.height<=row.line+1,JSON.stringify(row));}}
-      await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`coin-packs-${lang}-${member?'member':'standard'}-${width}.png`),(await f.state.win.webContents.capturePage()).toPNG());
+      await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`coin-packs-${lang}-${member?'member':'standard'}-${width}.png`),await captureBillingFrame(f));
     }
     f.state.win.setContentSize(1200,800);await delay(70);
     for(const [index,credits] of expected.entries()){
       await f.click('.billing-selector-option:nth-child('+(index+1)+')');assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat('en-US').format(credits*(member?1.5:1)));
-      assert.equal(await f.js('document.querySelectorAll(".billing-usage-metric").length'),3);assert.ok((await f.js('document.querySelector(".billing-usage-metric").textContent')).includes(new Intl.NumberFormat(lang).format(Math.floor(credits*(member?1.5:1)/8))));
+      assert.equal(await f.js('document.querySelectorAll(".billing-usage-metric").length'),3);assert.ok((await f.js("document.querySelector('.billing-usage-metric[data-usage-kind=images]').textContent")).includes(new Intl.NumberFormat(lang).format(Math.floor(credits*(member?1.5:1)/8))));
       await f.click('.billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
       const req=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(req.expected.creditsPerGrant,credits*(member?1.5:1));assert.equal(req.expected.amountMinor,(lang==='zh'?[20000,33400,46800,66900]:[2990,4990,6990,9990])[index]);assert.equal(req.sku,['v2_pack_1500','v2_pack_3000','v2_pack_5000','v2_pack_8000'][index]);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
     }

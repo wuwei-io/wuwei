@@ -8,5 +8,5 @@ export function backgroundParallel(product:BillingProduct,policy?:BillingCatalog
 }
 export function BillingBackground({product,policy,marker=false}:{product:BillingProduct;marker?:boolean;policy?:BillingCatalog['backgroundPolicy']}){
  const limit=backgroundParallel(product,policy);
- return limit==null?null:<li className="billing-background-feature" title={tr('billing.background.explanation')}>{marker&&<span aria-hidden="true">✓</span>}<span>{tr('billing.background.parallel',{count:limit})}</span></li>;
+ return limit==null?null:<li className="billing-background-feature billing-core-feature" title={tr('billing.background.explanation')}>{marker&&<span aria-hidden="true">✓</span>}<strong>{tr('billing.background.parallel',{count:limit})}</strong></li>;
 }
