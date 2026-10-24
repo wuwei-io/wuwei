@@ -40,6 +40,6 @@ export function BillingPlans(p:BillingPlansProps){
       </article>;
     })}</div>
     <div className="billing-plans-free"><b>{tr('ui.billingpanel.free.e99c08e')}</b><p>{tr('billing.plans.freeCopy')}{p.backgroundPolicy?.enabled&&<> · {tr('billing.background.free',{count:p.backgroundPolicy.free})}</>}</p>{p.onFree&&<button onClick={p.onFree}>{tr('ui.billingpanel.try.free.first.84f4717')}</button>}</div>
-    <div className="billing-plans-foot"><p>{tr(p.period==='trial'?'billing.mini.validity':'ui.billingpanel.plan.credits.expire.each.monthly.period.15e5dd7',{credits:p.products[0]?.credits??200})}</p><button onClick={p.onRules}>{tr('billing.plans.usageDetails')} <span aria-hidden="true">↗</span></button></div>
+    <div className="billing-plans-foot"><p>{tr(p.period==='trial'?'billing.mini.validity':'ui.billingpanel.plan.credits.expire.each.monthly.period.15e5dd7',{credits:p.products[0]?.credits??100})}</p><button onClick={p.onRules}>{tr('billing.plans.usageDetails')} <span aria-hidden="true">↗</span></button></div>
   </main>;
 }

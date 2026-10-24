@@ -6,8 +6,8 @@
     "period": "trial",
     "usdMinor": 100,
     "cnyMinor": 700,
-    "credits": 200,
-    "memberCredits": 200,
+    "credits": 100,
+    "memberCredits": 100,
     "recommended": false
   },
   {

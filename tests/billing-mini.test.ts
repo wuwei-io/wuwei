@@ -19,12 +19,12 @@ test('Mini requires both server switch and owner eligibility; legacy servers hid
  assert.deepEqual(availableBillingProducts(null),[]);
 });
 
-test('200 shared Mini coins estimate small amounts without rounding away half the allowance',()=>{
+test('100 shared Mini coins estimate small amounts without rounding away half the allowance',()=>{
  const chat={modelId:'mimo-v2.6-flash',category:'economy',free:false,price:{input:87.23,output:187.88}} as ModelChoice;
  const image={category:'images',imageCoins:8} as ModelChoice;
- const e=usageEstimates(200,[chat,image]);
- assert.equal(e.tasks,180);assert.equal(e.tokens,1800000);assert.equal(e.images,25);
- assert.ok(e.tasks!*e.taskCost!<=200);
+ const e=usageEstimates(100,[chat,image]);
+ assert.equal(e.tasks,93);assert.equal(e.tokens,930000);assert.equal(e.images,12);
+ assert.ok(e.tasks!*e.taskCost!<=100);
  assert.equal(usageEstimates(10000,[chat,image]).tasks,9300);
  assert.equal(canUpgradeBackgroundTier('mini'),true);
 });
