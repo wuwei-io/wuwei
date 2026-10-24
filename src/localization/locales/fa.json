@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "کارها",
     "background.tasks.queued": "در صف",
     "background.tasks.autoStart": "با آزاد شدن ظرفیت، خودکار شروع می‌شود",
-    "background.tasks.keepRunning": "با بستن این پنل، کارها ادامه می‌یابند"
+    "background.tasks.keepRunning": "با بستن این پنل، کارها ادامه می‌یابند",
+    "billing.plans.trialCategory": "بسته آزمایشی",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "تجربه ۲۴ ساعته",
+    "billing.mini.validity": "عضویت و {credits} سکه ۲۴ ساعت پس از پرداخت منقضی می‌شوند. تمدید خودکار ندارد.",
+    "billing.mini.once": "فقط یک خرید آزمایشی برای هر حساب",
+    "billing.mini.unavailable": "این طرح آزمایشی در دسترس نیست. طرح دیگری انتخاب کنید.",
+    "billing.mini.pending": "یک سفارش آزمایشی در انتظار پرداخت دارید. از روش پرداخت اصلی استفاده کنید یا پس از انقضا دوباره تلاش کنید.",
+    "billing.mini.refund": "پرداخت تکراری: مزایای بیشتری صادر نشد. برای بازپرداخت با پشتیبانی تماس بگیرید.",
+    "billing.usage.modelCheck": "بررسی مدل‌ها",
+    "billing.usage.taskOnly": "مصرف کارها (بدون بررسی‌ها)",
+    "billing.pages.size": "تعداد ردیف در صفحه"
   }
 }

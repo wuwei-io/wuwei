@@ -18,4 +18,4 @@ export function applyBackgroundTaskEvent(previous:BackgroundTasks,event:Backgrou
 export function accountBackgroundTasks(tasks:BackgroundTasks,accountId?:string|null):BackgroundTaskEntry[]{
  return Object.values(tasks).filter(task=>(task.accountId??null)===(accountId??null));
 }
-export function canUpgradeBackgroundTier(tier?:string):boolean{return ['free','pro','plus'].includes(tier??'');}
+export function canUpgradeBackgroundTier(tier?:string):boolean{return ['free','mini','pro','plus'].includes(tier??'');}

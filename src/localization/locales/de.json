@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "Aufgaben",
     "background.tasks.queued": "In Warteschlange",
     "background.tasks.autoStart": "Startet automatisch, sobald ein Platz frei wird",
-    "background.tasks.keepRunning": "Aufgaben laufen nach dem Schließen weiter"
+    "background.tasks.keepRunning": "Aufgaben laufen nach dem Schließen weiter",
+    "billing.plans.trialCategory": "Testpaket",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "24-Stunden-Test",
+    "billing.mini.validity": "Mitgliedschaft und {credits} Coins verfallen 24 Stunden nach Zahlung. Keine automatische Verlängerung.",
+    "billing.mini.once": "Ein Einführungskauf pro Konto",
+    "billing.mini.unavailable": "Dieses Testangebot ist nicht verfügbar. Bitte wähle einen anderen Tarif.",
+    "billing.mini.pending": "Eine Testbestellung ist offen. Nutze deren ursprüngliche Zahlungsart oder versuche es nach Ablauf erneut.",
+    "billing.mini.refund": "Doppelte Zahlung: Es wurden keine weiteren Vorteile gewährt. Bitte kontaktiere den Support zur Erstattung.",
+    "billing.usage.modelCheck": "Modellprüfungen",
+    "billing.usage.taskOnly": "Aufgabenverbrauch (ohne Prüfungen)",
+    "billing.pages.size": "Einträge pro Seite"
   }
 }

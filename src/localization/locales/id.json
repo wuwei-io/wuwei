@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "Tugas",
     "background.tasks.queued": "Mengantre",
     "background.tasks.autoStart": "Dimulai otomatis saat slot tersedia",
-    "background.tasks.keepRunning": "Tugas tetap berjalan saat panel ini ditutup"
+    "background.tasks.keepRunning": "Tugas tetap berjalan saat panel ini ditutup",
+    "billing.plans.trialCategory": "Paket uji coba",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Pengalaman 24 jam",
+    "billing.mini.validity": "Keanggotaan dan {credits} koin berakhir 24 jam setelah pembayaran. Tanpa perpanjangan otomatis.",
+    "billing.mini.once": "Satu pembelian perkenalan per akun",
+    "billing.mini.unavailable": "Penawaran pengalaman ini tidak tersedia. Pilih paket lain.",
+    "billing.mini.pending": "Ada pesanan pengalaman tertunda. Gunakan metode pembayaran awal atau coba lagi setelah kedaluwarsa.",
+    "billing.mini.refund": "Pembayaran ganda: tidak ada manfaat tambahan. Hubungi dukungan untuk pengembalian dana.",
+    "billing.usage.modelCheck": "Pemeriksaan model",
+    "billing.usage.taskOnly": "Penggunaan tugas (tanpa pemeriksaan)",
+    "billing.pages.size": "Baris per halaman"
   }
 }

@@ -51,8 +51,8 @@
 @media(max-width:680px),(max-height:620px){.billing-selector-view{height:auto;display:block;overflow:auto}.billing-selector-view .billing-selector{overflow:visible}.billing-catalog-scroll{flex:none;height:240px;min-height:0}.billing-selector>aside{order:1;border-right:0;border-top:1px solid var(--billing-line)}.billing-catalog-controls{flex-wrap:wrap}.billing-catalog-search{max-width:45%}}
 
 /* Keep the short Chinese coin delivery label on one line. */
-.packs .billing-selector-name:lang(zh){min-width:max-content}
-.packs .billing-selector-name:lang(zh) b,.packs .billing-selector-name:lang(zh) small{white-space:nowrap}
+.packs .billing-selector-name{min-width:0}
+.packs .billing-selector-name b,.packs .billing-selector-name small{white-space:nowrap}
 
 /* Annual comparisons use subdued list prices and a clear annual payable total. */
 .billing-original-monthly,.billing-original-annual{color:var(--billing-muted);font-weight:500;text-decoration-thickness:1px;font-variant-numeric:tabular-nums}
@@ -69,3 +69,18 @@
 .billing-selector-benefits li.billing-core-feature strong,.billing-plan-features .billing-core-feature strong{font:inherit;font-weight:600;color:var(--billing-ink)}
 .billing-selector-benefits .billing-usage-note{color:var(--billing-muted)}
 .billing-panel .billing-close:focus-visible{outline:none;box-shadow:none;background:var(--billing-soft)}
+
+/* Keep names on the left and prices on the right without splitting amount and unit. */
+.packs .billing-selector-option{display:grid;grid-template-columns:17px minmax(0,1fr) max-content;column-gap:7px;align-items:center;padding:14px 10px!important;min-height:88px}
+.packs .billing-selector-option>i{width:17px;height:17px}
+.packs .billing-selector-name small{font-size:9px;line-height:14px}
+.packs .billing-selector-price{grid-column:3;margin-left:0;margin-inline-start:0;text-align:end}
+.packs .billing-selector-price strong{font-size:24px}
+.billing-selector:has(.billing-selector-options.packs)>section{min-height:0;overflow-y:auto;scrollbar-width:thin}
+@media(min-width:681px) and (max-width:1150px){.billing-selector-options.packs{grid-template-columns:minmax(0,1fr);gap:10px}.packs .billing-selector-option{min-height:72px;padding:10px 12px!important}}
+@media(max-width:680px){.billing-selector-options.packs{grid-template-columns:minmax(0,1fr)}}
+
+.billing-page-size select{border:1px solid var(--billing-line);border-radius:5px;background:var(--billing-soft);color:var(--billing-text);padding:5px 7px;font:inherit;min-width:62px}.billing-page-size select:focus-visible{outline:none;}
+
+.billing-record-summary{display:grid;grid-template-columns:minmax(4ch,max-content) minmax(0,1fr);align-items:start;column-gap:10px;min-width:0}
+.billing-record-index{padding-top:2px;color:var(--billing-muted);font-size:11px;font-weight:400;line-height:1.6;font-variant-numeric:tabular-nums;direction:ltr;text-align:start}

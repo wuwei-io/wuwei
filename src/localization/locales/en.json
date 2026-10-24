@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "Tasks",
     "background.tasks.queued": "Queued",
     "background.tasks.autoStart": "Starts automatically when a slot is available",
-    "background.tasks.keepRunning": "Tasks continue when this panel is closed"
+    "background.tasks.keepRunning": "Tasks continue when this panel is closed",
+    "billing.plans.trialCategory": "Trial pack",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "24-hour experience",
+    "billing.mini.validity": "Membership and {credits} coins expire 24 hours after payment. No auto-renewal.",
+    "billing.mini.once": "One introductory purchase per account",
+    "billing.mini.unavailable": "This experience offer is unavailable. Please choose another plan.",
+    "billing.mini.pending": "You have a pending experience order. Use its original payment method or retry after it expires.",
+    "billing.mini.refund": "Duplicate payment: no additional benefits were issued. Please contact support for a refund.",
+    "billing.usage.modelCheck": "Model checks",
+    "billing.usage.taskOnly": "Task usage (excluding checks)",
+    "billing.pages.size": "Rows per page"
   }
 }

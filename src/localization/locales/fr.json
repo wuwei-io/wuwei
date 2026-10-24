@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "Tâches",
     "background.tasks.queued": "En attente",
     "background.tasks.autoStart": "Démarre automatiquement dès qu’une place se libère",
-    "background.tasks.keepRunning": "Les tâches continuent après la fermeture du panneau"
+    "background.tasks.keepRunning": "Les tâches continuent après la fermeture du panneau",
+    "billing.plans.trialCategory": "Pack d’essai",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Essai de 24 heures",
+    "billing.mini.validity": "Les avantages et les {credits} pièces expirent 24 heures après le paiement. Sans renouvellement automatique.",
+    "billing.mini.once": "Un seul achat découverte par compte",
+    "billing.mini.unavailable": "Cette offre découverte est indisponible. Choisissez une autre formule.",
+    "billing.mini.pending": "Une commande découverte est en attente. Utilisez son mode de paiement initial ou réessayez après expiration.",
+    "billing.mini.refund": "Paiement en double : aucun avantage supplémentaire accordé. Contactez le support pour un remboursement.",
+    "billing.usage.modelCheck": "Vérifications des modèles",
+    "billing.usage.taskOnly": "Utilisation des tâches (hors vérifications)",
+    "billing.pages.size": "Lignes par page"
   }
 }

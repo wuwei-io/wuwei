@@ -46,10 +46,21 @@ test('stalled or rejected billing IPC resolves to a retryable error, including l
 });
 
 
-test('Persian ledger uses the same Gregorian dates as filtering and always uses 24-hour time',()=>{
-  const date=new Date('2026-10-20T15:14:12Z');
-  const expected=new Intl.DateTimeFormat('fa',{calendar:'gregory',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date);
-  assert.equal(formatLedgerTime(date.toISOString(),'fa'),expected);
+test('ledger timestamps follow the local timezone with year-month-day and seconds in every UI language',()=>{
+  const previous=process.env.TZ;
+  try{
+    for(const [zone,value,expected] of [
+      ['Asia/Shanghai','2026-10-23T15:58:10Z','2026-10-23 23:58:10'],
+      ['America/New_York','2026-10-23T15:58:10Z','2026-10-23 11:58:10'],
+      ['Pacific/Kiritimati','2026-10-23T15:58:10Z','2026-10-24 05:58:10'],
+      ['Asia/Shanghai','2026-10-23T16:00:00Z','2026-10-24 00:00:00'],
+      ['UTC','2026-01-02T03:04:05Z','2026-01-02 03:04:05'],
+    ]){
+      process.env.TZ=zone;
+      for(const language of ['zh','en','fa'])assert.equal(formatLedgerTime(value,language),expected);
+    }
+    assert.equal(formatLedgerTime('invalid'),'—');
+  }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}
 });
 
 

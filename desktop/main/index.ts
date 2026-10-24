@@ -5477,6 +5477,7 @@ ipcMain.handle(
     const timer = setTimeout(() => ac.abort(), 25000);
     await p.complete("", [{ role: "user", content: [{ type: "text", text: "ping" }] }], [], {
       signal: ac.signal,
+      requestPurpose: "model_check",
     });
     clearTimeout(timer);
     return { ok: true, reason: tr("ui.index.verified.5768bc4") };
@@ -5534,6 +5535,7 @@ ipcMain.handle("conn:check", async () => {
       [],
       {
         signal: ac.signal,
+        requestPurpose: "model_check",
         onRateLimits: (rl: unknown) => {
           const pid = curProviderId();
           saveRateLimits(pid, rl);

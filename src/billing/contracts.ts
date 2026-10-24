@@ -1,4 +1,4 @@
-export type BillingPeriod = 'monthly' | 'annual' | 'pack';
+export type BillingPeriod = 'monthly' | 'annual' | 'pack' | 'trial';
 export type BillingCurrency = 'CNY' | 'USD';
 export type BillingChannel = 'alipay' | 'paddle' | 'crypto';
 export interface BillingProduct {
@@ -25,6 +25,8 @@ export interface BillingQuote {
   expiryMonths: number;
   memberBonus: boolean;
   autoRenew: false;
+  durationDays?: number;
+  expiryDays?: number;
   startsAt?: string;
 }
 export interface BillingCatalog {
@@ -33,6 +35,7 @@ export interface BillingCatalog {
   member: boolean;
   checkoutReady: boolean;
   channels: Record<BillingChannel, boolean>;
+  trial?: {enabled:boolean;eligible:boolean;repeatAllowed?:boolean};
   backgroundPolicy?: {enabled:boolean;version:string;free:number;plans:Record<string,number>};
 }
 export interface CreditRecord {
@@ -71,6 +74,7 @@ export interface BillingOrder {
   crypto?:{network:string;currency:string;address:string;amount:string;memo?:string};
   balance?:number;
   creditsGranted?:number;
+  refundRequired?:boolean;
   startsAt?:string;
 }
 export interface BillingRequest {
@@ -78,6 +82,7 @@ export interface BillingRequest {
   sku?: string;
   currency?: BillingCurrency;
   offset?: number;
+  limit?: number;
   type?: string;
   search?: string;
   from?: string;

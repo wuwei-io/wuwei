@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "执行任务",
     "background.tasks.queued": "排队中",
     "background.tasks.autoStart": "空出名额后自动开始",
-    "background.tasks.keepRunning": "关闭面板后，任务仍会继续执行"
+    "background.tasks.keepRunning": "关闭面板后，任务仍会继续执行",
+    "billing.plans.trialCategory": "体验包",
+    "billing.plans.period.trial": "Mini 体验",
+    "billing.mini.duration": "24 小时体验",
+    "billing.mini.validity": "会员和 {credits} 币自付款起 24 小时有效，到期失效，不自动续费。",
+    "billing.mini.once": "每个账号仅限首次购买一次",
+    "billing.mini.unavailable": "体验套餐暂不可购买，请选择其他套餐。",
+    "billing.mini.pending": "已有待付款体验订单，请使用原支付方式付款，或到期后重试。",
+    "billing.mini.refund": "该体验订单重复付款，未重复发放权益，请联系客服处理退款。",
+    "billing.usage.modelCheck": "模型检测",
+    "billing.usage.taskOnly": "任务消耗（不含检测）",
+    "billing.pages.size": "每页条数"
   }
 }

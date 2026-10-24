@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "Tarefas",
     "background.tasks.queued": "Na fila",
     "background.tasks.autoStart": "Inicia automaticamente quando houver uma vaga",
-    "background.tasks.keepRunning": "As tarefas continuam ao fechar este painel"
+    "background.tasks.keepRunning": "As tarefas continuam ao fechar este painel",
+    "billing.plans.trialCategory": "Pacote de teste",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Experiência de 24 horas",
+    "billing.mini.validity": "A assinatura e as {credits} moedas expiram 24 horas após o pagamento. Sem renovação automática.",
+    "billing.mini.once": "Uma compra de experiência por conta",
+    "billing.mini.unavailable": "Esta oferta de experiência não está disponível. Escolha outro plano.",
+    "billing.mini.pending": "Há um pedido de experiência pendente. Use o pagamento original ou tente novamente após a expiração.",
+    "billing.mini.refund": "Pagamento duplicado: nenhum benefício adicional foi concedido. Contate o suporte para reembolso.",
+    "billing.usage.modelCheck": "Verificações de modelos",
+    "billing.usage.taskOnly": "Uso em tarefas (sem verificações)",
+    "billing.pages.size": "Linhas por página"
   }
 }

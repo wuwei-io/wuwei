@@ -1,5 +1,16 @@
 [
   {
+    "sku": "v2_plan_mini_day",
+    "kind": "plan",
+    "name": "Mini",
+    "period": "trial",
+    "usdMinor": 100,
+    "cnyMinor": 700,
+    "credits": 100,
+    "memberCredits": 100,
+    "recommended": false
+  },
+  {
     "sku": "v2_plan_pro_monthly",
     "kind": "plan",
     "name": "Pro",

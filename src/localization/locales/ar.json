@@ -3300,6 +3300,17 @@
     "background.tasks.heading": "المهام",
     "background.tasks.queued": "في الانتظار",
     "background.tasks.autoStart": "تبدأ تلقائيًا عند توفر مكان",
-    "background.tasks.keepRunning": "تستمر المهام عند إغلاق هذه اللوحة"
+    "background.tasks.keepRunning": "تستمر المهام عند إغلاق هذه اللوحة",
+    "billing.plans.trialCategory": "باقة تجريبية",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "تجربة لمدة 24 ساعة",
+    "billing.mini.validity": "تنتهي العضوية و{credits} عملة بعد 24 ساعة من الدفع. دون تجديد تلقائي.",
+    "billing.mini.once": "شراء تجريبي واحد لكل حساب",
+    "billing.mini.unavailable": "العرض التجريبي غير متاح. يرجى اختيار باقة أخرى.",
+    "billing.mini.pending": "لديك طلب تجريبي معلق. استخدم وسيلة الدفع الأصلية أو أعد المحاولة بعد انتهاء صلاحيته.",
+    "billing.mini.refund": "دفعة مكررة: لم تضاف مزايا أخرى. يرجى التواصل مع الدعم لاسترداد المبلغ.",
+    "billing.usage.modelCheck": "فحوصات النماذج",
+    "billing.usage.taskOnly": "استهلاك المهام (باستثناء الفحوصات)",
+    "billing.pages.size": "عدد السجلات في الصفحة"
   }
 }
