@@ -19,7 +19,7 @@ export function BillingPlans(p:BillingPlansProps){
   return <main className={'billing-plans '+(pack?'is-pack':p.period==='trial'?'is-trial':'')}>
     <div className="billing-plans-heading"><h1>{tr(p.insufficient?'ui.billingpanel.more.credits.for.what.comes.next.1ef1628':'billing.plans.title')}</h1><p>{tr('billing.plans.subtitle')}</p></div>
     {p.insufficient&&<p className="billing-plans-shortage">{tr('ui.billingorderview.current.credits.18a748e')}: {formatCredits(p.balance)}</p>}
-    <div className="billing-plans-periods" role="tablist" aria-label={tr('ui.billingpanel.billing.period.af01053')}>{billingPeriods(p.catalogProducts).map(period=><button type="button" role="tab" data-period={period} aria-selected={p.period===period} key={period} onClick={()=>p.onPeriod(period)}>{tr('billing.plans.period.'+period)}{period==='annual'&&<span>−50%</span>}</button>)}</div>
+    <div className="billing-plans-periods" role="tablist" aria-label={tr('ui.billingpanel.billing.period.af01053')}>{billingPeriods(p.catalogProducts).map(period=><button type="button" role="tab" data-period={period} aria-selected={p.period===period} key={period} onClick={()=>p.onPeriod(period)}>{tr(period==='trial'?'billing.plans.trialCategory':'billing.plans.period.'+period)}{period==='annual'&&<span>−50%</span>}</button>)}</div>
     {p.loading&&<p role="status" className="billing-plans-loading">{tr('ui.billingpanel.loading.64db553')}</p>}
     <div className="billing-plan-grid">{p.products.map((product,index)=>{
       const annual=product.period==='annual',amount=p.currency==='USD'?product.usdMinor:product.cnyMinor;

@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "في الانتظار",
     "background.tasks.autoStart": "تبدأ تلقائيًا عند توفر مكان",
     "background.tasks.keepRunning": "تستمر المهام عند إغلاق هذه اللوحة",
+    "billing.plans.trialCategory": "باقة تجريبية",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "تجربة لمدة 24 ساعة",
     "billing.mini.validity": "تنتهي العضوية و{credits} عملة بعد 24 ساعة من الدفع. دون تجديد تلقائي.",

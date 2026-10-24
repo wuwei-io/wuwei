@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "Dalam baris gilir",
     "background.tasks.autoStart": "Bermula secara automatik apabila slot tersedia",
     "background.tasks.keepRunning": "Tugas diteruskan apabila panel ini ditutup",
+    "billing.plans.trialCategory": "Pek percubaan",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Pengalaman 24 jam",
     "billing.mini.validity": "Keahlian dan {credits} syiling tamat 24 jam selepas pembayaran. Tiada pembaharuan automatik.",

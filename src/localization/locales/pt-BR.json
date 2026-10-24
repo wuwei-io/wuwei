@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "Na fila",
     "background.tasks.autoStart": "Inicia automaticamente quando houver uma vaga",
     "background.tasks.keepRunning": "As tarefas continuam ao fechar este painel",
+    "billing.plans.trialCategory": "Pacote de teste",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Experiência de 24 horas",
     "billing.mini.validity": "A assinatura e as {credits} moedas expiram 24 horas após o pagamento. Sem renovação automática.",

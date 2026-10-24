@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "Đang chờ",
     "background.tasks.autoStart": "Tự động bắt đầu khi có chỗ trống",
     "background.tasks.keepRunning": "Tác vụ vẫn tiếp tục khi đóng bảng này",
+    "billing.plans.trialCategory": "Gói trải nghiệm",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Trải nghiệm 24 giờ",
     "billing.mini.validity": "Gói thành viên và {credits} xu hết hạn sau 24 giờ kể từ thanh toán. Không tự động gia hạn.",

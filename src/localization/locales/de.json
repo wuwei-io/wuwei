@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "In Warteschlange",
     "background.tasks.autoStart": "Startet automatisch, sobald ein Platz frei wird",
     "background.tasks.keepRunning": "Aufgaben laufen nach dem Schließen weiter",
+    "billing.plans.trialCategory": "Testpaket",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "24-Stunden-Test",
     "billing.mini.validity": "Mitgliedschaft und {credits} Coins verfallen 24 Stunden nach Zahlung. Keine automatische Verlängerung.",

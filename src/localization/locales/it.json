@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "In coda",
     "background.tasks.autoStart": "Si avvia automaticamente quando si libera un posto",
     "background.tasks.keepRunning": "Le attività continuano dopo la chiusura del pannello",
+    "billing.plans.trialCategory": "Pacchetto di prova",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Prova di 24 ore",
     "billing.mini.validity": "Abbonamento e {credits} monete scadono 24 ore dopo il pagamento. Nessun rinnovo automatico.",

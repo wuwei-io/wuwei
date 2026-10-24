@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "در صف",
     "background.tasks.autoStart": "با آزاد شدن ظرفیت، خودکار شروع می‌شود",
     "background.tasks.keepRunning": "با بستن این پنل، کارها ادامه می‌یابند",
+    "billing.plans.trialCategory": "بسته آزمایشی",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "تجربه ۲۴ ساعته",
     "billing.mini.validity": "عضویت و {credits} سکه ۲۴ ساعت پس از پرداخت منقضی می‌شوند. تمدید خودکار ندارد.",

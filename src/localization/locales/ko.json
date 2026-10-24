@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "대기 중",
     "background.tasks.autoStart": "자리가 나면 자동으로 시작됩니다",
     "background.tasks.keepRunning": "이 패널을 닫아도 작업은 계속됩니다",
+    "billing.plans.trialCategory": "체험 팩",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "24시간 체험",
     "billing.mini.validity": "멤버십과 {credits} 코인은 결제 후 24시간에 만료됩니다. 자동 갱신되지 않습니다.",

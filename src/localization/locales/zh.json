@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "排队中",
     "background.tasks.autoStart": "空出名额后自动开始",
     "background.tasks.keepRunning": "关闭面板后，任务仍会继续执行",
+    "billing.plans.trialCategory": "体验包",
     "billing.plans.period.trial": "Mini 体验",
     "billing.mini.duration": "24 小时体验",
     "billing.mini.validity": "会员和 {credits} 币自付款起 24 小时有效，到期失效，不自动续费。",

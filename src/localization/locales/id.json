@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "Mengantre",
     "background.tasks.autoStart": "Dimulai otomatis saat slot tersedia",
     "background.tasks.keepRunning": "Tugas tetap berjalan saat panel ini ditutup",
+    "billing.plans.trialCategory": "Paket uji coba",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Pengalaman 24 jam",
     "billing.mini.validity": "Keanggotaan dan {credits} koin berakhir 24 jam setelah pembayaran. Tanpa perpanjangan otomatis.",

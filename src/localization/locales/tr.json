@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "Kuyrukta",
     "background.tasks.autoStart": "Yer açılınca otomatik olarak başlar",
     "background.tasks.keepRunning": "Bu panel kapatıldığında görevler devam eder",
+    "billing.plans.trialCategory": "Deneme paketi",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "24 saatlik deneyim",
     "billing.mini.validity": "Üyelik ve {credits} jeton ödemeden 24 saat sonra sona erer. Otomatik yenileme yoktur.",

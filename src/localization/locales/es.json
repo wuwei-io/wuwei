@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "En cola",
     "background.tasks.autoStart": "Comienza automáticamente cuando haya un puesto libre",
     "background.tasks.keepRunning": "Las tareas continúan al cerrar este panel",
+    "billing.plans.trialCategory": "Paquete de prueba",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Prueba de 24 horas",
     "billing.mini.validity": "La membresía y las {credits} monedas caducan 24 horas después del pago. Sin renovación automática.",

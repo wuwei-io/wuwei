@@ -3301,6 +3301,7 @@
     "background.tasks.queued": "En attente",
     "background.tasks.autoStart": "Démarre automatiquement dès qu’une place se libère",
     "background.tasks.keepRunning": "Les tâches continuent après la fermeture du panneau",
+    "billing.plans.trialCategory": "Pack d’essai",
     "billing.plans.period.trial": "Mini",
     "billing.mini.duration": "Essai de 24 heures",
     "billing.mini.validity": "Les avantages et les {credits} pièces expirent 24 heures après le paiement. Sans renouvellement automatique.",
