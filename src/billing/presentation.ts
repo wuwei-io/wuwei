@@ -7,9 +7,12 @@ import type { ModelChoice } from '../model-selection.js';
 export function formatCredits(value:number, language=getCurrentLanguage()) {
   return new Intl.NumberFormat(language,{maximumFractionDigits:3}).format(Math.abs(value)<0.0005?0:value);
 }
-export function formatLedgerTime(value:string,language=getCurrentLanguage()) {
+/** Device-local Gregorian date and 24-hour time, shared by the ledger and CSV. */
+export function formatLedgerTime(value:string,_language?:string) {
   const date=new Date(value);
-  return Number.isFinite(date.getTime())?new Intl.DateTimeFormat(language,{calendar:'gregory',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'}).format(date):'—';
+  if(!Number.isFinite(date.getTime()))return '—';
+  const pad=(n:number)=>String(n).padStart(2,'0');
+  return `${String(date.getFullYear()).padStart(4,'0')}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 export function billingCheckoutUrl(value:string|undefined):string|null {
   try{const url=new URL(value??'');return url.protocol==='https:'&&!url.username&&!url.password&&(!url.port||url.port==='443')&&['wuweiai.io','checkout.paddle.com','sandbox-checkout.paddle.com','pay.paddle.io'].includes(url.hostname)?url.href:null;}catch{return null;}
