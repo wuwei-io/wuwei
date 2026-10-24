@@ -26,7 +26,7 @@
 .language-picker-check{width:12px;color:var(--accent);font-size:14px}
 .language-picker-foot{flex-shrink:0;border-top:1px solid var(--border);padding:11px 16px;background:var(--bg-soft);text-align:center;font-size:10px;line-height:1.5;color:var(--text-dim)}
 .language-picker-empty{text-align:center;padding:25px 12px;color:var(--text-dim)}
-.language-picker-trigger:focus-visible,.language-picker-options>button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.language-picker-trigger:focus-visible,.language-picker-options>button:focus-visible{outline:none;}
 @keyframes language-picker-appear{from{opacity:0;transform:translateY(-3px)}
 to{opacity:1;transform:translateY(0)}
 }

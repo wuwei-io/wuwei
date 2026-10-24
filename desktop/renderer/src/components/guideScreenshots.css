@@ -6,7 +6,7 @@
 .guide-capture__mark{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#334f99;color:white;border:2px solid white;font:700 13px/1 sans-serif;box-shadow:0 0 0 2px #334f99}
 .guide-capture-figure figcaption{font-size:13px;line-height:1.6;margin-top:10px}
 .guide-capture-figure small{display:block;color:var(--text-muted);font-size:11px}
-.guide-capture-open:focus-visible,.guide-capture-close:focus-visible{outline:3px solid #678ce1;outline-offset:3px}
+.guide-capture-open:focus-visible,.guide-capture-close:focus-visible{outline:none;}
 .guide-capture-dialog{box-sizing:border-box;max-width:96vw;max-height:94vh;width:max-content;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--bg);color:var(--text);overflow:auto}
 .guide-capture-dialog::backdrop{background:rgb(0 0 0 / .7)}
 .guide-capture-close{display:block;position:sticky;top:0;z-index:2;margin:0 0 12px auto;padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer}

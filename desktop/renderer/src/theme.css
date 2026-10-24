@@ -102,6 +102,12 @@
 * {
   box-sizing: border-box;
 }
+/* Quiet focus: preserve keyboard focus without a second frame around controls. */
+:focus { outline: none; }
+:where(button, a, summary, [role="button"], [role="tab"], [role="option"]):focus-visible {
+  filter: brightness(.94);
+}
+:where(input, select, textarea):focus-visible { border-color: var(--border-strong); }
 /* 无为 VI：朱赭「一念」只给主操作按钮；选中/导航/链接用淡青(--accent) */
 button.allow,
 .oauth-login-btn,
@@ -503,7 +509,7 @@ body {
   color: var(--text-muted); opacity: .6; cursor: pointer;
 }
 .acct-balance-refresh:hover:not(:disabled) { opacity: 1; background: var(--bg); }
-.acct-balance-refresh:focus-visible { opacity: 1; outline: 1px solid var(--text-muted); outline-offset: 1px; }
+.acct-balance-refresh:focus-visible { opacity: 1; outline: none; }
 .acct-balance-refresh:disabled { cursor: wait; }
 .acct-balance-refresh.busy svg { animation: acct-spin .8s linear infinite; }
 .acct-balance-refresh-error { margin-top: 8px; font-size: 10.5px; color: var(--spark); }
@@ -769,7 +775,7 @@ body {
   box-shadow: none;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.set-field-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.set-field-input:focus { border-color: var(--accent); }
 .set-field-input::placeholder { color: var(--text-muted); }
 .set-field-unit { flex: 0 0 auto; font-size: 12.5px; color: var(--text-dim); user-select: none; }
 
@@ -5933,8 +5939,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   background: var(--accent-soft);
 }
 .team-emp-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
 }
 .team-emp-go {
   margin-left: auto;
@@ -6355,7 +6360,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
 }
-.tc-emp:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tc-emp:focus-visible { outline: none; }
 .tc-ava {
   width: 38px;
   height: 38px;
@@ -7286,7 +7291,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .announce-close { position:absolute; z-index:2; top:16px; right:16px; display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid transparent; border-radius:9px; color:var(--text-muted); background:transparent; cursor:pointer; transition:color .16s,background .16s,border-color .16s; }
 .announce-close svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
 .announce-close:hover { color:var(--text); background:var(--bg-soft); border-color:var(--border); }
-.announce-close:focus-visible,.announce-content:focus-visible,.announce-footer button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.announce-close:focus-visible,.announce-content:focus-visible,.announce-footer button:focus-visible { outline: none; }
 .announce-header { padding:32px 64px 22px 32px; flex-shrink:0; }
 .announce-eyebrow { margin-bottom:8px; color:var(--accent); font-size:10.5px; font-weight:750; letter-spacing:.14em; }
 .announce-heading-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px 10px; }
@@ -7331,7 +7336,7 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .announce-markdown td,.announce-markdown th { padding:5px; border:1px solid var(--border); }
 .announce-details { margin-top:12px; }
 .announce-details summary { cursor:pointer; font-size:12px; }
-.announce-dialog :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.announce-dialog :focus-visible { outline: none; }
 @keyframes announce-fade { from { opacity:0; } }
 @keyframes announce-rise { from { opacity:0; transform:translateY(8px) scale(.985); } }
 @media (max-width:560px) { .announce-overlay{padding:16px}.announce-dialog{width:100%;max-height:calc(100vh - 32px);border-radius:16px}.announce-header{padding:24px 56px 16px 20px}.announce-content{padding:2px 20px 20px}.announce-footer{padding:14px 20px 18px} }
