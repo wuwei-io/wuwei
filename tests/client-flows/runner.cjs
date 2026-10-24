@@ -359,9 +359,17 @@ app.whenReady().then(async () => {
   for(const lang of ['zh','en'])await run('发布关键：Mini：入口、100币折算、24小时付款与限购 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8}],miniTrial:{enabled:true,eligible:true},backgroundPolicy:{enabled:true,version:'qa',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
     await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.wait('document.querySelector("[data-sku=v2_plan_pro_monthly]")?.getAttribute("aria-pressed")===("true")');
     assert.equal(await f.js('document.querySelector("[data-period=monthly]").getAttribute("aria-selected")'),'true');
-    assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),4);
-    await f.click('[data-period=trial]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    assert.equal(await f.js('document.querySelectorAll(".billing-selector-option").length'),1);
+    assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),3);
+    assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".billing-selector-option")).map(e=>e.dataset.sku)'),['v2_plan_mini_day','v2_plan_pro_monthly','v2_plan_plus_monthly','v2_plan_max_monthly']);
+    for(const [width,height] of [[1200,920],[1200,735],[840,735]]){
+      f.state.win.setContentSize(width,height);await delay(100);
+      const g=await f.js('(()=>{const a=document.querySelector("[data-sku=v2_plan_mini_day]"),b=document.querySelector("[data-sku=v2_plan_pro_monthly]"),pay=document.querySelector(".billing-selector-pay").getBoundingClientRect();return {miniAbovePro:a.getBoundingClientRect().bottom<b.getBoundingClientRect().top,payVisible:pay.bottom<=innerHeight-8,payTop:pay.top,payBottom:pay.bottom,height:innerHeight,miniNotMonthly:!a.querySelector(".billing-selector-price>span"),miniNoDiscount:!a.querySelector("del")}})()');
+      assert.ok(g.miniAbovePro&&g.payVisible&&g.miniNotMonthly&&g.miniNoDiscount,JSON.stringify(g));
+      fs.writeFileSync(path.join(evidence,`mini-above-pro-default-${lang}-${width}-${height}.png`),await captureBillingFrame(f));
+    }
+    f.state.win.setContentSize(1200,920);await delay(60);
+    await f.click('[data-sku=v2_plan_mini_day]');await f.wait('document.querySelector("[data-sku=v2_plan_mini_day]")?.getAttribute("aria-pressed")==="true"');
+    assert.equal(await f.js('document.querySelectorAll(".billing-selector-option").length'),4);
     assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),'100');
     assert.equal(await f.js('document.querySelector("[data-usage-kind=tasks]").textContent.includes("93")'),true);
     assert.equal(await f.js('document.querySelector("[data-usage-kind=images]").textContent.includes("12")'),true);
@@ -379,16 +387,28 @@ app.whenReady().then(async () => {
     f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');
     assert.equal(await f.js('document.querySelector(".billing-order-state").textContent.includes("100")'),true);
     await f.click('.billing-top button');await f.wait('!!document.querySelector(".billing-selector-periods")');
-    await f.wait('!document.querySelector("[data-period=trial]")');assert.equal(f.state.orders,1);
+    await f.wait('!document.querySelector("[data-sku=v2_plan_mini_day]")');assert.equal(f.state.orders,1);
+  });
+  for(const lang of ['zh','en'])await run('发布关键：Mini：年付与对比套餐中的体验包仍按一天报价 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{lang}},miniTrial:{enabled:true,eligible:true}},async f=>{
+    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('[data-period=annual]');await f.wait('!!document.querySelector("[data-sku=v2_plan_pro_annual]")');
+    const price=await f.js('document.querySelector("[data-sku=v2_plan_mini_day] .billing-selector-price strong").textContent');assert.ok(price.includes(lang==='zh'?'7':'1'));
+    assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day] del")'),false);
+    await f.click('[data-period=pack]');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day]")'),false);
+    await f.click('[data-period=annual]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('.billing-top button:first-child');await f.wait('!!document.querySelector(".billing-plans-trial")');
+    assert.equal(await f.js('document.querySelectorAll(".billing-plan-card").length'),3);
+    assert.equal(await f.js('document.querySelector(".billing-plans-trial").getBoundingClientRect().bottom<document.querySelector(".billing-plan-grid").getBoundingClientRect().top'),true);
+    fs.writeFileSync(path.join(evidence,'mini-above-pro-comparison-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.billing-plans-trial button');await f.wait('!!document.querySelector(".billing-payment-lines")');if(lang==='en'){await f.click('.billing-payment-choices button');}
+    await f.wait('!!document.querySelector(".billing-live-order")');const q=f.state.billingCalls.filter(x=>x.action==='quote').at(-1),order=f.state.billingCalls.filter(x=>x.action==='create-order').at(-1);assert.equal(q.sku,'v2_plan_mini_day');assert.equal(order.expected.amountMinor,lang==='zh'?700:100);assert.equal(order.expected.creditsPerGrant,100);assert.equal(f.state.orders,1);
   });
   await run('发布关键：Mini：白名单付款后仍可重复购买且每次独立下单',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true,repeatAllowed:true}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-period=trial]")');await f.click('[data-period=trial]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
+    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
     const requestIds=[];
     for(let i=0;i<2;i++){
       await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');
       requestIds.push(f.state.billingCalls.filter(x=>x.action==='create-order').at(-1).requestId);assert.equal(f.state.orders,i+1);
       f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');
-      await f.click('.billing-top button');await f.wait('!!document.querySelector("[data-period=trial]") && !!document.querySelector("[data-sku=v2_plan_mini_day]")');
+      await f.click('.billing-top button');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
       f.state.billingPaid=false;
     }
     assert.equal(new Set(requestIds).size,2);assert.equal(f.state.orders,2);
@@ -398,12 +418,12 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('!!document.querySelector("[data-period=trial],[data-sku=v2_plan_mini_day]")'),false);assert.equal(f.state.orders,0);
   });
   await run('发布关键：Mini：迟到的首购拒绝回到正式套餐',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-period=trial]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    f.state.quoteError='TRIAL_USED';await f.click('.billing-selector-pay');await f.wait('!document.querySelector("[data-period=trial]")');
+    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
+    f.state.quoteError='TRIAL_USED';await f.click('.billing-selector-pay');await f.wait('!document.querySelector("[data-sku=v2_plan_mini_day]")');
     assert.equal(await f.js('document.querySelector("[data-period=monthly]").getAttribute("aria-selected")'),'true');assert.equal(f.state.orders,0);
   });
   await run('发布关键：Mini：重复付款进入退款提示而不显示权益到账',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true},billingRefundRequired:true},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-period=trial]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
+    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
     await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');f.state.billingPaid=true;
     await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-order-state[role=alert]")');
     assert.equal(await f.js('!!document.querySelector(".billing-paid-symbol")'),false);

@@ -12,7 +12,7 @@ import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseMod
 import {BillingDatePicker} from './BillingDatePicker.js';
 import {billingRequest} from './request.js';
 import {billingTrack} from './telemetry.js';
-import {MINI_SKU,availableBillingProducts,miniFailureKey} from '../../../../../src/billing/mini.js';
+import {MINI_SKU,availableBillingProducts,billingProductsForPeriod,miniFailureKey} from '../../../../../src/billing/mini.js';
 import './catalog.css';
 
 type Props={lang:string;accountId:string;balance:number;models:ModelChoice[];initialPage?:'plans'|'ledger';initialPeriod?:BillingPeriod;insufficient?:boolean;imageMode?:boolean;onClose:()=>void;onNeedLogin:()=>void;onPaid?:()=>void;onSwitch:(choice:ModelChoice)=>Promise<void>};
@@ -110,8 +110,8 @@ export function BillingPanel(p:Props){
     return()=>{live=false;clearTimeout(timer);};
   },[page,offset,filter,search,fromDate,toDate,retry,p.accountId]);
   const availableProducts=availableBillingProducts(catalog);
-  const products=availableProducts.filter(x=>x.period===period);
-  useEffect(()=>{if(page==='plans'&&catalog&&period==='trial'&&!availableBillingProducts(catalog).some(x=>x.sku===MINI_SKU))setPeriod('monthly');},[page,catalog,period]);
+  const products=billingProductsForPeriod(availableProducts,period);
+  useEffect(()=>{if(page==='plans'&&catalog&&selected===MINI_SKU&&!availableProducts.some(x=>x.sku===MINI_SKU))setSelected(`v2_plan_${period==='monthly'?'pro':'plus'}_${period}`);},[page,catalog,selected,period]);
   const product=products.find(x=>x.sku===selected)??products.find(x=>x.recommended)??products[0];
   const models=showcaseModels(p.models);
   const free=p.models.find(m=>m.free&&m.modelId==='openrouter-auto-free')??p.models.find(m=>m.free);
@@ -125,7 +125,7 @@ export function BillingPanel(p:Props){
       if(!('catalogVersion' in r)||r.sku!==chosen.sku||r.currency!==currency)throw Error('invalid_quote');
       attemptedOrder.current='';openWebAfterPrepare.current=false;setChannel(r.currency==='CNY'?'alipay':catalog?.channels.paddle?'paddle':'crypto');setPaymentSelected(r.currency==='CNY');setSelected(chosen.sku);setQuote(r);setOrder(null);setPage('checkout');
       if(r.currency==='CNY')billingTrack('billing_payment_method_select',{channel:'alipay',selection:'automatic',sku:r.sku,currency:r.currency,lang:p.lang});
-    }catch(e){if(generation.current===current){setError(tr(miniFailureKey(e,"ui.billingpanel.quote.unavailable.please.retry.49ba615")));if(e instanceof Error&&/TRIAL_(USED|DISABLED)/.test(e.message)){setPeriod("monthly");setRetry(x=>x+1);}}}
+    }catch(e){if(generation.current===current){setError(tr(miniFailureKey(e,"ui.billingpanel.quote.unavailable.please.retry.49ba615")));if(e instanceof Error&&/TRIAL_(USED|DISABLED)/.test(e.message)){setSelected("v2_plan_pro_monthly");setPeriod("monthly");setRetry(x=>x+1);}}}
     finally{if(generation.current===current)setQuoteBusy(false);}
   };
   const createOrder=async()=>{

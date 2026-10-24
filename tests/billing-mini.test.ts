@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {availableBillingProducts,billingPeriods,miniFailureKey,MINI_SKU} from '../src/billing/mini.js';
+import {availableBillingProducts,billingPeriods,billingProductsForPeriod,miniFailureKey,MINI_SKU} from '../src/billing/mini.js';
 import {usageEstimates} from '../src/billing/estimates.js';
 import type {BillingCatalog} from '../src/billing/contracts.js';
 import type {ModelChoice} from '../src/model-selection.js';
@@ -15,8 +15,10 @@ test('Mini requires both server switch and owner eligibility; legacy servers hid
  }
  const c={products,trial:{enabled:true,eligible:true}} as BillingCatalog;
  assert.equal(availableBillingProducts(c).filter(p=>p.sku===MINI_SKU).length,1);
- assert.deepEqual(billingPeriods(availableBillingProducts(c)),['trial','monthly','annual','pack']);
+ assert.deepEqual(billingPeriods(availableBillingProducts(c)),['monthly','annual','pack']);
  assert.deepEqual(availableBillingProducts(null),[]);
+ for(const period of ['monthly','annual'] as const){const list=billingProductsForPeriod(availableBillingProducts(c),period);assert.equal(list[0].sku,MINI_SKU);assert.equal(list[0].usdMinor,100);assert.equal(list[1].name,'Pro');assert.equal(list.length,4);}
+ assert.ok(billingProductsForPeriod(availableBillingProducts(c),'pack').every(p=>p.kind==='pack'));
 });
 
 test('100 shared Mini coins estimate small amounts without rounding away half the allowance',()=>{
