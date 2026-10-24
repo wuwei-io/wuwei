@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Uma compra de experiência por conta",
     "billing.mini.unavailable": "Esta oferta de experiência não está disponível. Escolha outro plano.",
     "billing.mini.pending": "Há um pedido de experiência pendente. Use o pagamento original ou tente novamente após a expiração.",
-    "billing.mini.refund": "Pagamento duplicado: nenhum benefício adicional foi concedido. Contate o suporte para reembolso."
+    "billing.mini.refund": "Pagamento duplicado: nenhum benefício adicional foi concedido. Contate o suporte para reembolso.",
+    "billing.usage.modelCheck": "Verificações de modelos",
+    "billing.usage.taskOnly": "Uso em tarefas (sem verificações)",
+    "billing.pages.size": "Linhas por página"
   }
 }

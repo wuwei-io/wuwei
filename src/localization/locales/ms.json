@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Satu pembelian pengenalan bagi setiap akaun",
     "billing.mini.unavailable": "Tawaran pengalaman ini tidak tersedia. Pilih pelan lain.",
     "billing.mini.pending": "Terdapat pesanan pengalaman tertunda. Gunakan kaedah pembayaran asal atau cuba selepas tamat tempoh.",
-    "billing.mini.refund": "Bayaran berganda: tiada manfaat tambahan diberikan. Hubungi sokongan untuk bayaran balik."
+    "billing.mini.refund": "Bayaran berganda: tiada manfaat tambahan diberikan. Hubungi sokongan untuk bayaran balik.",
+    "billing.usage.modelCheck": "Semakan model",
+    "billing.usage.taskOnly": "Penggunaan tugas (tidak termasuk semakan)",
+    "billing.pages.size": "Baris setiap halaman"
   }
 }

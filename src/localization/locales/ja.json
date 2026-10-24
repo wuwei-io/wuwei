@@ -3308,6 +3308,9 @@
     "billing.mini.once": "初回購入は1アカウントにつき1回限り",
     "billing.mini.unavailable": "この体験プランは利用できません。別のプランを選択してください。",
     "billing.mini.pending": "未払いの体験注文があります。元の支払い方法を使うか、有効期限後に再試行してください。",
-    "billing.mini.refund": "重複払いのため特典は追加されていません。返金についてサポートにお問い合わせください。"
+    "billing.mini.refund": "重複払いのため特典は追加されていません。返金についてサポートにお問い合わせください。",
+    "billing.usage.modelCheck": "モデルの接続確認",
+    "billing.usage.taskOnly": "タスク使用量（接続確認を除く）",
+    "billing.pages.size": "1ページの件数"
   }
 }

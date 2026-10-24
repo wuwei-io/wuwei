@@ -82,6 +82,7 @@ export interface BillingRequest {
   sku?: string;
   currency?: BillingCurrency;
   offset?: number;
+  limit?: number;
   type?: string;
   search?: string;
   from?: string;

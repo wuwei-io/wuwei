@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Hesap başına tek tanıtım satın alımı",
     "billing.mini.unavailable": "Bu deneyim teklifi kullanılamıyor. Lütfen başka bir plan seçin.",
     "billing.mini.pending": "Bekleyen bir deneyim siparişiniz var. İlk ödeme yöntemini kullanın veya süresi dolduğunda tekrar deneyin.",
-    "billing.mini.refund": "Yinelenen ödeme: ek hak verilmedi. İade için destekle iletişime geçin."
+    "billing.mini.refund": "Yinelenen ödeme: ek hak verilmedi. İade için destekle iletişime geçin.",
+    "billing.usage.modelCheck": "Model kontrolleri",
+    "billing.usage.taskOnly": "Görev kullanımı (kontroller hariç)",
+    "billing.pages.size": "Sayfa başına satır"
   }
 }

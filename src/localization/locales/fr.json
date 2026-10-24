@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Un seul achat découverte par compte",
     "billing.mini.unavailable": "Cette offre découverte est indisponible. Choisissez une autre formule.",
     "billing.mini.pending": "Une commande découverte est en attente. Utilisez son mode de paiement initial ou réessayez après expiration.",
-    "billing.mini.refund": "Paiement en double : aucun avantage supplémentaire accordé. Contactez le support pour un remboursement."
+    "billing.mini.refund": "Paiement en double : aucun avantage supplémentaire accordé. Contactez le support pour un remboursement.",
+    "billing.usage.modelCheck": "Vérifications des modèles",
+    "billing.usage.taskOnly": "Utilisation des tâches (hors vérifications)",
+    "billing.pages.size": "Lignes par page"
   }
 }

@@ -100,7 +100,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
         s.orders++;s.billingOrder={id:'qa-billing-order-'+s.orders,sku:req.sku,currency:req.currency,amountMinor:req.expected.amountMinor,channel:req.channel,status:'pending',expiresAt:new Date(Date.now()+600000).toISOString(),...(req.channel==='alipay'?{qr:'https://qa.invalid/qr'}:req.channel==='paddle'?{checkoutUrl:'https://wuweiai.io/en/billing-checkout?order=qa'}:{crypto:{network:'Solana',currency:'USDT',address:'qa-isolated-address',amount:'40.0001'}})};return clone(s.billingOrder);
       }
       if(req.action==='order'){if(s.billingPaid){s.billingOrder={...s.billingOrder,status:'paid',...(s.billingRefundRequired?{refundRequired:true}:{}),creditsGranted:s.billingRefundRequired?0:s.billingOrder.sku==='v2_plan_mini_day'?100:2000,balance:3578.362704};}return clone(s.billingOrder);}
-      if(req.action==='ledger')return {balance:1578.362704,total:101,limit:50,offset:req.offset||0,hasMore:(req.offset||0)<100,records:[{id:'record-'+(req.offset||0),type:'spend',source:'model_usage',description:'无为托管模型调用',createdAt:'2026-10-20T15:14:12Z',amount:-0.03039,balanceAfter:1578.362704,model:'mimo-v2.6-flash',parameters:{turn_kind:'tool_cont',input_tokens:100}},{id:'free-record',type:'spend',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-20T15:05:49Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]};
+      if(req.action==='ledger')return {balance:1578.362704,total:req.type==='model_check'?1:101,limit:req.limit||50,offset:req.offset||0,hasMore:(req.offset||0)+(req.limit||50)<(req.type==='model_check'?1:101),records:req.type==='model_check'?[{id:'check-only',type:'model_check',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-24T00:00:00Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]:[{id:'record-'+(req.offset||0),type:'spend',source:'model_usage',description:'无为托管模型调用',createdAt:'2026-10-20T15:14:12Z',amount:-0.03039,balanceAfter:1578.362704,model:'mimo-v2.6-flash',parameters:{turn_kind:'tool_cont',input_tokens:100}},{id:'free-record',type:'spend',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-20T15:05:49Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]};
       return {error:'unknown_action'};
     }
     case 'payCreate': s.orders++; s.orderSkus.push(args[0]); return s.payError ? { error: s.payError } : { orderId: 'qa-order-' + s.orders, qr: 'https://qa.invalid/fake-payment-' + s.orders };
@@ -522,6 +522,24 @@ app.whenReady().then(async () => {
     await f.click('.billing-date-trigger');await f.wait('!!document.querySelector(".billing-calendar")');assert.doesNotMatch(await f.js('document.querySelector(".billing-calendar").textContent'),/[\u3400-\u9fff]/);assert.match(await f.js('document.querySelector(".billing-calendar").textContent'),/Today/);await uiLanguage(f,'zh');await f.wait('document.querySelector(".billing-calendar")?.textContent.includes("今天")');await uiLanguage(f,'en');await f.click('.billing-calendar-actions button');
     await f.click('.billing-pagination button[aria-label="Page 3"]');await f.wait('document.querySelector(".billing-pagination [aria-current=page]")?.textContent==="3"');await f.wait('document.querySelector(".billing-credit-record")?.textContent.includes("Wuwei hosted")');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).offset,100);
     await delay(250);fs.writeFileSync(path.join(evidence,'billing-ledger-en.png'),(await f.state.win.webContents.capturePage()).toPNG());
+  });
+  await run('发布关键：账单新版：模型检测分类与每页条数组合筛选', {account:clone(billingAccount),lang:'en',settings:{...settings(),app:{teamEnabled:false,lang:'en'}}},async f=>{
+    await openBilling(f,true);await f.wait('!!document.querySelector(".billing-page-size select")');
+    assert.deepEqual(await f.js('Array.from(document.querySelector(".billing-page-size select").options).map(o=>Number(o.value))'),[10,20,50,100,200,500]);
+    for(const limit of [10,20,100,200,500,50]){
+      await f.js(`(()=>{const s=document.querySelector('.billing-page-size select');s.value='${limit}';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await f.wait(`!!document.querySelector('.billing-credit-record') && document.querySelector('.billing-page-total')?.textContent.includes('${Math.ceil(101/limit)} pages')`);
+      const last=f.state.billingCalls.filter(r=>r.action==='ledger').at(-1);assert.equal(last.limit,limit);assert.equal(last.offset,0);
+    }
+    await f.click('.billing-pagination button[aria-label="Page 3"]');await f.wait('document.querySelector(".billing-pagination [aria-current=page]")?.textContent==="3"');
+    await f.js(`(()=>{const s=document.querySelector('.billing-page-size select');s.value='10';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await f.wait('document.querySelector(".billing-pagination [aria-current=page]")?.textContent==="1" && !!document.querySelector(".billing-credit-record")');
+    await f.js(`(()=>{const s=document.querySelector('.billing-filters select');s.value='model_check';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await f.wait('document.querySelector(".billing-type")?.textContent==="Model checks"');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).type,'model_check');
+    await uiLanguage(f,'zh');await f.wait('document.querySelector(".billing-page-size")?.textContent.includes("每页条数")');
+    await delay(200);fs.writeFileSync(path.join(evidence,'billing-checks-page-size-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await f.js(`(()=>{const s=document.querySelector('.billing-filters select');s.value='spend';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await f.wait('document.querySelector(".billing-type")?.textContent==="消费"');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).limit,10);
   });
   await run('发布关键：账单新版：套餐比较一屏显示并展示不同厂商', {account:clone(billingAccount)},async f=>{
     f.state.win.setContentSize(1200,735);await openBilling(f);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');

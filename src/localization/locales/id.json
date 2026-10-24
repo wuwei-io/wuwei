@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Satu pembelian perkenalan per akun",
     "billing.mini.unavailable": "Penawaran pengalaman ini tidak tersedia. Pilih paket lain.",
     "billing.mini.pending": "Ada pesanan pengalaman tertunda. Gunakan metode pembayaran awal atau coba lagi setelah kedaluwarsa.",
-    "billing.mini.refund": "Pembayaran ganda: tidak ada manfaat tambahan. Hubungi dukungan untuk pengembalian dana."
+    "billing.mini.refund": "Pembayaran ganda: tidak ada manfaat tambahan. Hubungi dukungan untuk pengembalian dana.",
+    "billing.usage.modelCheck": "Pemeriksaan model",
+    "billing.usage.taskOnly": "Penggunaan tugas (tanpa pemeriksaan)",
+    "billing.pages.size": "Baris per halaman"
   }
 }

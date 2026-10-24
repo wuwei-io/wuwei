@@ -23,7 +23,7 @@ export async function wuweiBillingRequest(accessToken:string, request:BillingReq
   if(request.action==='order' && !/^[a-zA-Z0-9_-]{8,100}$/.test(request.orderId??''))return {error:'invalid_order_id'};
   const endpoint=request.action==='create-order'?'orders':request.action==='order'?`orders/${request.orderId}`:request.action;
   const url=new URL(`/api/billing/${endpoint}`,SITE);
-  if(request.action==='ledger') for(const key of ['offset','type','search','from','to'] as const) {
+  if(request.action==='ledger') for(const key of ['offset','limit','type','search','from','to'] as const) {
     if(request[key]!=null) url.searchParams.set(key,String(request[key]));
   }
   try {

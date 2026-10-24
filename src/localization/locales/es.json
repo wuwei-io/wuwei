@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Una compra de prueba por cuenta",
     "billing.mini.unavailable": "Esta oferta de prueba no está disponible. Elige otro plan.",
     "billing.mini.pending": "Tienes un pedido de prueba pendiente. Usa su método de pago original o reinténtalo cuando caduque.",
-    "billing.mini.refund": "Pago duplicado: no se añadieron beneficios. Contacta con soporte para el reembolso."
+    "billing.mini.refund": "Pago duplicado: no se añadieron beneficios. Contacta con soporte para el reembolso.",
+    "billing.usage.modelCheck": "Comprobaciones de modelos",
+    "billing.usage.taskOnly": "Uso de tareas (sin comprobaciones)",
+    "billing.pages.size": "Filas por página"
   }
 }

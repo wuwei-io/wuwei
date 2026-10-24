@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Ein Einführungskauf pro Konto",
     "billing.mini.unavailable": "Dieses Testangebot ist nicht verfügbar. Bitte wähle einen anderen Tarif.",
     "billing.mini.pending": "Eine Testbestellung ist offen. Nutze deren ursprüngliche Zahlungsart oder versuche es nach Ablauf erneut.",
-    "billing.mini.refund": "Doppelte Zahlung: Es wurden keine weiteren Vorteile gewährt. Bitte kontaktiere den Support zur Erstattung."
+    "billing.mini.refund": "Doppelte Zahlung: Es wurden keine weiteren Vorteile gewährt. Bitte kontaktiere den Support zur Erstattung.",
+    "billing.usage.modelCheck": "Modellprüfungen",
+    "billing.usage.taskOnly": "Aufgabenverbrauch (ohne Prüfungen)",
+    "billing.pages.size": "Einträge pro Seite"
   }
 }

@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Mỗi tài khoản chỉ được mua trải nghiệm một lần",
     "billing.mini.unavailable": "Ưu đãi trải nghiệm không khả dụng. Vui lòng chọn gói khác.",
     "billing.mini.pending": "Bạn có đơn trải nghiệm chờ thanh toán. Dùng phương thức ban đầu hoặc thử lại khi đơn hết hạn.",
-    "billing.mini.refund": "Thanh toán trùng: không cấp thêm quyền lợi. Vui lòng liên hệ hỗ trợ để hoàn tiền."
+    "billing.mini.refund": "Thanh toán trùng: không cấp thêm quyền lợi. Vui lòng liên hệ hỗ trợ để hoàn tiền.",
+    "billing.usage.modelCheck": "Kiểm tra mô hình",
+    "billing.usage.taskOnly": "Mức dùng tác vụ (không gồm kiểm tra)",
+    "billing.pages.size": "Số dòng mỗi trang"
   }
 }

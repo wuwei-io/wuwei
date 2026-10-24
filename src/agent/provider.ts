@@ -389,6 +389,8 @@ class OpenAIProvider implements Provider {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.cfg.apiKey}`,
+        ...(handlers.requestPurpose === "model_check" && isWuweiHostedGateway(base)
+          ? {"X-Wuwei-Request-Purpose": "model_check"} : {}),
       },
       body: JSON.stringify({
         model: this.cfg.model,

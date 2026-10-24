@@ -3308,6 +3308,9 @@
     "billing.mini.once": "계정당 첫 구매 1회 한정",
     "billing.mini.unavailable": "체험 상품을 구매할 수 없습니다. 다른 요금제를 선택해 주세요.",
     "billing.mini.pending": "대기 중인 체험 주문이 있습니다. 원래 결제 수단을 이용하거나 만료 후 다시 시도하세요.",
-    "billing.mini.refund": "중복 결제로 혜택이 추가되지 않았습니다. 환불은 고객지원에 문의하세요."
+    "billing.mini.refund": "중복 결제로 혜택이 추가되지 않았습니다. 환불은 고객지원에 문의하세요.",
+    "billing.usage.modelCheck": "모델 연결 확인",
+    "billing.usage.taskOnly": "작업 사용량 (연결 확인 제외)",
+    "billing.pages.size": "페이지당 항목"
   }
 }

@@ -3308,6 +3308,9 @@
     "billing.mini.once": "Jeden zakup próbny na konto",
     "billing.mini.unavailable": "Ta oferta próbna jest niedostępna. Wybierz inny plan.",
     "billing.mini.pending": "Masz oczekujące zamówienie próbne. Użyj pierwotnej metody płatności lub spróbuj po jego wygaśnięciu.",
-    "billing.mini.refund": "Podwójna płatność: nie przyznano dodatkowych korzyści. Skontaktuj się ze wsparciem w sprawie zwrotu."
+    "billing.mini.refund": "Podwójna płatność: nie przyznano dodatkowych korzyści. Skontaktuj się ze wsparciem w sprawie zwrotu.",
+    "billing.usage.modelCheck": "Sprawdzanie modeli",
+    "billing.usage.taskOnly": "Zużycie zadań (bez sprawdzania)",
+    "billing.pages.size": "Wiersze na stronę"
   }
 }
