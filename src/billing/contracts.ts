@@ -35,7 +35,7 @@ export interface BillingCatalog {
   member: boolean;
   checkoutReady: boolean;
   channels: Record<BillingChannel, boolean>;
-  trial?: {enabled:boolean;eligible:boolean};
+  trial?: {enabled:boolean;eligible:boolean;repeatAllowed?:boolean};
   backgroundPolicy?: {enabled:boolean;version:string;free:number;plans:Record<string,number>};
 }
 export interface CreditRecord {

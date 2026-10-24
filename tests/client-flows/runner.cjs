@@ -89,7 +89,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'billingRequest': {
       const req=clone(args[0]);(s.billingCalls??=[]).push(req);
       const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
-      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {...(s.backgroundPolicy?{backgroundPolicy:s.backgroundPolicy}:{}),version:'qa-v2',trial:{...(s.miniTrial??{enabled:false,eligible:false}),...(s.billingPaid||s.quoteError==='TRIAL_USED'?{eligible:false}:{})},products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
+      if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {...(s.backgroundPolicy?{backgroundPolicy:s.backgroundPolicy}:{}),version:'qa-v2',trial:{...(s.miniTrial??{enabled:false,eligible:false}),...((s.billingPaid&&!s.miniTrial?.repeatAllowed)||s.quoteError==='TRIAL_USED'?{eligible:false}:{})},products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
       if(req.action==='quote'){
         if(s.quoteDelay)await delay(s.quoteDelay);
         if(s.quoteError)return {error:typeof s.quoteError==='string'?s.quoteError:'network'};
@@ -380,6 +380,18 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('document.querySelector(".billing-order-state").textContent.includes("100")'),true);
     await f.click('.billing-top button');await f.wait('!!document.querySelector(".billing-selector-periods")');
     await f.wait('!document.querySelector("[data-period=trial]")');assert.equal(f.state.orders,1);
+  });
+  await run('发布关键：Mini：白名单付款后仍可重复购买且每次独立下单',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true,repeatAllowed:true}},async f=>{
+    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-period=trial]")');await f.click('[data-period=trial]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
+    const requestIds=[];
+    for(let i=0;i<2;i++){
+      await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');
+      requestIds.push(f.state.billingCalls.filter(x=>x.action==='create-order').at(-1).requestId);assert.equal(f.state.orders,i+1);
+      f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');
+      await f.click('.billing-top button');await f.wait('!!document.querySelector("[data-period=trial]") && !!document.querySelector("[data-sku=v2_plan_mini_day]")');
+      f.state.billingPaid=false;
+    }
+    assert.equal(new Set(requestIds).size,2);assert.equal(f.state.orders,2);
   });
   for(const trial of [{enabled:false,eligible:true},{enabled:true,eligible:false},null])await run('发布关键：Mini：关闭、已购和旧服务隐藏入口 '+JSON.stringify(trial),{account:clone(billingAccount),miniTrial:trial},async f=>{
     await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),3);
