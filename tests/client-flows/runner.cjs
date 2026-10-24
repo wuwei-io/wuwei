@@ -74,7 +74,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'respondPermission': s.permissionReplies.push(clone(args)); return true;
     case 'respondDecision': s.decisionReplies.push(clone(args)); return true;
     case 'checkConn': return { status: 'green', reason: 'Isolated stub' };
-    case 'getAnnouncement': return { active: false, version: '' };
+    case 'getAnnouncement': { if(s.announcementDelay)await delay(s.announcementDelay);return clone(s.announcement??{active:false,version:''}); }
     case 'getMessages': return { messages: [], unread: 0 };
     case 'rememberList': return { accounts: [], last: null };
     case 'wuweiPasswordLogin': if (s.loginError) return { error: s.loginError }; s.account = account(100); return { me: clone(s.account) };
@@ -634,6 +634,24 @@ app.whenReady().then(async () => {
     await delay(150);assert.deepEqual(f.state.decisionReplies,[['qa-local-tool',{action:'allow'}]]);
     assert.equal(await f.js('!!document.querySelector(".tool-decision-mask")'),false);
     assert.equal(f.state.sent.length,0);
+  });
+  for(const loginFirst of [false,true])await run('发布关键：公告覆盖登录、保留输入与关闭后恢复 '+(loginFirst?'login-first':'announcement-first'),{announcement:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/announcement-current.json'),'utf8')),announcementDelay:loginFirst?1200:0},async f=>{
+    if(!loginFirst)await f.wait('!!document.querySelector(".announce-dialog")');
+    f.state.account=null;emit(f.state,'evt:wuwei-auth-expired');
+    await f.wait('!!document.querySelector(".session-expired-notice")');
+    if(loginFirst){await f.fill('.wuwei-login-layer input:not([type=password])','layer-test@example.invalid');await f.fill('.wuwei-login-layer input[type=password]','isolated-fixture');}
+    await f.wait('!!document.querySelector(".announce-dialog")');
+    await f.wait('document.querySelector(".wuwei-login-layer")?.inert===true');
+    assert.equal(await f.js('(()=>{const input=document.querySelector(".wuwei-login-layer input[type=password]"),r=input.getBoundingClientRect(),top=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!top?.closest(".announce-dialog")})()'),true);
+    await f.js('document.querySelector(".announce-primary").focus()');
+    f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});f.state.win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});await delay(50);
+    assert.equal(await f.js('!!document.activeElement.closest(".announce-dialog")'),true);
+    await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,'announcement-above-login-'+(loginFirst?'login-first':'announcement-first')+'.png'),await captureBillingFrame(f));
+    await f.click(loginFirst?'.announce-primary':'.announce-close');await f.wait('!document.querySelector(".announce-dialog")');
+    await f.wait('document.querySelector(".wuwei-login-layer")?.inert===false && !!document.activeElement.closest(".wuwei-login-layer")');
+    assert.equal(await f.js('!!document.querySelector(".session-expired-notice")'),true);
+    if(loginFirst){assert.equal(await f.js('document.querySelector(".wuwei-login-layer input:not([type=password])").value'),'layer-test@example.invalid');assert.equal(await f.js('document.querySelector(".wuwei-login-layer input[type=password]").value'),'isolated-fixture');}
+    assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
   });
   await run('登录恢复：失效事件清理旧账号并只弹出一次登录框',{},async f=>{
     f.state.account=null;

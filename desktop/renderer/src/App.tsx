@@ -2884,6 +2884,7 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
 }
 
 function WuweiLoginModal({
+  covered = false,
   incentive,
   sessionExpired,
   lang,
@@ -2892,6 +2893,7 @@ function WuweiLoginModal({
   onSuccess,
   onLang,
 }: {
+  covered?: boolean;
   incentive?: boolean;
   sessionExpired?: boolean;
   lang: Lang;
@@ -2900,6 +2902,12 @@ function WuweiLoginModal({
   onClose: () => void;
   onSuccess: (me: WuweiMe, action?: "login" | "register" | "reset") => void;
 }) {
+  const loginLayer = useRef<HTMLDivElement>(null);
+  const wasCovered = useRef(covered);
+  useEffect(() => {
+    if (wasCovered.current && !covered) loginLayer.current?.querySelector<HTMLInputElement>('input:not([disabled])')?.focus();
+    wasCovered.current = covered;
+  }, [covered]);
   type Mode = "email-login" | "email-register" | "email-reset" | "phone";
   const zh = lang === "zh";
   const [mode, setMode] = useState<Mode>("email-login");
@@ -3077,8 +3085,8 @@ function WuweiLoginModal({
 
   return (
     <>
-      <div className="mq-overlay" onClick={onClose} />
-      <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+      <div className="mq-overlay" inert={covered} aria-hidden={covered || undefined} onClick={onClose} />
+      <div ref={loginLayer} className="wuwei-login-layer" inert={covered} aria-hidden={covered || undefined} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
         <div
           style={{
             width: 340,
@@ -10320,6 +10328,7 @@ export function App() {
       {/* 应用内登录框：邮箱/手机号/Google。未登录点发送(loginResume)或点账号登录时弹出 */}
       {showLoginForm && (
         <WuweiLoginModal
+          covered={!!announce || !!announcementPreview}
           sessionExpired={sessionExpiredNotice}
           incentive={false} /* 激励已由前置的 LoginIntroModal 展示，登录框保持干净，避免重复。loginResume 仍用于登录后续发消息 */
           lang={lang}
