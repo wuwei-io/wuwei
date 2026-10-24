@@ -24,7 +24,7 @@ export function BillingPanel(p:Props){
   const en=p.lang !== "zh",currency=p.lang === "zh" ? "CNY" : "USD";
   const [page,setPage]=useState<'plans'|'checkout'|'ledger'>(p.initialPage??'plans');
   const [period,setPeriod]=useState<BillingPeriod>(p.initialPeriod??"monthly");
-  const [catalog,setCatalog]=useState<BillingCatalog|null>(null),[selected,setSelected]=useState(p.initialPeriod==='trial'?MINI_SKU:p.initialPeriod==='pack'?'v2_pack_3000':`v2_plan_${(p.initialPeriod??'monthly')==='monthly'?'pro':'plus'}_${p.initialPeriod??'monthly'}`);
+  const [catalog,setCatalog]=useState<BillingCatalog|null>(null),[selected,setSelected]=useState(p.initialPeriod==='trial'?MINI_SKU:p.initialPeriod==='pack'?'v2_pack_3000':`v2_plan_plus_${p.initialPeriod??'monthly'}`);
   const [quote,setQuote]=useState<BillingQuote|null>(null),[catalogBusy,setCatalogBusy]=useState(false),[quoteBusy,setQuoteBusy]=useState(false),[orderBusy,setOrderBusy]=useState(false),[ledgerBusy,setLedgerBusy]=useState(false),[switchBusy,setSwitchBusy]=useState(false),[error,setError]=useState('');
   const [rules,setRules]=useState(false),[layout,setLayout]=useState<'split'|'cards'>('split');
   const [channel,setChannel]=useState<'alipay'|'paddle'|'crypto'>((getCurrentLanguage() === "zh" ? "alipay" : "paddle"));
@@ -94,7 +94,7 @@ export function BillingPanel(p:Props){
     }).catch(()=>{if(live)setError(tr("ui.billingpanel.unable.to.load.please.retry.959c506"));}).finally(()=>{if(live)setCatalogBusy(false);});
     return()=>{live=false;};
   },[p.accountId,retry]);
-  useEffect(()=>{const key=(period==='trial'?MINI_SKU:period==='pack'?'v2_pack_3000':`v2_plan_${period==='monthly'?'pro':'plus'}_${period}`);setSelected(key);setQuote(null);setOrder(null);},[period]);
+  useEffect(()=>{const key=(period==='trial'?MINI_SKU:period==='pack'?'v2_pack_3000':`v2_plan_plus_${period}`);setSelected(key);setQuote(null);setOrder(null);},[period]);
   useEffect(()=>{
     if(page!=='ledger')return;let live=true;setLedgerBusy(true);setError('');setLedger(null);
     const timer=setTimeout(()=>{
@@ -111,7 +111,7 @@ export function BillingPanel(p:Props){
   },[page,offset,filter,search,fromDate,toDate,retry,p.accountId]);
   const availableProducts=availableBillingProducts(catalog);
   const products=billingProductsForPeriod(availableProducts,period);
-  useEffect(()=>{if(page==='plans'&&catalog&&selected===MINI_SKU&&!availableProducts.some(x=>x.sku===MINI_SKU))setSelected(`v2_plan_${period==='monthly'?'pro':'plus'}_${period}`);},[page,catalog,selected,period]);
+  useEffect(()=>{if(page==='plans'&&catalog&&selected===MINI_SKU&&!availableProducts.some(x=>x.sku===MINI_SKU))setSelected(`v2_plan_plus_${period}`);},[page,catalog,selected,period]);
   const product=products.find(x=>x.sku===selected)??products.find(x=>x.recommended)??products[0];
   const models=showcaseModels(p.models);
   const free=p.models.find(m=>m.free&&m.modelId==='openrouter-auto-free')??p.models.find(m=>m.free);
@@ -125,7 +125,7 @@ export function BillingPanel(p:Props){
       if(!('catalogVersion' in r)||r.sku!==chosen.sku||r.currency!==currency)throw Error('invalid_quote');
       attemptedOrder.current='';openWebAfterPrepare.current=false;setChannel(r.currency==='CNY'?'alipay':catalog?.channels.paddle?'paddle':'crypto');setPaymentSelected(r.currency==='CNY');setSelected(chosen.sku);setQuote(r);setOrder(null);setPage('checkout');
       if(r.currency==='CNY')billingTrack('billing_payment_method_select',{channel:'alipay',selection:'automatic',sku:r.sku,currency:r.currency,lang:p.lang});
-    }catch(e){if(generation.current===current){setError(tr(miniFailureKey(e,"ui.billingpanel.quote.unavailable.please.retry.49ba615")));if(e instanceof Error&&/TRIAL_(USED|DISABLED)/.test(e.message)){setSelected("v2_plan_pro_monthly");setPeriod("monthly");setRetry(x=>x+1);}}}
+    }catch(e){if(generation.current===current){setError(tr(miniFailureKey(e,"ui.billingpanel.quote.unavailable.please.retry.49ba615")));if(e instanceof Error&&/TRIAL_(USED|DISABLED)/.test(e.message)){setSelected("v2_plan_plus_monthly");setPeriod("monthly");setRetry(x=>x+1);}}}
     finally{if(generation.current===current)setQuoteBusy(false);}
   };
   const createOrder=async()=>{
