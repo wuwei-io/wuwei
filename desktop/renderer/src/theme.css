@@ -7291,7 +7291,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .announce-eyebrow { margin-bottom:8px; color:var(--accent); font-size:10.5px; font-weight:750; letter-spacing:.14em; }
 .announce-heading-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px 10px; }
 .announce-heading-row h2 { margin:0; color:var(--text); font-size:22px; line-height:1.28; font-weight:720; letter-spacing:-.025em; }
-.announce-version { display:inline-flex; align-items:center; min-height:24px; padding:2px 9px; color:var(--spark); background:var(--spark-soft); border:1px solid color-mix(in srgb,var(--spark) 28%,transparent); border-radius:999px; font:650 11.5px/1 var(--mono); }
 .announce-header>p { margin:9px 0 0; color:var(--text-dim); font-size:13px; line-height:1.6; }
 .announce-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:2px 32px 24px; scrollbar-gutter:stable; }
 .announce-cards { display:grid; gap:10px; }
@@ -7313,7 +7312,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .announce-primary { min-width:92px; color:#fff; background:var(--spark); border:1px solid var(--spark); box-shadow:0 6px 16px -9px color-mix(in srgb,var(--spark) 75%,transparent); }
 .announce-primary:hover { filter:brightness(1.08); }
 .announce-eyebrow { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
-.announce-version { color:var(--accent); background:var(--accent-soft); border-color:transparent; letter-spacing:0; }
 .announce-footer { padding:20px 32px 28px; flex-shrink:0; background:transparent; }
 .announce-primary { background:#a94f32; border-color:#a94f32; }
 .announce-dialog { box-shadow:0 28px 90px -30px rgba(0,0,0,.35),0 8px 28px -12px rgba(0,0,0,.16); }
@@ -7331,7 +7329,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .announce-markdown pre { white-space:pre-wrap; }
 .announce-markdown table { display:block; overflow:auto; border-collapse:collapse; }
 .announce-markdown td,.announce-markdown th { padding:5px; border:1px solid var(--border); }
-.announce-notice { padding:6px 0 0; }
 .announce-details { margin-top:12px; }
 .announce-details summary { cursor:pointer; font-size:12px; }
 .announce-dialog :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }

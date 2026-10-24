@@ -77,7 +77,7 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
         </button>
 
         <header className="announce-header">
-          <div className="announce-eyebrow">{tr("ui.announcementmodal.what.new.3d27833")}{heading.version && <span className="announce-version">{heading.version}</span>}</div>
+          <div className="announce-eyebrow">{tr("ui.announcementmodal.what.new.3d27833")}</div>
           <div className="announce-heading-row"><h2 id={titleId}>{heading.title}</h2></div>
         </header>
 
@@ -98,7 +98,6 @@ export function AnnouncementModal({ version, title, body, lang, onClose, onAckno
                   </div>
                 </article>
               ))}
-              {content.notice && <div className="announce-notice"><AnnouncementMarkdown>{content.notice}</AnnouncementMarkdown></div>}
             </div>
           ) : (
             <div className="announce-prose">
