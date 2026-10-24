@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "Tác vụ",
     "background.tasks.queued": "Đang chờ",
     "background.tasks.autoStart": "Tự động bắt đầu khi có chỗ trống",
-    "background.tasks.keepRunning": "Tác vụ vẫn tiếp tục khi đóng bảng này"
+    "background.tasks.keepRunning": "Tác vụ vẫn tiếp tục khi đóng bảng này",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Trải nghiệm 24 giờ",
+    "billing.mini.validity": "Gói thành viên và {credits} xu hết hạn sau 24 giờ kể từ thanh toán. Không tự động gia hạn.",
+    "billing.mini.once": "Mỗi tài khoản chỉ được mua trải nghiệm một lần",
+    "billing.mini.unavailable": "Ưu đãi trải nghiệm không khả dụng. Vui lòng chọn gói khác.",
+    "billing.mini.pending": "Bạn có đơn trải nghiệm chờ thanh toán. Dùng phương thức ban đầu hoặc thử lại khi đơn hết hạn.",
+    "billing.mini.refund": "Thanh toán trùng: không cấp thêm quyền lợi. Vui lòng liên hệ hỗ trợ để hoàn tiền."
   }
 }

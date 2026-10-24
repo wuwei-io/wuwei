@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "Задачи",
     "background.tasks.queued": "В очереди",
     "background.tasks.autoStart": "Начнётся автоматически, когда освободится место",
-    "background.tasks.keepRunning": "После закрытия панели задачи продолжат выполняться"
+    "background.tasks.keepRunning": "После закрытия панели задачи продолжат выполняться",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Пробный доступ на 24 часа",
+    "billing.mini.validity": "Подписка и {credits} монет действуют 24 часа после оплаты. Без автоматического продления.",
+    "billing.mini.once": "Одна пробная покупка на аккаунт",
+    "billing.mini.unavailable": "Пробное предложение недоступно. Выберите другой тариф.",
+    "billing.mini.pending": "Есть неоплаченный пробный заказ. Используйте исходный способ оплаты или повторите после истечения срока.",
+    "billing.mini.refund": "Повторная оплата: дополнительные права не выданы. Обратитесь в поддержку для возврата."
   }
 }

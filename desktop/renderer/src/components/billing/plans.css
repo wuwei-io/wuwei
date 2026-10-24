@@ -9,3 +9,5 @@
 
 @media(min-width:1100px) and (max-height:850px){.billing-plan-view .billing-top{--billing-header-height:44px}.billing-plan-view .billing-close{top:6px}.billing-plans{padding-top:12px;padding-bottom:10px}.billing-plan-card{padding-top:14px;padding-bottom:14px}.billing-plan-features{gap:6px}.billing-plans-periods{margin-bottom:16px}}
 @media(min-width:1100px) and (max-height:780px){.billing-plans{padding-top:10px;padding-bottom:8px}.billing-plans-heading h1{font-size:24px;line-height:1.2}.billing-plans-heading p{font-size:11px;line-height:16px;margin-top:3px}.billing-plans-periods{margin:8px auto 14px}.billing-plan-card{padding:12px 18px}.billing-plan-card .billing-plan-audience{margin-bottom:7px}.billing-plan-card .billing-plan-term{margin:3px 0 9px}.billing-plan-allowance{padding:8px 12px;margin-top:10px}.billing-plan-allowance b{font-size:22px}.billing-plan-models{margin-top:10px}.billing-plan-features{margin-top:10px;padding-top:10px;gap:5px}.billing-plans-free{margin-top:10px;padding:8px 14px}.billing-plans-foot{margin-top:8px}}
+
+.billing-plans.is-trial .billing-plan-grid{grid-template-columns:minmax(0,360px);justify-content:center}

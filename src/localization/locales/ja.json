@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "タスク",
     "background.tasks.queued": "順番待ち",
     "background.tasks.autoStart": "空きができると自動的に開始します",
-    "background.tasks.keepRunning": "パネルを閉じてもタスクは続行されます"
+    "background.tasks.keepRunning": "パネルを閉じてもタスクは続行されます",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "24時間体験",
+    "billing.mini.validity": "会員特典と {credits} コインは支払いから24時間で失効します。自動更新はありません。",
+    "billing.mini.once": "初回購入は1アカウントにつき1回限り",
+    "billing.mini.unavailable": "この体験プランは利用できません。別のプランを選択してください。",
+    "billing.mini.pending": "未払いの体験注文があります。元の支払い方法を使うか、有効期限後に再試行してください。",
+    "billing.mini.refund": "重複払いのため特典は追加されていません。返金についてサポートにお問い合わせください。"
   }
 }

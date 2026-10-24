@@ -13,7 +13,8 @@ export function usageEstimates(credits: number, models: ModelChoice[]) {
   // Leave room for the per-call microcredit rounding used by the gateway.
   const roundedTaskCost = taskCost == null ? null : Math.ceil(taskCost * 1_000_000 - 1e-8) / 1_000_000;
   const rawTasks = roundedTaskCost ? Math.floor(validCredits / roundedTaskCost) : null;
-  const tasks = rawTasks == null ? null : rawTasks >= 100 ? Math.floor(rawTasks / 100) * 100 : rawTasks;
+  const step = rawTasks != null && rawTasks >= 1000 ? 100 : 10;
+  const tasks = rawTasks == null ? null : rawTasks >= 100 ? Math.floor(rawTasks / step) * step : rawTasks;
   return { credits: validCredits, chat, image, inputTokens, outputTokens, taskCost: roundedTaskCost,
     tasks, tokens: tasks == null ? null : tasks * (inputTokens + outputTokens),
     images: image ? Math.floor(validCredits / image.imageCoins!) : null };

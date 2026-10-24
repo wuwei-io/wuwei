@@ -14,7 +14,7 @@ export function BackgroundQueueNotice({tasks,sid,roomId,onUpgrade,onViewTasks}:{
   void window.wuwei.track?.('background_queue_notice_shown',{tier:task.tier??'unknown',limit:task.limit??0,source:roomId?'room':'session'});
  },[task,roomId]);
  if(!task || !Number.isSafeInteger(task.limit) || !task.limit || task.limit<1)return null;
- const plan=task.tier==='free'?tr('background.plan.free'):({pro:'Pro',plus:'Plus',max:'Max'} as Record<string,string>)[task.tier??''];
+ const plan=task.tier==='free'?tr('background.plan.free'):({mini:'Mini',pro:'Pro',plus:'Plus',max:'Max'} as Record<string,string>)[task.tier??''];
  const upgrade=canUpgradeBackgroundTier(task.tier);
  return <section className="background-queue-notice" role="status" aria-live="polite" data-tier={task.tier}>
   <span className="background-queue-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.5v5l3 1.8"/></svg></span>

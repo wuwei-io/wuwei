@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "Tareas",
     "background.tasks.queued": "En cola",
     "background.tasks.autoStart": "Comienza automáticamente cuando haya un puesto libre",
-    "background.tasks.keepRunning": "Las tareas continúan al cerrar este panel"
+    "background.tasks.keepRunning": "Las tareas continúan al cerrar este panel",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Prueba de 24 horas",
+    "billing.mini.validity": "La membresía y las {credits} monedas caducan 24 horas después del pago. Sin renovación automática.",
+    "billing.mini.once": "Una compra de prueba por cuenta",
+    "billing.mini.unavailable": "Esta oferta de prueba no está disponible. Elige otro plan.",
+    "billing.mini.pending": "Tienes un pedido de prueba pendiente. Usa su método de pago original o reinténtalo cuando caduque.",
+    "billing.mini.refund": "Pago duplicado: no se añadieron beneficios. Contacta con soporte para el reembolso."
   }
 }

@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "Attività",
     "background.tasks.queued": "In coda",
     "background.tasks.autoStart": "Si avvia automaticamente quando si libera un posto",
-    "background.tasks.keepRunning": "Le attività continuano dopo la chiusura del pannello"
+    "background.tasks.keepRunning": "Le attività continuano dopo la chiusura del pannello",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Prova di 24 ore",
+    "billing.mini.validity": "Abbonamento e {credits} monete scadono 24 ore dopo il pagamento. Nessun rinnovo automatico.",
+    "billing.mini.once": "Un acquisto di prova per account",
+    "billing.mini.unavailable": "Questa offerta di prova non è disponibile. Scegli un altro piano.",
+    "billing.mini.pending": "Hai un ordine di prova in sospeso. Usa il metodo di pagamento originale o riprova dopo la scadenza.",
+    "billing.mini.refund": "Pagamento duplicato: nessun vantaggio aggiuntivo. Contatta il supporto per il rimborso."
   }
 }

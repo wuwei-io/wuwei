@@ -12,6 +12,7 @@ import {formatCredits,formatLedgerTime,ledgerDescription,pageNumbers,showcaseMod
 import {BillingDatePicker} from './BillingDatePicker.js';
 import {billingRequest} from './request.js';
 import {billingTrack} from './telemetry.js';
+import {MINI_SKU,availableBillingProducts,miniFailureKey} from '../../../../../src/billing/mini.js';
 import './catalog.css';
 
 type Props={lang:string;accountId:string;balance:number;models:ModelChoice[];initialPage?:'plans'|'ledger';initialPeriod?:BillingPeriod;insufficient?:boolean;imageMode?:boolean;onClose:()=>void;onNeedLogin:()=>void;onPaid?:()=>void;onSwitch:(choice:ModelChoice)=>Promise<void>};
@@ -23,7 +24,7 @@ export function BillingPanel(p:Props){
   const en=p.lang !== "zh",currency=p.lang === "zh" ? "CNY" : "USD";
   const [page,setPage]=useState<'plans'|'checkout'|'ledger'>(p.initialPage??'plans');
   const [period,setPeriod]=useState<BillingPeriod>(p.initialPeriod??"annual");
-  const [catalog,setCatalog]=useState<BillingCatalog|null>(null),[selected,setSelected]=useState(p.initialPeriod==='pack'?'v2_pack_3000':`v2_plan_plus_${p.initialPeriod??'annual'}`);
+  const [catalog,setCatalog]=useState<BillingCatalog|null>(null),[selected,setSelected]=useState(p.initialPeriod==='trial'?MINI_SKU:p.initialPeriod==='pack'?'v2_pack_3000':`v2_plan_plus_${p.initialPeriod??'annual'}`);
   const [quote,setQuote]=useState<BillingQuote|null>(null),[catalogBusy,setCatalogBusy]=useState(false),[quoteBusy,setQuoteBusy]=useState(false),[orderBusy,setOrderBusy]=useState(false),[ledgerBusy,setLedgerBusy]=useState(false),[switchBusy,setSwitchBusy]=useState(false),[error,setError]=useState('');
   const [rules,setRules]=useState(false),[layout,setLayout]=useState<'split'|'cards'>('split');
   const [channel,setChannel]=useState<'alipay'|'paddle'|'crypto'>((getCurrentLanguage() === "zh" ? "alipay" : "paddle"));
@@ -93,7 +94,7 @@ export function BillingPanel(p:Props){
     }).catch(()=>{if(live)setError(tr("ui.billingpanel.unable.to.load.please.retry.959c506"));}).finally(()=>{if(live)setCatalogBusy(false);});
     return()=>{live=false;};
   },[p.accountId,retry]);
-  useEffect(()=>{const key=(period==='pack'?'v2_pack_3000':`v2_plan_plus_${period}`);setSelected(key);setQuote(null);setOrder(null);},[period]);
+  useEffect(()=>{const key=(period==='trial'?MINI_SKU:period==='pack'?'v2_pack_3000':`v2_plan_plus_${period}`);setSelected(key);setQuote(null);setOrder(null);},[period]);
   useEffect(()=>{
     if(page!=='ledger')return;let live=true;setLedgerBusy(true);setError('');setLedger(null);
     const timer=setTimeout(()=>{
@@ -108,7 +109,9 @@ export function BillingPanel(p:Props){
     },250);
     return()=>{live=false;clearTimeout(timer);};
   },[page,offset,filter,search,fromDate,toDate,retry,p.accountId]);
-  const products=catalog?.products.filter(x=>x.period===period)??[];
+  const availableProducts=availableBillingProducts(catalog);
+  const products=availableProducts.filter(x=>x.period===period);
+  useEffect(()=>{if(page==='plans'&&catalog&&period==='trial'&&!availableBillingProducts(catalog).some(x=>x.sku===MINI_SKU))setPeriod('annual');},[page,catalog,period]);
   const product=products.find(x=>x.sku===selected)??products.find(x=>x.recommended)??products[0];
   const models=showcaseModels(p.models);
   const free=p.models.find(m=>m.free&&m.modelId==='openrouter-auto-free')??p.models.find(m=>m.free);
@@ -122,7 +125,7 @@ export function BillingPanel(p:Props){
       if(!('catalogVersion' in r)||r.sku!==chosen.sku||r.currency!==currency)throw Error('invalid_quote');
       attemptedOrder.current='';openWebAfterPrepare.current=false;setChannel(r.currency==='CNY'?'alipay':catalog?.channels.paddle?'paddle':'crypto');setPaymentSelected(r.currency==='CNY');setSelected(chosen.sku);setQuote(r);setOrder(null);setPage('checkout');
       if(r.currency==='CNY')billingTrack('billing_payment_method_select',{channel:'alipay',selection:'automatic',sku:r.sku,currency:r.currency,lang:p.lang});
-    }catch{if(generation.current===current)setError(tr("ui.billingpanel.quote.unavailable.please.retry.49ba615"));}
+    }catch(e){if(generation.current===current){setError(tr(miniFailureKey(e,"ui.billingpanel.quote.unavailable.please.retry.49ba615")));if(e instanceof Error&&/TRIAL_(USED|DISABLED)/.test(e.message)){setPeriod("annual");setRetry(x=>x+1);}}}
     finally{if(generation.current===current)setQuoteBusy(false);}
   };
   const createOrder=async()=>{
@@ -141,7 +144,7 @@ export function BillingPanel(p:Props){
       if('error' in r){if(r.error==='not_logged_in')p.onNeedLogin();if(r.error==='QUOTE_CHANGED'){setQuote(null);setPage('plans');setCatalog(null);setRetry(x=>x+1);throw Error('quote_changed');}throw Error(r.error);}
       if(!('id' in r)||r.sku!==quote.sku||r.currency!==quote.currency||r.amountMinor!==quote.amountMinor||r.channel!==channel)throw Error('invalid_order');
       orderCache.current.set(key,r);setOrder(r);billingTrack('billing_order_created',{channel:r.channel,sku:r.sku,order_id:r.id,currency:r.currency,lang:p.lang,...(channel==='crypto'?{chain}:{})});if(channel==='paddle')openWeb(r);
-    }catch{if(generation.current===current)setError(tr("ui.billingpanel.unable.to.create.an.order.please.19dc49a"));}
+    }catch(e){if(generation.current===current)setError(tr(miniFailureKey(e,"ui.billingpanel.unable.to.create.an.order.please.19dc49a")));}
     finally{orderInFlight.current.delete(key);if(generation.current===current)setOrderBusy(false);}
   };
   useEffect(()=>{
@@ -165,8 +168,8 @@ export function BillingPanel(p:Props){
   return <div className="billing-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)p.onClose();}}><section ref={panel} onKeyDown={e=>e.stopPropagation()} className={'billing-panel '+(page==='plans'?'billing-plan-view '+(layout==='split'?'billing-selector-view':'') :page==='checkout'?'billing-payment-view':'')} role="dialog" aria-modal="true" aria-labelledby="billing-title">
     <div className="billing-top"><b id="billing-title">{page==='ledger'?tr("ui.app.credit.details.a3a619a"):tr("ui.billingpanel.wuwei.plans.and.payment.4ce473d")}</b><div>{page!=='plans'&&<button onClick={()=>{setPage('plans');setError('');}}>{tr("ui.billingpanel.back.to.plans.f6afada")}</button>}{page==='plans'&&<button onClick={()=>setLayout(layout==='split'?'cards':'split')}>{tr(layout==='split'?'ui.billingpanel.compare.plans.9ce46b0':'ui.billingpanel.compact.layout.5bfae9b')}</button>}<button onClick={()=>{setPage('ledger');setOffset(0);setError('');}}>{tr("ui.app.credit.details.a3a619a")}</button><button className="billing-close" aria-label={tr("msg.close")} onClick={p.onClose}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
     {error&&<div className="billing-error" role="alert">{localizeStoredText(error, getCurrentLanguage())} <button onClick={()=>setRetry(x=>x+1)}>{tr("ui.billingpanel.retry.2cd6945")}</button></div>}
-    {page==='plans'&&(layout==='cards'?<BillingPlans lang={p.lang} period={period} currency={currency} products={products} catalogProducts={catalog?.products??[]} backgroundPolicy={catalog?.backgroundPolicy} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onRules={()=>setRules(true)}/>:<BillingSelector lang={p.lang} period={period} currency={currency} products={products} catalogProducts={catalog?.products??[]} backgroundPolicy={catalog?.backgroundPolicy} member={catalog?.member??false} models={p.models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{billingTrack('billing_plan_select',{sku,period,lang:p.lang});setSelected(sku);setQuote(null);}}/>)}
-    {page==='checkout'&&quote&&<BillingPayment lang={p.lang} quote={quote} order={order} channel={channel} chain={chain} busy={orderBusy} selected={paymentSelected} channels={catalog?.channels??{alipay:false,paddle:false,crypto:false}} ready={!!catalog?.checkoutReady&&!!catalog.channels[channel]}
+    {page==='plans'&&(layout==='cards'?<BillingPlans lang={p.lang} period={period} currency={currency} products={products} catalogProducts={availableProducts} backgroundPolicy={catalog?.backgroundPolicy} member={catalog?.member??false} models={models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onRules={()=>setRules(true)}/>:<BillingSelector lang={p.lang} period={period} currency={currency} products={products} catalogProducts={availableProducts} backgroundPolicy={catalog?.backgroundPolicy} member={catalog?.member??false} models={p.models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,lang:p.lang});setPeriod(next);}} onChoose={chosen=>void requestQuote(chosen)} onFree={free?()=>setFallback(free):undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{billingTrack('billing_plan_select',{sku,period,lang:p.lang});setSelected(sku);setQuote(null);}}/>)}
+    {page==='checkout'&&quote&&<BillingPayment lang={p.lang} quote={quote} order={order} channel={channel} chain={chain} busy={orderBusy} selected={paymentSelected} channels={{...(catalog?.channels??{alipay:false,paddle:false,crypto:false}),...(quote.period==='trial'?{crypto:false}:{})}} ready={!!catalog?.checkoutReady&&!!catalog.channels[channel]}
       onMethod={next=>{billingTrack('billing_payment_method_select',{channel:next,selection:'manual',sku:quote.sku,currency:quote.currency,lang:p.lang});openWebAfterPrepare.current=next==='paddle';setPaymentSelected(true);if(channel!==next){setOrder(null);setChannel(next);}else if(order&&next==='paddle')openWeb(order);}}
       onChain={next=>{billingTrack('billing_crypto_network_select',{channel:'crypto',chain:next,sku:quote.sku,lang:p.lang});setOrder(null);setChain(next);}} onRetry={()=>void createOrder()} onNeedLogin={p.onNeedLogin}
       onPaid={confirmed=>{const key=[quote.catalogVersion,quote.sku,quote.currency,quote.amountMinor,quote.creditsPerGrant,quote.startsAt??'',channel,channel==='crypto'?chain:''].join(':');setOrder(confirmed);requestIds.current.delete(key);orderCache.current.delete(key);attemptedOrder.current='';setRetry(x=>x+1);p.onPaid?.();}}/>}

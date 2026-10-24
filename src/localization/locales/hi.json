@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "कार्य",
     "background.tasks.queued": "कतार में",
     "background.tasks.autoStart": "जगह खाली होने पर अपने आप शुरू होगा",
-    "background.tasks.keepRunning": "यह पैनल बंद करने पर भी कार्य चलते रहेंगे"
+    "background.tasks.keepRunning": "यह पैनल बंद करने पर भी कार्य चलते रहेंगे",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "24 घंटे का अनुभव",
+    "billing.mini.validity": "सदस्यता और {credits} सिक्के भुगतान के 24 घंटे बाद समाप्त होते हैं। स्वतः नवीनीकरण नहीं।",
+    "billing.mini.once": "प्रति खाते केवल एक प्रारंभिक खरीद",
+    "billing.mini.unavailable": "यह अनुभव प्रस्ताव उपलब्ध नहीं है। कोई अन्य योजना चुनें।",
+    "billing.mini.pending": "आपका एक अनुभव ऑर्डर लंबित है। मूल भुगतान विधि उपयोग करें या अवधि समाप्त होने पर पुनः प्रयास करें।",
+    "billing.mini.refund": "दोहरा भुगतान: अतिरिक्त लाभ नहीं दिए गए। धनवापसी के लिए सहायता से संपर्क करें।"
   }
 }

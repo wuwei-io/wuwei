@@ -3300,6 +3300,13 @@
     "background.tasks.heading": "Zadania",
     "background.tasks.queued": "W kolejce",
     "background.tasks.autoStart": "Rozpocznie się automatycznie po zwolnieniu miejsca",
-    "background.tasks.keepRunning": "Zadania działają dalej po zamknięciu panelu"
+    "background.tasks.keepRunning": "Zadania działają dalej po zamknięciu panelu",
+    "billing.plans.period.trial": "Mini",
+    "billing.mini.duration": "Dostęp próbny na 24 godziny",
+    "billing.mini.validity": "Członkostwo i {credits} monet wygasają 24 godziny po płatności. Bez automatycznego odnawiania.",
+    "billing.mini.once": "Jeden zakup próbny na konto",
+    "billing.mini.unavailable": "Ta oferta próbna jest niedostępna. Wybierz inny plan.",
+    "billing.mini.pending": "Masz oczekujące zamówienie próbne. Użyj pierwotnej metody płatności lub spróbuj po jego wygaśnięciu.",
+    "billing.mini.refund": "Podwójna płatność: nie przyznano dodatkowych korzyści. Skontaktuj się ze wsparciem w sprawie zwrotu."
   }
 }
