@@ -179,11 +179,14 @@ jobs:
             release/*.blockmap
             release/latest*.yml
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 1
 
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     concurrency:
       group: wuwei-production-downloads
       cancel-in-progress: false
@@ -217,3 +220,12 @@ jobs:
           path: compatibility-backup/
           if-no-files-found: ignore
           retention-days: 30
+      - name: Remove temporary build artifacts after verified publication
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name | startswith("signed-release-")) | .id')
+          for id in $ids; do
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          done
