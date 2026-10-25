@@ -1,0 +1,39 @@
+name: Migrate downloads to GitHub
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing public stable release to complete and migrate
+        required: true
+        default: v1.7.65
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: wuwei-production-downloads
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests pyyaml oss2 boto3
+      - run: python -m unittest discover -s tests -p 'test_github_release.py'
+      - name: Complete GitHub release, verify, then migrate old update feeds
+        run: python scripts/github-release.py backfill --tag "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: github-migration-previous-manifests
+          path: compatibility-backup/
+          if-no-files-found: ignore
+          retention-days: 30

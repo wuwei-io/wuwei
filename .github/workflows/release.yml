@@ -67,8 +67,7 @@ jobs:
       - name: Build renderer/main
         run: npm run desktop:build
 
-      # 用 electron-builder.wuwei.yml：含 generic OSS publish 配置 → 会生成 latest*.yml 更新清单
-      # （--publish never 只是不让 electron-builder 自己上传；清单仍写入 release/，由下方 OSS 步骤上传）
+      # Generate GitHub-compatible generic update manifests; publish only after all platforms finish.
       - name: Package Linux (AppImage/deb)
         if: matrix.os == 'ubuntu-latest'
         run: npx electron-builder --linux --config electron-builder.wuwei.yml --publish never
@@ -84,7 +83,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
 
       # Verify the actual downloaded payloads, not just the unpacked build folder.
-      # This runs before OSS manifests or public release assets can be uploaded.
+      # This runs before staging or publishing any release payload.
       - name: Verify macOS signatures and notarization tickets (both architectures)
         if: matrix.os == 'macos-latest'
         run: node scripts/macos-release.mjs verify
@@ -162,40 +161,54 @@ jobs:
           WUWEI_QA_BUILT_RENDERER: '1'
           WUWEI_QA_FILTER: '发布关键'
 
-      # 上传安装包 + latest*.yml 到阿里云 OSS（自动更新源 + 官网下载源）。
-      # 凭证走仓库 secrets；上传成功后再发布 GitHub Release。
-      - name: Upload to Aliyun OSS
-        run: |
-          node -e "const fs=require('fs'),cp=require('child_process'); for(const p of ['scripts/upload-oss.mjs','scripts/lib/oss-release-upload.mjs','tests/oss-release-upload.test.mjs']) { fs.mkdirSync(require('path').dirname(p),{recursive:true}); fs.writeFileSync(p,cp.execFileSync('git',['show',process.env.RELEASE_WORKFLOW_SHA+':'+p])); }"
-          node --test tests/oss-release-upload.test.mjs
-          npm i ali-oss@6 --no-save --no-audit --no-fund --legacy-peer-deps --ignore-scripts
-          node scripts/upload-oss.mjs
-        env:
-          RELEASE_WORKFLOW_SHA: ${{ github.sha }}
-          OSS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
-          OSS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-
-      # Old releases point at R2. Only publish small compatibility manifests there.
-      # The installer, binaries and blockmaps are downloaded from OSS.
-      - uses: actions/setup-python@v5
+      # Stage all signed platform payloads. No installer upload to OSS/R2.
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: '3.12'
-      - name: Point old clients to OSS downloads
-        run: |
-          python -m pip install boto3 pyyaml
-          python scripts/upload-r2.py --oss-manifests-only
-        env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-
-      - name: Publish to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          files: |
+          name: signed-release-${{ matrix.os }}
+          path: |
             release/*.AppImage
             release/*.deb
             release/*.dmg
             release/*.exe
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: wuwei-production-downloads
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: signed-release-*
+          merge-multiple: true
+          path: release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests pyyaml oss2 boto3
+      - run: python -m unittest discover -s tests -p 'test_github_release.py'
+      - name: Publish complete GitHub release, then update legacy manifests
+        run: python scripts/github-release.py publish --tag "$RELEASE_TAG"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: previous-update-manifests
+          path: compatibility-backup/
+          if-no-files-found: ignore
+          retention-days: 30
