@@ -33,6 +33,11 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
+      - name: Verify release tag matches package version
+        run: node -e "if ('v' + require('./package.json').version !== process.env.RELEASE_TAG) throw new Error('Release tag must match package version')"
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
