@@ -5,6 +5,7 @@ import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {BillingError,PlatformBillingClient,type Sku} from './platform-billing-client.js';
 import type {ToolContext,ToolResult,Decision} from '../types.js';
+import {recordMediaTransfer} from '../media/activity-telemetry.js';
 import {beginImageTransfer} from './image-transfer-progress.js';
 import {imageModelLabel} from './image-catalog.js';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -52,7 +53,8 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
     if(detail.status!=='settled') return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tr("ui.platform.image.session.no.image.has.been.delivered.do.001b454")}),isError:true};
     ctx.signal?.throwIfAborted();
     const transfer=beginImageTransfer(token,ctx.sessionId,ctx.toolCallId,orderId);let bytes:Uint8Array;
-    try{bytes=await client.image(orderId,transfer.update,ctx.signal)}finally{transfer.finish()}
+    const downloadStarted=Date.now();
+    try{bytes=await client.image(orderId,transfer.update,ctx.signal);recordMediaTransfer(token,{kind:"image",order_id:orderId,duration_ms:Date.now()-downloadStarted,bytes:bytes.length,status:"success"})}catch(error){recordMediaTransfer(token,{kind:"image",order_id:orderId,duration_ms:Date.now()-downloadStarted,bytes:null,status:"failed",error_code:error instanceof BillingError?error.code:"IMAGE_DOWNLOAD_FAILED"});throw error}finally{transfer.finish()}
     await mkdir(root,{recursive:true});
     const path=join(root,`image-${orderId}-${randomUUID()}.png`);await writeFile(path,bytes,{flag:'wx'});
     return {content:JSON.stringify({...metadata,order_id:orderId,path,charged_coins:detail.charged_coins,displayed:true,...(Number.isFinite(Date.parse(detail.created_at||''))?{created_at_ms:Date.parse(detail.created_at!)}:startedAt?{created_at_ms:startedAt}:{}),...(typeof detail.duration_ms==='number'&&Number.isFinite(detail.duration_ms)&&detail.duration_ms>=0?{elapsed_ms:detail.duration_ms}:startedAt?{elapsed_ms:Date.now()-startedAt}:{})}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};

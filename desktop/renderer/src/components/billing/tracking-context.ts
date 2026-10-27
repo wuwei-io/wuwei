@@ -1,0 +1,10 @@
+type Notice={notice_id:string;source_notice_id:string;journey_id:string;notice_type:'free_daily'|'balance';expected_user_id?:string;shown_at:number;upgrade_selected?:boolean};
+let owner:string|undefined,notice:Notice|undefined,session:{billing_session_id:string;expected_user_id:string;source_notice_id?:string;journey_id?:string}|undefined;
+export function setTrackingOwner(next:string|undefined){if(owner!==next){owner=next;notice=undefined;session=undefined;}}
+export function beginNotice(kind:Notice['notice_type'],extra:Record<string,unknown>={}){const id=crypto.randomUUID();notice={notice_id:id,source_notice_id:id,journey_id:id,notice_type:kind,expected_user_id:owner,shown_at:Date.now()};emit('usage_notice_shown',{...notice,...extra});return {...notice};}
+export function noticeContext(){return notice?{...notice}:undefined;}
+export function noticeAction(action:string,extra:Record<string,unknown>={},context=notice){if(context){emit('usage_notice_action',{...context,action,...extra});if(notice?.notice_id===context.notice_id){if(action==='upgrade')notice.upgrade_selected=true;else if(action==='close'||action==='switch_success')notice=undefined;}}}
+export function beginBillingSession(id:string,account:string){if(session?.billing_session_id===id&&session.expected_user_id===account)return {...session};const valid=notice&&notice.expected_user_id===account&&notice.upgrade_selected&&Date.now()-notice.shown_at<86400000?notice:undefined;session={billing_session_id:id,expected_user_id:account,...(valid?{source_notice_id:valid.notice_id,journey_id:valid.journey_id}:{})};if(valid)notice=undefined;return {...session};}
+export function currentBillingContext(){return session?{...session}:{};}
+export function endBillingSession(id:string){if(session?.billing_session_id===id)session=undefined;}
+export function emit(event:string,props:Record<string,unknown>={}){try{void window.wuwei.track?.(event,{tracking_version:'tracking-v1',...props})?.catch(()=>{});}catch{/* Telemetry must never block the operation. */}}

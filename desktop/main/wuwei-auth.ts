@@ -1,3 +1,9 @@
+import * as trackingFs from 'node:fs';
+import {join as trackingJoin,dirname as trackingDir} from 'node:path';
+import {homedir as trackingHome} from 'node:os';
+import {randomUUID as trackingUuid} from 'node:crypto';
+import {ProductQueue,cleanProductProps,type QueuedProduct} from '../../src/analytics/product-queue.js';
+import {loadWuweiSession} from './wuwei-session.js';
 import { tr, getCurrentLanguage } from "../../src/localization/index.js";
 // 无为账号登录（本地回环中转）：
 //   1) 起临时本地 http server(127.0.0.1:随机端口)
@@ -265,32 +271,48 @@ export async function reportClientEvent(event: "heartbeat" | "install", version?
  *  隐私：只发匿名 anon_id(设备指纹)+版本+平台+事件名+props/detail；登录态带 Bearer 让服务端落 user_id(不落邮箱/姓名)。
  *  纯 fire-and-forget：失败静默，绝不拖累主流程。event/props/detail 由业务侧传入。 */
 export async function trackProductEvent(
-  event: string,
-  opts: { props?: Record<string, unknown>; detail?: string; sessionId?: string | null; version?: string; accessToken?: string | null } = {},
-): Promise<void> {
-  try {
-    if (!event) return;
-    const platform = process.platform === "win32" ? "win" : process.platform === "darwin" ? "mac" : process.platform === "linux" ? "linux" : String(process.platform);
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.accessToken) headers.Authorization = `Bearer ${opts.accessToken}`;
-    await fetch(`${SITE}/api/product-event`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        event,
-        surface: "desktop",
-        anon_id: getDeviceId(),
-        session_id: opts.sessionId || null,
-        props: opts.props || {},
-        detail: opts.detail || null,
-        platform,
-        app_version: opts.version || "",
-      }),
-    });
-  } catch {
-    /* 埋点失败静默：不拖累主流程 */
-  }
+  event:string,
+  opts:{props?:Record<string,unknown>;detail?:string;sessionId?:string|null;version?:string;accessToken?:string|null}={},
+):Promise<void>{
+ try{
+  if(!event)return;const owner=productOwner(opts.accessToken),expected=opts.props?.expected_user_id;if(opts.accessToken&&!owner)return;
+  if(typeof expected==='string'&&expected!==owner)return;
+  const id=typeof opts.props?.event_id==='string'?opts.props.event_id:trackingUuid();
+  const props={...cleanProductProps(opts.props??{}),...productIdentityStamp(owner,event,opts.props?.previous_identity),event_id:id,occurred_at:typeof opts.props?.occurred_at==='string'?opts.props.occurred_at:new Date().toISOString()};
+  productQueue().enqueue({id,owner,body:{event:event.slice(0,80),surface:'desktop',anon_id:getDeviceId(),session_id:opts.sessionId??null,platform:process.platform==='win32'?'win':process.platform==='darwin'?'mac':process.platform,app_version:opts.version??'',props,detail:opts.detail?.slice(0,4000)??null}});
+  void productQueue().flush();
+ }catch{/* Analytics must never break a client action. */}
 }
+const productQueueFile=trackingJoin(trackingHome(),process.env.WUWEI_DATA_DIR_NAME||'.wuwei','analytics-events.json');
+let pendingProductRows:QueuedProduct[]|undefined,productSaveTimer:ReturnType<typeof setTimeout>|undefined,productRetryTimer:ReturnType<typeof setInterval>|undefined,queuedProduct:ProductQueue|undefined;
+function productOwner(token:string|null|undefined):string|null{try{const s=JSON.parse(Buffer.from((token??'').split('.')[1],'base64url').toString()).sub;return typeof s==='string'?s:null;}catch{return null}}
+let productIdentity:{owner:string|null;epoch:string}|undefined;let productIdentitySaved=false;
+function productIdentityStamp(owner:string|null,event:string,previous:unknown):Record<string,unknown>{
+ const file=productQueueFile+'.identity';
+ if(!productIdentity){try{const saved=JSON.parse(trackingFs.readFileSync(file,'utf8'));if(typeof saved.epoch==='string'&&(saved.owner===null||typeof saved.owner==='string')){productIdentity=saved;productIdentitySaved=true;}}catch{}productIdentity??={owner:productOwner(loadWuweiSession()?.accessToken),epoch:trackingUuid()};}
+ const old=productIdentity,active=productOwner(loadWuweiSession()?.accessToken);
+ let previousEpoch:string|undefined;
+ if(event==='identity_link'&&previous==='anonymous'&&old.owner===null&&owner){previousEpoch=old.epoch;productIdentity={owner,epoch:trackingUuid()};}
+ else if(owner===active&&owner!==old.owner)productIdentity={owner,epoch:trackingUuid()};
+ if(!productIdentitySaved||productIdentity!==old)try{trackingFs.mkdirSync(trackingDir(file),{recursive:true});trackingFs.writeFileSync(file,JSON.stringify(productIdentity),{mode:0o600});productIdentitySaved=true;}catch{}
+ return {identity_epoch:owner===productIdentity.owner?productIdentity.epoch:undefined,...(previousEpoch?{previous_epoch:previousEpoch}:{})};
+}
+function persistProductRows(){if(!pendingProductRows)return;try{trackingFs.mkdirSync(trackingDir(productQueueFile),{recursive:true});const tmp=productQueueFile+'.tmp';trackingFs.writeFileSync(tmp,JSON.stringify(pendingProductRows),{mode:0o600});trackingFs.renameSync(tmp,productQueueFile);}catch{/* Storage failure does not affect product actions. */}}
+function productQueue(){
+ if(queuedProduct)return queuedProduct;
+ queuedProduct=new ProductQueue({
+  load:()=>{try{return JSON.parse(trackingFs.readFileSync(productQueueFile,'utf8'))}catch{return []}},
+  save:items=>{pendingProductRows=items;if(!productSaveTimer){productSaveTimer=setTimeout(()=>{productSaveTimer=undefined;persistProductRows()},150);productSaveTimer.unref?.();}},
+  canSend:item=>!item.owner||productOwner(loadWuweiSession()?.accessToken)===item.owner,
+  send:async item=>{
+   const current=loadWuweiSession()?.accessToken;if(item.owner&&productOwner(current)!==item.owner)return false;
+   const r=await fetch(`${SITE}/api/product-event`,{method:'POST',headers:{'Content-Type':'application/json',...(item.owner&&current?{Authorization:`Bearer ${current}`}:{})},body:JSON.stringify(item.body),signal:AbortSignal.timeout(10000)});
+   if(!r.ok)return false;const result=await r.json() as {ok?:boolean};return result.ok===true;
+  },
+ });
+ productRetryTimer=setInterval(()=>void queuedProduct?.flush(),12000);productRetryTimer.unref?.();return queuedProduct;
+}
+app.once('will-quit',()=>{clearTimeout(productSaveTimer);clearInterval(productRetryTimer);persistProductRows()});
 
 // ——「发送诊断信息」用户开关（默认开，用户可在设置里关）。关掉后 trackClientLog 一律不发。
 let diagConsent = true;

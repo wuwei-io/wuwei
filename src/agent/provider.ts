@@ -1,3 +1,4 @@
+import {currentMessageAudit} from "../media/message-audit-context.js";
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
 import { devGatewayUrl } from '../dev-gateway.js';
@@ -400,6 +401,7 @@ class OpenAIProvider implements Provider {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.cfg.apiKey}`,
         ...(clientRequestId ? {"X-Wuwei-Request-Id": clientRequestId} : {}),
+        ...(hostedRequest&&(handlers.messageAuditId??currentMessageAudit())?{"X-Wuwei-Message-Id":handlers.messageAuditId??currentMessageAudit()!}:{}),
         ...(handlers.requestPurpose === "model_check" && isWuweiHostedGateway(base)
           ? {"X-Wuwei-Request-Purpose": "model_check"} : {}),
       },

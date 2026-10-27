@@ -1,3 +1,4 @@
+import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
 import {PaidContextDialog} from './components/PaidContextDialog.js';
 import {BalanceShortageDialog} from './components/BalanceShortageDialog.js';
@@ -4206,6 +4207,7 @@ export function App() {
     trialEligible?: boolean; // 从未付费 → 缺币弹 ¥1 体验；否则弹「升级正式会员」
     providers?: { hidden?: string[] };
   } | null>(null);
+  setTrackingOwner(wuwei?.user.id);
   const visibleBackgroundTasks = accountBackgroundTasks(backgroundTasks,wuwei?.user.id);
   // Keep reserved/queued turns busy for injection and continuation guards, but
   // only admitted turns show generation controls and model activity.
@@ -4423,10 +4425,11 @@ export function App() {
     const choice = pickerChoicesRef.current.find(c => c.modelId === 'mimo-v2.6-flash' && c.category === 'economy' && !c.free);
     if (!choice) throw new Error('Model unavailable');
     const request = usageLimitRequestRef.current;
-    if (!await selectModelChoice(choice)) return;
+    if (!await selectModelChoice(choice)) return false;
     if (wuweiRef.current?.user.id !== account.user.id || usageLimitRequestRef.current !== request) return;
     usageLimitRequestRef.current = null;
     setFreeCapModal(null);
+    return true;
   }
   async function doWuweiLogout() {
     await window.wuwei.wuweiLogout();
@@ -6140,7 +6143,8 @@ export function App() {
     setUnavailModel(null); // 新发/重发即清「上游不可用」提示
     markFirstAction("send_input");
     // 每次发消息都埋点(behavior)：字数/是否带图/平台·模型，供分析活跃与使用深度
-    void window.wuwei.track?.("send_message", { len: (text || "").length, images: imgs.length, provider: curProviderId, model: meta.model });
+    const messageAuditId=crypto.randomUUID();
+    void window.wuwei.track?.("send_message", { message_id:messageAuditId,content_kind:imageMode?"image":"text",tracking_version:"tracking-v1",model_tier:quotaModelRef.current.free?"free":"paid",session_id:sid,len:(text||"").length,images:imgs.length,provider:curProviderId,model:meta.model,parameters:{effort} });
     // 发消息时顺带静默检测新版本（节流 2 分钟）——多一个触发点，发现新版即在药丸提示，不弹检查窗
     if (Date.now() - lastUpdCheck.current > 120000) { lastUpdCheck.current = Date.now(); void window.wuwei.checkUpdate?.().catch(() => {}); }
     if (text) {
@@ -6155,7 +6159,7 @@ export function App() {
     thinkStartRef.current = Date.now();
     charsRef.current = 0;
     turnTextRef.current = ""; // 新一轮:清掉上轮预览缓冲
-    window.wuwei.send(currentId, text, imgs.length ? imgs : undefined, false, imageApprovalId);
+    window.wuwei.send(currentId, text, imgs.length ? imgs : undefined, false, imageApprovalId, messageAuditId);
   }
 
   // —— 智能继续：自动接话 ——
@@ -6444,6 +6448,7 @@ export function App() {
   function dispatchMessage(text: string, imgs: string[], inject: boolean, imageApprovalId?: string) {
     if (inject && imageApprovalId) return;
     if (inject) {
+      void window.wuwei.track?.("send_message",{message_id:crypto.randomUUID(),content_kind:"text",tracking_version:"tracking-v1",model_tier:quotaModelRef.current.free?"free":"paid",session_id:currentId,len:text.length,images:imgs.length,provider:curProviderId,model:meta.model,parameters:{effort,injected:true}});
       push({ type: "user", text, images: imgs.length ? imgs : undefined, ts: Date.now() });
       if (text) {
         history.current.push(text);
@@ -9708,9 +9713,9 @@ export function App() {
             )}
           </div>}
 
-          {/* 只在主对话视图渲染主底栏；群/私聊(appView==="rooms")用 RoomView 自己的底栏，
-              否则两处 renderComposerFoot 同时挂载会让连通/额度等弹窗重复出现两个。 */}
-          {appView === null && renderComposerFoot()}
+          {/* 图片创作使用自己的操作区，不显示文字对话的状态栏。
+              群/私聊(appView==="rooms")仍用 RoomView 自己的底栏，避免重复挂载弹窗。 */}
+          {appView === null && !imageMode && renderComposerFoot()}
         </div>
 
         {showTasks && (runningSet.size > 0 || extraBackgroundTasks.length > 0) && (
@@ -10680,7 +10685,7 @@ export function App() {
         );
       })()}
       {wuwei && coinShortage && !coinShortage.browse && (
-        <BalanceShortageDialog onClose={() => closeShortage("close")} onUpgrade={upgradeFromShortage} />
+        <BalanceShortageDialog balance={coinShortage.balance} onClose={() => closeShortage("close")} onUpgrade={upgradeFromShortage} />
       )}
       {/* 旧版主动浏览入口仍保留兼容；余额不足先显示独立说明。 */}
       {coinShortage?.browse && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (

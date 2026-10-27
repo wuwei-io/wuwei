@@ -1,3 +1,4 @@
+import {currentMessageAudit} from '../src/media/message-audit-context.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ function harness(responses, redirect = url => url) {
   const calls = [], sleeps = [];
   const context = vm.createContext({
     Response, Headers, AbortController, DOMException, Error, Math, Number, String, process, exports: {},
-    CLIENT_OS: 'test', devGatewayUrl: redirect, isTerminalGatewayResponse, isTerminalGatewayError,
+    currentMessageAudit, CLIENT_OS: 'test', devGatewayUrl: redirect, isTerminalGatewayResponse, isTerminalGatewayError,
     fetch: async url => { calls.push(url); const response = responses.shift(); if (!response) throw Error('Unexpected resend'); return response; },
     sleep: async (ms, signal) => { if (signal?.aborted) throw new DOMException('Aborted', 'AbortError'); sleeps.push(ms); }, backoffMs: () => 1,
     tr: key => key, randomUUID: () => 'isolated-request', toOpenAIMessages: () => [],

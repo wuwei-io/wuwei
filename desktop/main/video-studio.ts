@@ -1,3 +1,4 @@
+import {recordMediaTransfer} from '../../src/media/activity-telemetry.js';
 import {downloadVideo} from './video-download.js';
 import {ipcMain,protocol,dialog} from 'electron';
 import {createHash,randomUUID} from 'node:crypto';
@@ -34,7 +35,8 @@ export function registerVideoStudio(options:{root:string;token:()=>string|undefi
    if(detail.status!=='completed'||!detail.byte_length)throw Error('VIDEO_NOT_READY');
    if(!await checkCache({byte_length:Number(detail.byte_length),sha256:detail.sha256??''})){
     await mkdir(folder,{recursive:true});
-    await downloadVideo({file,size:Number(detail.byte_length),sha256:detail.sha256??'',request:offset=>request('/orders/'+orderId+'/content','GET',undefined,offset),guard:()=>{if(scope().owner!==owner)throw Error('ACCOUNT_CHANGED')},onProgress:(received,total)=>progress.set(key,{received,total})});
+    const downloadStarted=Date.now(),downloadToken=scope().token;let received=0;
+    try{await downloadVideo({file,size:Number(detail.byte_length),sha256:detail.sha256??'',request:offset=>request('/orders/'+orderId+'/content','GET',undefined,offset),guard:()=>{if(scope().owner!==owner)throw Error('ACCOUNT_CHANGED')},onProgress:(bytes,total)=>{received=bytes;progress.set(key,{received:bytes,total})}});recordMediaTransfer(downloadToken,{kind:'video',order_id:orderId,duration_ms:Date.now()-downloadStarted,bytes:received,status:'success'})}catch(error){recordMediaTransfer(downloadToken,{kind:'video',order_id:orderId,duration_ms:Date.now()-downloadStarted,bytes:received,status:'failed',error_code:'VIDEO_DOWNLOAD_FAILED'});throw error}
    }
    const manifestTemp=file+'.'+randomUUID()+'.json.tmp';try{await writeFile(manifestTemp,JSON.stringify({byte_length:detail.byte_length,sha256:detail.sha256}),{flag:'wx'});await rename(manifestTemp,file+'.json')}catch{await unlink(manifestTemp).catch(()=>{})}
    if(scope().owner!==owner)throw Error('ACCOUNT_CHANGED');return `wuwei-video://media/${owner}/${orderId}`;

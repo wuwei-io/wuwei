@@ -1,10 +1,11 @@
 import {useEffect,useRef} from 'react';
 import {BillingVisit,type BillingVisitStage,type BillingSelection} from '../../../../../src/billing/visit.js';
 import {billingTrack} from './telemetry.js';
+import {currentBillingContext} from './tracking-context.js';
 
 export function useBillingVisit(session:string,page:BillingVisitStage,sku:string,period:string,context:string){
  const tracker=useRef<BillingVisit|null>(null);
- if(!tracker.current)tracker.current=new BillingVisit((event,props)=>billingTrack(event,{...props,billing_session_id:session,context}));
+ if(!tracker.current){const scope=currentBillingContext();tracker.current=new BillingVisit((event,props)=>billingTrack(event,{...scope,...props,billing_session_id:session,context}));}
  const stage=useRef(page);stage.current=page;
  useEffect(()=>{
   const visit=tracker.current!;
