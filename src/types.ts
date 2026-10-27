@@ -127,6 +127,7 @@ export interface Tool extends ToolSpec {
 
 // Provider 抽象：一次"请求模型 → 拿到助手回复（文本增量 + 可能的 tool_use）"
 export interface ProviderStreamHandlers {
+  messageAuditId?: string;
   requestPurpose?: "model_check"; // Explicit connection checks; ordinary chat never sets this.
   onRateLimits?: (limits: RateLimits) => void;
   onText?: (delta: string) => void; // 文本流式增量

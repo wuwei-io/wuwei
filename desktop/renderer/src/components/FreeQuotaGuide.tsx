@@ -1,12 +1,13 @@
 import { tr } from "../../../../src/localization/index.js";
 import React, { useState } from 'react';
 import { UsageNoticeDialog } from './UsageNoticeDialog.js';
+import {noticeContext,noticeAction} from './billing/tracking-context.js';
 
 export function FreeQuotaGuide({ onClose, onUpgrade, balance, onSwitchPaid }: {
   onUpgrade: () => void;
   onClose: () => void;
   balance: number;
-  onSwitchPaid: () => Promise<void>;
+  onSwitchPaid: () => Promise<void|boolean>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -14,9 +15,10 @@ export function FreeQuotaGuide({ onClose, onUpgrade, balance, onSwitchPaid }: {
   const switchPaid = async () => {
     if (busy) return;
     setBusy(true); setError(false);
-    try { await onSwitchPaid(); } catch { setError(true); } finally { setBusy(false); }
+    const context=noticeContext();
+    try { const switched=await onSwitchPaid();noticeAction(switched===true?'switch_success':'switch_deferred',{target_model:'mimo-v2.6-flash'},context); } catch { noticeAction('switch_failed',{target_model:'mimo-v2.6-flash'},context);setError(true); } finally { setBusy(false); }
   };
-  return <UsageNoticeDialog variant="free" title={tr('ui.freequotaguide.today.free.quota.is.used.up.627d194')} onClose={onClose} onUpgrade={onUpgrade}
+  return <UsageNoticeDialog variant="free" trackingMeta={{balance}} title={tr('ui.freequotaguide.today.free.quota.is.used.up.627d194')} onClose={onClose} onUpgrade={onUpgrade}
     busy={busy} secondaryAction={hasCoins ? { label: tr('billing.freecap.switchPaid'), onClick: () => void switchPaid() } : undefined}>
     <p className="usage-notice-description">
       <span>{tr('billing.freecap.resetNote')}</span>

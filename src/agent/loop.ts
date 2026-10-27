@@ -72,6 +72,7 @@ export interface RoundUsage {
 export type UsageReport = SessionUsage & { round?: RoundUsage };
 
 export interface AgentHooks {
+  messageAuditId?: string;
   preferredImageSku?: string;
   remoteExecution?: ToolContext['remoteExecution'];
   requestDecision?: ToolContext['requestDecision'];
@@ -459,6 +460,7 @@ export class Agent {
       for (let attempt = 0; ; attempt++) {
         try {
           result = await stepProvider.complete(stepSystem, this.requestHistory ? this.requestHistory(this.messages) : this.messages, stepTools, {
+            messageAuditId:hooks.messageAuditId,
             onText: hooks.onText,
             onRecover: hooks.onRecover,
             signal,

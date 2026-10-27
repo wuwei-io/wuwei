@@ -35,6 +35,8 @@ import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
 import {StudioImageApprovals,imageAccountScope,type StudioImageAuthorization} from '../../src/imagegen/studio-approval.js';
 import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
+import {withMessageAudit} from "../../src/media/message-audit-context.js";
+import {setMediaTransferObserver} from "../../src/media/activity-telemetry.js";
 import {readImageTransfers} from '../../src/imagegen/image-transfer-progress.js';
 import {createPlatformImageSession} from '../../src/imagegen/platform-image-session.js';
 import { checkImageAvailability } from '../../src/imagegen/image-availability.js';
@@ -3661,13 +3663,13 @@ async function refreshWuweiMe(): Promise<void> {
   }
 }
 
-function startTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization) {
+function startTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization, messageAuditId?: string) {
   // Every independent chat (manual send, idle injection, continuation, schedule
   // and report) has the same account-wide admission and queue UI.
-  return runBackgroundTask(useId, send, () => executeTurn(useId, text, images, sysOverride, imageAuthorization));
+  return runBackgroundTask(useId, send, () => withMessageAudit(messageAuditId,()=>executeTurn(useId, text, images, sysOverride, imageAuthorization, messageAuditId)));
 }
 
-async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization) {
+async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization, messageAuditId?: string) {
   turnSid = useId; // 供 ask_user 工具的事件带上会话 id
   text = secrets.redact(text).text; // 兜底：已入库密钥出现在消息里→占位符替换，永不出网到模型
   const agent = getAgent(useId);
@@ -3695,7 +3697,9 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
   // 看门狗照常到阈值救援——精准区分"合法长静默"与"真卡死"。
   let toolDepth = 0;
   const hb = setInterval(() => { if (toolDepth > 0 && runs.get(useId) === ac) send("evt:heartbeat", { sid: useId }); }, 25000);
-  const turnT0 = Date.now(); // 本轮耗时起点（诊断日志 api_call.ms 用）
+  const turnT0 = Date.now();
+  let auditUsage:{input:number;output:number;cacheHit:number;steps:number}|undefined;
+  const auditToken=loadWuweiSession()?.accessToken,auditConfig=loadConfig();let auditError:string|undefined; // 本轮耗时起点（诊断日志 api_call.ms 用）
   try {
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
@@ -3708,6 +3712,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
       text,
       {
         preferredImageSku: selectedImageSku,
+        messageAuditId: selectedImageSku?undefined:messageAuditId,
         onTurnEnd: (turnId) => taskReports.closeTurn(turnId),
         onContextWindow: (contextWindow) => send("evt:context-window", { sid: useId, contextWindow }),
         onText: (delta) => {
@@ -3737,7 +3742,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
           return waiting.then(answer => answer.action === 'allow' || answer.value === 'allow' ? 'allow' as const : 'deny' as const);
         },
         onUsage: (u) => {
-          if (u.round) lastRoundBySid.set(useId, { input: u.round.input, output: u.round.output, cacheHit: u.round.cacheHit, steps: u.round.steps });
+          if (u.round) {auditUsage={input:u.round.input,output:u.round.output,cacheHit:u.round.cacheHit,steps:u.round.steps};lastRoundBySid.set(useId,auditUsage);}
           send("evt:usage", { sid: useId, usage: u });
         },
         onRateLimits: (rl) => {
@@ -3791,6 +3796,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
     if (runs.get(useId) === ac)
       send(ac.signal.aborted ? "evt:stopped" : "evt:done", { sid: useId }); // 中断后 loop 干净返回也算停止
   } catch (e: any) {
+    auditError=secrets.redact(String(e?.message||e)).text.slice(0,500);
     // 若已被 chat:stop 手动停止(runs 里已换掉/删掉本 ac),就不再重复报,避免"已停止"提示重复
     if (runs.get(useId) === ac) {
       if (e?.name === "AbortError" || ac.signal.aborted) send("evt:stopped", { sid: useId });
@@ -3821,6 +3827,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
       }
     }
   } finally {
+    if(messageAuditId&&!selectedImageSku)void trackProductEvent("text_message_finished",{accessToken:auditToken,version:app.getVersion(),props:{message_id:messageAuditId,session_id:useId,model:auditConfig.model,status:ac.signal.aborted?"stopped":auditError?"failed":"success",error_code:auditError??null,tracking_version:"tracking-v1",...(auditUsage?{input_tokens:auditUsage.input,output_tokens:auditUsage.output,cache_hit_tokens:auditUsage.cacheHit,steps:auditUsage.steps}:{}),duration_ms:Date.now()-turnT0}});
     clearInterval(hb); // 停掉长命令心跳
     if (runs.get(useId) === ac) {
       runs.delete(useId);
@@ -3861,7 +3868,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
 // 在跑就别画气泡也别发——从根上杜绝时序误判导致的"孤儿气泡"。
 ipcMain.handle("chat:is-running", (_e, sid: string) => runs.has(sid || currentId));
 
-ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean, imageApprovalId?: string) => {
+ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean, imageApprovalId?: string, messageAuditId?: string) => {
   const useId = sid || currentId;
   // 自主推进/看门狗的「软续跑」(auto=true)：该会话若还在跑就静默跳过，绝不弹「上一条还在处理中」刷屏。
   // 时序心跳追不平主进程真实运行态时(免费模型长思考0token、无工具在跑),这一层让误判彻底无害——
@@ -3878,7 +3885,7 @@ ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?
     authorization = {...grant,isCurrent:()=>currentImageOwner()===owner};
   }
   if(authorization){setImageSession(useId,authorization.quote.sku_id,text);send("evt:sessions",listSessions());}
-  void startTurn(useId, text, images, undefined, authorization);
+  void startTurn(useId, text, images, undefined, authorization, !auto&&typeof messageAuditId==="string"&&/^[a-f0-9-]{36}$/i.test(messageAuditId)?messageAuditId:undefined);
 });
 
 // 运行中注入新需求：正在跑→注入到当前循环边界(AI 综合权衡/优先处理，不必等整轮跑完)；没在跑→当普通发送
@@ -4988,8 +4995,11 @@ ipcMain.handle("account:codex-login", async () => {
 // 登录 → 拿 /api/me(user+coin) → 明文持久化 ~/.wuwei/auth.json（B3 改 safeStorage 加密）。
 ipcMain.handle("account:wuwei-login", async () => {
   // 显式退出后强制重新选账号，避免复用浏览器残留的旧会话。
+  const previousIdentity=loadWuweiSession()?"account":"anonymous";
+  void trackProductEvent("login_started",{version:app.getVersion(),accessToken:loadWuweiSession()?.accessToken,props:{method:"browser",tracking_version:"tracking-v1"}});
   const sess = await wuweiLogin(wuweiSessionState.isLoggedOut());
-  if (!sess) return null;
+  if (!sess) {void trackProductEvent("login_cancelled",{version:app.getVersion(),props:{tracking_version:"tracking-v1"}});return null;}
+  void trackProductEvent("identity_link",{version:app.getVersion(),accessToken:sess.accessToken,props:{previous_identity:previousIdentity,tracking_version:"tracking-v1"}});
   wuweiSessionState.accept(sess);
   try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
@@ -5004,7 +5014,8 @@ async function finishWuweiSignin(
   r: WuweiSession | string,
   action: "login" | "register" = "login",
 ): Promise<{ me?: unknown; error?: string }> {
-  if (typeof r === "string") return { error: r };
+  if (typeof r === "string") {void trackProductEvent("login_failed",{version:app.getVersion(),props:{action,tracking_version:"tracking-v1"}});return { error: r };}
+  void trackProductEvent("identity_link",{version:app.getVersion(),accessToken:r.accessToken,props:{previous_identity:loadWuweiSession()?"account":"anonymous",tracking_version:"tracking-v1"}});
   wuweiSessionState.accept(r);
   try { refreshRelayClient(); } catch { /* 账号换了 → relay 用新号 token 重连、重注册到新账号名下，手机端才看得到 */ }
   loginReportedThisProc = false; // 新登录：重置节流，确保本次登录必报一次
@@ -5221,6 +5232,7 @@ ipcMain.handle("app:version", () => app.getVersion());
 // autoDownload：发现新版即后台静默下载；下载完推 evt:update-downloaded，用户点「升级」再 quitAndInstall。
 // 未打包(dev)或无更新源时 checkForUpdates 会抛错，一律吞掉，不影响使用。
 const { autoUpdater } = electronUpdater;
+setMediaTransferObserver((token,event)=>trackProductEvent("media_download_finished",{accessToken:token,version:app.getVersion(),props:{...event}}));
 let updaterWired = false;
 let updatePollInterval = DEFAULT_UPDATE_INTERVAL_MS;
 function setupUpdater(): void {
