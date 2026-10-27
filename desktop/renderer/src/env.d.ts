@@ -102,8 +102,6 @@ export interface WuweiApi {
   newSession(): void;
   handoffSession(sid: string): Promise<{ ok: boolean; newId?: string; goalCarried?: boolean }>; // 一键总结→开新会话接着做(带目标则自动智能继续)
   switchSession(id: string): void;
-  resumeSession(id: string): void;
-  dismissInterrupted(id: string): void;
   deleteSession(id: string): void;
   searchSessions(q: string): Promise<SearchResult>; // 全局搜所有对话正文
   getTranscript(sid: string): Promise<{ archived: any[]; live: any[]; full: any[]; compacted: boolean }>; // 完整对话历史(含压缩前原文)
@@ -229,6 +227,7 @@ export interface WuweiApi {
   imageCatalog(): Promise<import('../../../src/imagegen/image-catalog.js').ImageCatalogEntry[]>;
   selectImageSku(input:{sku_id:string;sid:string}):Promise<{sku_id:string}>;
   imageHistory():Promise<{id:string;title:string;updatedAt:number;imageSku?:string}[]>;
+  imageProgress(input:{sid:string}):Promise<import('../../../src/imagegen/image-transfer-progress.js').ImageTransferProgress[]>;
   imageRecover(input:{sid:string;tool_id:string}):Promise<import('../../../src/types.js').ToolResult>;
   imageQuote(input: {sku_id:string;prompt:string;count?:number}): Promise<import('../../../src/imagegen/studio-approval.js').StudioImageQuote>;
   modelPricing(): Promise<ModelPricingData | null>;

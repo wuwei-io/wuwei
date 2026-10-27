@@ -148,8 +148,6 @@ const api = {
   handoffSession: (sid: string) =>
     ipcRenderer.invoke("session:handoff", sid) as Promise<{ ok: boolean; newId?: string }>, // 一键总结→开新会话接着做
   switchSession: (id: string) => ipcRenderer.send("session:switch", id),
-  resumeSession: (id: string) => ipcRenderer.send("session:resume", id), // 崩溃恢复:继续中断的任务
-  dismissInterrupted: (id: string) => ipcRenderer.send("session:dismiss-interrupted", id), // 崩溃恢复:忽略
   deleteSession: (id: string) => ipcRenderer.send("session:delete", id),
   // 全局搜索:跨所有会话搜正文,返回标题+上下文摘要+跳转锚点
   searchSessions: (q: string) => ipcRenderer.invoke("session:search", q) as Promise<any>,
@@ -392,6 +390,7 @@ const api = {
   imageCatalog: () => ipcRenderer.invoke("account:image-catalog") as Promise<import('../../src/imagegen/image-catalog.js').ImageCatalogEntry[]>,
     selectImageSku: (input:{sku_id:string;sid:string}) => ipcRenderer.invoke('settings:image-sku',input) as Promise<{sku_id:string}>,
   imageHistory:()=>ipcRenderer.invoke('session:image-history') as Promise<{id:string;title:string;updatedAt:number;imageSku?:string}[]>,
+  imageProgress:(input:{sid:string})=>ipcRenderer.invoke('account:image-progress',input) as Promise<import('../../src/imagegen/image-transfer-progress.js').ImageTransferProgress[]>,
   imageRecover: (input:{sid:string;tool_id:string})=>ipcRenderer.invoke('account:image-recover',input) as Promise<import('../../src/types.js').ToolResult>,
   imageQuote: (input: {sku_id:string;prompt:string;count?:number}) => ipcRenderer.invoke('account:image-quote', input) as Promise<import('../../src/imagegen/studio-approval.js').StudioImageQuote>,
   modelPricing: () => ipcRenderer.invoke("model-pricing:get") as Promise<ModelPricingData | null>,

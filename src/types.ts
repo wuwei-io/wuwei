@@ -94,6 +94,7 @@ export interface ToolContext {
   };
   cwd: string;
   turnId?: string;
+  toolCallId?: string; // Identifies download progress for this tool only.
   reportOrigin?: TaskReportScope['origin'];
   taskReportScope?: TaskReportScope; // 子任务沿用根批次，结果统一回到最初的派活会话
   platformImage?: (input: Record<string,unknown>,ctx: ToolContext) => Promise<ToolResult>;

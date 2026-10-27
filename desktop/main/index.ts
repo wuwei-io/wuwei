@@ -35,6 +35,7 @@ import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
 import {StudioImageApprovals,imageAccountScope,type StudioImageAuthorization} from '../../src/imagegen/studio-approval.js';
 import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
+import {readImageTransfers} from '../../src/imagegen/image-transfer-progress.js';
 import {createPlatformImageSession} from '../../src/imagegen/platform-image-session.js';
 import { checkImageAvailability } from '../../src/imagegen/image-availability.js';
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
@@ -79,9 +80,7 @@ import {
   setSessionBinding,
   setSessionEmployee,
   setSessionRunning,
-  clearInterrupted,
-  dismissResume,
-  markInterruptedOnStartup,
+  resetInterruptedOnStartup,
   flushAllSessionsSync,
 } from "./sessions.js";
 import { ensureFresh as ensureSearchIndex, searchSessions as searchInSessions } from "./search.js";
@@ -101,7 +100,6 @@ import {
   secretsDetectEnabled,
   brainEnabled,
   brainDocsEnabled,
-  resumeDetectEnabled,
   claudeAutoRefreshEnabled,
   telemetryEnabled,
   teamEnabled,
@@ -4164,30 +4162,6 @@ ipcMain.on("session:switch", (_e, id: string) => {
   void emitAccount();
 });
 
-// 崩溃恢复——用户点「继续」：切到该会话、清中断标记，注入一句续跑指令让 AI 接着未完成的工作。
-// 历史在 getAgent→loadMessages 里已自愈(补齐悬空 tool_result/交替角色)，可直接续跑。
-ipcMain.on("session:resume", (_e, id: string) => {
-  const sid = id || currentId;
-  if (currentId && currentId !== sid) lockSessionModel(currentId); // 切到别的会话前先锁住当前会话的模型
-  clearInterrupted(sid);
-  currentId = sid;
-  const a = getAgent(sid);
-  send("evt:session-loaded", { id: sid, messages: a ? a.getDisplayMessages() : [] });
-  sendUsageFor(sid);
-  send("evt:sessions", listSessions());
-  void startTurn(
-    sid,
-    tr("ui.index.this.task.was.force.interrupted.on.5865f46"),
-  );
-});
-
-// 崩溃恢复——用户点「忽略」：只清中断标记，不续跑。
-ipcMain.on("session:dismiss-interrupted", (_e, id: string) => {
-  const sid = id || currentId;
-  dismissResume(sid); // 清中断标记 + 记忽略，内容启发式不再重复提示
-  send("evt:sessions", listSessions());
-});
-
 ipcMain.on("session:delete", (_e, id: string) => {
   const deleted = listSessions().find(s => s.id === id);
   runs.get(id)?.abort(); // 删除正在跑的会话先中断它
@@ -4368,12 +4342,10 @@ ipcMain.handle("session:bootstrap", () => {
     const list = listSessions();
     currentId = list[0]?.id ?? randomUUID();
   }
-  // 崩溃恢复(设置开关开时)：首个 bootstrap 同步检测(无时序竞争)。running 残留=强杀(强信号);
-  // 再对最近半截会话做内容启发式。返回所有 interrupted(含历史遗留未处理的)，多个不漏。
-  const resumeOn = resumeDetectEnabled(loadSettings());
+  // Clear stale process state without suggesting or starting another turn.
   if (!interruptDetected) {
     interruptDetected = true;
-    if (resumeOn) markInterruptedOnStartup(true);
+    resetInterruptedOnStartup();
   }
   const a = getAgent(currentId);
   return {
@@ -4383,11 +4355,7 @@ ipcMain.handle("session:bootstrap", () => {
     messages: a ? a.getDisplayMessages() : [],
     usage: a ? a.getUsage() : EMPTY_USAGE,
     rateLimits: loadRateLimits(curProviderId()) || null,
-    interrupted: resumeOn
-      ? listSessions()
-          .filter((s) => s.interrupted)
-          .map((s) => ({ id: s.id, title: s.title }))
-      : [], // 待恢复的会话(全部)；开关关=不提示
+    interrupted: [], // Compatibility field: recovery prompts have been removed.
   };
 });
 
@@ -5148,6 +5116,7 @@ ipcMain.handle('settings:image-sku', async (_e,input:{sku_id?:unknown;sid?:unkno
     modelPreferences:{...current.modelPreferences,[owner]:{providerId:'wuwei-image',modelId:input.sku_id}}});
   return {sku_id:input.sku_id};
 });
+ipcMain.handle('account:image-progress',(_event,input:{sid?:string})=>{const token=loadWuweiSession()?.accessToken;if(!token||input?.sid!==currentId)return [];return readImageTransfers(token,currentId)});
 const studioRecoveryLocks=new Set<string>();
 // A recovery can only query an original tool result in this idle conversation.
 // It has no generation/reauthorization action and never submits a new paid POST.
@@ -5169,7 +5138,7 @@ ipcMain.handle('account:image-recover',async(_e,input:{sid?:unknown;tool_id?:unk
   try{
     const session=await getFreshWuweiSession().catch(()=>null);if(!session?.accessToken)throw new Error('AUTH_REQUIRED');
     const owner=imageAccountScope(session.accessToken);
-    const output=await createPlatformImageSession('https://wuweiai.io',session.accessToken)(query,{cwd});
+    const output=await createPlatformImageSession('https://wuweiai.io',session.accessToken)(query,{cwd,sessionId:sid,toolCallId:input.tool_id});
     if(currentId!==sid||runs.has(sid)||agents.get(sid)!==agent||currentImageOwner()!==owner)throw new Error('IMAGE_SELECTION_CHANGED');
     const updated=JSON.stringify({...previous,...JSON.parse(output.content)});
     const blocks=output.displayImage?[{type:'text',text:updated},{type:'image',dataUrl:output.displayImage,displayOnly:true}]:updated;

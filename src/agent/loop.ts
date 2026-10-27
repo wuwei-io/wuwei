@@ -385,7 +385,7 @@ export class Agent {
         this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
         hooks.onToolStart?.(id,tool.name,input);
         const decide=hooks.requestDecision || this.ctx.requestDecision;
-        const out=await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,imageStudioAuthorization,
+        const out=await tool.run(input,{...this.ctx,signal,turnId,toolCallId:id,platformImage:this.provider.platformImage,imageStudioAuthorization,
           requestDecision:decide?request=>withoutTurnSlot(()=>decide(request)):undefined});
         hooks.onToolEnd?.(id,out.content,!!out.isError,out.displayImage);
         const content=out.displayImage?[{type:'text',text:out.content},{type:'image',dataUrl:out.displayImage,displayOnly:true}]:out.content;
@@ -630,7 +630,7 @@ export class Agent {
 
         const job = (async () => {
           hooks.onToolStart?.(call.id, call.name, call.input);
-          const execute = () => tool.run(call.input, { ...this.ctx, signal, turnId,
+          const execute = () => tool.run(call.input, { ...this.ctx, signal, turnId, toolCallId:call.id,
             remoteExecution: hooks.remoteExecution || this.ctx.remoteExecution,
             requestDecision: (hooks.requestDecision || this.ctx.requestDecision)
               ? request => withoutTurnSlot(() => (hooks.requestDecision || this.ctx.requestDecision)!(request)) : undefined,

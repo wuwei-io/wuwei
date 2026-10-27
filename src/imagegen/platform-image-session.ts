@@ -5,6 +5,7 @@ import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {BillingError,PlatformBillingClient,type Sku} from './platform-billing-client.js';
 import type {ToolContext,ToolResult,Decision} from '../types.js';
+import {beginImageTransfer} from './image-transfer-progress.js';
 import {imageModelLabel} from './image-catalog.js';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 const billingDetails=(error:unknown)=>error instanceof BillingError ? {billing_code:error.code,billing_status:error.status} : {};
@@ -50,7 +51,9 @@ export function createPlatformImageSession(base: string,token: string,recoveryRo
     if(detail.status==='failed' && detail.error_code==='PROVIDER_MODEL_UNAVAILABLE') return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_MODEL_UNAVAILABLE',message:tr('image.delivery.modelUnavailable')}),isError:true};
     if(detail.status!=='settled') return {content:JSON.stringify({...detail,displayed:false,code:'IMAGE_NOT_DELIVERED',message:tr("ui.platform.image.session.no.image.has.been.delivered.do.001b454")}),isError:true};
     ctx.signal?.throwIfAborted();
-    const bytes=await client.image(orderId);await mkdir(root,{recursive:true});
+    const transfer=beginImageTransfer(token,ctx.sessionId,ctx.toolCallId,orderId);let bytes:Uint8Array;
+    try{bytes=await client.image(orderId,transfer.update,ctx.signal)}finally{transfer.finish()}
+    await mkdir(root,{recursive:true});
     const path=join(root,`image-${orderId}-${randomUUID()}.png`);await writeFile(path,bytes,{flag:'wx'});
     return {content:JSON.stringify({...metadata,order_id:orderId,path,charged_coins:detail.charged_coins,displayed:true,...(Number.isFinite(Date.parse(detail.created_at||''))?{created_at_ms:Date.parse(detail.created_at!)}:startedAt?{created_at_ms:startedAt}:{}),...(typeof detail.duration_ms==='number'&&Number.isFinite(detail.duration_ms)&&detail.duration_ms>=0?{elapsed_ms:detail.duration_ms}:startedAt?{elapsed_ms:Date.now()-startedAt}:{})}),displayImage:`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`};
    };
