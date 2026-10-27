@@ -47,7 +47,8 @@ import {gatewayAffordability, type GatewayAffordability} from '../../../src/gate
 import { recommendedValueModel, premiumSelectionNeedsConfirmation } from '../../../src/premium-model.js';
 import { PremiumModelNotice } from './components/PremiumModelNotice.js';
 import type { Decision } from '../../../src/types.js';
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+﻿import {projectVideoHistory,videoCreationMembers} from './components/video-creation-links.js';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, useLanguage, getLanguages, getLanguagePreference, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
@@ -3569,7 +3570,6 @@ export function App() {
     return () => window.removeEventListener("keydown", h);
   }, [lightbox, imgMenu]);
   const [suggestion, setSuggestion] = useState(""); // 输入框幽灵提示：下一步动作建议(Tab 补全)
-  const [interruptedSessions, setInterruptedSessions] = useState<{ id: string; title: string }[]>([]); // 上次被强杀、待恢复的任务
   // 普通工具默认自动放行；智能继续需要显式开启，每个会话仍可单独暂停。
   const [defaultMode, setDefaultMode] = useState<ExecutionMode>(() => readDefaultExecutionMode(localStorage));
   const defaultModeRef = useRef(defaultMode);
@@ -4435,13 +4435,13 @@ export function App() {
   }
   const loadVideoHistory=useCallback(async(sync=false)=>{
     const owner=wuweiRef.current?.user.id;if(!owner){setVideoHistory([]);return}
-    try{if(sync)await window.wuwei.videoRequest({action:'orders'});const rows=await window.wuwei.videoRequest({action:'history'});if(wuweiRef.current?.user.id===owner&&Array.isArray(rows))setVideoHistory(rows as VideoHistoryEntry[])}catch{/* A history read must not interrupt an active conversation. */}
+    try{if(sync)await window.wuwei.videoRequest({action:'orders'});const rows=await window.wuwei.videoRequest({action:'history'});if(wuweiRef.current?.user.id===owner&&Array.isArray(rows))setVideoHistory(projectVideoHistory(owner,rows as VideoHistoryEntry[]))}catch{/* A history read must not interrupt an active conversation. */}
   },[]);
   useEffect(()=>{setVideoHistory([]);setRequestedVideoCreation(undefined);void loadVideoHistory(true)},[wuwei?.user.id,loadVideoHistory]);
   useEffect(()=>{if(wuwei?.user.id)void window.wuwei.imageHistory().catch(()=>{})},[wuwei?.user.id]);
   const sidebarSessions:SessionMeta[]=[...sessions,...videoHistory.map(row=>({id:'video:'+row.requestId,videoRequestId:row.requestId,title:row.title,updatedAt:row.updatedAt}))];
   function openVideoCreation(id?:string){setImagePreview(null);setRequestedVideoCreation(id?{id,version:Date.now()}:undefined);if(!id)setVideoNewVersion(v=>v+1);setAppView(null);setAgiView(null);setVideoMode(true)}
-  function deleteVideoCreation(requestId:string){const owner=wuweiRef.current?.user.id;if(!owner)return;askConfirm({title:tr('video.deleteHistory'),message:tr('video.deleteHistoryConfirm'),danger:true,onOk:()=>{void(async()=>{if(wuweiRef.current?.user.id!==owner)return;const result=await window.wuwei.videoRequest({action:'delete_history',request_id:requestId});if(result&&typeof result==='object'&&'error'in result)throw Error(String(result.error));if(wuweiRef.current?.user.id!==owner)return;setVideoHistoryVersion(v=>v+1);await loadVideoHistory();if(requestedVideoCreation?.id===requestId)openVideoCreation()})().catch(()=>push({type:'notice',text:tr('video.error.unavailable')}))}})}
+  function deleteVideoCreation(requestId:string){const owner=wuweiRef.current?.user.id;if(!owner)return;askConfirm({title:tr('video.deleteHistory'),message:tr('video.deleteHistoryConfirm'),danger:true,onOk:()=>{void(async()=>{if(wuweiRef.current?.user.id!==owner)return;for(const member of videoCreationMembers(owner,requestId)){if(wuweiRef.current?.user.id!==owner)return;const result=await window.wuwei.videoRequest({action:'delete_history',request_id:member});if(result&&typeof result==='object'&&'error'in result)throw Error(String(result.error));}if(wuweiRef.current?.user.id!==owner)return;setVideoHistoryVersion(v=>v+1);await loadVideoHistory();if(requestedVideoCreation?.id===requestId)openVideoCreation()})().catch(()=>push({type:'notice',text:tr('video.error.unavailable')}))}})}
   // 手动签到：账号面板点「签到」触发。后端幂等，给币则弹 toast + 刷新余额；无论刚签/已签都标记当天完成。
   async function doCheckin() {
     if (checkinBusy || checkinDone) return;
@@ -6013,19 +6013,8 @@ export function App() {
       setItems(messagesToItems(r.messages || []));
       if (r.usage) setUsage(r.usage);
       if (r.rateLimits) setRate(r.rateLimits);
-      if (r.interrupted?.length) setInterruptedSessions(r.interrupted); // 上次被强杀的任务→提示恢复
     });
   }, []);
-
-  // 崩溃恢复：点「继续」让 AI 接着未完成的工作；点「忽略」只清标记。
-  function resumeInterrupted(id: string) {
-    window.wuwei.resumeSession(id);
-    setInterruptedSessions((l) => l.filter((x) => x.id !== id));
-  }
-  function dismissInterrupted(id: string) {
-    window.wuwei.dismissInterrupted(id);
-    setInterruptedSessions((l) => l.filter((x) => x.id !== id));
-  }
 
   // API Key 等待态：轮询剪贴板，检测到像 key 的新内容就自动验证+设置(零手填)
   useEffect(() => {
@@ -11128,17 +11117,6 @@ export function App() {
         </div>
       )}
 
-      {/* 崩溃恢复：上次被强制中断的任务→贴输入框上方的非模态框(仿 ask_user)，问是否继续 */}
-      {interruptedSessions.length > 0 && (
-        <ResumeBox
-          sessions={interruptedSessions}
-          anchor={composerRef}
-          onResume={resumeInterrupted}
-          onDismiss={dismissInterrupted}
-          onDismissAll={() => interruptedSessions.forEach((s) => dismissInterrupted(s.id))}
-        />
-      )}
-
       {pending && (
         <div className="perm-overlay">
           <div className="perm">
@@ -11573,79 +11551,6 @@ function ResendIcon() {
 // ask_user：AI 弹出的可点击选择框(单选/多选/可多问)
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; header?: string; multiSelect?: boolean; allowCustom?: boolean; options: AskOption[] };
-// 崩溃恢复框：仿 ask_user，贴输入框上方对齐，非模态。列出被中断的任务，逐个「继续 / 忽略」。
-function ResumeBox({
-  sessions,
-  anchor,
-  onResume,
-  onDismiss,
-  onDismissAll,
-}: {
-  sessions: { id: string; title: string }[];
-  anchor: React.RefObject<HTMLDivElement | null>;
-  onResume: (id: string) => void;
-  onDismiss: (id: string) => void;
-  onDismissAll: () => void;
-}) {
-  // 对齐到输入框：同左、同宽、贴其正上方 8px(与 AskModal 一致)
-  const [box, setBox] = useState<{ left: number; width: number; bottom: number } | null>(null);
-  useLayoutEffect(() => {
-    const upd = () => {
-      const el = anchor.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const cs = getComputedStyle(el);
-      const padL = parseFloat(cs.paddingLeft) || 0;
-      const padR = parseFloat(cs.paddingRight) || 0;
-      const padT = parseFloat(cs.paddingTop) || 0;
-      setBox({ left: r.left + padL, width: r.width - padL - padR, bottom: window.innerHeight - (r.top + padT) + 8 });
-    };
-    upd();
-    window.addEventListener("resize", upd);
-    return () => window.removeEventListener("resize", upd);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor]);
-  const many = sessions.length > 1;
-  const en = getLang() !== "zh";
-  return (
-    <div
-      className="ask resume-ask"
-      style={box ? { left: box.left, width: box.width, bottom: box.bottom } : { visibility: "hidden" }}
-    >
-      <div className="ask-qhead">
-        <span className="ask-tag">{tr("ui.app.task.interrupted.58ee670")}</span>
-        <span className="ask-title">
-          {many
-            ? (tr("ui.app.tasks.were.running.when.you.last.81c6b97", { p0: sessions.length }))
-            : (tr("ui.app.this.task.was.interrupted.last.time.074be93"))}
-        </span>
-      </div>
-      <div className="resume-rows">
-        {sessions.map((s) => (
-          <div key={s.id} className="resume-row">
-            <span className="resume-title" title={s.title}>💬 {s.title || (tr("ui.app.new.chat.fca06b0"))}</span>
-            <span className="resume-btns">
-              <button type="button" className="allow" onClick={() => onResume(s.id)}>
-                {tr("err.fix.continue")}
-              </button>
-              <button type="button" onClick={() => onDismiss(s.id)}>
-                {tr("ui.app.ignore.bc67d4b")}
-              </button>
-            </span>
-          </div>
-        ))}
-      </div>
-      {many && (
-        <div className="resume-foot">
-          <button type="button" onClick={onDismissAll}>
-            {tr("ui.app.ignore.all.7411fda")}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // CEO 把关中的可见提示：员工请示后 CEO 正在拍板，贴输入框上方显示「🧑‍💼 X 拍板中… Ns」实时倒计时。
 // 能定就直接定、不打扰董事长；超时/拿不准才紧随弹出选择框(届时本提示被清)。
 function CeoDecidingPill({ lang, anchor, info }: { lang: Lang; anchor: React.RefObject<HTMLDivElement | null>; info: { ceoName: string; askerName: string; until: number } }) {
@@ -14133,7 +14038,6 @@ function SettingsModal({
   const [secretsDetect, setSecretsDetect] = useState(true); // 发送前扫描/拦截疑似新密钥
   const [brainOn, setBrainOn] = useState(true); // 启用本地脑网络 Brain
   const [brainDocsOn, setBrainDocsOn] = useState(true); // recall 连带扫描『相关文档』
-  const [resumeDetect, setResumeDetect] = useState(true); // 启动时检测被中断/干到一半的任务并提示恢复
   const [claudeAutoRefresh, setClaudeAutoRefresh] = useState(true); // Claude 订阅 token 快过期自动续期
   const [telemetry, setTelemetry] = useState(true); // 发送诊断信息用于改善体验(默认开，可关)
   const [teamOn, setTeamOn] = useState(false); // 「AI 员工团队」可选模块：默认关，用户主动开(与上面几个默认开的相反)
@@ -14566,7 +14470,6 @@ function SettingsModal({
       setSecretsDetect(s.app?.secretsDetect !== false);
       setBrainOn(s.app?.brainEnabled !== false);
       setBrainDocsOn(s.app?.brainDocs !== false);
-      setResumeDetect(s.app?.resumeDetect !== false);
       setClaudeAutoRefresh(s.app?.claudeAutoRefresh !== false);
       setTelemetry(s.app?.telemetry !== false);
       setTeamOn(s.app?.teamEnabled === true); // 可选模块，只有显式为 true 才算开
@@ -15324,25 +15227,6 @@ function SettingsModal({
                   </div>
                 </div>
               )}
-              <div className="app-set-group">{t("set.g.taskResumeGroup")}</div>
-              <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
-                <div className="app-set-text">
-                  <div className="app-set-label">{t("set.g.taskResume")}</div>
-                  <div className="app-set-hint">
-                    {t("set.g.taskResumeHint")}
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  className="app-set-toggle"
-                  checked={resumeDetect}
-                  onChange={(e) => {
-                    setResumeDetect(e.target.checked);
-                    setAppToggle({ resumeDetect: e.target.checked });
-                  }}
-                />
-              </div>
-
               <div className="app-set-group">{tr("ui.app.claude.subscription.auth.b4dbb3e")}</div>
               <div className="app-set-row" style={{ cursor: "default", marginBottom: "16px" }}>
                 <div className="app-set-text">

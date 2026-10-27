@@ -6,7 +6,7 @@ export interface GalleryItem {
   status?:string; image?:string;
 }
 export interface StudioArtwork {
-  id:string; toolId?:string; orderId?:string; image?:string; prompt:string;
+  id:string; toolId?:string; orderId?:string; recoveryKey?:string; image?:string; prompt:string;
   state:'complete'|'running'|'failed'|'pending'|'unattempted';
   skuId?:string; model?:string; quality?:string; ratio?:string; resolution?:string;
   charged?:number; elapsedMs?:number; ts?:number; message?:string;
@@ -29,12 +29,12 @@ export function studioBatches(items:GalleryItem[],catalog:ImageCatalogEntry[],bu
     const skuId=string(result.sku_id)||string(input.sku_id),sku=catalog.find(row=>row.sku_id===skuId);
     const orderId=string(result.order_id),image=item.image?.startsWith('data:image/')?item.image:undefined;
     const definitive=result.status==='failed'||(!orderId&&!result.recovery_key&&item.isError===true);
-    const artwork:StudioArtwork={id:orderId||item.id||`${batch.id}-${index}`,toolId:item.id,orderId,image,
+    const artwork:StudioArtwork={id:orderId||item.id||`${batch.id}-${index}`,toolId:item.id,orderId,recoveryKey:string(result.recovery_key),image,
       prompt:string(input.prompt)||string(result.prompt)||batch.prompt,skuId,
       model:string(result.model)||sku?.model,quality:string(result.quality)||sku?.quality,
       ratio:string(result.aspect_ratio)||sku?.aspect_ratio||undefined,resolution:string(result.resolution)||sku?.resolution||undefined,
-      state:image?'complete':item.status==='running'&&busy?'running':definitive?'failed':'pending',
-      charged:number(result.charged_coins),elapsedMs:number(result.elapsed_ms),ts:number(result.created_at_ms)||item.ts||batch.ts,
+      state:image?'complete':busy&&(item.status==='running'||!item.result)?'running':definitive?'failed':'pending',
+      charged:result.status==='unknown'&&number(result.charged_coins)===0?undefined:number(result.charged_coins),elapsedMs:number(result.elapsed_ms),ts:number(result.created_at_ms)||item.ts||batch.ts,
       message:string(result.message)};
     const existing=orderId?orders.get(orderId):undefined;
     if(existing){if(image||existing.state!=='complete')Object.assign(existing,artwork,{id:existing.id});return;}

@@ -159,7 +159,7 @@ export class PlatformBillingClient {
     if (!/^[0-9a-f-]{36}$/i.test(orderId)) throw new BillingError('INVALID_INPUT',tr("ui.platform.billing.client.invalid.order.id.c87f920"));
     return this.request(`/api/images/orders/${encodeURIComponent(orderId)}/settle`,'POST');
   }
-  async image(orderId: string): Promise<Uint8Array> {
+  async image(orderId: string,onProgress?:(received:number,total:number|null)=>void,signal?:AbortSignal): Promise<Uint8Array> {
     this.guard();
     if (!/^[0-9a-f-]{36}$/i.test(orderId)) throw new BillingError('INVALID_INPUT', tr("ui.platform.billing.client.invalid.order.id.c87f920"));
     const token = await this.token();
@@ -167,23 +167,24 @@ export class PlatformBillingClient {
     for(let attempt=0;;attempt++) {
      try {
     const response = await fetch(`${this.base}/api/images/orders/${encodeURIComponent(orderId)}/asset`, {
-      headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs),
+      headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal,
     });
     if(response.status===401) throw new BillingError('AUTH_REQUIRED',tr("ui.platform.billing.client.your.session.expired.sign.in.again.a03f416"),401);
     if (!response.ok || response.headers.get('content-type') !== 'image/png') throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.is.not.available.to.3405ec4"), response.status);
     const reader = response.body?.getReader();
     if (!reader) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.is.empty.1e7b3a9"));
+    const length=Number(response.headers.get('content-length'));const total=Number.isSafeInteger(length)&&length>0?length:null;onProgress?.(0,total);
     const chunks: Uint8Array[] = []; let size = 0;
     try {
       for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length;
-        if (size > 64 * 1024 * 1024) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.exceeds.the.size.ee40042")); chunks.push(part.value); }
+        if (size > 64 * 1024 * 1024) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.exceeds.the.size.ee40042")); chunks.push(part.value);onProgress?.(size,total); }
     } finally { await reader.cancel().catch(()=>{}); }
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     if (!size) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.is.empty.1e7b3a9"));
     return bytes;
      } catch(error) {
-      if(error instanceof BillingError || attempt>=2) throw error;
+      if(signal?.aborted||error instanceof BillingError || attempt>=2) throw error;
       await delay(400*(attempt+1));
      }
     }

@@ -52,3 +52,15 @@
 .image-studio .studio-v2-model.is-member-locked{opacity:1;cursor:pointer}.studio-v2-model.is-member-locked:hover{background:#f1f5f7}.studio-v2-model .studio-member-action{align-self:center;display:flex;align-items:center;gap:4px;color:#9a7d52;font-size:8px;white-space:nowrap;flex-shrink:0}.studio-v2-model .studio-member-action svg{width:11px;height:11px}
 
 .image-creation-history{max-width:980px;margin:0 auto;color:#274a63}.image-creation-history h2{font-size:18px;font-weight:600;margin:0 0 20px}.image-creation-history>article{display:flex;gap:12px;align-items:center;border:1px solid #dce5eb;background:#fff;border-radius:10px;margin-bottom:10px;padding:12px 15px}.image-creation-history button{border:0;background:none;color:inherit;font:inherit;cursor:pointer}.image-history-open{flex:1;min-width:0;text-align:left;padding:4px}.image-history-open strong{display:block;font-size:13px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.image-history-open small{display:block;font-size:10px;color:#81929e;margin-top:7px}.image-history-delete{font-size:20px!important;padding:6px}.image-creation-history>p{font-size:12px;color:#81929e}
+
+/* One-line composer keeps the same textarea mounted, preserving draft and caret. */
+.image-studio .studio-composer-heading-actions>button:not(.studio-composer-toggle){display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--studio-dim);padding:0}
+.image-studio-content.is-collapsed{padding-top:0;flex:0;margin-top:auto}
+.image-studio-content.is-collapsed .studio-hero,.image-studio-content.is-collapsed .studio-inspiration,.image-studio-content.is-collapsed .studio-footnote,.image-studio-content.is-collapsed .studio-references,.image-studio-content.is-collapsed .studio-prompt-count,.image-studio-content.is-collapsed .studio-inline-note,.image-studio-content.is-collapsed .studio-inline-error,.image-studio-content.is-collapsed .studio-options{display:none}
+.image-studio-content.is-collapsed .studio-card{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.image-studio-content.is-collapsed .studio-card-heading{display:none}
+.image-studio-content.is-collapsed .studio-card-heading>span,.image-studio-content.is-collapsed .studio-composer-heading-actions>button:not(.studio-composer-toggle){display:none}
+.image-studio-content.is-collapsed .studio-prompt-area{order:1;flex:1;min-width:0;min-height:0;padding:0;gap:0}
+.image-studio-content.is-collapsed .studio-prompt-area textarea{height:36px;min-height:36px;max-height:36px;padding:6px 0;line-height:24px;white-space:nowrap;overflow:hidden}
+.image-studio-content.is-collapsed .studio-toolbar{order:2;flex:none;margin:0;padding:0;border:0}
+.image-studio-composer.is-landing:has(>.image-studio-content.is-collapsed)>.composer-foot{margin-top:0;padding-top:12px}

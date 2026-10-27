@@ -1,0 +1,5 @@
+.media-load-progress{display:flex;align-items:center;gap:8px;width:144px;max-width:100%;flex-shrink:0;min-height:14px;margin:2px auto 0;color:#7b93a5}
+.media-load-track{height:3px;flex:1;min-width:0;overflow:hidden;border-radius:3px;background:#d7e2ea}
+.media-load-track>i{display:block;height:100%;border-radius:inherit;background:#789db4;transition:width .2s ease}
+.media-load-progress>small{min-width:25px;font-size:9px;line-height:14px;text-align:right;font-weight:400}
+@media(prefers-reduced-motion:reduce){.media-load-track>i{transition:none}}

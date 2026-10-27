@@ -1,5 +1,6 @@
+import {createStudioExamplePicker} from '../../../../src/media/studio-examples.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { hasMessage, tr } from '../../../../src/localization/index.js';
+import { getCurrentLanguage, hasMessage, tr } from '../../../../src/localization/index.js';
 import { imageModelChoices, imageModelLabel, type ImageCatalogEntry } from '../../../../src/imagegen/image-catalog.js';
 import type { StudioImageQuote } from '../../../../src/imagegen/studio-approval.js';
 import { BillingBrand } from './billing/BillingBrand.js';
@@ -7,6 +8,7 @@ import { chooseImageVariant, imageResolutionPixels, imageVariantDimensions, STUD
 import {STUDIO_MODELS,studioModelProfile} from '../../../../src/imagegen/studio-models.js';
 import {GalleryIcon} from './ImageGallery.js';
 import './image-studio.css';
+import {StudioComposerToggle} from './StudioComposerToggle.js';
 
 type IconName = 'image' | 'plus' | 'chevron' | 'arrow' | 'clock' | 'coin' | 'check' | 'close' | 'grid' | 'folder';
 function Icon({ name }: {name:IconName}) {
@@ -39,6 +41,10 @@ export function ImageStudio(p:Props) {
   const profiles=[...STUDIO_MODELS.filter(profile=>choices.some(row=>row.model===profile.model)),...choices.filter(row=>!studioModelProfile(row.model)).map(row=>({model:row.model,label:imageModelLabel(row),brand:imageProvider(row.model),description:'creative',maxResolution:''}))];
   const providers = unique(profiles.map(row=>row.brand));
   const [modelSearch,setModelSearch]=useState('');
+  const [collapsed,setCollapsed]=useState(false);
+  const examplePicker=useRef(createStudioExamplePicker('image'));
+  const fillExample=()=>{p.onChange(examplePicker.current(getCurrentLanguage()).prompt);p.textareaRef.current?.focus();};
+  const toggleCollapsed=()=>{setOpen(null);if(collapsed){setCollapsed(false);requestAnimationFrame(()=>p.textareaRef.current?.focus());}else{p.textareaRef.current?.blur();setCollapsed(true);}};
   const [provider,setProvider] = useState(selected ? imageProvider(selected.model) : providers[0]);
   const [open,setOpen] = useState<'models'|'parameters'|null>(null), [switching,setSwitching] = useState(false);
   const [error,setError] = useState(''), [retry,setRetry] = useState(0), [referenceHint,setReferenceHint] = useState(false);
@@ -57,7 +63,7 @@ export function ImageStudio(p:Props) {
   const ratios=unique(variants.map(row=>imageVariantDimensions(row).ratio)).sort((a,b)=>STUDIO_RATIOS.indexOf(a)-STUDIO_RATIOS.indexOf(b));
   const resolutions=unique(variants.map(row=>imageVariantDimensions(row).resolution)).sort((a,b)=>imageResolutionPixels(a)-imageResolutionPixels(b));
   const qualities=unique(variants.map(row=>row.quality).filter((v):v is string=>!!v)).sort((a,b)=>['default','low','medium','high','xhigh','max'].indexOf(a)-['default','low','medium','high','xhigh','max'].indexOf(b));
-  useEffect(()=>{setOpen(null);setError('');submission.current=false;setQuote(null);setCount(storedCount(p.scope));},[p.scope]);
+  useEffect(()=>{setCollapsed(false);setOpen(null);setError('');submission.current=false;setQuote(null);setCount(storedCount(p.scope));},[p.scope]);
   useEffect(()=>{if(selected)setProvider(imageProvider(selected.model));},[selected?.model]);
   useEffect(()=>{submission.current=false;},[p.value,p.busy]);
   useEffect(()=>()=>clearTimeout(unlock.current),[]);
@@ -126,14 +132,14 @@ export function ImageStudio(p:Props) {
   };
   const cost = activeQuote?.data?.estimated_coins ?? (selected?.coins_per_image!=null?selected.coins_per_image*count:undefined);
   const fillPreset=(kind:'product'|'poster'|'illustration')=>{p.onChange(tr(`studio.prompt.${kind}`));p.textareaRef.current?.focus();};
-  return <div className={'image-studio image-studio-content'+(p.compact?' is-compact':'')} ref={root}>
+  return <div className={'image-studio image-studio-content'+(p.compact?' is-compact':'')+(collapsed?' is-collapsed':'')} ref={root}>
     {!p.compact&&<section className="studio-hero"><div className="studio-eyebrow"><i/>IMAGE STUDIO</div><h1>{tr('studio.hero')}</h1><p>{tr('studio.lead')}</p></section>}
     <section className="studio-card">
-      <div className="studio-card-heading"><span><Icon name="image"/>{tr('studio.description')}</span><button onClick={()=>fillPreset('product')}>{tr('studio.example')}<Icon name="arrow"/></button></div>
+      <div className="studio-card-heading"><span><Icon name="image"/>{tr('studio.description')}</span><div className="studio-composer-heading-actions"><button type="button" onClick={fillExample}>{tr('studio.example')}<Icon name="arrow"/></button><StudioComposerToggle collapsed={collapsed} onToggle={toggleCollapsed}/></div></div>
       <div className="studio-prompt-area">
         <div className="studio-references">{p.references.map((src,i)=><div className="studio-reference-thumb" key={src+i}><img src={src} alt={tr('studio.referenceNumber',{number:i+1})}/><button className="studio-remove" onClick={()=>p.onRemoveReference(i)} aria-label={tr('studio.removeReference',{number:i+1})}><Icon name="close"/></button><small>{i+1}</small></div>)}
           <button className="studio-reference-add" aria-disabled="true" aria-describedby={referenceHint?'studio-reference-note':undefined} onClick={()=>setReferenceHint(v=>!v)} title={tr('studio.referenceUnavailable')}><Icon name="plus"/><span>{tr('studio.reference')}</span><small>{tr('studio.unavailable')}</small></button></div>
-        <textarea ref={p.textareaRef} dir="auto" rows={3} value={p.value} aria-label={tr('studio.description')} placeholder={tr('studio.placeholder')} onChange={e=>p.onChange(e.target.value)} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();generate();}}} onPaste={e=>{if([...e.clipboardData.files].some(f=>f.type.startsWith('image/'))){e.preventDefault();setReferenceHint(true);}}}/>
+        <textarea ref={p.textareaRef} onFocus={()=>setCollapsed(false)} onPointerDown={()=>setCollapsed(false)} dir="auto" rows={3} value={p.value} aria-label={tr('studio.description')} placeholder={tr('studio.placeholder')} onChange={e=>p.onChange(e.target.value)} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();generate();}}} onPaste={e=>{if([...e.clipboardData.files].some(f=>f.type.startsWith('image/'))){e.preventDefault();setReferenceHint(true);}}}/>
         {!!p.value&&<span className="studio-prompt-count">{p.value.length}</span>}
       </div>
       {(referenceHint||p.references.length>0)&&<p className="studio-inline-note" id="studio-reference-note">{tr('studio.referenceUnavailable')}{p.references.length>0&&' '+tr('studio.removeToGenerate')}</p>}

@@ -1,9 +1,11 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {tr} from '../../../../src/localization/index.js';
+import {tr,localizeStoredText} from '../../../../src/localization/index.js';
 import {imageModelLabel,type ImageCatalogEntry} from '../../../../src/imagegen/image-catalog.js';
 import {BillingBrand} from './billing/BillingBrand.js';
 import {studioBatches,type GalleryItem,type StudioArtwork} from './image-gallery-data.js';
 import './image-gallery.css';
+import {MediaLoadProgress} from './MediaLoadProgress.js';
+import type {ImageTransferProgress} from '../../../../src/imagegen/image-transfer-progress.js';
 import {MediaDetail} from './MediaDetail.js';
 
 const galleryText=(key:string,values:Record<string,string|number>={})=>tr('studio.gallery.'+key,values);
@@ -45,12 +47,34 @@ export function ImageGallery(p:Props){
   const [search,setSearch]=useState(''),[period,setPeriod]=useState('all'),[large,setLarge]=useState(false),[favorites,setFavorites]=useState(()=>readFavorites(p.scope)),[onlyFavorites,setOnlyFavorites]=useState(false);
   const [selected,setSelected]=useState<string|null>(null),[error,setError]=useState(''),[working,setWorking]=useState<string|null>(null),[dimensions,setDimensions]=useState<Record<string,string>>({});
   const galleryRef=useRef<HTMLElement>(null);
+  const [transfers,setTransfers]=useState<ImageTransferProgress[]>([]);
   useEffect(()=>{
     const stream=galleryRef.current?.closest<HTMLElement>('.stream');if(!stream)return;
     let frame=0;
     const fit=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{const width=`${stream.offsetWidth-stream.clientWidth}px`;if(stream.style.getPropertyValue('--studio-gallery-scrollbar')!==width)stream.style.setProperty('--studio-gallery-scrollbar',width);});};
     const observer=new ResizeObserver(fit);observer.observe(stream);fit();return()=>{observer.disconnect();cancelAnimationFrame(frame);};
   },[]);
+  // Query only existing, owned orders. Never regenerate or reauthorize here.
+  const recoverRef=useRef(p.onRecover);recoverRef.current=p.onRecover;
+  const pendingRows=batches.flatMap(batch=>batch.artworks).filter(art=>art.state==='pending'&&art.toolId&&(art.orderId||art.recoveryKey));
+  const pendingRef=useRef(pendingRows);pendingRef.current=pendingRows;
+  const pendingKey=pendingRows.map(art=>art.id).join('/');
+  useEffect(()=>{
+    if(p.busy||!pendingKey||p.scope.endsWith('/anonymous'))return;
+    let alive=true,timer:ReturnType<typeof setTimeout>,offset=0;
+    const check=async()=>{
+      const rows=pendingRef.current;if(!alive||!rows.length)return;
+      try{await recoverRef.current(rows[offset++%rows.length]);}catch{/* Retry this original order after transient reads fail. */}
+      if(alive)timer=setTimeout(()=>void check(),5000);
+    };
+    timer=setTimeout(()=>void check(),0);
+    return()=>{alive=false;clearTimeout(timer);};
+  },[p.scope,p.busy,pendingKey]);
+  useEffect(()=>{
+    setTransfers([]);if((!p.busy&&!working&&!pendingKey)||!window.wuwei.imageProgress)return;let alive=true,polling=false;
+    const update=async()=>{if(polling)return;polling=true;try{const rows=await window.wuwei.imageProgress({sid:p.scope.split('/')[0]});if(alive)setTransfers(Array.isArray(rows)?rows:[])}catch{}finally{polling=false}};
+    void update();const timer=setInterval(()=>void update(),750);return()=>{alive=false;clearInterval(timer)};
+  },[p.scope,p.busy,working,pendingKey]);
   const art=artworks.find(row=>row.id===selected),index=artworks.findIndex(row=>row.id===selected);
   useEffect(()=>{setSelected(null);setFavorites(readFavorites(p.scope));setSearch('');setError('');setWorking(null);},[p.scope]);
   const favorite=(item:StudioArtwork)=>{
@@ -59,6 +83,7 @@ export function ImageGallery(p:Props){
   const action=async(item:StudioArtwork,recover=false)=>{setWorking(item.id);setError('');try{if(recover)await p.onRecover(item);else{await p.onReuse(item);setSelected(null);}}catch{setError(galleryText(recover?'recoverError':'reuseError'));}finally{setWorking(null);}};
   const lower=search.trim().toLowerCase(),cutoff=period==='all'?0:Date.now()-(period==='day'?86400000:7*86400000);
   const shown=batches.filter(batch=>(!lower||[batch.prompt,...batch.artworks.map(art=>art.model||'')].join(' ').toLowerCase().includes(lower))&&(!cutoff||!!batch.ts&&batch.ts>=cutoff)&&(!onlyFavorites||batch.artworks.some(art=>favorites.includes(art.id))));
+  const priorityBatch=shown.at(-1)?.id;
   return <section ref={galleryRef} className={'studio-gallery'+(large?' large':'')} aria-label={tr('studio.gallery.title')}>
     <div className="studio-gallery-top"><div><span className="studio-eyebrow">{tr('studio.gallery.eyebrow')}</span><h1>{tr('studio.gallery.headline')}</h1></div><div className="studio-gallery-tools"><label><GalleryIcon name="search"/><input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder={tr('studio.gallery.search')} aria-label={tr('studio.gallery.search')}/></label><select value={period} onChange={event=>setPeriod(event.target.value)} aria-label={tr('studio.gallery.period')}><option value="all">{tr('studio.gallery.allTime')}</option><option value="day">{tr('studio.gallery.day')}</option><option value="week">{tr('studio.gallery.week')}</option></select><button aria-label={tr('studio.gallery.favorites')} title={tr('studio.gallery.favorites')} aria-pressed={onlyFavorites} onClick={()=>setOnlyFavorites(v=>!v)}><GalleryIcon name="heart"/></button><button aria-label={tr('studio.gallery.layout')} title={tr('studio.gallery.layout')} aria-pressed={large} onClick={()=>setLarge(v=>!v)}><GalleryIcon name="grid"/></button></div></div>
     {error&&<p role="alert" className="studio-gallery-error">{error}</p>}
@@ -71,7 +96,7 @@ export function ImageGallery(p:Props){
         {batch.prompt.length>60&&<details className="studio-batch-description"><summary>{tr('studio.gallery.fullPrompt')}</summary><p>{batch.prompt}</p></details>}
         <div className="studio-batch-meta">{first.model&&<span><BillingBrand model={first.model} provider=""/>{imageModelLabel({model:first.model})}</span>}{first.ratio&&<span>{first.ratio}</span>}{first.resolution&&<span>{first.resolution} · {quality(first.quality)}</span>}{knownCharges&&<span><GalleryIcon name="coin"/>{tr('studio.gallery.actual',{coins:charged})}</span>}</div>
         <div className="studio-art-grid">{batch.artworks.filter(item=>!onlyFavorites||favorites.includes(item.id)).map((item,i)=><div className="studio-art-card" key={item.id} data-studio-artwork={item.id}>
-          {item.image?<button className="studio-art-open" aria-label={tr('studio.gallery.open',{number:i+1})} onClick={()=>setSelected(item.id)}><img src={item.image} alt={item.prompt} loading="lazy" onLoad={event=>{const image=event.currentTarget;setDimensions(previous=>previous[item.id]?previous:{...previous,[item.id]:`${image.naturalWidth.toLocaleString()} × ${image.naturalHeight.toLocaleString()} px`});}}/><span className="studio-art-index">{String(i+1).padStart(2,'0')}</span><span className="studio-art-zoom"><GalleryIcon name="search"/></span></button>:<div className={'studio-art-placeholder '+item.state}>{item.state==='running'?<span className="studio-gallery-orbit"/>:<GalleryIcon name="image"/>}<b>{galleryText(item.state)}</b><small>{item.state==='unattempted'?tr('studio.gallery.notCharged'):item.message||galleryText(item.state==='pending'?'pendingHint':'workingHint')}</small>{item.state==='failed'&&<button disabled={p.busy||!!working} onClick={()=>void action(item)}>{tr('studio.gallery.retryOne')}</button>}{item.state==='pending'&&item.toolId&&<button disabled={p.busy||!!working} onClick={()=>void action(item,true)}>{working===item.id?tr('studio.gallery.checking'):tr('studio.gallery.checkOrder')}</button>}</div>}
+          {item.image?<button className="studio-art-open" aria-label={tr('studio.gallery.open',{number:i+1})} onClick={()=>setSelected(item.id)}><img src={item.image} alt={item.prompt} loading={batch.id===priorityBatch?'eager':'lazy'} decoding="async" fetchPriority={batch.id===priorityBatch&&i===0?'high':'auto'} onLoad={event=>{const image=event.currentTarget;setDimensions(previous=>previous[item.id]?previous:{...previous,[item.id]:`${image.naturalWidth.toLocaleString()} × ${image.naturalHeight.toLocaleString()} px`});}}/><span className="studio-art-index">{String(i+1).padStart(2,'0')}</span><span className="studio-art-zoom"><GalleryIcon name="search"/></span></button>:<div className={'studio-art-placeholder '+item.state}>{item.state==='running'?<span className="studio-gallery-orbit"/>:<GalleryIcon name="image"/>}<b>{transfers.some(row=>row.toolId===item.toolId&&!!row.toolId||row.orderId===item.orderId)?tr('ui.app.downloading.568fdf7'):galleryText(item.state)}</b>{transfers.filter(row=>row.toolId===item.toolId&&!!row.toolId||row.orderId===item.orderId).map(row=><MediaLoadProgress key={row.orderId} received={row.received} total={row.total}/>)}<small>{item.state==='unattempted'?tr('studio.gallery.notCharged'):(item.state==='pending'?galleryText('pendingHint'):item.message?localizeStoredText(item.message):galleryText('workingHint'))}</small>{item.state==='failed'&&<button disabled={p.busy||!!working} onClick={()=>void action(item)}>{tr('studio.gallery.retryOne')}</button>}{item.state==='pending'&&item.toolId&&(item.orderId||item.recoveryKey)&&<button disabled={p.busy||!!working} onClick={()=>void action(item,true)}>{working===item.id?tr('studio.gallery.checking'):tr('studio.gallery.checkOrder')}</button>}</div>}
           <div className="studio-art-bottom"><span>{item.charged!==undefined?<><GalleryIcon name="coin"/>{item.charged} {tr('studio.coins')}</>:galleryText(item.state==='unattempted'?'notCharged':item.state)}{item.elapsedMs!==undefined&&<> · {duration(item.elapsedMs)}</>}</span>{item.image&&<div><FavoriteButton compact saved={favorites.includes(item.id)} onClick={()=>favorite(item)}/><button title={tr('studio.gallery.download')} aria-label={tr('studio.gallery.download')} onClick={()=>download(item)}><GalleryIcon name="download"/></button></div>}</div>
         </div>)}</div><div className="studio-batch-foot"><span><GalleryIcon name="check"/>{tr('studio.gallery.saved')}</span>{completed>0&&<button onClick={()=>batch.artworks.filter(item=>!!item.image).forEach(download)}><GalleryIcon name="download"/>{tr('studio.gallery.downloadBatch')}</button>}</div>
       </article>;

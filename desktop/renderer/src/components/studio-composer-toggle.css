@@ -1,0 +1,4 @@
+.studio-composer-heading-actions{display:flex;align-items:center;gap:12px}
+.image-studio .studio-composer-toggle,.video-studio-root .studio-composer-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;min-height:28px;padding:5px;border:0;border-radius:6px;background:transparent;color:#7891a2;cursor:pointer}
+.image-studio .studio-composer-toggle:hover,.video-studio-root .studio-composer-toggle:hover{background:#edf2f5;color:#315f7b}
+.image-studio .studio-composer-toggle svg,.video-studio-root .studio-composer-toggle svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}

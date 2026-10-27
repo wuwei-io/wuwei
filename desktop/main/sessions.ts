@@ -230,61 +230,19 @@ export function dismissResume(id: string) {
   saveList(l);
 }
 
-// 读原始消息(不修复)：内容启发式要看真实末尾结构，repair 会补占位掩盖"半截"特征
-function readRaw(id: string): any[] {
-  try {
-    const m = JSON.parse(readFileSync(join(SDIR, id + ".json"), "utf8"));
-    return Array.isArray(m) ? m : [];
-  } catch {
-    return [];
-  }
-}
-// 内容启发式：会话是否"明显干到一半"——正常收尾=末条助手纯文字回复；否则视为半截：
-//  ① 末条助手带 tool_use(调了工具没等到结果/没继续) ② 末条纯 tool_result(工具跑完助手没给结论)
-//  ③ 末条用户消息(用户发了就退、AI 一个字没回)
-function looksIncomplete(msgs: any[]): boolean {
-  if (!msgs.length) return false;
-  const last = msgs[msgs.length - 1];
-  const blocks = last?.content || [];
-  if (last.role === "assistant") return blocks.some((b: any) => b.type === "tool_use");
-  if (last.role === "user")
-    return (
-      blocks.some((b: any) => b.type === "tool_result") ||
-      blocks.some((b: any) => b.type === "text" && b.text?.trim())
-    );
-  return false;
-}
-
-// 启动时调用一次(设置开关开时)：
-//  - 残留 running=true → 上次被强制中断/崩溃 → 置 interrupted、清 running(强信号，无条件)。
-//  - heuristic=true 时，额外对「最近 24h、未完成标记、未忽略过」的会话做内容启发式，明显半截的也置 interrupted。
-// 返回所有 interrupted 会话(含历史遗留未处理的)。
-export function markInterruptedOnStartup(heuristic: boolean): { id: string; title: string }[] {
-  const l = listSessions();
-  const now = Date.now();
-  const RECENT = 24 * 3600 * 1000;
+// A restarted process cannot still own these turns. Clear only stale runtime
+// flags; do not infer unfinished work from message contents or resume a task.
+export function resetInterruptedOnStartup(): void {
+  const sessions = listSessions();
   let changed = false;
-  for (const s of l) {
-    if (s.running) {
-      s.running = undefined;
-      s.interrupted = true;
-      changed = true;
-      continue;
-    }
-    if (
-      heuristic &&
-      !s.interrupted &&
-      !s.resumeDismissed &&
-      !s.done &&
-      s.updatedAt >= now - RECENT &&
-      looksIncomplete(readRaw(s.id))
-    ) {
-      s.interrupted = true;
+  for (const session of sessions) {
+    if (session.running || session.interrupted) {
+      session.running = undefined;
+      session.interrupted = undefined;
       changed = true;
     }
   }
-  if (changed) saveList(l);
-  return l.filter((s) => s.interrupted).map((s) => ({ id: s.id, title: s.title }));
+  if (changed) saveList(sessions);
 }
 
 // 组顺序整体重排(拖拽组头)
