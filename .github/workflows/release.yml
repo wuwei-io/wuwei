@@ -71,6 +71,8 @@ jobs:
 
       - name: Build renderer/main
         run: npm run desktop:build
+      - name: Verify mobile remote protocol and bundled adapters
+        run: node --test tests/mobile-remote.test.cjs
 
       # Generate GitHub-compatible generic update manifests; publish only after all platforms finish.
       - name: Package Linux (AppImage/deb)
