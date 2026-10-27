@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { WuweiMe, CatalogProviderDto, ModelPricingData } from "../main/wuwei-auth.js";
 import type { BillingRequest, BillingResponse } from '../../src/billing/contracts.js';
 
+import type {VideoRequest} from '../../src/videogen/contracts.js';
 const EVENTS = [
   // 自动更新事件——之前漏在白名单外，导致 main 发的「发现新版/下载进度/已就绪」全被 preload 拦掉、
   // 渲染层永远收不到 → 更新药丸永远不显示（用户从来没见过升级提示的真正根因）。
@@ -133,8 +134,8 @@ const api = {
   babyPyramid: () => ipcRenderer.invoke("agi:baby:pyramid") as Promise<string>,
   babyReorganize: () => ipcRenderer.invoke("agi:baby:reorganize") as Promise<string>,
 
-  send: (sid: string, text: string, images?: string[], auto?: boolean) =>
-    ipcRenderer.send("chat:send", sid, text, images, auto),
+  send: (sid: string, text: string, images?: string[], auto?: boolean, imageApprovalId?: string) =>
+    ipcRenderer.send("chat:send", sid, text, images, auto, imageApprovalId),
   isRunning: (sid: string) => ipcRenderer.invoke("chat:is-running", sid) as Promise<boolean>,
   inject: (sid: string, text: string, images?: string[]) =>
     ipcRenderer.send("chat:inject", sid, text, images),
@@ -388,7 +389,11 @@ const api = {
   wuweiLogin: () => ipcRenderer.invoke("account:wuwei-login") as Promise<WuweiMe | null>,
   wuweiMe: () => ipcRenderer.invoke("account:wuwei-me") as Promise<WuweiMe | null>,
   wuweiCatalog: () => ipcRenderer.invoke("account:wuwei-catalog") as Promise<CatalogProviderDto[] | null>,
-  imageCatalog: () => ipcRenderer.invoke("account:image-catalog") as Promise<{sku_id:string;label?:string;model:string;coins_per_image:number}[]>,
+  imageCatalog: () => ipcRenderer.invoke("account:image-catalog") as Promise<import('../../src/imagegen/image-catalog.js').ImageCatalogEntry[]>,
+    selectImageSku: (input:{sku_id:string;sid:string}) => ipcRenderer.invoke('settings:image-sku',input) as Promise<{sku_id:string}>,
+  imageHistory:()=>ipcRenderer.invoke('session:image-history') as Promise<{id:string;title:string;updatedAt:number;imageSku?:string}[]>,
+  imageRecover: (input:{sid:string;tool_id:string})=>ipcRenderer.invoke('account:image-recover',input) as Promise<import('../../src/types.js').ToolResult>,
+  imageQuote: (input: {sku_id:string;prompt:string;count?:number}) => ipcRenderer.invoke('account:image-quote', input) as Promise<import('../../src/imagegen/studio-approval.js').StudioImageQuote>,
   modelPricing: () => ipcRenderer.invoke("model-pricing:get") as Promise<ModelPricingData | null>,
   wuweiLogout: () => ipcRenderer.invoke("account:wuwei-logout") as Promise<boolean>,
   wuweiDeviceId: () => ipcRenderer.invoke("account:wuwei-device-id") as Promise<string>,
@@ -438,6 +443,7 @@ const api = {
   // 立即安装已下载好的更新并重启
   installUpdate: () => ipcRenderer.send("updater:install"),
   // 扫码支付：下单拿二维码串 + 轮询订单状态
+  videoRequest: (request:VideoRequest) => ipcRenderer.invoke('account:video-studio',request) as Promise<unknown>,
   billingRequest: (request:BillingRequest) => ipcRenderer.invoke('billing:request',request) as Promise<BillingResponse>,
   backgroundTasks: () => ipcRenderer.invoke('background:tasks'),
   payCreate: (sku: string, channel: string) =>

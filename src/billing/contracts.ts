@@ -26,6 +26,8 @@ export interface BillingQuote {
   memberBonus: boolean;
   autoRenew: false;
   durationDays?: number;
+  durationMonths?: number;
+  creditsNeverExpire?: boolean;
   expiryDays?: number;
   startsAt?: string;
 }
@@ -35,7 +37,7 @@ export interface BillingCatalog {
   member: boolean;
   checkoutReady: boolean;
   channels: Record<BillingChannel, boolean>;
-  trial?: {enabled:boolean;eligible:boolean;repeatAllowed?:boolean};
+  trial?: {enabled:boolean;eligible:boolean;repeatAllowed?:boolean;cryptoChains?:string[]};
   backgroundPolicy?: {enabled:boolean;version:string;free:number;plans:Record<string,number>};
 }
 export interface CreditRecord {

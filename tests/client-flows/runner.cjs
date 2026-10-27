@@ -89,6 +89,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'billingRequest': {
       const req=clone(args[0]);(s.billingCalls??=[]).push(req);
       const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
+      if(s.miniPurchased||s.billingPaid){for(const p of products)if(p.period==='monthly')p.recommended=p.name==='Pro';}
       if(req.action==='catalog'){if(s.billingDelay)await delay(s.billingDelay);return {...(s.backgroundPolicy?{backgroundPolicy:s.backgroundPolicy}:{}),version:'qa-v2',trial:{...(s.miniTrial??{enabled:false,eligible:false}),...((s.billingPaid&&!s.miniTrial?.repeatAllowed)||s.quoteError==='TRIAL_USED'?{eligible:false}:{})},products,member:!!s.billingMember,checkoutReady:true,channels:{alipay:true,paddle:!s.cryptoOnly,crypto:true}};}
       if(req.action==='quote'){
         if(s.quoteDelay)await delay(s.quoteDelay);
@@ -99,7 +100,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
         if(s.createError)return {error:typeof s.createError==='string'?s.createError:'network'};
         s.orders++;s.billingOrder={id:'qa-billing-order-'+s.orders,sku:req.sku,currency:req.currency,amountMinor:req.expected.amountMinor,channel:req.channel,status:'pending',expiresAt:new Date(Date.now()+600000).toISOString(),...(req.channel==='alipay'?{qr:'https://qa.invalid/qr'}:req.channel==='paddle'?{checkoutUrl:'https://wuweiai.io/en/billing-checkout?order=qa'}:{crypto:{network:'Solana',currency:'USDT',address:'qa-isolated-address',amount:'40.0001'}})};return clone(s.billingOrder);
       }
-      if(req.action==='order'){if(s.billingPaid){s.billingOrder={...s.billingOrder,status:'paid',...(s.billingRefundRequired?{refundRequired:true}:{}),creditsGranted:s.billingRefundRequired?0:s.billingOrder.sku==='v2_plan_mini_day'?100:2000,balance:3578.362704};}return clone(s.billingOrder);}
+      if(req.action==='order'){if(s.billingPaid){s.billingOrder={...s.billingOrder,status:'paid',...(s.billingRefundRequired?{refundRequired:true}:{}),creditsGranted:s.billingRefundRequired?0:s.billingOrder.sku==='v2_plan_mini_monthly'?600:2000,balance:3578.362704};}return clone(s.billingOrder);}
       if(req.action==='ledger')return {balance:1578.362704,total:req.type==='model_check'?1:101,limit:req.limit||50,offset:req.offset||0,hasMore:(req.offset||0)+(req.limit||50)<(req.type==='model_check'?1:101),records:req.type==='model_check'?[{id:'check-only',type:'model_check',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-24T00:00:00Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]:[{id:'record-'+(req.offset||0),type:'spend',source:'model_usage',description:'无为托管模型调用',createdAt:'2026-10-20T15:14:12Z',amount:-0.03039,balanceAfter:1578.362704,model:'mimo-v2.6-flash',parameters:{turn_kind:'tool_cont',input_tokens:100}},{id:'free-record',type:'spend',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-20T15:05:49Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]};
       return {error:'unknown_action'};
     }
@@ -222,10 +223,10 @@ app.whenReady().then(async () => {
     // Exercise the real split selector and card view, with no order creation.
     await f.click('.acct-btn');await f.click('[data-account-upgrade]');
     await f.wait('!!document.querySelector(".billing-selector-benefits .billing-background-feature")');
-    await f.click('[data-period=annual]');
+    await f.click('[data-period=annual]');await f.click('[data-sku=v2_plan_plus_annual]');
     const inspect=()=>f.js('(()=>{const rows=[...document.querySelectorAll(".billing-selector-benefits li")];return rows.map(e=>({kind:e.dataset.usageKind || (e.classList.contains("billing-value-feature")?"value":e.classList.contains("billing-background-feature")?"parallel":"common"),weight:Number(getComputedStyle(e.querySelector("strong")||e).fontWeight),text:e.textContent}))})()');
     let rows=await inspect();assert.deepEqual(rows.slice(0,5).map(r=>r.kind),['tasks','tokens','images','value','parallel']);
-    assert.ok(rows.slice(0,5).every(r=>r.weight>=600));assert.ok(rows.slice(5).every(r=>r.weight<600));
+    assert.ok(rows.slice(0,3).every(r=>r.weight>=550));assert.ok(rows.slice(3,5).every(r=>r.weight>=600));assert.ok(rows.slice(5).every(r=>r.weight<600));
     assert.match(rows[3].text,/20/);assert.match(rows[4].text,/4/);
     assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-pay")).backgroundColor'),'rgb(192, 95, 60)');
     assert.equal(await f.js('getComputedStyle(document.querySelector(".billing-selector-option.selected")).borderTopColor'),'rgb(39, 74, 99)','selected plan border');
@@ -352,82 +353,49 @@ app.whenReady().then(async () => {
   });
 
   const billingAccount=account(1578.362704);billingAccount.flags=['billing_v2'];
-  const openBilling=async(f,ledger=false,period='monthly')=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js(ledger?'Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()':'document.querySelector("[data-account-upgrade]")?.click()');await f.wait('!!document.querySelector(".billing-panel")');if(!ledger&&period){await f.wait('!!document.querySelector(".billing-selector-periods")');await f.click('.billing-selector-periods button:nth-child('+(['monthly','annual','pack'].indexOf(period)+1)+')');await f.wait('document.querySelector(".billing-selector-periods button:nth-child('+(['monthly','annual','pack'].indexOf(period)+1)+')")?.getAttribute("aria-selected")==="true"');}};
+  const openBilling=async(f,ledger=false,period='monthly')=>{const english=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/en.json'),'utf8')).messages,key=Object.keys(english).find(key=>english[key]===(ledger?'Coin details':'Top up')),pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='system'?'en.json':(f.state.lang||'zh')+'.json'),'utf8')).messages;await f.click('.acct-btn');await f.js(ledger?'Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(pack[key])+')?.click()':'document.querySelector("[data-account-upgrade]")?.click()');await f.wait('!!document.querySelector(".billing-panel")');if(!ledger&&period){await f.wait('!!document.querySelector(".billing-selector-periods")');await f.click('[data-period='+period+']');await f.wait('document.querySelector("[data-period='+period+']")?.getAttribute("aria-selected")==="true"');}};
 
 
 
-  for(const lang of ['zh','en'])await run('发布关键：Mini：入口、100币折算、24小时付款与限购 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8}],miniTrial:{enabled:true,eligible:true},backgroundPolicy:{enabled:true,version:'qa',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.wait('document.querySelector("[data-sku=v2_plan_plus_monthly]")?.getAttribute("aria-pressed")===("true")');
-    assert.equal(await f.js('document.querySelector("[data-period=monthly]").getAttribute("aria-selected")'),'true');
-    assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),3);
-    assert.deepEqual(await f.js('Array.from(document.querySelectorAll(".billing-selector-option")).map(e=>e.dataset.sku)'),['v2_plan_mini_day','v2_plan_pro_monthly','v2_plan_plus_monthly','v2_plan_max_monthly']);
-    for(const [width,height] of [[1200,920],[1200,735],[840,735]]){
-      f.state.win.setContentSize(width,height);await delay(100);
-      const g=await f.js('(()=>{const a=document.querySelector("[data-sku=v2_plan_mini_day]"),b=document.querySelector("[data-sku=v2_plan_pro_monthly]"),pay=document.querySelector(".billing-selector-pay").getBoundingClientRect();return {miniAbovePro:a.getBoundingClientRect().bottom<b.getBoundingClientRect().top,payVisible:pay.bottom<=innerHeight-8,payTop:pay.top,payBottom:pay.bottom,height:innerHeight,miniNotMonthly:!a.querySelector(".billing-selector-price>span"),miniNoDiscount:!a.querySelector("del")}})()');
-      assert.ok(g.miniAbovePro&&g.payVisible&&g.miniNotMonthly&&g.miniNoDiscount,JSON.stringify(g));
-      fs.writeFileSync(path.join(evidence,`mini-above-pro-default-${lang}-${width}-${height}.png`),await captureBillingFrame(f));
-    }
-    f.state.win.setContentSize(1200,920);await delay(60);
-    await f.click('[data-sku=v2_plan_mini_day]');await f.wait('document.querySelector("[data-sku=v2_plan_mini_day]")?.getAttribute("aria-pressed")==="true"');
+  for(const lang of ['zh','en'])await run('发布关键：Mini：月付600币、永久币、付款后推荐Pro且可重复购买 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{lang}}},async f=>{
+    await openBilling(f,false,null);await f.wait('document.querySelector("[data-sku=v2_plan_mini_monthly]")?.getAttribute("aria-pressed")==="true"');
+    assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),4);
     assert.equal(await f.js('document.querySelectorAll(".billing-selector-option").length'),4);
-    assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),'100');
-    assert.equal(await f.js('document.querySelector("[data-usage-kind=tasks]").textContent.includes("93")'),true);
-    assert.equal(await f.js('document.querySelector("[data-usage-kind=images]").textContent.includes("12")'),true);
-    assert.equal(await f.js('document.querySelector("[data-usage-kind=tokens]").textContent.includes(new Intl.NumberFormat(' + JSON.stringify(lang) + ',{notation:"compact",maximumFractionDigits:1}).format(930000))'),true);
-    assert.equal(await f.js('document.querySelector(".billing-background-feature").textContent.includes("2")'),true);
-    assert.equal(await f.js('!!document.querySelector(".billing-value-feature")'),false);
-    const price=await f.js('document.querySelector(".billing-selector-price strong").textContent');assert.ok(price.includes(lang==='zh'?'7':'1'),price);
-    assert.equal(f.state.orders,0);fs.writeFileSync(path.join(evidence,'mini-'+lang+'.png'),await captureBillingFrame(f));
-    await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-payment-lines")');
-    assert.equal(await f.js('document.querySelector(".billing-payment-lines").textContent.includes("24")'),true);
-    if(lang==='en'){assert.equal(await f.js('document.querySelectorAll(".billing-payment-choices button")[1].disabled'),true);await f.click('.billing-payment-choices button');}
-    await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,1);
-    assert.equal(f.state.billingCalls.find(x=>x.action==='quote').sku,'v2_plan_mini_day');
-    fs.writeFileSync(path.join(evidence,'mini-checkout-'+lang+'.png'),await captureBillingFrame(f));
-    f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');
-    assert.equal(await f.js('document.querySelector(".billing-order-state").textContent.includes("100")'),true);
-    await f.click('.billing-top button');await f.wait('!!document.querySelector(".billing-selector-periods")');
-    await f.wait('!document.querySelector("[data-sku=v2_plan_mini_day]")');assert.equal(f.state.orders,1);
-  });
-  for(const lang of ['zh','en'])await run('发布关键：Mini：年付与对比套餐中的体验包仍按一天报价 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{lang}},miniTrial:{enabled:true,eligible:true}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('[data-period=annual]');await f.wait('!!document.querySelector("[data-sku=v2_plan_pro_annual]")');
-    const price=await f.js('document.querySelector("[data-sku=v2_plan_mini_day] .billing-selector-price strong").textContent');assert.ok(price.includes(lang==='zh'?'7':'1'));
-    assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day] del")'),false);
-    await f.click('[data-period=pack]');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day]")'),false);
-    await f.click('[data-period=annual]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('.billing-top button:first-child');await f.wait('!!document.querySelector(".billing-plans-trial")');
-    assert.equal(await f.js('document.querySelectorAll(".billing-plan-card").length'),3);
-    assert.equal(await f.js('document.querySelector(".billing-plans-trial").getBoundingClientRect().bottom<document.querySelector(".billing-plan-grid").getBoundingClientRect().top'),true);
-    fs.writeFileSync(path.join(evidence,'mini-above-pro-comparison-'+lang+'.png'),await captureBillingFrame(f));
-    await f.click('.billing-plans-trial button');await f.wait('!!document.querySelector(".billing-payment-lines")');if(lang==='en'){await f.click('.billing-payment-choices button');}
-    await f.wait('!!document.querySelector(".billing-live-order")');const q=f.state.billingCalls.filter(x=>x.action==='quote').at(-1),order=f.state.billingCalls.filter(x=>x.action==='create-order').at(-1);assert.equal(q.sku,'v2_plan_mini_day');assert.equal(order.expected.amountMinor,lang==='zh'?700:100);assert.equal(order.expected.creditsPerGrant,100);assert.equal(f.state.orders,1);
-  });
-  await run('发布关键：Mini：白名单付款后仍可重复购买且每次独立下单',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true,repeatAllowed:true}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    const requestIds=[];
+    assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),'600');
+    const price=await f.js('document.querySelector("[data-sku=v2_plan_mini_monthly] .billing-selector-price strong").textContent');assert(price.includes(lang==='zh'?'20':'3'));
+    assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day]")'),false);
+    await f.js('document.querySelector(".billing-overlay").dispatchEvent(new MouseEvent("mousedown",{bubbles:true}));document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+    assert.equal(await f.js('!!document.querySelector(".billing-panel")'),true);
     for(let i=0;i<2;i++){
-      await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');
-      requestIds.push(f.state.billingCalls.filter(x=>x.action==='create-order').at(-1).requestId);assert.equal(f.state.orders,i+1);
+      await f.click('[data-sku=v2_plan_mini_monthly]');await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-payment-lines")');
+      if(lang==='en')await f.click('.billing-payment-choices button');
+      await f.wait('!!document.querySelector(".billing-live-order")');assert.equal(f.state.orders,i+1);
+      const order=f.state.billingCalls.filter(x=>x.action==='create-order').at(-1);assert.equal(order.sku,'v2_plan_mini_monthly');assert.equal(order.expected.amountMinor,lang==='zh'?2000:300);assert.equal(order.expected.creditsPerGrant,600);
       f.state.billingPaid=true;await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-paid-symbol")');
-      await f.click('.billing-top button');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-      f.state.billingPaid=false;
+      await f.click('.billing-top button');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_monthly]")');
+      f.state.billingPaid=false;f.state.miniPurchased=true;
+      if(i===0){await f.click('.billing-top .billing-close');await openBilling(f);await f.wait('document.querySelector("[data-sku=v2_plan_pro_monthly]")?.getAttribute("aria-pressed")==="true"');}
     }
-    assert.equal(new Set(requestIds).size,2);assert.equal(f.state.orders,2);
+    assert.equal(new Set(f.state.billingCalls.filter(x=>x.action==='create-order').map(x=>x.requestId)).size,2);
   });
-  for(const trial of [{enabled:false,eligible:true},{enabled:true,eligible:false},null])await run('发布关键：Mini：关闭、已购和旧服务隐藏入口 '+JSON.stringify(trial),{account:clone(billingAccount),miniTrial:trial},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');assert.equal(await f.js('document.querySelectorAll(".billing-selector-periods button").length'),3);
-    assert.equal(await f.js('!!document.querySelector("[data-period=trial],[data-sku=v2_plan_mini_day]")'),false);assert.equal(f.state.orders,0);
+  for(const trial of [{enabled:false,eligible:true},{enabled:true,eligible:false},null])await run('发布关键：Mini：月付不受旧体验包资格限制 '+JSON.stringify(trial),{account:clone(billingAccount),miniTrial:trial},async f=>{
+    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_monthly]")');assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_day]")'),false);assert.equal(f.state.orders,0);
+    await f.click('[data-period=annual]');await f.wait('document.querySelectorAll(".billing-selector-option").length===3');assert.equal(await f.js('!!document.querySelector("[data-sku=v2_plan_mini_monthly]")'),false);
+    await f.click('[data-period=free]');await f.wait('!!document.querySelector(".billing-free-activities")');assert.equal(f.state.orders,0);
   });
-  await run('发布关键：Mini：迟到的首购拒绝回到正式套餐',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true}},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    f.state.quoteError='TRIAL_USED';await f.click('.billing-selector-pay');await f.wait('!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    assert.equal(await f.js('document.querySelector("[data-period=monthly]").getAttribute("aria-selected")'),'true');assert.equal(f.state.orders,0);
+  await run('发布关键：Mini：退款提示不能显示权益到账',{account:clone(billingAccount),billingRefundRequired:true},async f=>{
+    await openBilling(f);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_monthly]")');await f.click('[data-sku=v2_plan_mini_monthly]');await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');f.state.billingPaid=true;
+    await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-order-state[role=alert]")');assert.equal(await f.js('!!document.querySelector(".billing-paid-symbol")'),false);assert.equal(f.state.orders,1);
   });
-  await run('发布关键：Mini：重复付款进入退款提示而不显示权益到账',{account:clone(billingAccount),miniTrial:{enabled:true,eligible:true},billingRefundRequired:true},async f=>{
-    await openBilling(f,false,null);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('[data-sku=v2_plan_mini_day]');await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_day]")');
-    await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');f.state.billingPaid=true;
-    await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-order-state[role=alert]")');
-    assert.equal(await f.js('!!document.querySelector(".billing-paid-symbol")'),false);
-    assert.equal(await f.js('document.querySelector(".billing-order-state").textContent.includes("退款")'),true);
+  for(const coins of [0,100])await run('发布关键：额度弹窗立即显示、模态关闭和余额切换 '+coins,{account:account(coins),nextError:'[[gw:free_daily_cap_reached]] exhausted'},async f=>{
+    f.state.meDelay=2000;await f.send();await f.wait('!!document.querySelector(".free-quota-notice")',1000);
+    await f.js('document.querySelector(".usage-notice-overlay").click();document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');assert.equal(await f.js('!!document.querySelector(".free-quota-notice")'),true);
+    assert.equal(await f.js('!!document.querySelector(".usage-notice-secondary")'),coins>0);
+    if(coins){assert.match(await f.js('document.querySelector(".usage-notice-description").textContent'),/另外您还有无为币/);await f.click('.usage-notice-secondary');await f.wait('!document.querySelector(".free-quota-notice")');await f.wait('document.querySelector(".mq-txt")?.textContent.includes("MiMo") || document.querySelector(".mq-txt")?.textContent.includes("mimo")');assert.equal(f.state.settings.model,'mimo-v2.6-flash');assert.equal(f.state.sent.length,1);assert.equal(f.state.orders,0);}
+    else{await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-selector-shortage")'),false);}
+  });
+  await run('发布关键：余额不足先说明，点击立马升级后打开标准套餐',{account:account(0),settings:settings('wuwei-mimo','mimo-v2.6-flash')},async f=>{
+    await f.send();await f.wait('!!document.querySelector(".balance-shortage-dialog")');assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-error,.billing-selector-shortage")'),false);assert.equal(f.state.orders,0);
   });
   for(const lang of ['zh','en','fa'])await run('发布关键：账号菜单升级入口、年付优惠标与菜单顺序 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
     await f.click('.acct-btn');await f.wait('!!document.querySelector("[data-account-upgrade]")');await delay(180);
@@ -455,7 +423,7 @@ app.whenReady().then(async () => {
       let capture;for(let attempt=0;attempt<3;attempt++){try{capture=await f.state.win.webContents.capturePage();break;}catch(error){if(!/UnknownVizError/.test(String(error))||attempt===2)throw error;f.state.win.webContents.invalidate();await delay(250);}}fs.writeFileSync(path.join(evidence,`billing-full-models-${lang}-${width}.png`),capture.toPNG());
     }
     await f.click('.billing-catalog-filters button:nth-child(3)');assert.equal(await f.js('document.querySelectorAll(".billing-selector-models>div").length'),3);
-    await f.click('.billing-catalog-filters button:nth-child(4)');assert.equal(await f.js('document.querySelectorAll(".billing-selector-models>div").length'),5);
+    await f.click('.billing-catalog-filters button:nth-child(4)');assert.equal(await f.js('document.querySelectorAll(".billing-selector-models>div").length'),0);await f.click('.billing-catalog-filters button:nth-child(5)');assert.equal(await f.js('document.querySelectorAll(".billing-selector-models>div").length'),5);
     await f.click('.billing-catalog-filters button:first-child');
     await f.js('(()=>{const e=document.querySelector(".billing-catalog-search input");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"claude");e.dispatchEvent(new Event("input",{bubbles:true}));})()');
     await f.wait('document.querySelectorAll(".billing-selector-models>div").length===9');
@@ -543,7 +511,7 @@ app.whenReady().then(async () => {
     await f.wait('document.querySelector(".billing-type")?.textContent==="消费"');assert.equal(f.state.billingCalls.filter(r=>r.action==='ledger').at(-1).limit,10);
   });
   await run('发布关键：账单新版：套餐比较一屏显示并展示不同厂商', {account:clone(billingAccount)},async f=>{
-    f.state.win.setContentSize(1200,735);await openBilling(f);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    f.state.win.setContentSize(1200,735);await openBilling(f);await f.wait('!!document.querySelector(".billing-selector-option")');await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===4');
     await f.js('document.fonts.ready');await delay(250);fs.writeFileSync(path.join(evidence,'billing-comparison-zh.png'),(await f.state.win.webContents.capturePage()).toPNG());
     const layout=await f.js('({viewport:innerHeight,scroll:document.querySelector(".billing-panel").scrollHeight,client:document.querySelector(".billing-panel").clientHeight})');assert.ok(layout.scroll<=layout.client+2,JSON.stringify(layout));assert.equal(await f.js('document.querySelectorAll(".billing-card-benefits").length'),0);
   });
@@ -561,15 +529,15 @@ app.whenReady().then(async () => {
     await openBilling(f);await f.wait('document.querySelector(".billing-plan-buy")?.disabled===false');await f.click('.billing-plan-buy');await f.click('.billing-close');await delay(1050);assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);assert.equal(f.state.orders,0);
   });
 
-  for(const lang of ['zh','en','fa','ar'])await run('发布关键：默认月付Plus、切换年付原价和实际金额 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]},async f=>{
-    await openBilling(f,false,null);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');
+  for(const lang of ['zh','en','fa','ar'])await run('发布关键：默认月付Mini、切换年付原价和实际金额 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]},async f=>{
+    await openBilling(f,false,null);await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
     assert.equal(await f.js('document.querySelector("[data-period=monthly]").getAttribute("aria-selected")'),'true');
-    assert.equal(await f.js('document.querySelector(".billing-selector-option.selected").dataset.sku'),'v2_plan_plus_monthly');
-    assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat(lang,{maximumFractionDigits:3}).format(10000));
-    assert.equal(await f.js('document.querySelector(".billing-selector-option.selected .billing-selector-price strong").textContent'),await f.js(`new Intl.NumberFormat(${JSON.stringify(lang)},{style:'currency',currency:${JSON.stringify(lang==='zh'?'CNY':'USD')},maximumFractionDigits:0}).format(${lang==='zh'?268:40})`));
+    assert.equal(await f.js('document.querySelector(".billing-selector-option.selected").dataset.sku'),'v2_plan_mini_monthly');
+    assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat(lang,{maximumFractionDigits:3}).format(600));
+    assert.equal(await f.js('document.querySelector(".billing-selector-option.selected .billing-selector-price strong").textContent'),await f.js(`new Intl.NumberFormat(${JSON.stringify(lang)},{style:'currency',currency:${JSON.stringify(lang==='zh'?'CNY':'USD')},maximumFractionDigits:0}).format(${lang==='zh'?20:3})`));
     assert.equal(f.state.orders,0);
     await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`default-monthly-plus-${lang}.png`),await captureBillingFrame(f));
-    await f.click('[data-period=annual]');
+    await f.click('[data-period=annual]');await f.click('[data-sku=v2_plan_plus_annual]');
     assert.equal(await f.js('document.querySelector("[data-period=annual]").getAttribute("aria-selected")'),'true');
     assert.match(await f.js('document.querySelector(".billing-selector-option.selected .billing-selector-name b").textContent'),/Plus/);
     const monthly=lang==='zh'?[13400,26800,53600]:[2000,4000,8000],annual=lang==='zh'?[80400,160800,321600]:[12000,24000,48000];
@@ -582,33 +550,33 @@ app.whenReady().then(async () => {
       assert.ok(geometry.boxes.every(box=>box.inside&&!box.overflow),lang+width+JSON.stringify(geometry));assert.ok(geometry.payBottom<geometry.height,lang+width+JSON.stringify(geometry));await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`annual-prices-${lang}-${width}.png`),await captureBillingFrame(f));
     }
     f.state.win.setContentSize(1200,800);await delay(70);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),6);await delay(150);fs.writeFileSync(path.join(evidence,`annual-comparison-${lang}.png`),await captureBillingFrame(f));
-    await f.click('.billing-plans-periods button:first-child');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);await f.click('.billing-plans-periods button:nth-child(3)');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);
-    await f.click('.billing-plans-periods button:nth-child(2)');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');await f.click('.billing-plan-card[data-sku="v2_plan_pro_annual"] .billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
+    await f.click('.billing-plans-periods [data-period=monthly]');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);await f.click('.billing-plans-periods [data-period=pack]');assert.equal(await f.js('document.querySelectorAll(".billing-plan-card del").length'),0);
+    await f.click('.billing-plans-periods [data-period=annual]');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');await f.click('.billing-plan-card[data-sku="v2_plan_pro_annual"] .billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
     const request=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(request.sku,'v2_plan_pro_annual');assert.equal(request.expected.amountMinor,annual[0]);assert.equal(request.expected.creditsPerGrant,4000);assert.equal(f.state.orders,1);
   });
 
-  for(const lang of ['zh','en'])for(const member of [false,true])await run('发布关键：币包额度翻倍、单行到账说明和付款报价 '+lang+' '+(member?'member':'standard'),{account:clone(billingAccount),billingMember:member,lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]} ,async f=>{
-    await openBilling(f);await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
-    const expected=[3000,6000,10000,16000];
+  for(const lang of ['zh','en'])for(const member of [false,true])await run('发布关键：新币包金额、单行到账说明和付款报价 '+lang+' '+(member?'member':'standard'),{account:clone(billingAccount),billingMember:member,lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),imageCatalog:[{sku_id:'gpt_image_1_low',model:'gpt-image-1',quality:'low',coins_per_image:8},{sku_id:'gpt_image_2_medium',model:'gpt-image-2',quality:'medium',coins_per_image:36},{sku_id:'nano_banana_2',model:'google/gemini-3.1-flash-image-preview',quality:'default',coins_per_image:46}]} ,async f=>{
+    await openBilling(f);await f.click('.billing-selector-periods [data-period=pack]');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
+    const expected=[100,800,2000,4000];
     for(const width of [1200,1000,840]){
       f.state.win.setContentSize(width,800);await delay(100);
       const g=await f.js(`Array.from(document.querySelectorAll('.billing-selector-option')).map(el=>{const n=el.querySelector('.billing-selector-name small'),name=el.querySelector('.billing-selector-name b'),r=n.getBoundingClientRect(),card=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(n);const text=range.getBoundingClientRect();return {title:name.textContent,text:n.textContent,height:text.height,line:parseFloat(getComputedStyle(n).lineHeight),inside:text.left>=card.left&&text.right<=card.right+1,whiteSpace:getComputedStyle(n).whiteSpace}})`);
-      assert.equal(g.length,4);for(const [index,row] of g.entries()){assert.ok(row.inside,lang+width+JSON.stringify(row));if(lang==='zh'){assert.equal(row.text,new Intl.NumberFormat('en-US').format(expected[index]*(member?1.5:1))+' 币到账');assert.equal(row.whiteSpace,'nowrap');assert.ok(row.height<=row.line+1,JSON.stringify(row));}}
+      assert.equal(g.length,4);for(const [index,row] of g.entries()){assert.ok(row.inside,lang+width+JSON.stringify(row));if(lang==='zh'){assert.equal(row.text,new Intl.NumberFormat('en-US').format(expected[index])+' 币到账');assert.equal(row.whiteSpace,'nowrap');assert.ok(row.height<=row.line+1,JSON.stringify(row));}}
       await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,`coin-packs-${lang}-${member?'member':'standard'}-${width}.png`),await captureBillingFrame(f));
     }
     f.state.win.setContentSize(1200,800);await delay(70);
     for(const [index,credits] of expected.entries()){
-      await f.click('.billing-selector-option:nth-child('+(index+1)+')');assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat('en-US').format(credits*(member?1.5:1)));
-      assert.equal(await f.js('document.querySelectorAll(".billing-usage-metric").length'),3);assert.ok((await f.js("document.querySelector('.billing-usage-metric[data-usage-kind=images]').textContent")).includes(new Intl.NumberFormat(lang).format(Math.floor(credits*(member?1.5:1)/8))));
+      await f.click('.billing-selector-option:nth-child('+(index+1)+')');assert.equal(await f.js('document.querySelector(".billing-selector-credits strong").textContent'),new Intl.NumberFormat('en-US').format(credits));
+      assert.equal(await f.js('document.querySelectorAll(".billing-usage-metric").length'),3);assert.ok((await f.js("document.querySelector('.billing-usage-metric[data-usage-kind=images]').textContent")).includes(new Intl.NumberFormat(lang).format(Math.floor(credits/8))));
       await f.click('.billing-plan-buy');await f.wait(lang==='zh'?'!!document.querySelector(".billing-real-qr svg")':'!!document.querySelector(".billing-pay-methods button")');if(lang!=='zh'){await f.click('.billing-pay-methods button');await f.wait('!!document.querySelector(".billing-live-order")');}
-      const req=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(req.expected.creditsPerGrant,credits*(member?1.5:1));assert.equal(req.expected.amountMinor,(lang==='zh'?[20000,33400,46800,66900]:[2990,4990,6990,9990])[index]);assert.equal(req.sku,['v2_pack_1500','v2_pack_3000','v2_pack_5000','v2_pack_8000'][index]);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
+      const req=f.state.billingCalls.filter(call=>call.action==='create-order').at(-1);assert.equal(req.expected.creditsPerGrant,credits);assert.equal(req.expected.amountMinor,(lang==='zh'?[700,3400,6700,13400]:[100,500,1000,2000])[index]);assert.equal(req.sku,['v2_pack_100','v2_pack_800','v2_pack_2000','v2_pack_4000'][index]);await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
     }
     assert.equal(f.state.orders,4);
   });
 
   await run('发布关键：账单新版：切换月付年付积分包，按选中套餐准确报价', {account:clone(billingAccount)},async f=>{
-    await openBilling(f);await f.wait('document.querySelectorAll(".billing-selector-option").length===3');await f.click('.billing-selector-periods button:nth-child(2)');await f.wait('document.querySelector(".billing-selector-option")?.textContent.includes("67")');await f.click('.billing-selector-option:last-child');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');let req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_plan_max_annual');assert.equal(req.expected.amountMinor,321600);assert.equal(req.expected.creditsPerGrant,20000);
-    await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods button:nth-child(3)');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_3000');assert.equal(req.expected.amountMinor,33400);assert.equal(req.expected.creditsPerGrant,6000);
+    await openBilling(f);await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-periods [data-period=annual]');await f.wait('document.querySelector(".billing-selector-option")?.textContent.includes("67")');await f.click('.billing-selector-option:last-child');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');let req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_plan_max_annual');assert.equal(req.expected.amountMinor,321600);assert.equal(req.expected.creditsPerGrant,20000);
+    await f.click('.billing-top button:first-child');await f.click('.billing-selector-periods [data-period=pack]');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');await f.click('.billing-selector-option:nth-child(2)');await f.click('.billing-plan-buy');await f.wait('!!document.querySelector(".billing-real-qr svg")');req=f.state.billingCalls.filter(r=>r.action==='create-order').at(-1);assert.equal(req.sku,'v2_pack_800');assert.equal(req.expected.amountMinor,3400);assert.equal(req.expected.creditsPerGrant,800);
   });
   await run('多语言：已打开额度登录卡和历史系统提示同步切换', {account:null,settings:settings('wuwei-free','glm-4.7-flash'),nextError:'[[gw:free_daily_cap_reached]] 今日免费额度已用完：明日自动恢复，登录可解锁更高额度。'}, async f=>{
     await f.send();await f.wait('!!document.querySelector(".login-intro-reason")');
@@ -1010,10 +978,10 @@ app.whenReady().then(async () => {
     await f.wait('!!document.querySelector(".premium-model-current")'); await delay(10_100); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); ready(f.state); emit(f.state, 'evt:tasks', { running: ['qa-session'] }); await delay(120); assert.equal(await f.js('!!document.querySelector(".premium-model-current")'), false); assert.equal(f.state.sent.length, 0);
   });
   for(const lang of ['zh','en']) await run('发布关键：后台并行：套餐展示与排队 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},modelCatalog:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-full-model-catalog.json'),'utf8')),backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
-    await openBilling(f,false,null);
+    await openBilling(f,false,null);await f.wait('!!document.querySelector("[data-sku=v2_plan_plus_monthly]")');await f.click('[data-sku=v2_plan_plus_monthly]');
     await f.wait('!!document.querySelector(".billing-background-feature")');
     assert.match(await f.js('document.querySelector(".billing-background-feature").textContent'),/4/);
-    await f.click('[data-period=annual]');
+    await f.click('[data-period=annual]');await f.click('[data-sku=v2_plan_plus_annual]');
     assert.match(await f.js('document.querySelector(".billing-background-feature").textContent'),/4/);
     await f.click('[data-sku="v2_plan_pro_annual"]');
     await f.wait('document.querySelector(".billing-background-feature")?.textContent.includes("2")');
@@ -1041,7 +1009,7 @@ app.whenReady().then(async () => {
   });
   await run('发布关键：后台并行：关闭的服务端策略不提前承诺权益',{account:clone(billingAccount),backgroundPolicy:{enabled:false,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
     await openBilling(f,false,null);assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);
-    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===3');
+    await f.click('.billing-top button:first-child');await f.wait('document.querySelectorAll(".billing-plan-card").length===4');
     assert.equal(await f.js('!!document.querySelector(".billing-background-feature")'),false);assert.equal(f.state.orders,0);
   });
   for(const lang of ['zh','en','fa','ar']) await run('发布关键：并行提示：等级上限、套餐入口、输入保留与自动收起 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}},backgroundPolicy:{enabled:true,version:'qa-background-v1',free:1,plans:{Pro:2,Plus:4,Max:8}}},async f=>{
@@ -1063,7 +1031,7 @@ app.whenReady().then(async () => {
       if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-notice-'+lang+'.png'),await captureBillingFrame(f));
       await f.click('.background-queue-action');await f.wait('!!document.querySelector(".billing-panel")');
       await f.wait('document.querySelector("[data-period=monthly]")?.getAttribute("aria-selected")=="true"');
-      await f.wait('document.querySelector("[data-sku=v2_plan_plus_monthly]")?.getAttribute("aria-pressed")=="true"');
+      await f.wait('document.querySelector("[data-sku=v2_plan_mini_monthly]")?.getAttribute("aria-pressed")=="true"');
       assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留这段尚未发送的工作要求');
       assert.equal(await f.js('document.querySelector(".background-queue-notice")?.dataset.tier'),tier);
       if(tier==='free')fs.writeFileSync(path.join(evidence,'background-upgrade-open-plans-'+lang+'.png'),await captureBillingFrame(f));

@@ -107,3 +107,44 @@ for (const phase of ['quote','create','settle','reauthorize']) test(`image ${pha
  if(phase==='create') assert.ok(data.recovery_key);
  if(phase==='settle') assert.equal(data.order_id,id);
 });
+
+for(const mode of ['direct','changed-estimate','changed-ceiling','changed-version','account-changed','prompt-changed','forged-input','stopped'])test(`studio authorization: ${mode}`,async t=>{
+ const root=mkdtempSync(path.join(tmpdir(),'wuwei-image-direct-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const id='abcdef12-3456-7890-abcd-1234567890ab',other='abcdef12-3456-7890-abcd-1234567890ac',calls=[];
+ const sku={sku_id:'image-medium',price_version:mode==='changed-version'?other:id,authorization_ceiling:120,coins_per_image:29,model:'gpt-image-1',size:'1024x1024',quality:'medium',max_count:1,max_prompt_bytes:1000};
+ const quote={sku_id:sku.sku_id,price_version:id,estimated_coins:29,authorization_ceiling:120};
+ const original=globalThis.fetch;
+ globalThis.fetch=async(url,options={})=>{
+  const method=options.method||'GET';calls.push({url,method,body:options.body?JSON.parse(options.body):null});
+  if(url.endsWith('/catalog'))return Response.json([sku]);
+  if(url.endsWith('/quote'))return Response.json({...quote,price_version:sku.price_version,...(mode==='changed-estimate'?{estimated_coins:30}:{}),...(mode==='changed-ceiling'?{authorization_ceiling:121}:{})});
+  if(url.endsWith('/orders')&&method==='POST')return Response.json({order_id:id,status:'settled',reserved_coins:29,unit_price_coins:29});
+  if(url.endsWith('/asset'))return new Response(Buffer.from([137,80,78,71]),{headers:{'Content-Type':'image/png'}});
+  return Response.json({order_id:id,status:'settled',charged_coins:29});
+ };t.after(()=>{globalThis.fetch=original;});
+ const authorization={prompt:mode==='prompt-changed'?'other':'cup',quote,isCurrent:()=>mode!=='account-changed'};
+ const ac=new AbortController();if(mode==='stopped')ac.abort();
+ let dialogs=0;
+ const result=await create('https://wuweiai.io','test-only-token',path.join(root,'recovery'))({sku_id:sku.sku_id,prompt:'cup',...(mode==='forged-input'?{imageStudioAuthorization:authorization}:{})},{cwd:root,signal:ac.signal,imageStudioAuthorization:mode==='forged-input'?undefined:authorization,requestDecision:async()=>{dialogs++;return {action:'deny'};}});
+ const paid=calls.filter(c=>c.url.endsWith('/orders')&&c.method==='POST');
+ assert.equal(dialogs,mode==='forged-input'?1:0);
+ assert.equal(paid.length,mode==='direct'?1:0,result.content);
+ if(mode==='direct'){assert.ok(result.displayImage);assert.equal(paid[0].body.sku_id,sku.sku_id);assert.equal(paid[0].body.authorized_budget,120);}
+ else assert.equal(result.displayImage,undefined);
+});
+
+
+for(const [failure,expected]of [['PROVIDER_MODEL_UNAVAILABLE','IMAGE_MODEL_UNAVAILABLE'],['PROVIDER_REQUEST_REJECTED','IMAGE_REQUEST_REJECTED']])test('definite '+failure+' reports released funds without repeating generation or settlement',async t=>{
+ const previous=globalThis.fetch,requests=[];let released=false;
+ globalThis.fetch=async(url,options={})=>{
+  requests.push({url,method:options.method||'GET'});
+  if(url.endsWith('/settle')){released=true;return Response.json({status:'failed'});}
+  return Response.json({order_id:'abcdef12-3456-7890-abcd-1234567890ab',status:released?'failed':'unknown',error_code:released?failure:'PROVIDER_OUTCOME_UNKNOWN',charged_coins:0,released_coins:released?8:0,actual_coins:null});
+ };t.after(()=>{globalThis.fetch=previous;});
+ const run=create('https://wuweiai.io','fixture');
+ for(let n=0;n<2;n++){
+  const r=await run({action:'query',order_id:'abcdef12-3456-7890-abcd-1234567890ab'},{cwd:tmpdir()});
+  assert.equal(r.isError,true);const data=JSON.parse(r.content);assert.equal(data.code,expected);assert.equal(data.released_coins,8);assert.equal(data.displayed,false);
+ }
+ assert.equal(requests.filter(r=>r.method==='POST').length,1);assert.ok(requests.every(r=>r.url.includes('/orders/')));
+});

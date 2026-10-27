@@ -1,3 +1,4 @@
+import {promotionMessageValues} from '../promotion-config.js';
 import { languagePacks } from './registry.generated.js';
 import type { Language, LanguagePack, MessageReference, MessageValues } from './types.js';
 export type { Language, LanguagePack, MessageReference, MessageValues } from './types.js';
@@ -86,7 +87,8 @@ function messageTemplate(key: string, language: string): string | undefined {
 export function tr(key: string, values: MessageValues = {}, language = getCurrentLanguage()): string {
   const template = messageTemplate(key, language);
   if (template == null) return key;
-  return template.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);
+  const resolved={...promotionMessageValues(key),...values};
+  return template.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (token, name: string) => Object.hasOwn(resolved, name) ? String(resolved[name as keyof typeof resolved]) : token);
 }
 export function hasMessage(key: string, language = getCurrentLanguage()) { return messageTemplate(key, language) != null; }
 export function isChineseLanguage(language = getCurrentLanguage()) { return normalizeLanguage(language) === 'zh'; }

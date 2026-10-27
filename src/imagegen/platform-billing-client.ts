@@ -8,6 +8,7 @@ export type BillingSource = 'platform' | 'subscription' | 'byok';
 export interface OrderInput { sku_id: string; price_version: string; prompt: string; count: 1; authorized_budget: number }
 export interface Sku {
   sku_id: string; price_version: string; authorization_ceiling: number; model: string; size: string; quality: string;
+  aspect_ratio?:string|null; resolution?:string|null;
   coins_per_image: number; max_prompt_bytes: number; max_count: number;
 }
 export interface ImageQuote { sku_id: string; price_version: string; estimated_coins: number; authorization_ceiling: number }
@@ -17,7 +18,7 @@ export interface CreatedOrder {
 export interface OrderDetail {
   order_id: string; status: string; delivered_count: number; charged_coins: number; actual_coins?: number | null;
   released_coins: number; images: { asset_id: string; url: string; expires_at: string | null }[];
-  error_code: string | null;
+  error_code: string | null; created_at?:string; duration_ms?:number;
 }
 export class BillingError extends Error {
   constructor(public code: string, message: string, public status?: number) { super(message); }
@@ -56,7 +57,7 @@ export class PlatformBillingClient {
      try {
       response = await fetch(this.base + path, {
         method, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs),
-        headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}),
+        headers: { Authorization: `Bearer ${token}`, ...(path==='/api/images/catalog'?{'X-Wuwei-Image-Specifications':'20261025'}:{}), ...(body ? { 'Content-Type': 'application/json' } : {}),
           ...(key ? { 'Idempotency-Key': key } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
@@ -69,6 +70,7 @@ export class PlatformBillingClient {
     if (!response.ok) {
       if (response.status === 401) throw new BillingError('AUTH_REQUIRED', tr("ui.platform.billing.client.your.session.expired.sign.in.again.a03f416"), 401);
       if (response.status === 402) throw new BillingError('INSUFFICIENT_BALANCE', tr("ui.platform.billing.client.insufficient.quota.and.coins.add.funds.5cc667d"), 402);
+      if (data?.code==='MEMBERSHIP_REQUIRED') throw new BillingError('MEMBERSHIP_REQUIRED',tr('studio.gallery.memberOnly'),403);
       if (data?.code === 'PRICE_CHANGED') throw new BillingError('PRICE_CHANGED', tr("ui.platform.billing.client.pricing.changed.refresh.the.catalog.and.9c8f30c"), response.status);
       if (response.status === 409) throw new BillingError(data?.code === 'PRICE_UNAVAILABLE' ? 'PRICE_UNAVAILABLE' : 'IDEMPOTENCY_CONFLICT', tr("ui.platform.billing.client.the.price.is.unavailable.or.the.31385e6"), 409);
       if (response.status === 422) throw new BillingError('INVALID_INPUT', tr("ui.platform.billing.client.the.input.is.too.large.or.68443fa"), 422);
@@ -137,7 +139,7 @@ export class PlatformBillingClient {
         throw error;
       }
       // Only explicit pre-dispatch rejection can be manually retried with the SAME key.
-      attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT'].includes(error.code) ? 'ready' : 'unknown';
+      attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT','MEMBERSHIP_REQUIRED'].includes(error.code) ? 'ready' : 'unknown';
       throw error;
     }
   }
@@ -174,7 +176,7 @@ export class PlatformBillingClient {
     const chunks: Uint8Array[] = []; let size = 0;
     try {
       for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length;
-        if (size > 12 * 1024 * 1024) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.exceeds.the.size.ee40042")); chunks.push(part.value); }
+        if (size > 64 * 1024 * 1024) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.exceeds.the.size.ee40042")); chunks.push(part.value); }
     } finally { await reader.cancel().catch(()=>{}); }
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }

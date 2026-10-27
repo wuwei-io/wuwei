@@ -5518,7 +5518,7 @@ body {
 /* 免费模型次数用完弹窗(已登录) */
 .freecap-modal {
   position: fixed; z-index: 201; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: min(420px, 90vw); padding: 24px 24px 18px; text-align: center;
+  width: min(420px, 90vw); padding: 24px; text-align: center;
   background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 16px;
   box-shadow: 0 20px 56px rgba(0, 0, 0, .32);
 }
@@ -5530,7 +5530,10 @@ body {
 .freecap-title { font-size: 17px; font-weight: 700; color: var(--text); margin: 4px 0 8px; }
 /* 一句话说明，居中留白后接按钮区 */
 .freecap-sub { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin-bottom: 20px; }
-.freecap-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.freecap-options { display: flex; flex-direction: column; gap: 16px; }
+.freecap-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.freecap-options > .freecap-sub { margin: 0; }
+.freecap-footer { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .freecap-primary {
   display: block; width: 100%; box-sizing: border-box; padding: 11px 16px; border-radius: 11px; cursor: pointer;
   background: var(--spark); border: 1px solid var(--spark); color: #fff; font-size: 14px; font-weight: 600;
@@ -5542,7 +5545,7 @@ body {
 }
 .freecap-secondary:hover { background: var(--bg-input); }
 .freecap-ghost {
-  border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 6px 10px;
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; min-height: 32px; padding: 8px 10px;
 }
 .freecap-ghost:hover { color: var(--text-dim); }
 .goal-modal {
@@ -7362,3 +7365,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 .md { direction: ltr; unicode-bidi: isolate; text-align: left; }
 .md :is(pre,code), .sysprompt-area { unicode-bidi: isolate; }
 .md pre { direction: ltr; text-align: left; }
+
+/* Creation kinds use the same line icons as workspace navigation. */
+.session-item .s-creation-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex:0 0 14px;color:var(--text-dim)}.session-item .s-creation-icon svg{display:block;width:14px;height:14px}.session-item.active .s-creation-icon{color:currentColor}

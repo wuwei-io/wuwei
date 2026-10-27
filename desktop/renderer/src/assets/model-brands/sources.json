@@ -1,0 +1,101 @@
+{
+  "note": "Official brand artwork downloaded from provider websites. Marks remain property of their owners. Used only to identify the associated models. Existing verified icons are reused.",
+  "assets": [
+    {
+      "file": "flux.svg",
+      "sourcePage": "https://bfl.ai/",
+      "assetUrl": "https://bfl.ai/icon0.svg",
+      "bytes": 1001,
+      "sha256": "59b1a6bce60aabbe5d2d6ee8db1828d312c13c623671b4ddd3539032116f5991",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "recraft.png",
+      "sourcePage": "https://www.recraft.ai/",
+      "assetUrl": "https://framerusercontent.com/images/id5ZjKRfENkLEfAMrnKLKJfqfE.png",
+      "bytes": 414,
+      "sha256": "1236aa59603ef5a46d0e7ddbc32cdad7cbb2cd991221ae7cd6c24ec54d9e95fd",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "sourceful.ico",
+      "sourcePage": "https://www.sourceful.com/",
+      "assetUrl": "https://www.sourceful.com/favicon.ico",
+      "bytes": 4286,
+      "sha256": "e645b76282be60eb878149b796a6bb1b122a04d9073e35e7d6d0be2405a523ee",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "microsoft.ico",
+      "sourcePage": "https://www.microsoft.com/",
+      "assetUrl": "https://www.microsoft.com/favicon.ico?v2",
+      "bytes": 17174,
+      "sha256": "90cdaf487716184e4034000935c605d1633926d348116d198f355a98b8c6cd21",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "hunyuan.svg",
+      "sourcePage": "https://hunyuan.tencent.com/",
+      "assetUrl": "https://hunyuan-blog-web-prod-1258344703.cos.ap-guangzhou.myqcloud.com/logo.svg",
+      "bytes": 2853,
+      "sha256": "564d1900032b018e8ffb4760608aa913a30d5a1717a6c1e72472395dfdd47e71",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "stepfun.svg",
+      "sourcePage": "https://www.stepfun.com/",
+      "assetUrl": "https://www.stepfun.com/step_favicon.svg",
+      "bytes": 773,
+      "sha256": "155d5901d2974785f178e186f3a461e80d4406b1907c6ae4d27936f6e301cfa1",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "mistral.svg",
+      "sourcePage": "https://mistral.ai/",
+      "assetUrl": "https://mistral.ai/favicon.svg",
+      "bytes": 717,
+      "sha256": "66ceaf186f2075da38e5a3c2e46fc0015936e0cb57692d1f8ae0ba565354874d",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "meta.svg",
+      "sourcePage": "https://www.meta.com/",
+      "assetUrl": "https://static.xx.fbcdn.net/rsrc.php/yf/r/-7pQO6hUGK_.svg",
+      "bytes": 8912,
+      "sha256": "9c354dc7d40f7862df2dfb34df05ae08c3e956d55a450379803d6cac6878a63e",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "cohere.png",
+      "sourcePage": "https://cohere.com/",
+      "assetUrl": "https://cohere.com/favicon-32x32.png",
+      "bytes": 1147,
+      "sha256": "5fd55b86633d4a9534e914993ce8bad0a4079065254917497c5704c370c3939e",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "runway.png",
+      "sourcePage": "https://runway.com/",
+      "assetUrl": "https://runway.com/icon.png?icon.35ps9bmugbe1e.png",
+      "bytes": 4846,
+      "sha256": "f545e0e706d0c6be0e8602a8e8d685d4f43ab72880bd5e6a234916e765ff2b70",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "happyhorse.png",
+      "sourcePage": "https://www.happyhorse.com/",
+      "assetUrl": "https://img.alicdn.com/imgextra/i1/O1CN01HtmeRD1ubFJYSMwQf_!!6000000006055-2-tps-160-160.png",
+      "bytes": 3864,
+      "sha256": "eea32dcbeb033184d544fc26bd8ee49e5dc4feb81ff16eaa805249501382dd9c",
+      "retrievedAt": "2026-10-26"
+    },
+    {
+      "file": "openrouter.png",
+      "sourcePage": "https://openrouter.ai/",
+      "assetUrl": "https://openrouter.ai/favicon/glyph.png",
+      "bytes": 16833,
+      "sha256": "e6ce76bf956ac68569a7b1456fe0310fb9cc22bc1bc0fd8defd5daae099480b8",
+      "retrievedAt": "2026-10-26"
+    }
+  ]
+}

@@ -1,34 +1,28 @@
-import { tr, getCurrentLanguage } from "../../../../src/localization/index.js";
-import React from 'react';
+import { tr } from "../../../../src/localization/index.js";
+import React, { useState } from 'react';
+import { UsageNoticeDialog } from './UsageNoticeDialog.js';
 
-export function FreeQuotaGuide({ balance, hasMemberQuota, recommendations, lang, onChoose, onClose }: {
-  balance: number;
-  hasMemberQuota: boolean;
-  recommendations: string[];
-  lang: string;
-  onChoose: () => void;
+export function FreeQuotaGuide({ onClose, onUpgrade, balance, onSwitchPaid }: {
+  onUpgrade: () => void;
   onClose: () => void;
+  balance: number;
+  onSwitchPaid: () => Promise<void>;
 }) {
-  const en = lang !== "zh";
-  const coins = balance.toLocaleString(getCurrentLanguage(), { maximumFractionDigits:3 });
-  return <>
-    <div className="mq-overlay" style={{ zIndex: 200 }} onClick={onClose} />
-    <div className="freecap-modal" role="dialog" aria-modal="true" aria-label={tr("ui.freequotaguide.today.free.quota.is.used.up.627d194")}>
-      <button type="button" className="freecap-x" title={tr("msg.close")} onClick={onClose}>×</button>
-      <div className="freecap-title">{tr("ui.freequotaguide.today.free.quota.is.used.up.627d194")}</div>
-      <div className="freecap-sub">
-        {balance > 0
-          ? tr("ui.freequotaguide.you.still.have.wuwei.coins.choose.940142f", { p0: coins, p1: (en ? hasMemberQuota ? tr("ui.freequotaguide.message.ef4d1c5071") : '' : hasMemberQuota ? tr("ui.freequotaguide.message.ef4d1c5071") : '') })
-          : hasMemberQuota
-            ? tr("ui.freequotaguide.you.still.have.membership.allowance.available.ee00fcd")
-            : tr("ui.freequotaguide.choose.recommended.value.model.to.continue.00b69ea")}
-        {recommendations.length > 0 && <p>{tr("ui.freequotaguide.recommended.9a50dc1")}{recommendations.join(tr("ui.index.text.6486d4e"))}{tr("ui.app.text.76b3731")}</p>}
-        <p>{tr("ui.freequotaguide.review.model.prices.before.choosing.your.1e44da8")}</p>
-      </div>
-      <div className="freecap-actions">
-        <button type="button" className="freecap-primary" onClick={onChoose}>{tr("ui.freequotaguide.choose.recommended.value.model.0eb2158")}</button>
-        <button type="button" className="freecap-ghost" onClick={onClose}>{tr("ui.freequotaguide.maybe.tomorrow.a4ce641")}</button>
-      </div>
-    </div>
-  </>;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const hasCoins = Number.isFinite(balance) && balance > 0;
+  const switchPaid = async () => {
+    if (busy) return;
+    setBusy(true); setError(false);
+    try { await onSwitchPaid(); } catch { setError(true); } finally { setBusy(false); }
+  };
+  return <UsageNoticeDialog variant="free" title={tr('ui.freequotaguide.today.free.quota.is.used.up.627d194')} onClose={onClose} onUpgrade={onUpgrade}
+    busy={busy} secondaryAction={hasCoins ? { label: tr('billing.freecap.switchPaid'), onClick: () => void switchPaid() } : undefined}>
+    <p className="usage-notice-description">
+      <span>{tr('billing.freecap.resetNote')}</span>
+      <span>{tr('billing.freecap.upgradeNote')}</span>
+      {hasCoins && <span>{tr('billing.freecap.coinsNote')}</span>}
+    </p>
+    {error && <p className="usage-notice-description" role="alert">{tr('ui.billingpanel.unable.to.switch.please.retry.8f406cd')}</p>}
+  </UsageNoticeDialog>;
 }

@@ -38,7 +38,7 @@ test('catalog/create/query: Bearer, exact body, stable key and no duplicate POST
   assert.equal(m.calls[2].path, '/api/images/orders/mock-order');
 });
 
-for (const [status, code, expected] of [[402, 'INSUFFICIENT_BALANCE', 'INSUFFICIENT_BALANCE'], [409, 'PRICE_UNAVAILABLE', 'PRICE_UNAVAILABLE'], [409, 'CONFLICT', 'IDEMPOTENCY_CONFLICT'], [422, 'LIMIT', 'INVALID_INPUT']]) {
+for (const [status, code, expected] of [[403,'MEMBERSHIP_REQUIRED','MEMBERSHIP_REQUIRED'],[402, 'INSUFFICIENT_BALANCE', 'INSUFFICIENT_BALANCE'], [409, 'PRICE_UNAVAILABLE', 'PRICE_UNAVAILABLE'], [409, 'CONFLICT', 'IDEMPOTENCY_CONFLICT'], [422, 'LIMIT', 'INVALID_INPUT']]) {
   test(`${status}/${code}: explicit error, manual retry retains key`, async t => {
     const m = await mock(t, (req, res, n) => json(res, n === 1 ? status : 202, n === 1 ? { code } : accepted));
     const c = m.client(), a = c.prepare(input, sku);

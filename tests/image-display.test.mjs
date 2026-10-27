@@ -62,3 +62,11 @@ test('Agent preserves distinct generated pictures and repeated screenshots suppl
   await agent.send('work', { onToolEnd: (_id, _text, _error, image) => displayed.push(image) });
   assert.deepEqual(displayed, ['a', 'b', 'a', 'a']);
 });
+
+
+test('separate paid batch orders keep identical images while original-order and send_image copies stay deduplicated',()=>{
+ const a='abcdef12-3456-7890-abcd-1234567890ab',b='abcdef12-3456-7890-abcd-1234567890ac';
+ const tool=id=>({type:'tool',name:'platform_imagegen',image:'same-png',result:JSON.stringify({order_id:id})});
+ const result=dedupeDisplayedToolImages([{type:'user'},tool(a),tool(b),tool(a),{type:'tool',name:'send_image',image:'same-png'}]);
+ assert.equal(result[1].image,'same-png');assert.equal(result[2].image,'same-png');assert.equal(result[3].image,undefined);assert.equal(result[4].image,undefined);
+});

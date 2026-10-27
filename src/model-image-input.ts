@@ -39,6 +39,7 @@ const HOSTED_IMAGE_INPUT: Record<string, boolean | undefined> = {
   'grok-4.6': true,
   'grok-4.7': true,
   'kimi-k3': true,
+  'kimi-k3-1-pro': true,
   'llama-4-maverick': true,
   'mimo-v2.6-flash': true,
   'minimax-m3': true,

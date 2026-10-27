@@ -45,6 +45,7 @@ export interface SessionMeta {
   running?: boolean; // 正在跑一轮(开跑置 true、结束置 false)；能跨重启存活→崩溃/强杀时残留 true
   interrupted?: boolean; // 上次运行被强制中断(启动时检测到残留 running=true 或内容明显干到一半)→提示恢复
   resumeDismissed?: boolean; // 用户点过「忽略」→内容启发式不再重复提示该会话(强杀 running 仍会重新提示)
+  imageSku?: string; // Image creation workspace associated with this conversation.
   employeeId?: string; // 「AI 员工团队」可选模块：本会话在跟哪名员工私聊(空=普通会话)。模块关着时永远不会被写入
 }
 
@@ -64,6 +65,13 @@ export function listSessions(): SessionMeta[] {
 function saveList(l: SessionMeta[]) {
   ensure();
   writeFileSync(META, JSON.stringify(l));
+}
+
+export function setImageSession(id:string,sku:string,title:string){
+ const all=listSessions(),previous=all.find(s=>s.id===id);
+ if(previous)previous.imageSku=sku;
+ else all.unshift({id,title:title.trim().slice(0,120),updatedAt:Date.now(),imageSku:sku});
+ saveList(all);
 }
 
 // —— 分组顺序(手动) ——
@@ -418,6 +426,7 @@ export function saveSession(
     running: prev?.running, // 保留运行/中断标记，别被每轮落盘抹掉(否则崩溃检测失效)
     interrupted: prev?.interrupted,
     resumeDismissed: prev?.resumeDismissed,
+    imageSku: prev?.imageSku,
     employeeId: prev?.employeeId, // ⭐ 保留员工私聊绑定，别被每轮落盘抹掉(否则一发消息就退化成普通会话，标题栏/侧栏都不认，人格记忆也断)
   });
   saveList(l);

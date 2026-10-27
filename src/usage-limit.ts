@@ -41,3 +41,9 @@ export function usageLimitDestination(kind: UsageLimitKind, account: PaidAllowan
   if (kind === 'balance') return 'pay';
   return hasPaidAllowance(account) ? 'recommend' : 'pay';
 }
+
+/** Keep the gateway's localized estimate and balance instead of claiming zero funds. */
+export function gatewayLimitMessage(raw:string,fallback:string):string {
+ const match=raw.match(/\[\[gw:(insufficient_balance|free_daily_cap_reached)\]\]\s*([\s\S]+)$/i);
+ return match&&match[2].trim()?match[2].trim():fallback;
+}

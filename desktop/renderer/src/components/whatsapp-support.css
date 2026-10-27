@@ -1,0 +1,34 @@
+.wa-support {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 16px;
+  margin: 0 0 18px;
+  border: 1px solid var(--border, #dce4df);
+  border-radius: 12px;
+  background: var(--bg-soft, #f5f8f5);
+  color: var(--text, #202c26);
+  text-align: left;
+  font-size: 12px;
+}
+.wa-support-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wa-support-heading > div { min-width: 0; }
+.wa-support-heading strong { font-size: 14px; }
+.wa-support p { font-size: 12px; line-height: 1.5; margin: 5px 0 0; color: var(--text-muted, #657168); overflow-wrap: anywhere; }
+.wa-support a.wa-support-chat { display: inline-flex; align-items: center; justify-content: center; padding: 9px 12px; border-radius: 8px; background: #137c50; color: #fff; text-decoration: none; font-size: 12px; font-weight: 600; line-height: 1.4; }
+.wa-support a.wa-support-chat:hover { background: #106944; }
+.wa-support button.wa-support-toggle, .wa-support button.wa-support-copy { padding: 5px 0; margin-top: 7px; border: 0; background: transparent; color: var(--text, #202c26); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.wa-support a:focus-visible, .wa-support button:focus-visible { outline: 2px solid #137c50; outline-offset: 3px; }
+.wa-support-details { margin-top: 10px; text-align: center; }
+.wa-support-qr { width: 160px; height: 160px; padding: 4px; box-sizing: border-box; margin: 0 auto; background: #fff; border-radius: 8px; }
+.wa-support-qr svg { display: block; }
+.wa-support-status { display: block; font-size: 11px; line-height: 1.5; }
+.sc-card > .wa-support { margin: 0 14px 10px; max-height: calc(100% - 170px); overflow-y: auto; }
+.sc-card:has(> .wa-support) .sc-list { min-height: 0; }
+.sc-card:has(> .wa-support) .sc-head, .sc-card:has(> .wa-support) .sc-input { flex-shrink: 0; }
+.wa-support-inline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin: 12px 0 0; padding: 0; border: 0; background: none; color: var(--text-muted, #6b747c); font-size: 11px; line-height: 1.6; text-align: start; }
+.wa-support-inline a { display: inline; padding: 0; border: 0; background: none; color: var(--text-dim, #6b747c); font: inherit; text-decoration: underline; text-decoration-color: var(--border-strong, #cbd3da); text-underline-offset: 3px; white-space: nowrap; }
+.wa-support-inline a:hover { color: var(--accent, #274a63); text-decoration-color: currentColor; }
+.wa-support-inline a:focus-visible { outline: none; box-shadow: none; color: var(--accent, #274a63); text-decoration-thickness: 2px; }
+.billing-selector > aside > .wa-support-inline { margin: 14px 0 0; }
+.billing-panel > .wa-support-inline { flex: 0 0 auto; margin: 0 24px 14px; }
+.sc-card > .wa-support-inline { flex: 0 0 auto; margin: 0 14px 10px; }

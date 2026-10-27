@@ -2,6 +2,7 @@
 // 来源：Kimi/OpenAI/DeepSeek = 客户端 brandLogos.ts 解码；Claude = Anthropic 官方橙星芒；
 // 智谱 = 官网 logo.svg 的 Z 字；豆包 = 官方头像 PNG。
 import type { CSSProperties } from "react";
+import {BRAND_ICON_FILES,modelBrandKey} from "./brand-icons.js";
 
 type Brand = { vb?: string; body?: string; img?: string };
 
@@ -40,7 +41,8 @@ export function BrandLogo({
   ghost?: boolean;
   style?: CSSProperties;
 }) {
-  const b = BRANDS[brand] || BRANDS.local;
+  const key=modelBrandKey(brand)??brand;
+  const b = BRAND_ICON_FILES[key] ? {img:BRAND_ICON_FILES[key]} : BRANDS[key] || BRANDS.local;
   const badge: CSSProperties = {
     width: size,
     height: size,
