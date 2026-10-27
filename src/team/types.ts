@@ -95,6 +95,8 @@ export interface RoomMessage {
   mentions?: string[];
   /** 出错时留痕，界面上标红，不当正常发言参与后续投影 */
   error?: boolean;
+  /** Member stopped explicitly; retained partial text is a normal saved message. */
+  stopped?: boolean;
   /**
    * 「收到」应答：员工被唤醒后先落的一条轻量确认消息（跑完才落正式回复）。
    * 界面弱化显示；不带 steps；投影时跳过（见 projection.ts），别把「收到」当正文喂回模型。
