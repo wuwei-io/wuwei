@@ -106,3 +106,44 @@ test("transport uses a deadline and no cache; distinguishes outage and withdrawa
   await assert.rejects(fetchAnnouncement(async () => Response.json({ active: true }), "https://example.com"));
   assert.deepEqual(await fetchAnnouncement(async () => Response.json({ active: false }), "https://example.com"), { active: false });
 });
+
+test('manual opening reopens acknowledged or dismissed announcements without changing receipts', async()=>{
+  for(const close of ['acknowledge','dismiss'] as const){
+    const f=fixture();
+    try{
+      await f.delivery.check(true);f.delivery[close](announcement);
+      const before=[...f.values.entries()];
+      const pending=f.delivery.open();assert.deepEqual(f.current(),announcement,'Cached notice opens synchronously');
+      await pending;assert.deepEqual(f.current(),announcement);assert.deepEqual([...f.values.entries()],before);
+      f.delivery.dismiss(announcement);await f.delivery.check(true);assert.equal(f.current(),null);
+    }finally{f.delivery.stop();}
+  }
+});
+
+test('manual open during startup shares the fetch and bypasses an existing read receipt',async()=>{
+  let resolve!:(value:UnreadAnnouncement)=>void,shown:UnreadAnnouncement|null=null,calls=0;
+  const d=createAnnouncementDelivery({fetch:()=>{calls++;return new Promise(r=>{resolve=r})},storage:{getItem:()=>JSON.stringify([announcement.appVersion,announcement.version]),setItem:()=>{throw Error('No write expected')}},show:a=>{shown=a}});
+  try{const startup=d.check(true);await d.open();assert.equal(calls,1);resolve(announcement);await startup;assert.deepEqual(shown,announcement);}finally{d.stop();}
+});
+
+test('manual refresh replaces cached announcement with the latest publication; withdrawal closes it',async()=>{
+  const f=fixture();
+  try{
+    await f.delivery.check(true);f.delivery.acknowledge(announcement);f.remote({...announcement,version:'new',bodyZh:'New publication'});
+    await f.delivery.open();assert.equal(f.current()?.version,'new');
+    f.remote({...announcement,active:false});await f.delivery.open();assert.equal(f.current(),null);
+  }finally{f.delivery.stop();}
+});
+
+test('manual failures preserve cached content, cold failures report unavailable and stop suppresses late replies',async()=>{
+  let remote:Promise<UnreadAnnouncement>=Promise.resolve(announcement),shown:UnreadAnnouncement|null=null,unavailable=0;
+  const d=createAnnouncementDelivery({fetch:()=>remote,storage:{getItem:()=>null,setItem:()=>{}},show:a=>{shown=a},onUnavailable:()=>{unavailable++}});
+  try{
+    await d.check(true);d.dismiss(announcement);remote=Promise.reject(Error('offline'));await d.open();assert.deepEqual(shown,announcement);assert.equal(unavailable,0);
+  }finally{d.stop();}
+  let resolve!:(a:UnreadAnnouncement)=>void;
+  const cold=createAnnouncementDelivery({fetch:()=>new Promise(r=>{resolve=r}),storage:{getItem:()=>null,setItem:()=>{}},show:()=>{throw Error('Stopped controller must not show')},onUnavailable:()=>{throw Error('Stopped controller must not report')}});
+  const pending=cold.open();cold.stop();resolve(announcement);await pending;
+  const offline=createAnnouncementDelivery({fetch:async()=>{throw Error('offline')},storage:{getItem:()=>null,setItem:()=>{}},show:()=>{},onUnavailable:()=>{unavailable++}});
+  try{await offline.open();assert.equal(unavailable,1);}finally{offline.stop();}
+});

@@ -34,6 +34,14 @@ test('ordinary notices remain readable; lists are not legacy cards', () => {
   assert.equal(parseAnnouncementBody('今晚维护。\n请保存。\n\n谢谢。').kind, 'plain');
   assert.equal(parseAnnouncementBody('- a\n- b\n\n- c\n- d').kind, 'plain');
 });
+
+test('video creation sections use the video icon in both source languages',()=>{
+  for(const heading of ['视频创作模型','Video creation models']){
+    const parsed=parseAnnouncementBody('## '+heading+'\nModel overview');
+    assert.equal(parsed.kind,'cards');
+    if(parsed.kind==='cards')assert.equal(parsed.cards[0].icon,'video');
+  }
+});
 test('safe rendering supports formatting without raw HTML, dangerous links or images', () => {
   const html = renderToStaticMarkup(React.createElement(AnnouncementMarkdown, { children: '### 子标题\n**重点**\n\n- 列表\n\n[安全](https://example.com) [危险](javascript:alert) ![图片](https://example.com/a.png)\n<script>alert(1)</script><iframe src="https://example.com"></iframe>' }));
   assert.ok(html.includes('<strong>重点</strong>'));

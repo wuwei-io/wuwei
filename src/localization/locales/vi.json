@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Bạn vẫn còn xu. Chuyển sang mô hình trả phí để tiếp tục.",
     "billing.freecap.switchPaid": "Chuyển sang mô hình trả phí",
     "whatsapp.chat": "Trò chuyện trên WhatsApp",
-    "whatsapp.scan": "Quét bằng điện thoại của bạn"
+    "whatsapp.scan": "Quét bằng điện thoại của bạn",
+    "studio.gallery.brand.Qwen": "Chữ trong ảnh và bố cục áp phích",
+    "studio.gallery.brand.FLUX": "Chi tiết tự nhiên và bố cục",
+    "studio.gallery.brand.Tencent": "Hiểu mô tả và tạo cảnh",
+    "studio.gallery.brand.Recraft": "Thiết kế đồ họa và hình ảnh thương hiệu",
+    "studio.gallery.brand.Microsoft": "Ánh sáng chân thực và chi tiết tinh tế",
+    "studio.gallery.brand.Sourceful": "Hình ảnh sản phẩm và sáng tạo thương hiệu",
+    "announcement.unavailable": "Hiện chưa thể mở thông báo. Vui lòng thử lại."
   }
 }

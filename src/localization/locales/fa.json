@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "هنوز سکه دارید. برای ادامه به یک مدل پولی تغییر دهید.",
     "billing.freecap.switchPaid": "تغییر به مدل پولی",
     "whatsapp.chat": "گفت‌وگو در WhatsApp",
-    "whatsapp.scan": "با گوشی خود اسکن کنید"
+    "whatsapp.scan": "با گوشی خود اسکن کنید",
+    "studio.gallery.brand.Qwen": "رندر متن و چیدمان پوستر",
+    "studio.gallery.brand.FLUX": "جزئیات طبیعی و ترکیب‌بندی",
+    "studio.gallery.brand.Tencent": "درک توصیف و خلق صحنه",
+    "studio.gallery.brand.Recraft": "طراحی گرافیک و هویت بصری",
+    "studio.gallery.brand.Microsoft": "نور واقعی و جزئیات دقیق",
+    "studio.gallery.brand.Sourceful": "تصاویر محصول و خلاقیت برند",
+    "announcement.unavailable": "اعلان‌ها فعلاً در دسترس نیستند. دوباره تلاش کنید."
   }
 }

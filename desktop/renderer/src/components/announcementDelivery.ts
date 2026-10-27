@@ -17,12 +17,15 @@ export function createAnnouncementDelivery(options: {
   fetch: () => Promise<PublishedAnnouncement>;
   storage: Pick<Storage, "getItem" | "setItem">;
   show: (announcement: UnreadAnnouncement | null) => void;
+  onUnavailable?: () => void;
 }) {
   let stopped = false;
   let busy = false;
   let lastCheck = 0;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let latest: UnreadAnnouncement | null = null;
+  let manualRequested = false;
   const dismissed = new Set<string>();
   const acknowledged = new Set<string>();
   const schedule = (delay: number) => {
@@ -37,18 +40,32 @@ export function createAnnouncementDelivery(options: {
       const a = await options.fetch();
       if (stopped) return;
       failures = 0;
-      if (!a.active) options.show(null);
+      if (!a.active) {
+        latest = null;
+        options.show(null);
+        if (manualRequested) options.onUnavailable?.();
+        manualRequested = false;
+      }
       else if (a.version && [a.titleZh, a.titleEn, a.bodyZh, a.bodyEn].some(text => text?.trim())) {
         let seen = "";
         try { seen = options.storage.getItem(ANNOUNCEMENT_READ_KEY) || ""; } catch { /* memory receipt still works */ }
         if (!a.appVersion) throw new Error("Missing installed app version");
         const key = receipt(a as UnreadAnnouncement);
-        if (seen !== key && !dismissed.has(key) && !acknowledged.has(key)) {
-          options.show({ ...a, version: a.version });
+        latest = { ...a, version: a.version };
+        if (manualRequested || (seen !== key && !dismissed.has(key) && !acknowledged.has(key))) {
+          options.show(latest);
         }
+        manualRequested = false;
+      } else if (manualRequested) {
+        manualRequested = false;
+        options.onUnavailable?.();
       }
       schedule(5 * 60_000);
     } catch {
+      if (!stopped && manualRequested) {
+        manualRequested = false;
+        if (!latest) options.onUnavailable?.();
+      }
       // Startup network failures are not an unpublished announcement.
       schedule(Math.min(15_000 * 2 ** failures++, 60_000));
     } finally {
@@ -57,6 +74,12 @@ export function createAnnouncementDelivery(options: {
   }
   return {
     check,
+    open() {
+      if (stopped) return Promise.resolve();
+      manualRequested = true;
+      if (latest) { options.show(latest); manualRequested = false; }
+      return check(true);
+    },
     dismiss(a: UnreadAnnouncement) {
       dismissed.add(receipt(a));
       options.show(null);

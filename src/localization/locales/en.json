@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "You still have coins. Switch to a paid model to continue.",
     "billing.freecap.switchPaid": "Switch to paid model",
     "whatsapp.chat": "Chat on WhatsApp",
-    "whatsapp.scan": "Scan with your phone"
+    "whatsapp.scan": "Scan with your phone",
+    "studio.gallery.brand.Qwen": "Text rendering and poster layouts",
+    "studio.gallery.brand.FLUX": "Natural detail and composition",
+    "studio.gallery.brand.Tencent": "Prompt understanding and scenes",
+    "studio.gallery.brand.Recraft": "Graphic design and brand visuals",
+    "studio.gallery.brand.Microsoft": "Realistic lighting and fine detail",
+    "studio.gallery.brand.Sourceful": "Product visuals and brand creative",
+    "announcement.unavailable": "Announcements are unavailable right now. Please try again."
   }
 }

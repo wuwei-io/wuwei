@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Hâlâ jetonunuz var. Devam etmek için ücretli bir modele geçin.",
     "billing.freecap.switchPaid": "Ücretli modele geç",
     "whatsapp.chat": "WhatsApp üzerinden sohbet et",
-    "whatsapp.scan": "Telefonunuzla tarayın"
+    "whatsapp.scan": "Telefonunuzla tarayın",
+    "studio.gallery.brand.Qwen": "Metin işleme ve afiş düzeni",
+    "studio.gallery.brand.FLUX": "Doğal ayrıntılar ve kompozisyon",
+    "studio.gallery.brand.Tencent": "İstem anlama ve sahne oluşturma",
+    "studio.gallery.brand.Recraft": "Grafik tasarım ve marka görselleri",
+    "studio.gallery.brand.Microsoft": "Gerçekçi ışık ve ince ayrıntılar",
+    "studio.gallery.brand.Sourceful": "Ürün görselleri ve marka yaratıcılığı",
+    "announcement.unavailable": "Duyurular şu anda kullanılamıyor. Lütfen tekrar deneyin."
   }
 }

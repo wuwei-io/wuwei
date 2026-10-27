@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "另外您还有无为币，可以切换到付费模型中继续使用。",
     "billing.freecap.switchPaid": "切换付费模型",
     "whatsapp.chat": "打开 WhatsApp 聊天",
-    "whatsapp.scan": "用手机扫码联系"
+    "whatsapp.scan": "用手机扫码联系",
+    "studio.gallery.brand.Qwen": "中文文字与海报排版",
+    "studio.gallery.brand.FLUX": "自然质感与光影构图",
+    "studio.gallery.brand.Tencent": "语义理解与场景创作",
+    "studio.gallery.brand.Recraft": "平面设计与品牌视觉",
+    "studio.gallery.brand.Microsoft": "真实光影与细节呈现",
+    "studio.gallery.brand.Sourceful": "产品展示与品牌创意",
+    "announcement.unavailable": "暂时无法打开公告，请稍后重试。"
   }
 }

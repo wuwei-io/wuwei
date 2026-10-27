@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Du hast noch Coins. Wechsle zu einem kostenpflichtigen Modell, um fortzufahren.",
     "billing.freecap.switchPaid": "Zu kostenpflichtigem Modell",
     "whatsapp.chat": "Auf WhatsApp chatten",
-    "whatsapp.scan": "Mit dem Smartphone scannen"
+    "whatsapp.scan": "Mit dem Smartphone scannen",
+    "studio.gallery.brand.Qwen": "Textdarstellung und Posterlayouts",
+    "studio.gallery.brand.FLUX": "Natürliche Details und Komposition",
+    "studio.gallery.brand.Tencent": "Promptverständnis und Szenen",
+    "studio.gallery.brand.Recraft": "Grafikdesign und Markenvisuals",
+    "studio.gallery.brand.Microsoft": "Realistisches Licht und feine Details",
+    "studio.gallery.brand.Sourceful": "Produktbilder und Markenideen",
+    "announcement.unavailable": "Ankündigungen sind derzeit nicht verfügbar. Bitte versuche es erneut."
   }
 }

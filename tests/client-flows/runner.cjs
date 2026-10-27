@@ -186,6 +186,20 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for(const platform of ['Win32','MacIntel'])await run('发布关键：公告快捷键打开已读线上公告并保留输入 '+platform,{announcement:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/announcement-video.json'),'utf8'))},async f=>{
+    await f.wait('!!document.querySelector(".announce-dialog")');await f.click('.announce-primary');await f.wait('!document.querySelector(".announce-dialog")');
+    const receipt=await f.js('localStorage.getItem("wuwei_read_announcement_v2")');assert.ok(receipt);
+    await f.fill('.composer textarea','保留尚未发送的输入');f.state.announcementDelay=2000;
+    await f.js(`Object.defineProperty(navigator,'platform',{value:${JSON.stringify(platform)},configurable:true});window.dispatchEvent(new KeyboardEvent('keydown',{key:'N',code:'KeyN',${platform==='MacIntel'?'metaKey':'ctrlKey'}:true,shiftKey:true,bubbles:true}));`);
+    await f.wait('!!document.querySelector(".announce-dialog")',800);
+    assert.equal(await f.js('localStorage.getItem("wuwei_read_announcement_v2")'),receipt);
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留尚未发送的输入');
+    assert.equal(await f.js('document.querySelectorAll(".announce-card").length'),3);
+    assert.match(await f.js('document.querySelector(".announce-dialog").textContent'),/视频创作模型/);
+    assert.doesNotMatch(await f.js('document.querySelector(".announce-dialog").textContent'),/模型列表优化/);
+    await f.js('document.fonts.ready');fs.writeFileSync(path.join(evidence,'announcement-video-'+platform+'.png'),await captureBillingFrame(f));
+    await f.click('.announce-close');await f.wait('!document.querySelector(".announce-dialog")');await delay(2200);assert.equal(await f.js('!!document.querySelector(".announce-dialog")'),false);assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
   for(const lostEvents of [false,true])await run('发布关键：任务实时同步：停止移除、排队转运行、快照补偿 '+(lostEvents?'missed-events':'live-events'),{
     account:account(),running:['first-chat','qa-session'],sessions:[{id:'first-chat',title:'先执行的任务'},{id:'qa-session',title:'后执行的任务'}],
     backgroundTasks:[{taskId:'first-task',sid:'first-chat',accountId:'qa-account',queued:false,limit:1,tier:'free'},{taskId:'second-task',sid:'qa-session',accountId:'qa-account',queued:true,limit:1,tier:'free'}],

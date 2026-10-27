@@ -63,6 +63,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { HelpManualModal } from "./components/HelpManualModal.js";
 import { createAnnouncementDelivery, type UnreadAnnouncement } from "./components/announcementDelivery.js";
+import { isAnnouncementShortcut } from '../../../src/announcement-shortcut.js';
 import { AnnouncementModal } from "./components/AnnouncementModal.js";
 import { selectAnnouncementLocale, type AnnouncementSource } from "./components/announcementLocale.js";
 import { BabyAvatar, inferBabyState } from "./baby/BabyAvatar.js";
@@ -5443,34 +5444,9 @@ export function App() {
         setAnnouncementPreview(Object.fromEntries(["titleZh", "bodyZh", "titleEn", "bodyEn"].map(key => [key, typeof detail[key] === "string" ? detail[key] : ""])));
       }
     };
-    let alive = true;
-    let loading = false;
-    const hotkey = async (event: KeyboardEvent) => {
-      const primary = /Mac/i.test(navigator.platform)
-        ? event.metaKey && !event.ctrlKey
-        : event.ctrlKey && !event.metaKey;
-      if (!primary || !event.shiftKey || event.altKey || (event.code !== "KeyN" && event.key.toLowerCase() !== "n") || event.isComposing || event.defaultPrevented) return;
-      event.preventDefault();
-      if (event.repeat || loading) return;
-      loading = true;
-      try {
-        const { default: fixture } = await import("../../../tests/fixtures/announcement-current.json");
-        if (!alive) return;
-        window.dispatchEvent(new CustomEvent("wuwei:preview-announcement", {
-          detail: fixture,
-        }));
-      } catch (error) {
-        console.warn("DEV announcement fixture unavailable", error);
-      } finally {
-        loading = false;
-      }
-    };
     window.addEventListener("wuwei:preview-announcement", preview);
-    window.addEventListener("keydown", hotkey);
     return () => {
-      alive = false;
       window.removeEventListener("wuwei:preview-announcement", preview);
-      window.removeEventListener("keydown", hotkey);
     };
   }, []);
 
@@ -5486,18 +5462,27 @@ export function App() {
         setItem: (key, value) => localStorage.setItem(key, value),
       },
       show: setAnnounce,
+      onUnavailable: () => push({ type: 'notice', text: tr('announcement.unavailable') }),
     });
     announcementDeliveryRef.current = delivery;
     const refresh = () => { void delivery.check(); };
     const reconnect = () => { void delivery.check(true); };
+    const openFromShortcut = (event: KeyboardEvent) => {
+      if (!isAnnouncementShortcut(event, navigator.platform)) return;
+      event.preventDefault(); event.stopPropagation();
+      setAnnouncementPreview(null);
+      void delivery.open();
+    };
     void delivery.check(true);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", reconnect);
+    window.addEventListener('keydown', openFromShortcut, true);
     return () => {
       delivery.stop();
       announcementDeliveryRef.current = null;
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", reconnect);
+      window.removeEventListener('keydown', openFromShortcut, true);
     };
   }, []);
 

@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "코인이 남아 있습니다. 유료 모델로 전환하여 계속 이용하세요.",
     "billing.freecap.switchPaid": "유료 모델로 전환",
     "whatsapp.chat": "WhatsApp으로 채팅",
-    "whatsapp.scan": "휴대폰으로 스캔"
+    "whatsapp.scan": "휴대폰으로 스캔",
+    "studio.gallery.brand.Qwen": "텍스트 표현과 포스터 구성",
+    "studio.gallery.brand.FLUX": "자연스러운 질감과 구도",
+    "studio.gallery.brand.Tencent": "프롬프트 이해와 장면 제작",
+    "studio.gallery.brand.Recraft": "그래픽 디자인과 브랜드 표현",
+    "studio.gallery.brand.Microsoft": "사실적인 조명과 세밀한 묘사",
+    "studio.gallery.brand.Sourceful": "제품 이미지와 브랜드 창작",
+    "announcement.unavailable": "현재 공지를 열 수 없습니다. 다시 시도해 주세요."
   }
 }

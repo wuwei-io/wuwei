@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "コインが残っています。有料モデルに切り替えて続けられます。",
     "billing.freecap.switchPaid": "有料モデルに切り替え",
     "whatsapp.chat": "WhatsApp でチャット",
-    "whatsapp.scan": "スマートフォンでスキャン"
+    "whatsapp.scan": "スマートフォンでスキャン",
+    "studio.gallery.brand.Qwen": "文字描画とポスターレイアウト",
+    "studio.gallery.brand.FLUX": "自然な質感と光の構図",
+    "studio.gallery.brand.Tencent": "指示の理解とシーン制作",
+    "studio.gallery.brand.Recraft": "グラフィックとブランド表現",
+    "studio.gallery.brand.Microsoft": "リアルな光と細部の表現",
+    "studio.gallery.brand.Sourceful": "商品ビジュアルとブランド制作",
+    "announcement.unavailable": "現在お知らせを開けません。もう一度お試しください。"
   }
 }

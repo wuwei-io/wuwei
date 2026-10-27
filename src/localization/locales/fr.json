@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Il vous reste des pièces. Passez à un modèle payant pour continuer.",
     "billing.freecap.switchPaid": "Passer au modèle payant",
     "whatsapp.chat": "Discuter sur WhatsApp",
-    "whatsapp.scan": "Scanner avec votre téléphone"
+    "whatsapp.scan": "Scanner avec votre téléphone",
+    "studio.gallery.brand.Qwen": "Texte et mise en page d’affiches",
+    "studio.gallery.brand.FLUX": "Détails naturels et composition",
+    "studio.gallery.brand.Tencent": "Compréhension des consignes et scènes",
+    "studio.gallery.brand.Recraft": "Design graphique et identité visuelle",
+    "studio.gallery.brand.Microsoft": "Lumière réaliste et détails fins",
+    "studio.gallery.brand.Sourceful": "Visuels produit et création de marque",
+    "announcement.unavailable": "Les annonces sont indisponibles pour le moment. Réessayez."
   }
 }

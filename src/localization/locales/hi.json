@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "आपके पास अभी भी सिक्के हैं। जारी रखने के लिए सशुल्क मॉडल पर स्विच करें।",
     "billing.freecap.switchPaid": "सशुल्क मॉडल पर स्विच करें",
     "whatsapp.chat": "WhatsApp पर चैट करें",
-    "whatsapp.scan": "अपने फ़ोन से स्कैन करें"
+    "whatsapp.scan": "अपने फ़ोन से स्कैन करें",
+    "studio.gallery.brand.Qwen": "टेक्स्ट रेंडरिंग और पोस्टर लेआउट",
+    "studio.gallery.brand.FLUX": "प्राकृतिक विवरण और रचना",
+    "studio.gallery.brand.Tencent": "निर्देशों की समझ और दृश्य",
+    "studio.gallery.brand.Recraft": "ग्राफ़िक डिज़ाइन और ब्रांड विज़ुअल",
+    "studio.gallery.brand.Microsoft": "यथार्थ प्रकाश और बारीक विवरण",
+    "studio.gallery.brand.Sourceful": "उत्पाद चित्र और ब्रांड रचनात्मकता",
+    "announcement.unavailable": "अभी घोषणाएँ उपलब्ध नहीं हैं। कृपया फिर कोशिश करें।"
   }
 }

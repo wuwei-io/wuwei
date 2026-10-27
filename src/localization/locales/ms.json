@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Anda masih mempunyai syiling. Tukar ke model berbayar untuk meneruskan.",
     "billing.freecap.switchPaid": "Tukar ke model berbayar",
     "whatsapp.chat": "Sembang di WhatsApp",
-    "whatsapp.scan": "Imbas dengan telefon anda"
+    "whatsapp.scan": "Imbas dengan telefon anda",
+    "studio.gallery.brand.Qwen": "Teks dan susun atur poster",
+    "studio.gallery.brand.FLUX": "Butiran semula jadi dan komposisi",
+    "studio.gallery.brand.Tencent": "Pemahaman arahan dan adegan",
+    "studio.gallery.brand.Recraft": "Reka grafik dan visual jenama",
+    "studio.gallery.brand.Microsoft": "Cahaya realistik dan butiran halus",
+    "studio.gallery.brand.Sourceful": "Visual produk dan kreativiti jenama",
+    "announcement.unavailable": "Pengumuman tidak tersedia sekarang. Sila cuba lagi."
   }
 }

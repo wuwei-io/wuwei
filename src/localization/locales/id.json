@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "Anda masih memiliki koin. Beralih ke model berbayar untuk melanjutkan.",
     "billing.freecap.switchPaid": "Beralih ke model berbayar",
     "whatsapp.chat": "Chat di WhatsApp",
-    "whatsapp.scan": "Pindai dengan ponsel Anda"
+    "whatsapp.scan": "Pindai dengan ponsel Anda",
+    "studio.gallery.brand.Qwen": "Teks dan tata letak poster",
+    "studio.gallery.brand.FLUX": "Detail alami dan komposisi",
+    "studio.gallery.brand.Tencent": "Pemahaman perintah dan adegan",
+    "studio.gallery.brand.Recraft": "Desain grafis dan visual merek",
+    "studio.gallery.brand.Microsoft": "Cahaya realistis dan detail halus",
+    "studio.gallery.brand.Sourceful": "Visual produk dan kreasi merek",
+    "announcement.unavailable": "Pengumuman belum tersedia. Silakan coba lagi."
   }
 }
