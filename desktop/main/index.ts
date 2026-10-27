@@ -1,3 +1,5 @@
+import {registerVideoStudio} from "./video-studio.js";
+import {gatewayAffordability} from "../../src/gateway-affordability.js";
 import {localizeToolMetadata} from "../../src/localization/tools.js";
 import { tr, getCurrentLanguage, getLanguages } from "../../src/localization/index.js";
 import { resolveEmployee, employeeLabel, employeeRoster, TEAM_TOOL_EN } from "../../src/team/default-localization.js";
@@ -31,7 +33,9 @@ import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMP
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
+import {StudioImageApprovals,imageAccountScope,type StudioImageAuthorization} from '../../src/imagegen/studio-approval.js';
 import { PlatformBillingClient } from '../../src/imagegen/platform-billing-client.js';
+import {createPlatformImageSession} from '../../src/imagegen/platform-image-session.js';
 import { checkImageAvailability } from '../../src/imagegen/image-availability.js';
 import { connectMcp, mcpTools, mcpToolsBySource, mcpStatus, loadMcpConfig, searchMcpRegistry, MCP_CONFIG_PATH } from "./mcp.js";
 import * as secrets from "./secrets.js";
@@ -71,6 +75,7 @@ import {
   setSessionDone,
   setSessionDiscuss,
   setSessionModel,
+  setImageSession,
   setSessionBinding,
   setSessionEmployee,
   setSessionRunning,
@@ -187,6 +192,7 @@ process.on("unhandledRejection", (e) => { log("unhandledRejection", String(e)); 
 // 注册自定义 app:// 协议为特权协议（须在 app ready 前）。
 // 用它伺服打包后的 renderer，避免 file:// 下 module 脚本被 CORS/CSP 拦导致黑屏。
 protocol.registerSchemesAsPrivileged([
+  { scheme: "wuwei-video", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
@@ -3194,6 +3200,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     process.env.WUWEI_SYSTEM_LANG = app.getPreferredSystemLanguages()[0] || app.getLocale();
     initializeFirstRunSettings();
+    registerVideoStudio({root:join(homedir(),DATA_DIR_NAME,"video-studio"),token:()=>loadWuweiSession()?.accessToken,refresh:async rejected=>(await getFreshWuweiSession(rejected))?.accessToken});
     // 所有模型请求统一压缩发送副本：限制长边和编码字节，包含历史附件、截图和手机上传。
     // 小图保持原样；大图优先 PNG，必要时 JPEG/继续缩小，原始展示图不受影响。
     setImageCapper((dataUrl: string, maxEdge: number) => {
@@ -3572,6 +3579,8 @@ const wuweiSessionState = createHostedSessionState({
     send("evt:wuwei-auth-expired");
   },
 });
+const studioImageApprovals = new StudioImageApprovals();
+const currentImageOwner = () => imageAccountScope(loadWuweiSession()?.accessToken || '');
 const getFreshWuweiSession = (rejectedAccessToken?: string) => wuweiSessionState.get(rejectedAccessToken);
 // 客户端登录埋点上报：登录成功即报；启动/运行期检测到有效会话每进程只报一次(loginReportedThisProc 节流)，
 // 避免 account:wuwei-me 被反复调用(启动拉账号、扣币刷余额)时重复上报把「登录数」灌水。显式登出后重置，重登会再报。
@@ -3654,13 +3663,13 @@ async function refreshWuweiMe(): Promise<void> {
   }
 }
 
-function startTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+function startTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization) {
   // Every independent chat (manual send, idle injection, continuation, schedule
   // and report) has the same account-wide admission and queue UI.
-  return runBackgroundTask(useId, send, () => executeTurn(useId, text, images, sysOverride));
+  return runBackgroundTask(useId, send, () => executeTurn(useId, text, images, sysOverride, imageAuthorization));
 }
 
-async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string) {
+async function executeTurn(useId: string, text: string, images?: string[], sysOverride?: string, imageAuthorization?: StudioImageAuthorization) {
   turnSid = useId; // 供 ask_user 工具的事件带上会话 id
   text = secrets.redact(text).text; // 兜底：已入库密钥出现在消息里→占位符替换，永不出网到模型
   const agent = getAgent(useId);
@@ -3677,7 +3686,7 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
   // 每轮开跑前刷新系统提示词，让上一轮 remember 写入的记忆立即生效(日报等场景用 sysOverride 注入聚合内容)
   send("evt:context-window", { sid: useId, ...agent.getContextBudget() });
   const imageSettings = loadSettings();
-  const selectedImageSku = imageSettings?.imageMode && !sysOverride ? imageSettings.imageSku : undefined;
+  const selectedImageSku = imageAuthorization?.quote.sku_id ?? (imageSettings?.imageMode && !sysOverride ? imageSettings.imageSku : undefined);
   agent.setSystem((sysOverride ?? sysForSession(useId)) + (selectedImageSku ? tr("ui.index.the.user.selected.image.mode.with.768f21e", { p0: selectedImageSku }) : ""));
   const ac = new AbortController();
   runs.set(useId, ac);
@@ -3693,9 +3702,10 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
     // 先占住会话运行态再等待凭证准备，避免用户消息与后台汇报同时穿过空闲检查。
     await ensureFreshClaudeOAuth();
     await ensureHostedProviderReady(useId);
+    if (imageAuthorization && !imageAuthorization.isCurrent()) throw new Error(tr('studio.quoteChanged'));
     if (selectedImageSku && images?.length) throw new Error(tr("ui.index.these.image.presets.accept.text.only.5ec50c2"));
     const runP = (selectedImageSku
-      ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal)
+      ? (input: string, hooks: Parameters<Agent['send']>[1], signal?: AbortSignal) => agent.sendImage(input, selectedImageSku, hooks, signal, imageAuthorization)
       : agent.send.bind(agent))(
       text,
       {
@@ -3803,12 +3813,12 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
           if (restored) send("evt:error", { sid: useId, message: tr("ui.index.authorization.was.just.auto.renewed.please.f6af66e") });
           else clearDeadClaudeOAuth("http-401"); // 内部会发一条「已清除失效 token，请重新授权」的 evt:error
         } else {
-          send("evt:error", { sid: useId, message: e.message });
+          send("evt:error", { sid: useId, message: e.message, gatewayFailure: gatewayAffordability(e?.gatewayFailure) });
         }
         // 诊断日志：本轮报错(非用户主动停止) —— 错误原文 + 模型/平台/状态码/耗时，便于排障
         try {
           const cc = loadConfig();
-          void trackClientLog("error", "error", { version: app.getVersion(), accessToken: loadWuweiSession()?.accessToken ?? null, message: String(e?.message || e).slice(0, 500), meta: { model: cc.model, provider: loadSettings()?.providerId || cc.provider, ok: false, ms: Date.now() - turnT0, status: e?.status ?? null } });
+          void trackClientLog("error", "error", { version: app.getVersion(), accessToken: loadWuweiSession()?.accessToken ?? null, message: String(e?.message || e).slice(0, 500), meta: { model: cc.model, provider: loadSettings()?.providerId || cc.provider, ok: false, ms: Date.now() - turnT0, status: e?.status ?? null, gatewayFailure: gatewayAffordability(e?.gatewayFailure) } });
         } catch { /* ignore */ }
       }
     }
@@ -3853,13 +3863,24 @@ async function executeTurn(useId: string, text: string, images?: string[], sysOv
 // 在跑就别画气泡也别发——从根上杜绝时序误判导致的"孤儿气泡"。
 ipcMain.handle("chat:is-running", (_e, sid: string) => runs.has(sid || currentId));
 
-ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean) => {
+ipcMain.on("chat:send", (_e, sid: string, text: string, images?: string[], auto?: boolean, imageApprovalId?: string) => {
   const useId = sid || currentId;
   // 自主推进/看门狗的「软续跑」(auto=true)：该会话若还在跑就静默跳过，绝不弹「上一条还在处理中」刷屏。
   // 时序心跳追不平主进程真实运行态时(免费模型长思考0token、无工具在跑),这一层让误判彻底无害——
   // 主进程 runs 才是唯一裁判。真结束后由正常 cont 流程/下一次看门狗巡检自然接上。用户手动发才照旧提示。
   if (auto && runs.has(useId)) return;
-  void startTurn(useId, text, images);
+  let authorization: StudioImageAuthorization | undefined;
+  if (imageApprovalId !== undefined) {
+    const owner = currentImageOwner();
+    const grant = studioImageApprovals.consume(imageApprovalId, secrets.redact(text).text.trim(), useId, owner);
+    const settings = loadSettings();
+    if (!grant || auto || images?.length || !owner || !settings?.imageMode || settings.imageSku !== grant.quote.sku_id) {
+      send('evt:error', {sid:useId,message:tr('studio.quoteChanged')}); emitTasks(); return;
+    }
+    authorization = {...grant,isCurrent:()=>currentImageOwner()===owner};
+  }
+  if(authorization){setImageSession(useId,authorization.quote.sku_id,text);send("evt:sessions",listSessions());}
+  void startTurn(useId, text, images, undefined, authorization);
 });
 
 // 运行中注入新需求：正在跑→注入到当前循环边界(AI 综合权衡/优先处理，不必等整轮跑完)；没在跑→当普通发送
@@ -4117,6 +4138,15 @@ ipcMain.handle("session:handoff", async (_e, sid: string) => {
   return { ok: true, newId, goalCarried };
 });
 
+ipcMain.handle('session:image-history',()=>{
+  let changed=false;const rows=listSessions().flatMap(meta=>{
+    const last=meta.imageSku?undefined:loadMessages(meta.id).flatMap(message=>message.content).filter((block:any)=>block.type==='tool_use'&&block.name==='platform_imagegen').at(-1) as {input?:{sku_id?:unknown}}|undefined;
+    const imageSku=meta.imageSku??(typeof last?.input?.sku_id==='string'?last.input.sku_id:undefined);
+    if(!imageSku)return [];if(!meta.imageSku){setImageSession(meta.id,imageSku,meta.title);changed=true}
+    return [{id:meta.id,title:meta.title,updatedAt:meta.updatedAt,imageSku}];
+  });if(changed)send('evt:sessions',listSessions());return rows.sort((a,b)=>b.updatedAt-a.updatedAt);
+});
+
 ipcMain.on("session:switch", (_e, id: string) => {
   // 切走前无条件把当前模型锁给正要离开的会话，让老会话立刻记牢、切回来必还原(不再只在"未绑定"时才锁)
   if (currentId && currentId !== id) lockSessionModel(currentId);
@@ -4125,8 +4155,11 @@ ipcMain.on("session:switch", (_e, id: string) => {
   // 每会话绑定模型：把该会话存的 {model, providerId} 带给渲染端，由它用 PRESETS 完整切平台
   // (含 kind/apiKey/oauthToken/baseUrl——CredSlot 不存 kind，主进程切不干净会 invalid_token)
   const bmeta = listSessions().find((x) => x.id === id);
+  const legacyImage=(a?.getDisplayMessages()??[]).flatMap(message=>message.content).filter((block:any)=>block.type==='tool_use'&&block.name==='platform_imagegen').at(-1) as {input?:{sku_id?:unknown}}|undefined;
+  const imageSku=bmeta?.imageSku??(typeof legacyImage?.input?.sku_id==='string'?legacyImage.input.sku_id:undefined);
+  if(imageSku&&!bmeta?.imageSku)setImageSession(id,imageSku,bmeta?.title??'');
   // getDisplayMessages：带上还没并入历史的注入消息，否则切回正在跑的会话时「刚发的那条」会不见
-  send("evt:session-loaded", { id, messages: a ? a.getDisplayMessages() : [], boundModel: bmeta?.model, boundProviderId: bmeta?.providerId, contextWindow: a?.getContextBudget().contextWindow });
+  send("evt:session-loaded", { id, messages: a ? a.getDisplayMessages() : [], boundModel: bmeta?.model, boundProviderId: bmeta?.providerId, imageSku, contextWindow: a?.getContextBudget().contextWindow });
   sendUsageFor(id);
   void emitAccount();
 });
@@ -5055,6 +5088,7 @@ ipcMain.handle("account:wuwei-me", async () => {
   return meVal;
 });
 ipcMain.handle("account:wuwei-logout", () => {
+  studioImageApprovals.clear();
   wuweiSessionState.logout(); // Invalidate every in-flight refresh before clearing storage.
   try { stopRelayClient(); } catch { /* 登出 → 断开 relay，把这台设备从旧账号名下摘掉 */ }
   loginReportedThisProc = false; // 登出 → 重置节流，下次重登会再上报一次登录
@@ -5075,11 +5109,92 @@ function applyAnonProviders(cat: any[]): void {
   anonProviderIds.add("wuwei-free");
   for (const p of cat) if (p.anon) anonProviderIds.add(p.id);
 }
+let studioSelectionCatalog: { owner:string; rows:import('../../src/imagegen/image-catalog.js').ImageCatalogEntry[]; at:number } | undefined;
+async function studioCatalogForSelection(token:string) {
+  const owner=imageAccountScope(token);
+  if(studioSelectionCatalog?.owner===owner&&Date.now()-studioSelectionCatalog.at<60000)return studioSelectionCatalog.rows;
+  const result=await new PlatformBillingClient('https://wuweiai.io',()=>token,'platform').catalog();
+  const rows=Array.isArray(result)?result:[];
+  studioSelectionCatalog={owner,rows,at:Date.now()};
+  return rows;
+}
 ipcMain.handle("account:image-catalog", async () => {
   const sess = await getFreshWuweiSession().catch(() => null);
-  if (!sess?.accessToken) return [];
+  if (!sess?.accessToken) {
+    const response=await fetch('https://wuweiai.io/api/billing/image-models',{signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw new Error('IMAGE_CATALOG_UNAVAILABLE');
+    const rows=await response.json();if(!Array.isArray(rows))throw new Error('IMAGE_CATALOG_UNAVAILABLE');
+    return rows;
+  }
   const result = await new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform').catalog();
-  return Array.isArray(result) ? result : [];
+  const rows=Array.isArray(result)?result:[];
+  studioSelectionCatalog={owner:imageAccountScope(sess.accessToken),rows,at:Date.now()};
+  return rows;
+});
+// An active image studio changes only its image specification. No text-provider
+// rebuild, account refresh or global ready event is needed for these controls.
+ipcMain.handle('settings:image-sku', async (_e,input:{sku_id?:unknown;sid?:unknown}) => {
+  if(!input||typeof input.sku_id!=='string'||!input.sku_id||input.sku_id.length>200||typeof input.sid!=='string'||input.sid!==currentId)throw new Error('INVALID_IMAGE_SELECTION');
+  const sid=currentId;
+  if(!loadSettings()?.imageMode||runs.has(sid))throw new Error('IMAGE_SELECTION_CHANGED');
+  const sess=await getFreshWuweiSession().catch(()=>null);
+  if(!sess?.accessToken)throw new Error('AUTH_REQUIRED');
+  const owner=imageAccountScope(sess.accessToken);
+  const rows=await studioCatalogForSelection(sess.accessToken);
+  if(!rows.some(row=>row.sku_id===input.sku_id&&row.eligible!==false))throw new Error('SKU_UNAVAILABLE');
+  const current=loadSettings(),token=loadWuweiSession()?.accessToken;
+  if(currentId!==sid||!current?.imageMode||runs.has(sid)||!token||imageAccountScope(token)!==owner)throw new Error('IMAGE_SELECTION_CHANGED');
+  saveSettings({...current,imageSku:input.sku_id,modelChoiceExplicit:true,
+    modelPreferences:{...current.modelPreferences,[owner]:{providerId:'wuwei-image',modelId:input.sku_id}}});
+  return {sku_id:input.sku_id};
+});
+const studioRecoveryLocks=new Set<string>();
+// A recovery can only query an original tool result in this idle conversation.
+// It has no generation/reauthorization action and never submits a new paid POST.
+ipcMain.handle('account:image-recover',async(_e,input:{sid?:unknown;tool_id?:unknown})=>{
+  if(!input||input.sid!==currentId||typeof input.tool_id!=='string'||runs.has(currentId))throw new Error('INVALID_IMAGE_RECOVERY');
+  const sid=currentId,agent=getAgent(sid),lock=`${sid}/${input.tool_id}`;
+  if(!agent||studioRecoveryLocks.has(lock))throw new Error('IMAGE_RECOVERY_BUSY');
+  const messages=agent.getMessages();
+  const use=messages.flatMap(message=>message.content).find((block:any)=>block.type==='tool_use'&&block.id===input.tool_id&&block.name==='platform_imagegen');
+  const result=messages.flatMap(message=>message.content).find((block:any)=>block.type==='tool_result'&&block.tool_use_id===input.tool_id) as any;
+  if(!use||!result)throw new Error('INVALID_IMAGE_RECOVERY');
+  const content=Array.isArray(result.content)?result.content.filter((block:any)=>block.type==='text').map((block:any)=>block.text).join(''):result.content;
+  let previous:any;try{previous=JSON.parse(content);}catch{throw new Error('INVALID_IMAGE_RECOVERY');}
+  if(previous.displayed===true)throw new Error('IMAGE_ALREADY_DELIVERED');
+  const query=typeof previous.order_id==='string'&&/^[0-9a-f-]{36}$/i.test(previous.order_id)?{order_id:previous.order_id}
+    :typeof previous.recovery_key==='string'&&/^[a-zA-Z0-9_-]{16,128}$/.test(previous.recovery_key)?{recovery_key:previous.recovery_key}:null;
+  if(!query)throw new Error('INVALID_IMAGE_RECOVERY');
+  studioRecoveryLocks.add(lock);
+  try{
+    const session=await getFreshWuweiSession().catch(()=>null);if(!session?.accessToken)throw new Error('AUTH_REQUIRED');
+    const owner=imageAccountScope(session.accessToken);
+    const output=await createPlatformImageSession('https://wuweiai.io',session.accessToken)(query,{cwd});
+    if(currentId!==sid||runs.has(sid)||agents.get(sid)!==agent||currentImageOwner()!==owner)throw new Error('IMAGE_SELECTION_CHANGED');
+    const updated=JSON.stringify({...previous,...JSON.parse(output.content)});
+    const blocks=output.displayImage?[{type:'text',text:updated},{type:'image',dataUrl:output.displayImage,displayOnly:true}]:updated;
+    result.content=blocks;result.is_error=!!output.isError;
+    persistQuiet(sid);
+    return {...output,content:updated};
+  }finally{studioRecoveryLocks.delete(lock);}
+});
+ipcMain.handle('account:image-quote', async (_e, input: {sku_id?:unknown;prompt?:unknown;count?:unknown}) => {
+  if (!input || typeof input.sku_id !== 'string' || typeof input.prompt !== 'string'
+    || !input.prompt.trim() || Buffer.byteLength(input.prompt.trim(), 'utf8') > 1000) throw new Error('INVALID_INPUT');
+  const count=input.count??1;
+  if(!Number.isInteger(count)||typeof count!=='number'||count<1||count>4)throw new Error('INVALID_IMAGE_COUNT');
+  const sid = currentId;
+  const prompt = secrets.redact(input.prompt.trim()).text.trim();
+  const sess = await getFreshWuweiSession().catch(() => null);
+  if (!sess?.accessToken) throw new Error('AUTH_REQUIRED');
+  const client = new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform');
+  const catalog = await client.catalog();
+  const sku = Array.isArray(catalog) ? catalog.find(row => row.sku_id === input.sku_id) : undefined;
+  if (!sku || typeof sku.price_version !== 'string' || !Number.isInteger(sku.max_prompt_bytes)
+    || sku.max_prompt_bytes < 1 || Buffer.byteLength(prompt, 'utf8') > sku.max_prompt_bytes) throw new Error('SKU_UNAVAILABLE');
+  // A click may consume this one-use quote; quoting itself never creates an order.
+  const quote = await client.quote({sku_id:sku.sku_id,price_version:sku.price_version,prompt,count:1});
+  return studioImageApprovals.issue(quote,prompt,sid,imageAccountScope(sess.accessToken),count);
 });
 ipcMain.handle("account:wuwei-catalog", async () => {
   const sess = await getFreshWuweiSession().catch(() => null);

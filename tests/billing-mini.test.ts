@@ -7,26 +7,28 @@ import type {ModelChoice} from '../src/model-selection.js';
 import {canUpgradeBackgroundTier} from '../src/billing/background-tasks.js';
 import products from './fixtures/billing-products.json';
 
-test('Mini requires both server switch and owner eligibility; legacy servers hide it',()=>{
- for(const trial of [undefined,{enabled:false,eligible:true},{enabled:true,eligible:false}]){
-  const c={products,trial} as BillingCatalog;
-  assert.ok(!availableBillingProducts(c).some(p=>p.sku===MINI_SKU));
-  assert.deepEqual(billingPeriods(availableBillingProducts(c)),['monthly','annual','pack']);
+test('Mini is a repeatable monthly plan, independent of old trial eligibility',()=>{
+ for(const trial of [undefined,{enabled:false,eligible:false},{enabled:true,eligible:true}]){
+  const c={products:[...products,{...products[0],sku:'v2_plan_mini_day',period:'trial'}],trial} as BillingCatalog;
+  const available=availableBillingProducts(c);
+  assert.ok(available.some(p=>p.sku===MINI_SKU));
+  assert.ok(available.every(p=>p.period!=='trial'));
+  const monthly=billingProductsForPeriod(available,'monthly');
+  assert.equal(monthly[0].sku,MINI_SKU);assert.equal(monthly[0].usdMinor,300);assert.equal(monthly.length,4);
+  assert.equal(monthly.find(p=>p.recommended)?.name,'Mini');
+  assert.equal(billingProductsForPeriod(available,'annual').length,3);
+  assert.ok(billingProductsForPeriod(available,'pack').every(p=>p.kind==='pack'));
+  assert.deepEqual(billingPeriods(available),['free','monthly','annual','pack']);
  }
- const c={products,trial:{enabled:true,eligible:true}} as BillingCatalog;
- assert.equal(availableBillingProducts(c).filter(p=>p.sku===MINI_SKU).length,1);
- assert.deepEqual(billingPeriods(availableBillingProducts(c)),['monthly','annual','pack']);
  assert.deepEqual(availableBillingProducts(null),[]);
- for(const period of ['monthly','annual'] as const){const list=billingProductsForPeriod(availableBillingProducts(c),period);assert.equal(list[0].sku,MINI_SKU);assert.equal(list[0].usdMinor,100);assert.equal(list[1].name,'Pro');assert.equal(list.length,4);}
- assert.ok(billingProductsForPeriod(availableBillingProducts(c),'pack').every(p=>p.kind==='pack'));
 });
 
-test('100 shared Mini coins estimate small amounts without rounding away half the allowance',()=>{
+test('300 shared Mini coins estimate small amounts without rounding away half the allowance',()=>{
  const chat={modelId:'mimo-v2.6-flash',category:'economy',free:false,price:{input:87.23,output:187.88}} as ModelChoice;
  const image={category:'images',imageCoins:8} as ModelChoice;
- const e=usageEstimates(100,[chat,image]);
- assert.equal(e.tasks,93);assert.equal(e.tokens,930000);assert.equal(e.images,12);
- assert.ok(e.tasks!*e.taskCost!<=100);
+ const e=usageEstimates(300,[chat,image]);
+ assert.equal(e.tasks,270);assert.equal(e.tokens,2700000);assert.equal(e.images,37);
+ assert.ok(e.tasks!*e.taskCost!<=300);
  assert.equal(usageEstimates(10000,[chat,image]).tasks,9300);
  assert.equal(canUpgradeBackgroundTier('mini'),true);
 });

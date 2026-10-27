@@ -56,7 +56,7 @@ export function showcaseModels(choices:ModelChoice[],limit=10) {
 /** Full hosted catalog. Auto-routing is a strategy, not another model. */
 export function billingModelCatalog(choices:ModelChoice[]) {
   const seen=new Set<string>();
-  const available=choices.filter(m=>m.category!=='connections'&&!m.hiddenInPicker&&!/auto[-_]?free/i.test(m.modelId)).filter(m=>{
+  const available=choices.filter(m=>m.category!=='connections'&&m.category!=='videos'&&!m.hiddenInPicker&&!/auto[-_]?free/i.test(m.modelId)).filter(m=>{
     const key=(m.category==='images'?'image:':'chat:')+(m.category==='images'?m.imageModel??m.modelId:m.modelId).toLowerCase();
     if(seen.has(key))return false;seen.add(key);return true;
   });

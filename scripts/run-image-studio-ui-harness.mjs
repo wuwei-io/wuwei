@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+const repo=process.cwd(),root=fs.mkdtempSync(path.join(os.tmpdir(),'wuwei-image-studio-ui-'));
+const profile=path.join(root,'profile'),dir=path.join(profile,'.wuwei-test');fs.mkdirSync(dir,{recursive:true});
+fs.writeFileSync(path.join(dir,'auth.json'),JSON.stringify({access_token:'studio-ui-fixture',refresh_token:'fixture',expires_at:Math.floor(Date.now()/1000)+3600}));
+fs.writeFileSync(path.join(dir,'config.json'),JSON.stringify({theme:'light',kind:'openai',providerId:'wuwei-free',model:'glm-4.7-flash',apiKey:'studio-ui-fixture',baseUrl:'https://gw.wuweiai.io/api/gateway/v1',imageMode:true,imageSku:'openai-gpt-image-2-medium',app:{lang:'zh',teamEnabled:false,telemetry:false,brainEnabled:false,claudeAutoRefresh:false,resumeDetect:false,remoteEnabled:false},permissions:{mode:'auto'}}));
+const evidence=path.resolve(process.env.STUDIO_EVIDENCE||'docs/verification/image-studio-20261025');fs.mkdirSync(evidence,{recursive:true});
+const env={...process.env,USERPROFILE:profile,WUWEI_EDITION:'test',STUDIO_UI_ROOT:root,STUDIO_UI_REPO:repo,STUDIO_UI_EVIDENCE:evidence};
+for(const key of Object.keys(env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CODEX_HOME|CLAUDE_CONFIG|MINICC_|ANTHROPIC_|EXPO_TOKEN|WUWEI_SITE_URL|WUWEI_DATA_DIR_NAME|ELECTRON_RUN_AS_NODE|ELECTRON_RENDERER_URL/i.test(key))delete env[key];
+const result=spawnSync(path.join(repo,'node_modules/electron/dist/electron.exe'),[path.join(repo,process.env.STUDIO_SETTINGS_UI==='true'?'scripts/image-studio-settings-ui-electron.cjs':'scripts/image-studio-ui-electron.cjs')],{cwd:root,env,encoding:'utf8',timeout:180000,windowsHide:true});
+const log=(result.stdout||'')+(result.stderr||'')+'\nEXIT='+result.status+'\n';
+fs.writeFileSync(path.join(evidence,'desktop-ui.log'),log);console.log(log);
+if(result.status!==0)process.exit(1);

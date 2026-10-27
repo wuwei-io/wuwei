@@ -15,3 +15,9 @@
 .billing-plans-trial{display:flex;align-items:center;gap:18px;margin-bottom:16px;padding:12px 16px;border:1px solid var(--billing-line);border-radius:10px;background:var(--billing-soft)}
 .billing-plans-trial>div{flex:1;min-width:0}.billing-plans-trial b{font-size:14px;font-weight:600}.billing-plans-trial b>span{font-size:10px;font-weight:500;color:var(--billing-muted);margin-inline-start:8px}.billing-plans-trial small{display:block;margin-top:3px;font-size:10px;color:var(--billing-accent)}
 .billing-plans-trial>strong{font-size:24px;font-weight:600;letter-spacing:-.04em;white-space:nowrap}.billing-plans-trial>button{display:flex;align-items:center;gap:12px;padding:8px 13px;border:1px solid var(--billing-line);border-radius:7px;font-size:11px;font-weight:600;color:var(--billing-accent);background:var(--billing-paper)}
+.billing-plan-grid.four-plans{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:950px){.billing-plan-grid.four-plans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.billing-plan-grid.four-plans{grid-template-columns:minmax(0,1fr)}}
+@media(min-width:1000px) and (max-height:780px){.billing-plans:has(.four-plans) .billing-plans-periods{margin-bottom:12px}.four-plans .billing-plan-card{padding-top:10px;padding-bottom:10px}.four-plans .billing-plan-models{margin-top:6px}.four-plans .billing-plan-features{margin-top:7px;padding-top:7px;gap:4px}}
+
+@media(min-width:1001px){.billing-plan-grid:has([data-sku="v2_plan_mini_monthly"]){grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.billing-plan-grid:has([data-sku="v2_plan_mini_monthly"]) .billing-plan-card{padding-left:16px;padding-right:16px}}

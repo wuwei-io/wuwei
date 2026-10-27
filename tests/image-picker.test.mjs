@@ -35,3 +35,22 @@ test('same-turn send_image of an already displayed path is skipped, explicit lat
   await agent.send('Draw a cube',{});assert.equal(sends,0);
   await agent.send('Send that file again',{});assert.equal(sends,1);
 });
+
+
+for(const mode of ['complete','pending','stop'])test(`approved image batch ${mode}: preserve results and never repeat a paid request`,async()=>{
+ let calls=0;const controller=new AbortController();const images=[];
+ const provider={name:'openai',complete:()=>{throw Error('No text call');},platformImage:async()=>{
+  calls++;
+  if(mode==='pending'&&calls===2)return {content:JSON.stringify({displayed:false,message:'Original order pending'}),isError:true};
+  if(mode==='stop'&&calls===1)controller.abort();
+  return {content:JSON.stringify({displayed:true,path:`fixture-${calls}.png`}),displayImage:`fixture-image-${calls}`};
+ }};
+ const tool={name:'platform_imagegen',description:'',inputSchema:{},run:(i,c)=>c.platformImage(i,c)};
+ const agent=new Agent(provider,'',[tool],{cwd:'.'},new Map([[tool.name,tool]]));
+ const task=agent.sendImage('cube','sku',{onToolEnd:(_i,_t,_e,image)=>{if(image)images.push(image);}},controller.signal,{count:4,quote:{},prompt:'cube',isCurrent:()=>true});
+ if(mode==='stop')await assert.rejects(task,/abort/i);else await task;
+ assert.equal(calls,mode==='complete'?4:mode==='pending'?2:1);
+ assert.equal(images.length,mode==='complete'?4:1);
+ assert.equal(new Set(images).size,images.length);
+ assert.equal(agent.getMessages().filter(m=>m.content.some(b=>b.type==='tool_result')).length,calls);
+});

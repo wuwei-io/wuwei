@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 // 渲染进程可见的 window.wuwei 类型（来自 preload）
 import type { WuweiMe, CatalogProviderDto, ModelPricingData } from "../../main/wuwei-auth.js";
+import type {VideoRequest} from '../../../src/videogen/contracts.js';
 import type { BillingRequest, BillingResponse } from '../../../src/billing/contracts.js';
 import type { BackgroundTaskEntry } from '../../../src/billing/background-tasks.js';
 
@@ -91,7 +92,7 @@ export interface WuweiApi {
   babyGraph(): Promise<string>;
   babyPyramid(): Promise<string>;
   babyReorganize(): Promise<string>;
-  send(sid: string, text: string, images?: string[], auto?: boolean): void;
+  send(sid: string, text: string, images?: string[], auto?: boolean, imageApprovalId?: string): void;
   isRunning(sid: string): Promise<boolean>;
   inject(sid: string, text: string, images?: string[]): void;
   recallInject(sid: string, text: string): Promise<boolean>;
@@ -225,7 +226,11 @@ export interface WuweiApi {
   wuweiLogin(): Promise<WuweiMe | null>;
   wuweiMe(): Promise<WuweiMe | null>;
   wuweiCatalog(): Promise<CatalogProviderDto[] | null>;
-  imageCatalog(): Promise<{sku_id:string;label?:string;model:string;coins_per_image:number}[]>;
+  imageCatalog(): Promise<import('../../../src/imagegen/image-catalog.js').ImageCatalogEntry[]>;
+  selectImageSku(input:{sku_id:string;sid:string}):Promise<{sku_id:string}>;
+  imageHistory():Promise<{id:string;title:string;updatedAt:number;imageSku?:string}[]>;
+  imageRecover(input:{sid:string;tool_id:string}):Promise<import('../../../src/types.js').ToolResult>;
+  imageQuote(input: {sku_id:string;prompt:string;count?:number}): Promise<import('../../../src/imagegen/studio-approval.js').StudioImageQuote>;
   modelPricing(): Promise<ModelPricingData | null>;
   wuweiLogout(): Promise<boolean>;
   wuweiDeviceId(): Promise<string>;
@@ -249,6 +254,7 @@ export interface WuweiApi {
     error?: string;
     message?: string;
   }>;
+  videoRequest(request:VideoRequest):Promise<unknown>;
   billingRequest(request:BillingRequest):Promise<BillingResponse>;
   backgroundTasks():Promise<BackgroundTaskEntry[]>;
   payCryptoCreate(sku: string): Promise<{

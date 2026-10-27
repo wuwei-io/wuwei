@@ -1,3 +1,7 @@
+import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
+import {PaidContextDialog} from './components/PaidContextDialog.js';
+import {BalanceShortageDialog} from './components/BalanceShortageDialog.js';
+import {usePromotionConfig} from './usePromotionConfig.js';
 import { BackgroundTasksPanel } from './components/BackgroundTasksPanel.js';
 import { BackgroundQueueNotice } from './components/BackgroundQueueNotice.js';
 import { useBackgroundTasks } from './components/useBackgroundTasks.js';
@@ -23,14 +27,27 @@ import { arrangeProviderEntries } from '../../../src/provider-order.js';
 import { createCatalogRefresher } from '../../../src/catalog-refresh.js';
 import { createAccountRefresher, type AccountRefreshState } from '../../../src/account-refresh.js';
 import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
+import { mediaModelChoices } from '../../../src/media-model-selection.js';
+import type {VideoCatalog} from '../../../src/videogen/contracts.js';
 import { ModelPicker } from './components/ModelPicker.js';
+import {ImageGallery} from './components/ImageGallery.js';
+import {ImageCreationHistory} from './components/ImageCreationHistory.js';
+import type {StudioArtwork} from './components/image-gallery-data.js';
+import {VideoStudio} from './components/VideoStudio.js';
+import type {VideoHistoryEntry} from '../../../src/videogen/contracts.js';
+import { ImageStudio, ImageStudioHeader } from './components/ImageStudio.js';
+import { withImageSkuChoices } from './components/image-studio-catalog.js';
 import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
 import { BillingPanel } from './components/billing/BillingPanel.js';
-import { hasPaidAllowance, imageToolBalanceFailure, usageLimitKind, usageLimitDestination } from '../../../src/usage-limit.js';
+import {refreshBillingCatalogCache} from './components/billing/catalog-cache.js';
+import {BillingExitFeedback} from "./components/billing/BillingExitFeedback.js";
+import {billingFeedbackEligible,type BillingExit} from "../../../src/billing/exit-feedback.js";
+import { hasPaidAllowance, gatewayLimitMessage, imageToolBalanceFailure, usageLimitKind } from '../../../src/usage-limit.js';
+import {gatewayAffordability, type GatewayAffordability} from '../../../src/gateway-affordability.js';
 import { recommendedValueModel, premiumSelectionNeedsConfirmation } from '../../../src/premium-model.js';
 import { PremiumModelNotice } from './components/PremiumModelNotice.js';
 import type { Decision } from '../../../src/types.js';
-﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WuweiMe, CatalogProviderDto } from "../../main/wuwei-auth.js";
 import { getLang, setLang as persistLang, makeT, useLanguage, getLanguages, getLanguagePreference, type Lang, type T } from "./i18n.js";
 import { tx, setTxMode, useTx } from "./tx.js";
@@ -39,6 +56,7 @@ import { dedupeDisplayedToolImages } from "./imageResults.js";
 import { BRAND_LOGOS } from "./brandLogos.js";
 import { BrandLogo } from "./modelLogos.js";
 import { WECHAT_CS_QR } from "./wechatCsQr.js";
+import { WhatsAppSupport } from "./components/WhatsAppSupport.js";
 import { QRCodeSVG } from "qrcode.react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -81,6 +99,7 @@ type Item =
       type: "tool";
       id?: string; // 工具调用 id：并行时用来精确匹配 start/end(不再靠"最后一个running")
       name: string;
+      ts?: number;
       input: Record<string, unknown>;
       result?: string;
       isError?: boolean;
@@ -118,6 +137,8 @@ interface Pending {
   input: Record<string, unknown>;
 }
 interface SessionMeta {
+  videoRequestId?:string;
+  imageSku?:string;
   id: string;
   title: string;
   updatedAt: number;
@@ -260,6 +281,7 @@ function messagesToItems(messages: any[]): Item[] {
           const it: Extract<Item, { type: "tool" }> = {
             type: "tool",
             name: b.name,
+            id:b.id,ts:m.ts,
             input: b.input,
             status: "done",
           };
@@ -440,7 +462,8 @@ function friendlyError(raw: string, t: T, freeModel = true): string {
   const r = raw || "";
   // 无为托管网关的业务错误 → 友好文案（优先，避免被下方通用 401/429 规则吃掉）
   if (/anon_login_required|anon_not_allowed/i.test(r)) return t("ui.app.sign.in.to.use.this.model.8ff2e81");
-  if (/insufficient_balance/i.test(r)) return t("err.insufficientBalance");
+  if (/insufficient_balance/i.test(r)) return gatewayLimitMessage(r,t("err.insufficientBalance"));
+  if (/\[\[gw:free_daily_cap_reached\]\]/i.test(r)) return gatewayLimitMessage(r,t("err.dailyCap"));
   if (/free_quota_exhausted/i.test(r)) return t("err.freeQuota");
   if (/free_trial_disabled/i.test(r)) return t("err.freeDisabled");
   if (/\bdaily_cap_reached\b/i.test(r) && !freeModel) return t("err.paidDailyCap");
@@ -1005,8 +1028,9 @@ function ContactSupportModal({ onClose, onLeaveMessage, onChat, t }: { onClose: 
             {tr("ui.app.chat.with.support.live.3b049e0")}
           </button>
         )}
+        <WhatsAppSupport />
         {getLang() !== "zh" ? (
-          // 英文版：海外不用微信，只给留言反馈入口
+          // International customers can also use WhatsApp.
           <>
             <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 18px", lineHeight: 1.6 }}>
               {tr("ui.shared.3d2c9c722f")}</p>
@@ -1160,6 +1184,7 @@ function SupportChatModal({ onClose, loggedIn, t }: { onClose: () => void; logge
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>
+        <WhatsAppSupport compact />
         <div className="sc-list" ref={listRef}>
           {!loaded ? (
             <div className="sc-empty">{tr("set.brain.warming")}</div>
@@ -2022,6 +2047,7 @@ function TrialPayModal({
             <button className="trial-cs" onClick={onContact}>
               {tr("ui.app.payment.issue.contact.support.029c8ab")}
             </button>
+            <WhatsAppSupport compact source="payment" />
           </div>
         </div>
 
@@ -2809,9 +2835,6 @@ function LoginIntroModal({ lang, t, onClose, onLogin, onKeepFree, reason, onLang
                 <span style={{ color: "#C05F3C" }}>{tr("usage.clickLogin")}</span> {tr("ui.shared.4c19da5fdb")}</>
             )}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-            {tr("ui.app.free.models.have.daily.limits.paid.eb2cb7e")}
-          </div>
           <div
             style={{
               display: "grid",
@@ -3488,12 +3511,14 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
         )}
 
         <button className="cpay-cs" onClick={onContact}>{tr("ui.app.payment.issue.contact.support.029c8ab")}</button>
+        <WhatsAppSupport compact source="payment" />
       </div>
     </div>
   );
 }
 
 export function App() {
+  usePromotionConfig();
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
   const backgroundTasks = useBackgroundTasks();
@@ -3883,11 +3908,31 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("model"); // 统一设置页的初始/当前左侧菜单项
   const [curProviderId, setCurProviderId] = useState("");
-  const [imageMode, setImageMode] = useState(false);
+  const [videoMode,setVideoMode]=useState(false);
+  const [videoNewVersion,setVideoNewVersion]=useState(0);
+  const [requestedVideoCreation,setRequestedVideoCreation]=useState<{id:string;version:number}|undefined>();
+  const [videoHistory,setVideoHistory]=useState<VideoHistoryEntry[]>([]);
+  const [videoHistoryVersion,setVideoHistoryVersion]=useState(0);
+  const [imageSessionToOpen,setImageSessionToOpen]=useState<{sid:string;sku:string}|null>(null);
+  const [requestedVideo,setRequestedVideo]=useState<{id:string;version:number}|undefined>();
+  const [configuredImageMode,setConfiguredImageMode]=useState(false);
+  const [imagePreview,setImagePreview]=useState<{model?:string}|null>(null);
+  const imagePreviewRef=useRef(imagePreview);imagePreviewRef.current=imagePreview;
+  const imageMode=configuredImageMode||!!imagePreview;
+  const setImageMode=(enabled:boolean)=>{setConfiguredImageMode(enabled);setImagePreview(null);};
   const imageModeRef = useRef(imageMode);
   imageModeRef.current = imageMode;
   const [imageSku, setImageSku] = useState("");
-  const [imageCatalog, setImageCatalog] = useState<{sku_id:string;label?:string;model:string;quality?:string;coins_per_image:number}[]>([]);
+  const [imageCatalog, setImageCatalog] = useState<import('../../../src/imagegen/image-catalog.js').ImageCatalogEntry[]>([]);
+  const imageCatalogRef = useRef(imageCatalog);
+  imageCatalogRef.current = imageCatalog;
+  const [imageHistory, setImageHistory] = useState(false);
+  const [imageHistoryOverview,setImageHistoryOverview]=useState(false),[imageHistoryLoading,setImageHistoryLoading]=useState(false);
+  const [imageHistoryRows,setImageHistoryRows]=useState<{id:string;title:string;updatedAt:number;imageSku?:string}[]>([]);
+  const [imageReuseVersion,setImageReuseVersion]=useState(0);
+  const imageReturnChoiceRef = useRef<string | null>(null);
+  useEffect(() => { setImageHistory(false); }, [imageMode, currentId]);
+  useEffect(() => { if (imageMode && busy) setImageHistory(true); }, [imageMode, busy, currentId]);
   const imageChoices = imageModelChoices(imageCatalog);
   const imagePreset: Preset = {id:"wuwei-image",get label() { return tr("ui.app.message.a24d0f2a14"); },get labelEn() { return tr("ui.app.message.a24d0f2a14"); },kind:"openai",baseUrl:WUWEI_GATEWAY_BASE,keyUrl:"",keyHint:"",models:imageChoices.map(s=>s.sku_id),hosted:true,fixedBaseUrl:true};
   const displayProviderId = imageMode ? imagePreset.id : curProviderId;
@@ -3896,7 +3941,33 @@ export function App() {
     const row=imageCatalog.find(s=>s.sku_id===id);
     return row ? imageModelLabel(row) : id;
   };
-  const refreshImageCatalog = async () => {try {const rows=await window.wuwei.imageCatalog();setImageCatalog(rows);}catch {setImageCatalog([]);}};
+  const [videoCatalog,setVideoCatalog]=useState<VideoCatalog|null>(null);
+  const [mediaLoading,setMediaLoading]=useState({images:true,videos:true});
+  const [mediaError,setMediaError]=useState({images:false,videos:false});
+  const mediaReads=useRef({images:0,videos:0});
+  const mediaOwners=useRef<{images?:string;videos?:string}>({});
+  const pendingMediaChoice=useRef<{category:'images'|'videos';modelId:string;imageModel?:string;inStudio?:boolean;sid?:string}|null>(null);
+  const committingPreview=useRef(false);
+  const refreshImageCatalog = async () => {
+    const owner=wuweiRef.current?.user.id??'anonymous',read=++mediaReads.current.images;
+    setMediaLoading(v=>({...v,images:true}));setMediaError(v=>({...v,images:false}));
+    try{let rows=await window.wuwei.imageCatalog();
+      // Older main processes returned an empty guest catalogue. Public display
+      // metadata is also readable directly, without credentials or an upgrade.
+      if(owner==='anonymous'&&!rows.length){const response=await fetch('https://wuweiai.io/api/billing/image-models',{cache:'no-store',credentials:'omit'});if(!response.ok)throw Error('IMAGE_CATALOG_UNAVAILABLE');rows=await response.json();if(!Array.isArray(rows))throw Error('IMAGE_CATALOG_UNAVAILABLE');}
+      if(read!==mediaReads.current.images||owner!==(wuweiRef.current?.user.id??'anonymous'))return;
+      mediaOwners.current.images=owner;setImageCatalog(rows);
+    }catch{if(read===mediaReads.current.images)setMediaError(v=>({...v,images:true}));}
+    finally{if(read===mediaReads.current.images)setMediaLoading(v=>({...v,images:false}));}
+  };
+  const refreshVideoCatalog = async () => {
+    const owner=wuweiRef.current?.user.id??'anonymous',read=++mediaReads.current.videos;
+    setMediaLoading(v=>({...v,videos:true}));setMediaError(v=>({...v,videos:false}));
+    try{const result=await window.wuwei.videoRequest({action:'catalog'});if(!result||typeof result!=='object'||'error'in result||!Array.isArray((result as VideoCatalog).models))throw Error('VIDEO_CATALOG_UNAVAILABLE');
+      if(read!==mediaReads.current.videos||owner!==(wuweiRef.current?.user.id??'anonymous'))return;mediaOwners.current.videos=owner;setVideoCatalog(result as VideoCatalog);
+    }catch{if(read===mediaReads.current.videos)setMediaError(v=>({...v,videos:true}));}
+    finally{if(read===mediaReads.current.videos)setMediaLoading(v=>({...v,videos:false}));}
+  };
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({}); // 各平台实时拉到的模型
   const [showAllModels, setShowAllModels] = useState(false); // 切换模型下拉：false=常用(预设旗舰) true=全部(含实时拉取)
   const [showModelPricing, setShowModelPricing] = useState(false); // 模型费用说明弹窗
@@ -4030,6 +4101,7 @@ export function App() {
   };
   const [secretPrompt, setSecretPrompt] = useState<{
     text: string; // 原始文本(供存入后重新扫描)
+    imageApprovalId?: string;
     redacted: string; // 已把已入库密钥换成占位符的版本(用于显示/发送)
     imgs: string[];
     inject: boolean;
@@ -4151,6 +4223,14 @@ export function App() {
   const [wuweiReady, setWuweiReady] = useState(false);
   const wuweiRef = useRef(wuwei); // 空依赖事件闭包里读最新登录态(否则 wuwei 冻结在挂载时=未登录)
   wuweiRef.current = wuwei;
+  useEffect(() => {
+    const owner = wuwei?.user.id;
+    if (!owner) return;
+    let live = true;
+    // Warm price metadata after login; never delay opening a notice or panel.
+    void refreshBillingCatalogCache(owner, () => live && wuweiRef.current?.user.id === owner);
+    return () => { live = false; };
+  }, [wuwei?.user.id, wuwei?.membership?.tier, wuwei?.trialEligible]);
   const wuweiRevisionRef = useRef(0);
   function setWuwei(value: React.SetStateAction<typeof wuwei>) {
     ++wuweiRevisionRef.current;
@@ -4199,9 +4279,11 @@ export function App() {
   const showSubscription = !!wuwei?.flags?.includes("subscription");
   const [wuweiBusy, setWuweiBusy] = useState(false);
   // rebind：当前绑的是「无为托管·Claude」且用户已授权 Claude 订阅时，弹窗给「一键改用订阅继续」（订阅走账号额度、不扣无为币）
-  const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
+  const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; gatewayFailure?: GatewayAffordability; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
+  const billingFeedbackSeen=useRef(new Map<string,number>());
+  const [billingFeedback,setBillingFeedback]=useState<(BillingExit&{sid:string;userId:string})|null>(null);
   const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number; hasMemberQuota?: boolean } | null>(null);
-  const usageLimitHandlerRef = useRef<(kind: 'free' | 'balance', message: string) => void>(() => {});
+  const usageLimitHandlerRef = useRef<(kind: 'free' | 'balance', message: string, diagnostic?: GatewayAffordability) => void>(() => {});
   const usageLimitRequestRef = useRef<{ user: string; sid: string; model: string; at: number; pending: boolean } | null>(null);
   const [quotaWarn, setQuotaWarn] = useState<{ model: string; usedPct: number; resetsAt: string | null } | null>(null); // 用高价模型烧周额度过快(≥50/80%)→弹窗建议切省钱模型
   // 所有付费/提醒弹窗「展示」统一埋点：依赖用 !!state(布尔)，只在弹窗打开的一刻发一次(对象内容更新不重复发)。
@@ -4229,6 +4311,12 @@ export function App() {
     shortageShownAt.current = 0;
     setCoinShortage(null);
     setDebugCtx(null); // 关掉调试强制的 context
+  }
+  function upgradeFromShortage() {
+    closeShortage("upgrade");
+    if (!wuweiRef.current) { requestModelLogin(); return; }
+    setCoinPackOpen(false); setPlanOpen(false); setFreeCapModal(null);
+    setBillingPage('plans'); setBillingOpen(true);
   }
   // 【仅开发预览】调试快捷键，逐个弹出各弹窗看文案/效果。import.meta.env.DEV 门控，生产构建自动剥离。
   //   Ctrl+Shift+1 本月额度用完(weekly)  ·  2 无为币用完(shortage)  ·  3 今日免费额度用完(freecap购买)
@@ -4286,16 +4374,17 @@ export function App() {
   const lastUpdCheck = useRef(0); // 发消息时顺带静默检测新版本的节流(2分钟)，多一个触发点
   const [dlProgress, setDlProgress] = useState<{ percent: number; bytesPerSecond: number } | null>(null); // 更新下载进度(0-100)，下载完清空
   const [dlVer, setDlVer] = useState(""); // 正在下载的新版本号（左下角提示用）
-  async function refreshWuweiForShortage(message: string) {
+  async function refreshWuweiForShortage(message: string, diagnostic?: GatewayAffordability) {
     // 去抖：自主推进/智能继续的会话会连续重试，每次撞余额都会调这里 → 弹窗弹好几次。
     // 3 秒内已弹过就跳过(点「刷新余额」按钮走的是同函数，但那是用户主动、间隔一般 >3s，不受影响)。
     usageLimitRequestRef.current = null;
     if (coinShortage && Date.now() - shortageShownAt.current < 3000) return;
-    // 直接打开充值付款界面，后台刷新账号不阻塞展示。
+    // 先说明余额不足；只有用户点击升级后才打开标准套餐弹窗。
+    setBillingOpen(false); setCoinPackOpen(false); setPlanOpen(false);
     setFreeCapModal(null); setQuotaWarn(null); setShowAcctMenu(false);
     setShowProviderMenu(false); setShowModelMenu(false); setDebugCtx(null);
     const userId = wuweiRef.current?.user.id;
-    setCoinShortage({ message, balance: wuweiRef.current?.coin.balance ?? 0 });
+    setCoinShortage({ message, balance: wuweiRef.current?.coin.balance ?? 0, gatewayFailure: diagnostic });
     shortageShownAt.current = Date.now();
     try {
       const me = await window.wuwei.wuweiMe();
@@ -4307,42 +4396,51 @@ export function App() {
       /* 弹窗仍然保留充值入口 */
     }
   }
-  async function handleUsageLimit(kind: 'free' | 'balance', message: string) {
+  async function handleUsageLimit(kind: 'free' | 'balance', message: string, diagnostic?: GatewayAffordability) {
     const account = wuweiRef.current;
     if (!account) { requestModelLogin(); return; }
-    if (kind === 'balance') { void refreshWuweiForShortage(message); return; }
+    if (kind === 'balance') { void refreshWuweiForShortage(message, diagnostic); return; }
     const previous = usageLimitRequestRef.current;
     const sid = currentIdRef.current;
     const model = quotaModelRef.current.model;
     if (previous?.user === account.user.id && previous.sid === sid && previous.model === model && (previous.pending || Date.now() - previous.at < 3000)) return;
-    const request = { user: account.user.id, sid, model, at: Date.now(), pending: true };
+    const request = { user: account.user.id, sid, model, at: Date.now(), pending: false };
     usageLimitRequestRef.current = request;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refreshed = await Promise.race([
-      window.wuwei.wuweiMe().catch(() => null),
-      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 3000); }),
-    ]);
-    clearTimeout(timer);
-    if (usageLimitRequestRef.current !== request) return;
-    request.pending = false;
-    if (wuweiRef.current?.user.id !== request.user || currentIdRef.current !== sid || quotaModelRef.current.model !== model) return;
-    const latest = refreshed?.user.id === request.user ? refreshed : wuweiRef.current;
-    if (refreshed?.user.id === request.user) setWuwei(refreshed);
+    // The gateway has already rejected the request. Showing this local notice
+    // does not depend on another account/network read.
     setShowAcctMenu(false); setShowProviderMenu(false); setShowModelMenu(false); setQuotaWarn(null); setDebugCtx(null);
-    if (usageLimitDestination(kind, latest) === 'recommend') {
-      setCoinShortage(null);
-      setFreeCapModal({ model, balance: latest.coin.balance, hasMemberQuota: !!latest.membership?.weeklyQuota?.active && (latest.membership.weeklyQuota.remainingPct ?? 0) > 0 });
-    } else {
-      setFreeCapModal(null);
-      setCoinShortage({ message: 'freecap', balance: latest.coin.balance, freecap: true });
-      shortageShownAt.current = Date.now();
-    }
+    setCoinShortage(null);
+    setFreeCapModal({model,balance:account.coin.balance,hasMemberQuota:!!account.membership?.weeklyQuota?.active&&(account.membership.weeklyQuota.remainingPct??0)>0});
+    // Show immediately with the latest known balance; refresh quietly without
+    // delaying the notice, sharing the account refresher's lifetime guards.
+    void accountRefreshRef.current?.refresh();
+  }
+  async function switchFreeCapToPaid() {
+    const account = wuweiRef.current;
+    if (!account) { requestModelLogin(); return; }
+    if (!(Number.isFinite(account.coin.balance) && account.coin.balance > 0)) return;
+    const choice = pickerChoicesRef.current.find(c => c.modelId === 'mimo-v2.6-flash' && c.category === 'economy' && !c.free);
+    if (!choice) throw new Error('Model unavailable');
+    const request = usageLimitRequestRef.current;
+    if (!await selectModelChoice(choice)) return;
+    if (wuweiRef.current?.user.id !== account.user.id || usageLimitRequestRef.current !== request) return;
+    usageLimitRequestRef.current = null;
+    setFreeCapModal(null);
   }
   async function doWuweiLogout() {
     await window.wuwei.wuweiLogout();
     setWuwei(null);
     setCheckinDone(false);
   }
+  const loadVideoHistory=useCallback(async(sync=false)=>{
+    const owner=wuweiRef.current?.user.id;if(!owner){setVideoHistory([]);return}
+    try{if(sync)await window.wuwei.videoRequest({action:'orders'});const rows=await window.wuwei.videoRequest({action:'history'});if(wuweiRef.current?.user.id===owner&&Array.isArray(rows))setVideoHistory(rows as VideoHistoryEntry[])}catch{/* A history read must not interrupt an active conversation. */}
+  },[]);
+  useEffect(()=>{setVideoHistory([]);setRequestedVideoCreation(undefined);void loadVideoHistory(true)},[wuwei?.user.id,loadVideoHistory]);
+  useEffect(()=>{if(wuwei?.user.id)void window.wuwei.imageHistory().catch(()=>{})},[wuwei?.user.id]);
+  const sidebarSessions:SessionMeta[]=[...sessions,...videoHistory.map(row=>({id:'video:'+row.requestId,videoRequestId:row.requestId,title:row.title,updatedAt:row.updatedAt}))];
+  function openVideoCreation(id?:string){setImagePreview(null);setRequestedVideoCreation(id?{id,version:Date.now()}:undefined);if(!id)setVideoNewVersion(v=>v+1);setAppView(null);setAgiView(null);setVideoMode(true)}
+  function deleteVideoCreation(requestId:string){const owner=wuweiRef.current?.user.id;if(!owner)return;askConfirm({title:tr('video.deleteHistory'),message:tr('video.deleteHistoryConfirm'),danger:true,onOk:()=>{void(async()=>{if(wuweiRef.current?.user.id!==owner)return;const result=await window.wuwei.videoRequest({action:'delete_history',request_id:requestId});if(result&&typeof result==='object'&&'error'in result)throw Error(String(result.error));if(wuweiRef.current?.user.id!==owner)return;setVideoHistoryVersion(v=>v+1);await loadVideoHistory();if(requestedVideoCreation?.id===requestId)openVideoCreation()})().catch(()=>push({type:'notice',text:tr('video.error.unavailable')}))}})}
   // 手动签到：账号面板点「签到」触发。后端幂等，给币则弹 toast + 刷新余额；无论刚签/已签都标记当天完成。
   async function doCheckin() {
     if (checkinBusy || checkinDone) return;
@@ -4620,8 +4718,8 @@ export function App() {
       // 首启兜底：从未选过平台(providerId 为空)时默认落到「免费体验(wuwei-free, anon 免登录)」，
       // 让全新未登录用户下载后第一条消息就能直接聊、不撞登录墙(头号转化真凶)。已登录/已选过平台者 providerId 非空不受影响。
       setCurProviderId(r?.settings?.providerId || "wuwei-free");
-      setImageMode(!!r?.settings?.imageMode);
-      setImageSku(r?.settings?.imageSku || "");
+      setConfiguredImageMode(!!r?.settings?.imageMode);
+      if(!imagePreviewRef.current)setImageSku(r?.settings?.imageSku || "");
       // 首启兜底不能只改 UI：若从未选过平台(providerId 空)，把 wuwei-free 的完整配置(kind=openai/网关 baseUrl)
       // 真正落盘。否则界面显示免费、settings.kind 却停在默认(anthropic) → 免费模型被当 anthropic 发、报"无法解析鉴权"。
       if (!r?.settings?.providerId) {
@@ -4660,7 +4758,11 @@ export function App() {
   useEffect(() => {
     void refreshCatalog();
   }, [wuwei?.user?.id]);
-  useEffect(() => { void refreshImageCatalog(); }, [wuwei?.user?.id]);
+  useEffect(() => {
+    setImageCatalog([]);setVideoCatalog(null);mediaOwners.current={};
+    void refreshImageCatalog();void refreshVideoCatalog();
+    return()=>{mediaReads.current.images++;mediaReads.current.videos++;};
+  }, [wuwei?.user?.id]);
 
   // 内置平台 + 用户自定义供应商：先应用用户的删除/改名/改端点覆盖，再按托管登录+后台可见性过滤，
   // 最后按用户自定义顺序排、隐藏项不进切换菜单
@@ -4710,12 +4812,7 @@ export function App() {
   }));
   const pickerChoices: ModelChoice[] = [
     ...catalogModelChoices([...pickerCatalog, ...extraConnections], selectedModelKey),
-    ...imageChoices.map((row, index) => ({ key: `wuwei-image/${row.sku_id}`, providerId: "wuwei-image", modelId: row.sku_id,
-      label: imageModelLabel(row), labelEn: imageModelLabel(row), category: "images" as const, rank: index, recommended: false, defaultForNewUsers: false,
-      free: false, needsLogin: true, imageModel: row.model,
-      imageQuality: imageCatalog.filter(entry => entry.model === row.model).sort((a,b) => a.coins_per_image-b.coins_per_image)[0]?.quality,
-      imageCoins: Math.min(...imageCatalog.filter((entry) => entry.model === row.model).map((entry) => entry.coins_per_image)),
-    })),
+    ...mediaModelChoices(imageCatalog,videoCatalog),
   ];
   const selectedChoice = pickerChoices.find((choice) => choice.key === selectedModelKey);
   const pickerChoicesRef = useRef(pickerChoices);
@@ -4725,7 +4822,7 @@ export function App() {
   const [modelRetry, setModelRetry] = useState<{ sid: string; userId: string | null; key: string; text: string; images: string[] } | null>(null);
   const quotaModelRef = useRef({ model: meta.model, free: freeModelIds.has(meta.model) });
   quotaModelRef.current = { model: meta.model, free: freeModelIds.has(meta.model) };
-  usageLimitHandlerRef.current = (kind, message) => { void handleUsageLimit(kind, message); };
+  usageLimitHandlerRef.current = (kind, message, diagnostic) => { void handleUsageLimit(kind, message, diagnostic); };
   useEffect(() => {
     // A response from before an account/session/model change cannot open a stale dialog.
     usageLimitRequestRef.current = null;
@@ -4751,24 +4848,46 @@ export function App() {
     setLoginResume(false); setLoginIntroReason(null);
     setShowLoginIntro(false); setShowLoginForm(true);
   };
-  async function selectModelChoice(choice: ModelChoice, automatic = false, premiumConfirmed = false): Promise<boolean> {
+  const [paidContext,setPaidContext]=useState<{choice:ModelChoice;sid:string;userId:string}|null>(null);
+  const pendingPaidChat=useRef<{choice:ModelChoice;sourceSid:string;userId:string;at:number}|null>(null);
+  useEffect(()=>{setPaidContext(null);const pending=pendingPaidChat.current;if(pending&&pending.userId!==wuwei?.user.id)pendingPaidChat.current=null},[wuwei?.user.id,currentId]);
+  useEffect(()=>{
+    const pending=pendingPaidChat.current;if(!pending||pending.sourceSid===currentId)return;
+    pendingPaidChat.current=null;
+    if(pending.userId!==wuweiRef.current?.user.id||Date.now()-pending.at>15000)return;
+    const scope=modelDefaultScopeRef.current;if(scope.sid!==currentId||!scope.empty||scope.busy)return;
+    modelDefaultRef.current.handled.add(currentId);
+    void selectModelChoice(pending.choice,false,true,true).then(ok=>{if(!ok)throw Error('model_switch_failed')}).catch(()=>push({type:'notice',text:tr('ui.billingpanel.unable.to.switch.please.retry.8f406cd')}));
+  },[currentId,wuwei?.user.id]);
+  async function selectModelChoice(choice: ModelChoice, automatic = false, premiumConfirmed = false, contextConfirmed = false): Promise<boolean> {
+    if(automatic&&imagePreviewRef.current)return false;
     const approved = premiumConfirmed ? choice : undefined;
     const resolveChoice = () => {
       const current = pickerChoicesRef.current.find(c => c.key === choice.key);
-      if (!current) throw new Error('Model unavailable');
-      return current;
+      if (current) return current;
+      // The general picker groups qualities; the studio may select another
+      // real SKU of that same model. Revalidate it on both sides of the await.
+      const variant = imageCatalogRef.current.find(row => row.sku_id === choice.modelId && row.model === choice.imageModel);
+      const imageChoice = variant && choice.category === 'images' && pickerChoicesRef.current.find(c => c.category === 'images' && c.imageModel === variant.model);
+      if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id};
+      throw new Error('Model unavailable');
     };
     if (!automatic && premiumSelectionNeedsConfirmation(resolveChoice(), approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
+    }
+    if(!automatic&&!contextConfirmed&&wuweiRef.current&&paidSwitchNeedsFreshChat(quotaModelRef.current.free,resolveChoice(),switchContextTokens(usage.lastInput,items))){
+      setShowProviderMenu(false);setShowModelMenu(false);setBillingOpen(false);setCoinShortage(null);setFreeCapModal(null);
+      setPaidContext({choice:resolveChoice(),sid:currentIdRef.current,userId:wuweiRef.current.user.id});return false;
     }
     const defaults = modelDefaultRef.current;
     const sid = currentIdRef.current;
     if (!automatic) defaults.handled.add(sid);
     if (automatic && defaults.handled.has(sid)) return false;
     if (choice.needsLogin && !wuweiRef.current) { requestModelLogin(); return false; }
+    const owner = wuweiRef.current?.user.id;
     const r = await window.wuwei.getSettings(); const cur = r?.settings || {};
-    if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid) return false;
+    if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid || wuweiRef.current?.user.id !== owner || (automatic&&imagePreviewRef.current)) return false;
     choice = resolveChoice();
     if (!automatic && premiumSelectionNeedsConfirmation(choice, approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
@@ -4777,11 +4896,11 @@ export function App() {
     if (!automatic) setModelRetry(null);
     const userId = wuweiRef.current?.user.id;
     const choices = pickerChoicesRef.current;
-    const remembered = userId ? rememberedModelChoice(choices, cur, userId) : undefined;
+    const remembered = userId ? rememberedModelChoice(withImageSkuChoices(choices, imageCatalogRef.current), cur, userId) : undefined;
     if (automatic) {
       const scope = modelDefaultScopeRef.current;
       const hosted = providerListRef.current.find(p => p.id === cur.providerId)?.hosted === true || cur.providerId?.startsWith('wuwei-') === true;
-      const target = userId ? remembered ?? recommendedValueModel(choices) : anonymousDefaultModel(choices);
+      const target = userId ? remembered ?? signedInDefaultModel(choices,cur,userId!) : anonymousDefaultModel(choices);
       const eligible = userId ? !!remembered || shouldApplyEconomyDefault(cur, true, scope.empty, hosted) : hosted || !cur.providerId;
       if (defaults.handled.has(sid) || defaults.userId !== (userId ?? null) || scope.sid !== sid || scope.busy || !scope.empty || !eligible || target?.key !== choice.key) return false;
       defaults.handled.add(sid);
@@ -4794,6 +4913,7 @@ export function App() {
     if (automatic && !cur.imageMode && cur.providerId === choice.providerId && cur.model === choice.modelId && (!remember || cur.modelPreferences?.[userId!])) return true;
     if (choice.category === "images") {
       if (!imageCatalog.some((row) => row.sku_id === choice.modelId)) throw new Error("Image model unavailable");
+      if (!cur.imageMode) imageReturnChoiceRef.current = `${cur.providerId}/${cur.model}`;
       window.wuwei.setSettings({ ...cur, modelPreferences, kind: "openai", providerId: "wuwei-free", baseUrl: WUWEI_GATEWAY_BASE, model: "glm-4.7-flash", apiKey: undefined, oauthToken: undefined, imageMode: true, imageSku: choice.modelId, modelChoiceExplicit });
       setCurProviderId("wuwei-free"); setImageMode(true); setImageSku(choice.modelId);
     } else {
@@ -4808,14 +4928,123 @@ export function App() {
     void window.wuwei.track?.("model_switch", { model: choice.modelId, provider: choice.providerId, category: choice.category, automatic });
     return true;
   }
+  async function selectPickerChoice(choice:ModelChoice){
+    if(choice.category==='images'||choice.category==='videos'){
+      if(!wuweiRef.current){pendingMediaChoice.current={category:choice.category,modelId:choice.modelId,imageModel:choice.imageModel};requestModelLogin();return;}
+      if(busy)throw Error('CREATION_BUSY');
+      if(choice.category==='videos'){
+        if(!videoCatalog?.enabled||!videoCatalog.models.some(row=>row.id===choice.modelId))throw Error('VIDEO_UNAVAILABLE');
+        setRequestedVideo(v=>({id:choice.modelId,version:(v?.version??0)+1}));openVideoCreation();return;
+      }
+      if(!await selectModelChoice(choice))throw Error('MODEL_CHANGED');
+      setVideoMode(false);setAppView(null);setAgiView(null);setImageHistory(false);setImageHistoryOverview(false);window.wuwei.newSession();return;
+    }
+    if(!await selectModelChoice(choice,false,choice.category==='premium'))throw Error('MODEL_CHANGED');
+    setVideoMode(false);
+  }
+  useEffect(()=>{
+    const pending=pendingMediaChoice.current??(imagePreviewRef.current?{category:'images' as const,modelId:imageSku,imageModel:imagePreviewRef.current.model,inStudio:true,sid:currentIdRef.current}:null),owner=wuwei?.user.id;
+    if(!pending||!owner||committingPreview.current||mediaOwners.current[pending.category]!==owner)return;
+    if(pending.inStudio&&pending.sid!==currentIdRef.current){pendingMediaChoice.current=null;return;}
+    let choice=pickerChoicesRef.current.find(c=>c.category===pending.category&&(pending.imageModel?c.imageModel===pending.imageModel:c.modelId===pending.modelId));
+    if(!choice){if(!mediaLoading[pending.category])pendingMediaChoice.current=null;return;}
+    const variant=pending.inStudio?imageCatalogRef.current.find(row=>row.sku_id===pending.modelId&&row.model===choice!.imageModel):undefined;
+    if(variant)choice={...choice,key:'wuwei-image/'+variant.sku_id,modelId:variant.sku_id};
+    pendingMediaChoice.current=null;
+    if(pending.inStudio){
+      // Activate the existing preview after login. Its local session and draft
+      // stay in place; only a later explicit Generate click can submit work.
+      committingPreview.current=true;
+      void selectModelChoice(choice).then(ok=>{if(!ok)throw Error('MODEL_CHANGED')}).catch(()=>push({type:'notice',text:tr('studio.switchError')})).finally(()=>{committingPreview.current=false;});
+    }else void selectPickerChoice(choice).catch(()=>push({type:'notice',text:tr('studio.switchError')}));
+  },[wuwei?.user.id,imageCatalog,videoCatalog,mediaLoading,imagePreview,imageSku]);
+  useEffect(()=>{
+    if(!imagePreview)return;
+    const sku=imageCatalog.find(row=>row.sku_id===imageSku)??imageChoices.find(row=>row.model===imagePreview.model)??imageChoices[0];
+    if(!sku)return;if(sku.sku_id!==imageSku)setImageSku(sku.sku_id);
+    if(sku.model!==imagePreview.model)setImagePreview({model:sku.model});
+  },[imagePreview,imageCatalog,imageSku]);
+  function requestStudioLogin(skuId=imageSku){
+    const sku=imageCatalogRef.current.find(row=>row.sku_id===skuId);
+    if(sku)pendingMediaChoice.current={category:'images',modelId:sku.sku_id,imageModel:sku.model,inStudio:true,sid:currentIdRef.current};
+    requestModelLogin();
+  }
+  async function selectStudioSku(skuId: string) {
+    const sku = imageCatalog.find(row => row.sku_id === skuId);
+    const choice = pickerChoices.find(row => row.category === 'images' && row.imageModel === sku?.model);
+    if (!sku || !choice) throw new Error('SKU_UNAVAILABLE');
+    if(!wuweiRef.current){requestStudioLogin(skuId);return;}
+    if(imageModeRef.current) {
+      const sid=currentIdRef.current,owner=wuweiRef.current?.user.id;
+      if(!owner)throw new Error('AUTH_REQUIRED');
+      if(skuId===imageSku)return;
+      const result=await window.wuwei.selectImageSku({sku_id:skuId,sid});
+      if(result.sku_id!==skuId||currentIdRef.current!==sid||wuweiRef.current?.user.id!==owner||!imageModeRef.current)throw new Error('IMAGE_SELECTION_CHANGED');
+      modelDefaultRef.current.handled.add(sid);
+      setImageSku(skuId);
+      return;
+    }
+    if (!await selectModelChoice({...choice,key:`wuwei-image/${skuId}`,modelId:skuId})) throw new Error('MODEL_CHANGED');
+  }
+  async function showImageHistory(){
+    setImageHistory(true);setImageHistoryOverview(true);setImageHistoryLoading(true);
+    try{setImageHistoryRows(await window.wuwei.imageHistory())}catch{push({type:'notice',text:tr('studio.switchError')})}finally{setImageHistoryLoading(false)}
+  }
+  async function beginImageCreation(){
+    if(busy)return;
+    if(!wuweiRef.current){
+      const sku=imageCatalog.find(row=>row.sku_id===imageSku)??imageChoices[0];
+      setImagePreview({model:sku?.model});if(sku)setImageSku(sku.sku_id);
+      setVideoMode(false);setAppView(null);setAgiView(null);setImageHistory(false);setImageHistoryOverview(false);
+      window.wuwei.newSession();if(!sku)void refreshImageCatalog();return;
+    }
+    const owner=wuweiRef.current.user.id;
+    try{const sku=imageCatalog.find(row=>row.sku_id===imageSku)??imageChoices[0];if(!sku){await refreshImageCatalog();setModelPickerCategory('images');setShowProviderMenu(true);return}
+      await selectStudioSku(sku.sku_id);if(wuweiRef.current?.user.id!==owner)return;
+      setVideoMode(false);setAppView(null);setAgiView(null);setImageHistory(false);setImageHistoryOverview(false);window.wuwei.newSession();
+    }catch{push({type:'notice',text:tr('studio.switchError')})}
+  }
+  const openingImageSession=useRef(false);
+  useEffect(()=>{
+    const pending=imageSessionToOpen;if(!pending||pending.sid!==currentId)return;
+    if(imageMode&&imageSku===pending.sku){setImageHistory(true);setImageSessionToOpen(null);return}
+    const choice=pickerChoices.find(row=>row.category==='images'&&row.imageModel===imageCatalog.find(x=>x.sku_id===pending.sku)?.model);
+    if(openingImageSession.current||!choice)return;
+    openingImageSession.current=true;
+    void selectModelChoice({...choice,key:'wuwei-image/'+pending.sku,modelId:pending.sku}).then(ok=>{if(!ok)setImageSessionToOpen(null)}).finally(()=>{openingImageSession.current=false}).catch(()=>setImageSessionToOpen(null));
+  },[imageSessionToOpen,currentId,imageCatalog,pickerChoices,imageMode,imageSku]);
+  async function reuseStudioArtwork(art:StudioArtwork) {
+    if(busy)throw new Error('IMAGE_BUSY');
+    const sid=currentIdRef.current,owner=wuweiRef.current?.user.id;
+    if(!art.skuId||!imageCatalogRef.current.some(row=>row.sku_id===art.skuId))throw new Error('SKU_UNAVAILABLE');
+    await selectStudioSku(art.skuId);
+    if(currentIdRef.current!==sid||wuweiRef.current?.user.id!==owner)throw new Error('IMAGE_SELECTION_CHANGED');
+    try{sessionStorage.setItem('image-studio-count/'+`${sid}/${owner||'anonymous'}`,'1');}catch{}
+    setImageReuseVersion(v=>v+1);setInput(art.prompt);requestAnimationFrame(()=>taRef.current?.focus());
+  }
+  async function recoverStudioArtwork(art:StudioArtwork) {
+    if(!art.toolId||busy)throw new Error('INVALID_IMAGE_RECOVERY');
+    const sid=currentIdRef.current,owner=wuweiRef.current?.user.id;
+    const result=await window.wuwei.imageRecover({sid,tool_id:art.toolId});
+    if(currentIdRef.current!==sid||wuweiRef.current?.user.id!==owner)return;
+    setItems(previous=>previous.map(item=>item.type==='tool'&&item.id===art.toolId?{...item,status:'done',result:result.content,isError:result.isError,image:result.displayImage||item.image}:item));
+  }
+  async function leaveImageStudio() {
+    const target = pickerChoices.find(row => row.key === imageReturnChoiceRef.current && row.category !== 'images')
+      ?? anonymousDefaultModel(pickerChoices);
+    if (!target) { setModelPickerCategory('economy'); setShowProviderMenu(true); return; }
+    try { await selectModelChoice(target, false, target.category === 'premium'); }
+    catch { push({type:'notice',text:tr('studio.switchError')}); }
+  }
   async function applyDefaultModel() {
+    if(imagePreviewRef.current)return;
     const defaults = modelDefaultRef.current;
     const sid = currentIdRef.current;
     if (defaults.handled.has(sid)) return;
     const r = await window.wuwei.getSettings();
     if (defaults !== modelDefaultRef.current || sid !== currentIdRef.current) return;
     const userId = wuweiRef.current?.user.id;
-    const choice = userId ? rememberedModelChoice(pickerChoices, r?.settings || {}, userId) ?? recommendedValueModel(pickerChoices) : anonymousDefaultModel(pickerChoices);
+    const choice = userId ? signedInDefaultModel(withImageSkuChoices(pickerChoices, imageCatalogRef.current), r?.settings || {}, userId) : anonymousDefaultModel(pickerChoices);
     if (choice) await selectModelChoice(choice, true);
   }
   async function switchToRecommendedValue() {
@@ -4887,7 +5116,8 @@ export function App() {
       setConn({ status: "yellow", reason: tr("ui.app.check.failed.please.retry.85b1dfd") });
     }
   }
-  useEffect(() => { if (imageMode) void runConnCheck(); }, [imageMode, imageSku, wuwei?.user?.id, lang]);
+  const studioConnectionModel=imageCatalog.find(row=>row.sku_id===imageSku)?.model;
+  useEffect(() => { if (imageMode) void runConnCheck(); }, [imageMode, studioConnectionModel, wuwei?.user?.id, lang]);
 
   // ——— API Key 平台：一键获取 → 复制自动检测 → 通了自动设置 ———
   // 把验证过的 key 存进当前平台槽并切换生效
@@ -5067,7 +5297,7 @@ export function App() {
       setModelPickerCategory('images'); setShowModelMenu(false); setShowProviderMenu(true); return;
     }
     // Hosted platform lists can start with an expensive model. Use the same
-    // recommended choice as login, instead of treating models[0] as a default.
+    // value choice for this explicit switch, rather than models[0].
     if (p.hosted && !p.anon) {
       await switchToRecommendedValue();
       return;
@@ -5308,6 +5538,7 @@ export function App() {
           break;
         case "evt:sessions":
           setSessions(payload);
+          setImageHistoryRows(rows=>rows.filter(row=>payload.some((s:SessionMeta)=>s.id===row.id)));
           break;
         case "evt:groups":
           setGroups(Array.isArray(payload) ? payload : []);
@@ -5341,6 +5572,9 @@ export function App() {
           setBrowserDetached(!!payload);
           break;
         case "evt:session-loaded": {
+          setVideoMode(false);
+          setImageHistoryOverview(false);
+          setImageSessionToOpen(payload.imageSku?{sid:payload.id,sku:payload.imageSku}:null);
           setCurrentId(payload.id);
           setServerCtxMax(0);
           if (payload.contextWindow) setMeta((prev) => ({ ...prev, ctxWindow: payload.contextWindow }));
@@ -5354,7 +5588,7 @@ export function App() {
           setAwayFromBottom(false);
           setItems(messagesToItems(payload.messages));
           // 每会话绑定模型：切到该会话→用它上次绑定的平台/模型(渲染端切，带全 kind/鉴权，避免 invalid_token)
-          if (payload.boundProviderId || payload.boundModel) void applyBoundModel(payload.boundProviderId, payload.boundModel);
+          if (!payload.imageSku && (payload.boundProviderId || payload.boundModel)) void applyBoundModel(payload.boundProviderId, payload.boundModel);
           break;
         }
         case "evt:assistant-delta":
@@ -5377,7 +5611,7 @@ export function App() {
         case "evt:tool-start":
           if (payload.sid !== currentIdRef.current) break;
           if (payload.name === 'platform_imagegen' && payload.id) imageBillingToolsRef.current.set(payload.id, imageBillingScopeRef.current);
-          push({ type: "tool", id: payload.id, name: payload.name, input: payload.input, status: "running" });
+          push({ type: "tool", id: payload.id, name: payload.name, input: payload.input, ts:Date.now(), status: "running" });
           break;
         case "evt:tool-end":
           if (payload.sid !== currentIdRef.current) break;
@@ -5578,9 +5812,17 @@ export function App() {
             push({ type: "notice", text: tr("ui.app.handoff.doc.ready.continuing.in.new.0be859f") });
           break;
         case "evt:error": {
-          if (payload.sid && payload.sid !== currentIdRef.current) break;
-          thinkStartRef.current = null;
           const rawMsg = String(payload.message ?? payload);
+          if (payload.sid && payload.sid !== currentIdRef.current) {
+            // A background conversation must pause its own quota retry loop too.
+            const backgroundLimit = usageLimitKind(rawMsg, false);
+            if (backgroundLimit && modeOf(payload.sid) === 'cont') {
+              try { setMode(payload.sid, 'auto'); } catch { /* mode ref updates before storage */ }
+              void window.wuwei.track?.('quota_auto_continue_paused', {kind:backgroundLimit,conversation_id:payload.sid,background:true,flow_version:'conversion-20261026'});
+            }
+            break;
+          }
+          thinkStartRef.current = null;
           const friendly = friendlyError(rawMsg, t, quotaModelRef.current.free);
           // 产品行为埋点：用中报错/限额（报错原文进 detail，供后台诊断分析）
           void window.wuwei.track?.("error_shown", { friendly: friendly.slice(0, 100) }, rawMsg.slice(0, 2000));
@@ -5590,6 +5832,13 @@ export function App() {
           void realLimit;
           const loggedIn = !!wuweiRef.current;
           const limitKind = usageLimitKind(rawMsg, quotaModelRef.current.free);
+          // A rejected quota request must not be retried by smart-continue/watchdog.
+          // Pause only this conversation; keep its history and the global preference.
+          if(limitKind&&currentIdRef.current&&modeOf(currentIdRef.current)==='cont'){
+            try{setMode(currentIdRef.current,'auto')}catch{/* in-memory mode is already updated if storage is unavailable */}
+            void window.wuwei.track?.('quota_auto_continue_paused',{kind:limitKind,model:quotaModelRef.current.model,flow_version:'conversion-20261026'});
+          }
+
           if (['invalid_token', 'no_token', 'anon_login_required', 'anon_not_allowed'].includes(gatewayCode(rawMsg))) {
             usageLimitRequestRef.current = null;
             wuweiRef.current = null; setWuwei(null);
@@ -5601,7 +5850,9 @@ export function App() {
           }
           let suppressInlineNotice = false;
           if (limitKind && loggedIn) {
-            usageLimitHandlerRef.current(limitKind, friendly);
+            const diagnostic = limitKind === 'balance' ? gatewayAffordability(payload.gatewayFailure) : undefined;
+            if (diagnostic) void window.wuwei.track?.('billing_request_blocked', { ...diagnostic, conversation_id: currentIdRef.current, flow_version: 'conversion-20261026' });
+            usageLimitHandlerRef.current(limitKind, friendly, diagnostic);
             suppressInlineNotice = true;
           } else if (!loggedIn && (limitKind || /free_trial_disabled|anon_login_required/i.test(rawMsg))) {
             setLoginIntroReason(
@@ -5895,10 +6146,10 @@ export function App() {
   }
 
   // 真正发送一条(立即入队跑)
-  function doSend(text: string, imgs: string[]) {
+  function doSend(text: string, imgs: string[], imageApprovalId?: string) {
     const sid = currentIdRef.current;
     const userId = wuweiRef.current?.user.id;
-    if (userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
+    if (!imageApprovalId && userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
       if (modelDefaultSendRef.current) return;
       const request = {};
       modelDefaultSendRef.current = request;
@@ -5930,7 +6181,7 @@ export function App() {
     thinkStartRef.current = Date.now();
     charsRef.current = 0;
     turnTextRef.current = ""; // 新一轮:清掉上轮预览缓冲
-    window.wuwei.send(currentId, text, imgs.length ? imgs : undefined);
+    window.wuwei.send(currentId, text, imgs.length ? imgs : undefined, false, imageApprovalId);
   }
 
   // —— 智能继续：自动接话 ——
@@ -6216,7 +6467,8 @@ export function App() {
   }
 
   // 真正把消息投递出去(注入 or 新发)——已入库密钥由主进程兜底脱敏
-  function dispatchMessage(text: string, imgs: string[], inject: boolean) {
+  function dispatchMessage(text: string, imgs: string[], inject: boolean, imageApprovalId?: string) {
+    if (inject && imageApprovalId) return;
     if (inject) {
       push({ type: "user", text, images: imgs.length ? imgs : undefined, ts: Date.now() });
       if (text) {
@@ -6225,7 +6477,7 @@ export function App() {
       }
       window.wuwei.inject(currentId, text, imgs.length ? imgs : undefined);
     } else {
-      doSend(text, imgs);
+      doSend(text, imgs, imageApprovalId);
     }
   }
 
@@ -6257,7 +6509,7 @@ export function App() {
       setModelRetry({ sid, userId: null, key: choice.key, text, images });
     } catch { push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.retry.f1bb49c") }); }
   }
-  function submit(override?: string) {
+  function submit(override?: string, imageApprovalId?: string) {
     const text = (typeof override === "string" ? override : input).trim();
     if (!text && pendingImages.length === 0) return;
     if (text === "/reset") {
@@ -6294,7 +6546,7 @@ export function App() {
     const inject = busy; // 跑动中→注入到当前回合
     // 铁律:发送绝不能依赖密钥扫描。扫描失败/无该接口都要照常发,主进程还会兜底脱敏。
     const go = () => {
-      dispatchMessage(text, imgs, inject);
+      dispatchMessage(text, imgs, inject, imageApprovalId);
       clearComposer();
     };
     const scan = text ? window.wuwei.secretsScan?.(text) : undefined;
@@ -6307,6 +6559,7 @@ export function App() {
         if (r?.candidates?.length > 0) {
           setSecretPrompt({
             text,
+            imageApprovalId,
             redacted: r.redacted ?? text,
             imgs,
             inject,
@@ -6316,7 +6569,7 @@ export function App() {
           });
         } else {
           // 用脱敏后的文本显示+发送:已入库密钥在气泡里也是占位符,不明文示人
-          dispatchMessage(r?.redacted ?? text, imgs, inject);
+          dispatchMessage(r?.redacted ?? text, imgs, inject, imageApprovalId);
           clearComposer();
         }
       })
@@ -6360,7 +6613,7 @@ export function App() {
       }
     }
     setSecretPrompt(null);
-    dispatchMessage(outText, sp.imgs, sp.inject);
+    dispatchMessage(outText, sp.imgs, sp.inject, sp.imageApprovalId);
     clearComposer();
   }
 
@@ -6737,6 +6990,7 @@ export function App() {
                             : (tr("ui.app.checking.4186bc8"))}
                     </div>
                     <p className="conn-pop-reason">{localizeStoredText(conn.reason, lang)}</p>
+                    {conn.status === "green" && (curPreset?.hosted || curProviderId.startsWith("wuwei-")) && <p className="conn-pop-reason">{tr("billing.connection.scope")}</p>}
                     <div className="conn-pop-actions">
                       <button
                         onClick={() => {
@@ -6812,7 +7066,7 @@ export function App() {
               <button className="mq-btn mq-select" title={`${lang !== "zh" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · ${imageMode ? imageLabel(imageSku) : selectedChoice ? (lang !== "zh" ? selectedChoice.labelEn : selectedChoice.label) : meta.model}`} onClick={(e) => {
                 openMqMenu(e);
                 setModelPickerCategory(undefined);
-                if (!showProviderMenu) { void refreshCatalog(); void refreshImageCatalog(); }
+                if (!showProviderMenu) { void refreshCatalog(); void refreshImageCatalog(); void refreshVideoCatalog(); }
                 setShowModelMenu(false); setShowProviderMenu((value) => !value);
               }}>
                 <span className="mq-txt"><span className="mq-category-name">{!selectedChoice && !imageMode ? (tr("set.m.model")) : lang !== "zh" ? selectedCategoryLabel.en : selectedCategoryLabel.zh} · </span>{imageMode ? imageLabel(imageSku) : selectedChoice ? (lang !== "zh" ? selectedChoice.labelEn : selectedChoice.label) : modelLabelsEn.get(meta.model) || modelLabels.get(meta.model) || meta.model}</span>
@@ -6867,9 +7121,10 @@ export function App() {
               {(showProviderMenu || showModelMenu) && <>
                 <div className="mq-overlay" onClick={closeModelPicker} />
                 <ModelPicker choices={pickerChoices} selectedKey={selectedModelKey} loggedIn={!!wuwei} lang={lang} loading={!catalogReady}
-                  initialCategory={modelPickerCategory}
+                  initialCategory={modelPickerCategory} mediaLoading={mediaLoading} mediaError={mediaError}
+                  onRetryMedia={()=>{void refreshImageCatalog();void refreshVideoCatalog();}}
                   onRequireLogin={requestModelLogin}
-                  onChoose={async choice => { if (!await selectModelChoice(choice, false, choice.category === 'premium')) throw new Error('Model selection cancelled'); }} onClose={closeModelPicker} onConnections={() => { closeModelPicker(); setSettingsTab("platforms"); setShowSettings(true); }} />
+                  onChoose={selectPickerChoice} onClose={closeModelPicker} onConnections={() => { closeModelPicker(); setSettingsTab("platforms"); setShowSettings(true); }} />
               </>}
             </div>
 
@@ -7367,9 +7622,14 @@ export function App() {
           );
         })()}
         {showChats && (<>
-        <button className="new-session" onClick={() => { void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
-          {t("session.new")}
+        <button className="new-session" onClick={() => { if(videoMode){openVideoCreation();return;}void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
+          {videoMode||imageMode?tr("video.newCreation"):t("session.new")}
         </button>
+        <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
+          <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>
+          <button className={imageMode&&!videoMode ? 'active' : ''} aria-pressed={imageMode&&!videoMode} onClick={() => { void beginImageCreation(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>{tr('studio.title')}</button>
+          <button className={videoMode?'active':''} aria-pressed={videoMode} onClick={()=>openVideoCreation()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>{tr('video.title')}</button>
+        </nav>
         {/* AGI 板块：数字婴儿入口(迁自 minicc)。默认隐藏，设置里开 */}
         {agiEnabled && (
         <div className="agi-panel">
@@ -7402,10 +7662,10 @@ export function App() {
         </div>
         )}
         <div className="session-list">
-          {sessions.filter((s) => !s.employeeId).length === 0 && <div className="empty">{tr("ui.app.no.conversations.yet.b8bca7a")}</div>}
+          {sidebarSessions.filter((s) => !s.employeeId).length === 0 && <div className="empty">{tr("ui.app.no.conversations.yet.b8bca7a")}</div>}
           {(() => {
             const byGroup = new Map<string, SessionMeta[]>();
-            for (const s of sessions) {
+            for (const s of sidebarSessions) {
               if (s.employeeId) continue; // 员工私聊会话不进普通列表，归一人公司板块下
               const g = groupOf(s);
               if (!byGroup.has(g)) byGroup.set(g, []);
@@ -7439,12 +7699,12 @@ export function App() {
                 key={s.id}
                 className={
                   "session-item" +
-                  (s.id === currentId ? " active" : "") +
+                  ((s.videoRequestId?videoMode&&requestedVideoCreation?.id===s.videoRequestId:!videoMode&&s.id===currentId) ? " active" : "") +
                   (s.done ? " done" : "") +
                   (s.id === dragId ? " dragging" : "") +
                   (s.id === dragOverId ? " drag-over" : "")
                 }
-                draggable
+                draggable={!s.videoRequestId}
                 onDragStart={(e) => {
                   setDragId(s.id);
                   e.dataTransfer.effectAllowed = "move";
@@ -7454,14 +7714,15 @@ export function App() {
                   if (dragId && dragId !== s.id) setDragOverId(s.id);
                 }}
                 onDragLeave={() => setDragOverId((v) => (v === s.id ? null : v))}
-                onDrop={(e) => dropOnSession(e, s, list)}
+                onDrop={(e) => {if(s.videoRequestId)e.preventDefault();else dropOnSession(e,s,list)}}
                 onDragEnd={() => {
                   setDragId(null);
                   setDragOverId(null);
                 }}
-                onClick={() => window.wuwei.switchSession(s.id)}
+                onClick={() => {if(s.videoRequestId){openVideoCreation(s.videoRequestId);return}setImagePreview(null);setVideoMode(false);window.wuwei.switchSession(s.id);}}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  if(s.videoRequestId){deleteVideoCreation(s.videoRequestId);return}
                   setGroupInputSid(null);
                   setCtxMenu({ sid: s.id, x: e.clientX, y: e.clientY });
                 }}
@@ -7477,6 +7738,7 @@ export function App() {
                 )}
                 {s.discuss && <span className="s-discuss" title={t("side.discuss")}>{t("side.discussBadge")}</span>}
                 {s.done && <span className="s-done" title={t("side.done")}>✓</span>}
+                {(s.videoRequestId||s.imageSku)&&<span className="s-creation-icon" role="img" aria-label={tr(s.videoRequestId?'video.title':'studio.title')} title={tr(s.videoRequestId?'video.title':'studio.title')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{s.videoRequestId?<><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></>:<><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></>}</svg></span>}
                 <span className="s-title">{tx(s.title)}</span>
                 <span className="s-time" title={new Date(s.updatedAt).toLocaleString()}>
                   {relTime(s.updatedAt)}
@@ -7485,6 +7747,7 @@ export function App() {
                   className="s-del"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if(s.videoRequestId){deleteVideoCreation(s.videoRequestId);return}
                     window.wuwei.deleteSession(s.id);
                   }}
                 >
@@ -7939,7 +8202,6 @@ export function App() {
                             setCoinShortage((cur) => (cur ? { ...cur, balance: me.coin.balance } : cur));
                           }).catch(() => {});
                         };
-                        const openPack = () => void openBrowsePay("topup"); // 充值 → 统一支付弹窗
                         const openPlan = () => void openBrowsePay("upgrade"); // 开通/续费 → 统一支付弹窗
                         // 已登录但没昵称/邮箱时的兜底首字：中文取「无」(无为)，英文取 W
                         const initial = (wuwei.user.name || wuwei.user.email || t("acct.userInitial")).slice(0, 1).toUpperCase();
@@ -7996,15 +8258,9 @@ export function App() {
                                     {formatCredits(bal)}
                                   </div>
                                 </div>
-                                {bal <= 0 && !isPro && (
-                                  <button className="acct-topup" onClick={openPack}>
-                                    {tr("menu.donate")}
-                                  </button>
-                                )}
                               </div>
                               {balanceRefresh.error && <div className="acct-balance-refresh-error" role="status">{tr("ui.app.could.not.refresh.try.again.ab58e97")}</div>}
-                              {/* 签到按钮永远显示：0 余额非会员反而最该签到领免费币，不能因 bal<=0 把它藏掉。
-                                  0 余额非会员额外在下方追加充值引导。 */}
+                              {/* 签到按钮始终显示，余额为 0 时也可签到。 */}
                               <button
                                 type="button"
                                 className={"acct-checkin" + (checkinDone ? " done" : "")}
@@ -8021,12 +8277,9 @@ export function App() {
                                 {checkinBusy ? <span className="acct-checkin-spin" aria-hidden="true" /> : checkinDone ? <CheckinDoneIcon size={13} /> : <CheckinIcon size={13} />}
                                 <span>{checkinBusy ? t("menu.checkinBusy") : checkinDone ? t("menu.checkedInShort") : t("menu.checkinShort")}</span>
                               </button>
-                              {bal <= 0 && !isPro && (
-                                <div className="acct-hint zero">{t("menu.hintTopup")}</div>
-                              )}
                             </div>
 
-                            {/* 会员条：Pro 平时不显(顶部 chip 已标档位，避免重复)，仅快到期(≤7天)时作续费提醒出现；免费=靛青升级引导 */}
+                            {/* 会员仅在快到期（≤7天）时显示续费提醒。 */}
                             {isPro ? (
                               nearExpiry ? (
                                 <div className="acct-memb on">
@@ -8043,20 +8296,6 @@ export function App() {
                                   </button>
                                 </div>
                               ) : null
-                            ) : bal <= 0 ? (
-                              // 只在无为币用完(余额=0)后才推会员——自然的升级时机，不打扰仍有币的用户
-                              <div className="acct-memb up" onClick={openPlan}>
-                                <div>
-                                  <div className="acct-memb-ttl">
-                                    <span className="acct-crown">
-                                      <Spark />
-                                    </span>{" "}
-                                    {tr("ui.app.upgrade.to.pro.21a61f3")}
-                                  </div>
-                                  <div className="acct-memb-sub">{tr("ui.app.more.quota.better.value.from.mo.c4f58cd")}</div>
-                                </div>
-                                <span className="acct-go">{tr("ui.app.upgrade.now.3da50eb")}</span>
-                              </div>
                             ) : null}
 
                             <div className="acct-sep" />
@@ -8347,7 +8586,8 @@ export function App() {
       )}
 
       {/* 主区 */}
-      <div className="main">
+      <div className={"main" + (videoMode && appView === null && !agiView ? " video-studio-main" : imageMode && appView === null && !agiView ? " image-studio-main" : "")}>
+        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>setPlanOpen(true)} onBack={()=>setVideoMode(false)} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
@@ -8862,8 +9102,9 @@ export function App() {
           </div>
         )}
 
+        {imageMode && appView === null && !agiView && <ImageStudioHeader historyAvailable={!!wuwei} historyOpen={imageHistory || busy} onHistory={() => {if(imageHistory||busy)void beginImageCreation();else void showImageHistory()}} onBack={() => void leaveImageStudio()} />}
         <div
-          className="stream"
+          className={"stream" + (imageMode?" studio-gallery-stream":"") + (imageMode && !imageHistory && !busy ? " image-studio-stream-hidden" : "")}
           ref={streamRef}
           onScroll={(e) => {
             const el = e.currentTarget;
@@ -8877,7 +9118,7 @@ export function App() {
             atBottomRef.current = atBottom;
           }}
         >
-          {items.length === 0 && (
+          {items.length === 0 && !imageMode && (
             <div className="welcome">
               <div className="wc-hero">
                 <WuweiLogo size={58} />
@@ -8948,7 +9189,7 @@ export function App() {
               )}
             </div>
           )}
-          {(() => {
+          {imageMode?imageHistoryOverview?<ImageCreationHistory entries={imageHistoryRows} loading={imageHistoryLoading} lang={lang} model={sku=>imageCatalog.find(r=>r.sku_id===sku)?.model??sku} onOpen={id=>window.wuwei.switchSession(id)} onDelete={id=>{window.wuwei.deleteSession(id);setImageHistoryRows(rows=>rows.filter(r=>r.id!==id))}}/>:<ImageGallery key={`${currentId}/${wuwei?.user.id||'anonymous'}`} items={items} catalog={imageCatalog} scope={`${currentId}/${wuwei?.user.id||'anonymous'}`} busy={busy} onReuse={reuseStudioArtwork} onRecover={recoverStudioArtwork}/>: (() => {
             const turns = groupTurns(items);
             let userOrd = -1; // 已见的用户输入序号(与主进程 messages 里的用户输入一一对应)
             // 上一 AI 回合末的累计用量，用于算本轮增量(输入/输出/缓存命中/新增/步数)
@@ -9124,7 +9365,7 @@ export function App() {
               );
             });
           })()}
-          {executing && !pending && (
+          {executing && !pending && !imageMode && (
             <ThinkingBar startRef={thinkStartRef} charsRef={charsRef} textRef={turnTextRef} items={items} />
           )}
         </div>
@@ -9149,7 +9390,7 @@ export function App() {
           </button>
         )}
 
-        <div className="composer" ref={composerRef}>
+        <div className={"composer" + (imageMode ? " image-studio-composer" + (!imageHistory && !busy ? " is-landing" : "") : "")} ref={composerRef}>
           {appView===null && renderBackgroundQueue(currentId)}
           {selectedChoice?.category === 'premium' && <PremiumModelNotice key={selectedModelKey} en={lang !== "zh"} busy={busy} switching={valueSwitchBusy} onSwitch={()=>void switchToRecommendedValue()} />}
           {/* 鉴权提示条：检测到缺授权后常驻，直到授权成功或用户手动 × 关闭 */}
@@ -9302,6 +9543,7 @@ export function App() {
               </div>
             );
           })()}
+          {billingFeedback&&billingFeedback.userId===wuwei?.user.id&&billingFeedback.sid===currentId&&!imageMode&&!videoMode&&<BillingExitFeedback visit={billingFeedback} onReason={reason=>{void window.wuwei.track?.('billing_exit_reason',{billing_session_id:billingFeedback.session,sku:billingFeedback.sku,context:billingFeedback.context,reason});setBillingFeedback(null)}} onDismiss={()=>{void window.wuwei.track?.('billing_exit_feedback_dismiss',{billing_session_id:billingFeedback.session});setBillingFeedback(null)}}/>}
           {/* 非鉴权类错误：中断类主推「继续」（一键从中断处接着做），其它错误仍给「删除这条」。
               注意判断要中英都认——英文界面的报错以 "Error" 开头，旧代码只认「出错」，导致英文下这条提示条从不出现。 */}
           {!busy &&
@@ -9325,7 +9567,7 @@ export function App() {
                 )}
               </div>
             )}
-          {pendingImages.length > 0 && (
+          {!imageMode && pendingImages.length > 0 && (
             <div className="img-strip">
               {pendingImages.map((src, i) => (
                 <div className="thumb" key={i}>
@@ -9436,7 +9678,10 @@ export function App() {
               </button>
             </div>
           )}
-          <div className="input-wrap">
+          {imageMode ? <ImageStudio key={`${currentId}/${wuwei?.user.id || 'anonymous'}`} catalog={imageCatalog} skuId={imageSku} scope={`${currentId}/${wuwei?.user.id || 'anonymous'}`} value={input} onChange={setInput} reuseVersion={imageReuseVersion}
+            onSelect={selectStudioSku} onGenerate={approvalId => submit(undefined, approvalId)} onStop={stop} onRefresh={refreshImageCatalog}
+            busy={busy} compact={imageHistory || busy} loggedIn={!!wuwei} onLogin={()=>requestStudioLogin()} onUpgrade={openBackgroundPlans}
+            references={pendingImages} onRemoveReference={i => setPendingImages(xs => xs.filter((_,j) => i !== j))} textareaRef={taRef} /> : <div className="input-wrap">
             <textarea dir="ltr"
               ref={taRef}
               rows={1}
@@ -9487,7 +9732,7 @@ export function App() {
                 ↵
               </button>
             )}
-          </div>
+          </div>}
 
           {/* 只在主对话视图渲染主底栏；群/私聊(appView==="rooms")用 RoomView 自己的底栏，
               否则两处 renderComposerFoot 同时挂载会让连通/额度等弹窗重复出现两个。 */}
@@ -10336,6 +10581,7 @@ export function App() {
           onClose={() => {
             setShowLoginForm(false);
             setLoginResume(false);
+            pendingMediaChoice.current=null;
           }}
           onLang={changeLang}
           onSuccess={onWuweiLoggedIn}
@@ -10413,19 +10659,15 @@ export function App() {
           />
         );
       })()}
+      {paidContext&&<PaidContextDialog model={lang==='zh'?paidContext.choice.label:paidContext.choice.labelEn}
+        onClose={()=>setPaidContext(null)}
+        onNew={async()=>{const pending=paidContext;if(pending.userId!==wuweiRef.current?.user.id||pending.sid!==currentIdRef.current)throw Error('stale_switch');pendingPaidChat.current={choice:pending.choice,sourceSid:pending.sid,userId:pending.userId,at:Date.now()};setPaidContext(null);setVideoMode(false);setAppView(null);setAgiView(null);window.wuwei.newSession()}}
+        onCurrent={async()=>{const pending=paidContext;if(pending.userId!==wuweiRef.current?.user.id||pending.sid!==currentIdRef.current||!await selectModelChoice(pending.choice,false,true,true))throw Error('model_switch_failed');setPaidContext(null)}}/>}
       {freeCapModal && <FreeQuotaGuide
-        lang={lang}
-        balance={freeCapModal.balance}
-        hasMemberQuota={!!freeCapModal.hasMemberQuota}
-        recommendations={pickerChoices.filter((choice) => choice.category === 'economy' && choice.recommended).slice(0, 3).map((choice) => lang !== "zh" ? choice.labelEn : choice.label)}
+        balance={wuwei?.coin.balance ?? 0}
+        onSwitchPaid={switchFreeCapToPaid}
+        onUpgrade={()=>{usageLimitRequestRef.current=null;setFreeCapModal(null);setCoinShortage(null);setBillingPage('plans');setBillingOpen(true);shortageShownAt.current=Date.now()}}
         onClose={() => { usageLimitRequestRef.current = null; setFreeCapModal(null); }}
-        onChoose={() => {
-          usageLimitRequestRef.current = null;
-          setFreeCapModal(null); setModelPickerCategory('economy');
-          setShowModelMenu(false); setShowProviderMenu(true);
-          void refreshCatalog();
-          void window.wuwei.track?.('free_cap_choose_value_models', { model: freeCapModal.model, balance: freeCapModal.balance });
-        }}
       />}
       {/* 高价模型烧周额度过快：建议一键切到更省的 DeepSeek V4 Flash / GLM-5.3 Flash；点「继续用」则不再打扰这档 */}
       {quotaWarn && (() => {
@@ -10463,8 +10705,11 @@ export function App() {
           </>
         );
       })()}
-      {/* ① 无为币不足触发弹窗（v2）：金色升级Pro在上(更划算) + 朱色购买积分包在下 */}
-      {coinShortage && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
+      {wuwei && coinShortage && !coinShortage.browse && (
+        <BalanceShortageDialog onClose={() => closeShortage("close")} onUpgrade={upgradeFromShortage} />
+      )}
+      {/* 旧版主动浏览入口仍保留兼容；余额不足先显示独立说明。 */}
+      {coinShortage?.browse && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
         <TrialPayModal
           en={lang !== "zh"}
           balance={coinShortage.balance != null ? coinShortage.balance : wuwei?.coin.balance ?? 0}
@@ -10548,15 +10793,16 @@ export function App() {
           }}
         />
       )}
-      {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage || coinPackOpen || planOpen))) && (
-        <BillingPanel key={wuwei.user.id}
+      {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage?.browse || coinPackOpen || planOpen))) && (
+        <BillingPanel onVideo={id=>{setRequestedVideo(v=>({id,version:(v?.version??0)+1}));setAppView(null);setAgiView(null);setVideoMode(true);setPlanOpen(false);}} key={wuwei.user.id}
           lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
           initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"monthly"}
-          insufficient={!!coinShortage&&!coinShortage.browse} imageMode={imageMode}
+          insufficient={!!coinShortage&&!coinShortage.browse} contextMessage={coinShortage&&!coinShortage.browse&&!coinShortage.freecap?coinShortage.message:undefined} gatewayFailure={coinShortage?.gatewayFailure} imageMode={imageMode}
+          onExit={visit=>{if(imageMode||videoMode)return;const key='wuwei_billing_feedback_'+wuwei.user.id;let last=billingFeedbackSeen.current.get(key)??0;try{last=Math.max(last,Number(localStorage.getItem(key)||0)||0)}catch{}if(billingFeedbackEligible(visit,last)){billingFeedbackSeen.current.set(key,Date.now());try{localStorage.setItem(key,String(Date.now()))}catch{}setBillingFeedback({...visit,sid:currentIdRef.current,userId:wuwei.user.id})}}}
           onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage("close");}}
           onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
           onPaid={()=>{const paidUser=wuwei.user.id;void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===paidUser)setWuwei(current=>current?.user.id===paidUser?me:current);}).catch(()=>{});}}
-          onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:tr("ui.app.model.switched.send.your.message.when.c9fcf0d")});}}
+          onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:tr("billing.switch.ready")});}}
         />
       )}
       {payCheckout && (

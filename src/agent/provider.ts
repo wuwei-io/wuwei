@@ -7,6 +7,8 @@ import { wrapBackgroundProvider } from './background.js';
 // - OpenAIProvider：任意 OpenAI 兼容 /chat/completions（本地 vLLM 等），做消息与工具的双向转换
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
+import { readGatewayAffordability } from "../gateway-affordability.js";
+import { isTerminalGatewayResponse } from "../gateway-retry.js";
 import { generateSubscriptionImage } from "../imagegen/subscription.mjs";
 import type { Config } from "../config.js";
 import type {
@@ -134,6 +136,7 @@ const CLIENT_OS = (() => {
   }
 })();
 async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Promise<Response> {
+  const hostedGateway = /^https:\/\/(?:gw\.)?wuweiai\.io\/api\/gateway\//.test(url);
   // 网关迁移(2026-09)：托管聊天从 Vercel 上的 wuweiai.io 网关迁到海外常驻 gw.wuweiai.io(不再穿 Vercel、
   // 不再吃 Fluid Compute 额度)。此处运行时改写 host → 一并覆盖所有「已把旧 URL 存进本地设置」的老用户，无需数据迁移。
   // 只改写网关聊天流量；余额/coins 等 /api/me/* 仍走 wuweiai.io(Vercel)，不受影响。
@@ -147,7 +150,6 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Pro
   const signal = init.signal as AbortSignal | undefined;
   // Hosted gateways already recover upstream streams. Avoid stacking ten more
   // client retries on top and leaving a failed model waiting for minutes.
-  const hostedGateway = /^https:\/\/(?:gw\.)?wuweiai\.io\/api\/gateway\//.test(url);
   const gatewayRetryLimit = hostedGateway ? Math.min(retries, 2) : retries;
   for (let attempt = 0; ; attempt++) {
     let res: Response | null = null;
@@ -159,6 +161,12 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = 10): Pro
       continue;
     }
     const transient = res.status === 429 || res.status === 503 || (res.status >= 500 && res.status < 600);
+    if (hostedGateway && transient) {
+      // Preserve the original body for the localized quota/auth UI. HTTP 429
+      // also represents daily product caps, not just temporary upstream limits.
+      const body = await res.clone().json().catch(() => null);
+      if (isTerminalGatewayResponse(body)) return res;
+    }
     const retryLimit = gatewayRetryLimit;
     if (transient && attempt < retryLimit) {
       const ra = Number(res.headers.get("retry-after"));
@@ -384,11 +392,14 @@ class OpenAIProvider implements Provider {
     // 此时不发 max_tokens，让服务端按 (窗口 - 输入) 自适应，绝不越界。
     const ctxWin = this.cfg.contextWindow || 0;
     const sendMaxTokens = ctxWin && this.cfg.maxTokens >= ctxWin ? undefined : this.cfg.maxTokens;
+    const hostedRequest = isWuweiHostedGateway(base);
+    const clientRequestId = hostedRequest ? randomUUID() : undefined;
     const res = await fetchWithRetry(`${base}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.cfg.apiKey}`,
+        ...(clientRequestId ? {"X-Wuwei-Request-Id": clientRequestId} : {}),
         ...(handlers.requestPurpose === "model_check" && isWuweiHostedGateway(base)
           ? {"X-Wuwei-Request-Purpose": "model_check"} : {}),
       },
@@ -408,14 +419,18 @@ class OpenAIProvider implements Provider {
     if (!res.ok || !res.body) {
       const rawBody = await res.text();
       // 无为托管网关：把结构化错误(余额不足/达上限等)翻成人话，别甩原始 JSON 给用户。第三方端点保持原样。
-      const isWuweiGateway = base.includes("/api/gateway");
+      const isWuweiGateway = hostedRequest;
       if (isWuweiGateway) {
         const friendly = humanizeGatewayError(res.status, rawBody);
         if (friendly) {
           // 把网关稳定错误码原样带进异常消息(机器标记 [[gw:code]])，让渲染层按「码」判定弹窗，
           // 而不是脆弱地匹配中/英文案。渲染层显示前会剥掉这个标记。
           const code = gwCode(rawBody);
-          throw new Error(code ? `[[gw:${code}]] ${friendly}` : friendly);
+          const gatewayFailure = readGatewayAffordability(rawBody, {
+            clientRequestId: clientRequestId!, model: this.cfg.model,
+            phase: messages.at(-1)?.content.some(block => block.type === 'tool_result') ? 'tool_continuation' : messages.at(-1)?.role === 'user' ? 'new_turn' : 'unknown',
+          });
+          throw Object.assign(new Error(code ? `[[gw:${code}]] ${friendly}` : friendly), {gatewayFailure, gatewayCode: code, status: res.status});
         }
       }
       throw new Error(

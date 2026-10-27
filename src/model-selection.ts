@@ -1,14 +1,16 @@
 import { tr, localizeStoredText } from "./localization/index.js";
 import { hostedModelImageInput } from './model-image-input.js';
 
-export type ModelCategory = 'free' | 'economy' | 'premium' | 'images' | 'connections';
-export const MODEL_CATEGORIES: { id: ModelCategory; zh: string; en: string }[] = [{"id":"free","messageKey":"model.category.free"},{"id":"economy","messageKey":"model.category.economy"},{"id":"premium","messageKey":"model.category.premium"},{"id":"images","messageKey":"model.category.images"},{"id":"connections","messageKey":"model.category.connections"}].map(row => ({...row, id:row.id as ModelCategory, get zh(){return tr(row.messageKey);},get en(){return tr(row.messageKey);}}));
+export type ModelCategory = 'free' | 'economy' | 'premium' | 'images' | 'videos' | 'connections';
+export const MODEL_CATEGORIES: { id: ModelCategory; zh: string; en: string }[] = [{"id":"free","messageKey":"model.category.free"},{"id":"economy","messageKey":"model.category.economy"},{"id":"premium","messageKey":"model.category.premium"},{"id":"images","messageKey":"model.category.images"},{"id":"videos","messageKey":"model.category.videos"},{"id":"connections","messageKey":"model.category.connections"}].map(row => ({...row, id:row.id as ModelCategory, get zh(){return tr(row.messageKey);},get en(){return tr(row.messageKey);}}));
 export type ModelChoice = {
   key: string; providerId: string; modelId: string; label: string; labelEn: string;
   category: ModelCategory; rank: number; recommended: boolean; defaultForNewUsers: boolean;
   free: boolean; needsLogin: boolean; badge?: string | null;
   imageInput?: boolean;
   price?: { input: number | null; output: number | null; cache: number | null };
+  videoCoins?: number | null;
+  videoModel?: string;
   imageCoins?: number;
   imageModel?: string;
   imageQuality?: string;

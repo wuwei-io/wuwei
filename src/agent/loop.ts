@@ -1,5 +1,6 @@
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
+import { isTerminalGatewayError } from "../gateway-retry.js";
 import { withImageToolInstructions, withResponseLanguage } from './prompt.js';
 import { randomUUID } from 'node:crypto';
 import { runHostedTurn, withoutTurnSlot } from './background.js';
@@ -93,6 +94,7 @@ export interface AgentHooks {
 // 网络中断类瞬时错误：自动退避重试(静默)，全部失败才抛给上层提示。
 const NET_RETRY_DELAYS_MS = [1000, 3000, 5000, 10000, 30000, 60000, 120000, 300000, 600000];
 function isTransientNetErr(e: unknown): boolean {
+  if (isTerminalGatewayError(e)) return false;
   const status = Number((e as { status?: number })?.status || 0);
   if (status === 429 || (status >= 500 && status < 600)) return true; // 限流/服务端错误也当瞬时
   const m = String((e as { message?: string })?.message || e).toLowerCase();
@@ -366,32 +368,41 @@ export class Agent {
   }
 
   /** Image picker: execute the user's explicit selection without an extra text-model request. */
-  async sendImage(prompt: string, sku: string, hooks: AgentHooks, signal?: AbortSignal): Promise<void> {
+  async sendImage(prompt: string, sku: string, hooks: AgentHooks, signal?: AbortSignal, imageStudioAuthorization?: import('../imagegen/studio-approval.js').StudioImageAuthorization): Promise<void> {
     const turnId = randomUUID();
     const tool = this.toolMap.get('platform_imagegen');
     if (!tool || !this.provider.platformImage) throw new Error(tr("ui.loop.sign.in.and.select.hosted.image.e79a6e5"));
     signal?.throwIfAborted();
     this.ensureCanAcceptUser();
+    const count=imageStudioAuthorization?.count??1;
+    if(!Number.isInteger(count)||count<1||count>4)throw new Error('INVALID_IMAGE_COUNT');
     this.messages.push({role:'user',content:[{type:'text',text:prompt}],ts:Date.now()});
-    const id = randomUUID(), input = {action:'generate',sku_id:sku,prompt};
     try { await runHostedTurn(this.provider, async signal => {
-      this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
-      hooks.onToolStart?.(id,tool.name,input);
-      const decide=hooks.requestDecision || this.ctx.requestDecision;
-      const out = await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,
-        requestDecision:decide?request=>withoutTurnSlot(()=>decide(request)):undefined});
-      hooks.onToolEnd?.(id,out.content,!!out.isError,out.displayImage);
-      const content = out.displayImage ? [{type:'text',text:out.content},{type:'image',dataUrl:out.displayImage,displayOnly:true}] : out.content;
-      this.messages.push({role:'user',content:[{type:'tool_result',tool_use_id:id,content,is_error:!!out.isError} as any],ts:Date.now()});
-      let result: any;
-      try { result=JSON.parse(out.content); } catch { /* Cancellation text. */ }
-      const reply = result?.displayed === true ? tr("ui.loop.image.generated.59a71fd")
-        : result?.message || out.content;
+      let completed=0,reply='';
+      for(let index=0;index<count;index++) {
+        signal?.throwIfAborted();
+        const id=randomUUID(),input={action:'generate',sku_id:sku,prompt,batch_id:turnId,batch_index:index,batch_count:count};
+        this.messages.push({role:'assistant',content:[{type:'tool_use',id,name:tool.name,input}],ts:Date.now()});
+        hooks.onToolStart?.(id,tool.name,input);
+        const decide=hooks.requestDecision || this.ctx.requestDecision;
+        const out=await tool.run(input,{...this.ctx,signal,turnId,platformImage:this.provider.platformImage,imageStudioAuthorization,
+          requestDecision:decide?request=>withoutTurnSlot(()=>decide(request)):undefined});
+        hooks.onToolEnd?.(id,out.content,!!out.isError,out.displayImage);
+        const content=out.displayImage?[{type:'text',text:out.content},{type:'image',dataUrl:out.displayImage,displayOnly:true}]:out.content;
+        this.messages.push({role:'user',content:[{type:'tool_result',tool_use_id:id,content,is_error:!!out.isError} as any],ts:Date.now()});
+        let result:any;try{result=JSON.parse(out.content);}catch{/* Cancellation text. */}
+        reply=result?.displayed===true?tr('ui.loop.image.generated.59a71fd'):result?.message||out.content;
+        if(result?.displayed===true)completed++;
+        // Persist every delivered image. Failure, uncertainty or Stop ends the
+        // batch; completed orders are never replayed and remaining images cost 0.
+        hooks.onStep?.();
+        if(out.isError||result?.displayed!==true)break;
+      }
+      if(count>1)reply=completed===count?tr('studio.batchComplete',{count}):tr('studio.batchStopped',{completed,count})+'\n'+reply;
       this.messages.push({role:'assistant',content:[{type:'text',text:reply}],ts:Date.now()});
-      hooks.onText?.(reply);
-      hooks.onStep?.();
-      if (!signal?.aborted) hooks.onAssistantDone?.();
-    }, signal); } finally { hooks.onTurnEnd?.(turnId); }
+      hooks.onText?.(reply);hooks.onStep?.();
+      if(!signal?.aborted)hooks.onAssistantDone?.();
+    },signal); } finally { hooks.onTurnEnd?.(turnId); }
   }
 
   private async sendTurn(
