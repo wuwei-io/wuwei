@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "У вас ещё есть монеты. Переключитесь на платную модель, чтобы продолжить.",
     "billing.freecap.switchPaid": "Перейти на платную модель",
     "whatsapp.chat": "Написать в WhatsApp",
-    "whatsapp.scan": "Отсканируйте телефоном"
+    "whatsapp.scan": "Отсканируйте телефоном",
+    "studio.gallery.brand.Qwen": "Текст и вёрстка постеров",
+    "studio.gallery.brand.FLUX": "Естественные детали и композиция",
+    "studio.gallery.brand.Tencent": "Понимание запросов и создание сцен",
+    "studio.gallery.brand.Recraft": "Графический дизайн и стиль бренда",
+    "studio.gallery.brand.Microsoft": "Реалистичный свет и тонкие детали",
+    "studio.gallery.brand.Sourceful": "Изображения товаров и креатив бренда",
+    "announcement.unavailable": "Объявления сейчас недоступны. Повторите попытку."
   }
 }

@@ -14,6 +14,9 @@ type Props = {
 };
 
 function FeatureIcon({ kind }: { kind: AnnouncementCard["icon"] }) {
+  if (kind === "video") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="12" height="14" rx="2.5"/><path d="m15 10 6-4v12l-6-4"/></svg>;
+  }
   if (kind === "image") {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg>;
   }

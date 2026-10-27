@@ -3701,6 +3701,13 @@
     "billing.freecap.coinsNote": "لا تزال لديك عملات. انتقل إلى نموذج مدفوع للمتابعة.",
     "billing.freecap.switchPaid": "التبديل إلى نموذج مدفوع",
     "whatsapp.chat": "الدردشة عبر WhatsApp",
-    "whatsapp.scan": "امسح الرمز بهاتفك"
+    "whatsapp.scan": "امسح الرمز بهاتفك",
+    "studio.gallery.brand.Qwen": "عرض النصوص وتنسيق الملصقات",
+    "studio.gallery.brand.FLUX": "تفاصيل طبيعية وتكوين بصري",
+    "studio.gallery.brand.Tencent": "فهم الأوصاف وإنشاء المشاهد",
+    "studio.gallery.brand.Recraft": "تصميم جرافيكي وهوية بصرية",
+    "studio.gallery.brand.Microsoft": "إضاءة واقعية وتفاصيل دقيقة",
+    "studio.gallery.brand.Sourceful": "صور المنتجات وإبداع العلامات التجارية",
+    "announcement.unavailable": "الإعلانات غير متاحة الآن. يرجى المحاولة مجددًا."
   }
 }

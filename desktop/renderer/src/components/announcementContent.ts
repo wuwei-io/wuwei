@@ -1,5 +1,5 @@
 import { tr } from "../../../../src/localization/index.js";
-export type AnnouncementCard = { title: string; summary: string; details: string; icon: "company" | "image" | "spark" };
+export type AnnouncementCard = { title: string; summary: string; details: string; icon: "company" | "image" | "video" | "spark" };
 export type AnnouncementContent = { kind: "cards"; cards: AnnouncementCard[]; intro: string; notice: string } | { kind: "plain"; paragraphs: string[] };
 
 // The API version is an updated_at read receipt, NEVER a product version.
@@ -14,7 +14,7 @@ export function safeAnnouncementUrl(url: string): string {
 function card(title: string, body: string): AnnouncementCard {
   // Only collapse explicitly separated detail paragraphs. Never split sentences or alter Markdown lines.
   const separator = body.indexOf("\n\n");
-  return { title, summary: separator < 0 ? body : body.slice(0, separator), details: separator < 0 ? "" : body.slice(separator + 2), icon: /生图|图像|图片|image|photo/i.test(title) ? "image" : /公司|团队|员工|company|team/i.test(title) ? "company" : "spark" };
+  return { title, summary: separator < 0 ? body : body.slice(0, separator), details: separator < 0 ? "" : body.slice(separator + 2), icon: /视频|video/i.test(title) ? "video" : /生图|图像|图片|image|photo/i.test(title) ? "image" : /公司|团队|员工|company|team/i.test(title) ? "company" : "spark" };
 }
 export function parseAnnouncementBody(body: string): AnnouncementContent {
   const text = body.replace(/\r\n?/g, "\n").trim();

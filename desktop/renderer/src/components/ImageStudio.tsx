@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { tr } from '../../../../src/localization/index.js';
+import { hasMessage, tr } from '../../../../src/localization/index.js';
 import { imageModelChoices, imageModelLabel, type ImageCatalogEntry } from '../../../../src/imagegen/image-catalog.js';
 import type { StudioImageQuote } from '../../../../src/imagegen/studio-approval.js';
 import { BillingBrand } from './billing/BillingBrand.js';
@@ -144,7 +144,7 @@ export function ImageStudio(p:Props) {
       </div>{p.busy?<button className="studio-generate" onClick={p.onStop}><span className="studio-stop"/>{tr('composer.stop')}</button>:<button className="studio-generate" disabled={p.loggedIn&&!canGenerate} onClick={generate} title={tr('studio.feeNote')}>{tr('studio.generate')}<Icon name="arrow"/>{cost!=null&&<><i/><span className="studio-generate-cost"><Icon name="coin"/>{cost}</span></>}</button>}</div>
       {open==='models'&&<div ref={panel} className="studio-popover studio-model-popover studio-v2-models" role="dialog" aria-label={tr('studio.chooseModel')}>
         <div className="studio-popover-title"><b>{tr('studio.chooseModel')}</b><label className="studio-model-search"><GalleryIcon name="search"/><input value={modelSearch} onChange={event=>setModelSearch(event.target.value)} placeholder={tr('studio.gallery.modelSearch')} aria-label={tr('studio.gallery.modelSearch')}/></label><button onClick={()=>setOpen(null)} aria-label={tr('studio.gallery.close')}><Icon name="close"/></button></div>
-        <div className="studio-model-menu"><nav aria-label={tr('studio.provider')}><small>{tr('studio.provider')}</small>{providers.map(name=><button key={name} className={name===provider&&!modelSearch?'active':''} onClick={()=>{setProvider(name);setModelSearch('');}}><BillingBrand model={name==='Google'?'gemini':name==='OpenAI'?'gpt':name} provider=""/><span>{name}<small>{tr('studio.gallery.brand.'+name)}</small></span></button>)}</nav>
+        <div className="studio-model-menu"><nav aria-label={tr('studio.provider')}><small>{tr('studio.provider')}</small>{providers.map(name=><button key={name} className={name===provider&&!modelSearch?'active':''} onClick={()=>{setProvider(name);setModelSearch('');}}><BillingBrand model={name==='Google'?'gemini':name==='OpenAI'?'gpt':name} provider=""/><span>{name}<small>{tr(hasMessage('studio.gallery.brand.'+name)?'studio.gallery.brand.'+name:'studio.gallery.trait.creative')}</small></span></button>)}</nav>
           <div className="studio-model-list">{profiles.filter(profile=>modelSearch?`${profile.label} ${profile.brand} ${tr('studio.gallery.trait.'+profile.description)}`.toLowerCase().includes(modelSearch.toLowerCase()):profile.brand===provider).map(profile=>{
             const row=choices.find(choice=>choice.model===profile.model),specs=rows.filter(item=>item.model===profile.model);
             const max=specs.map(item=>imageVariantDimensions(item).resolution).filter(value=>value!=='auto').sort((a,b)=>imageResolutionPixels(b)-imageResolutionPixels(a))[0];
