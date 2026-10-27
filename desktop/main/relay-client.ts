@@ -1,3 +1,6 @@
+import { app } from "electron";
+import { EDITION } from "./edition.js";
+import mobileIdentity from "./mobile-remote/wuwei-remote-identity.cjs";
 import { tr } from "../../src/localization/index.js";
 // 手机端远程设备执行 · relay 常驻连接（电脑端，M1）。
 // ⚠️ 仅当用户在设置里开「允许手机端远程调用本机」(remoteEnabled) 才启动。
@@ -98,7 +101,7 @@ const remoteDecisions = new RemoteDecisions();
 export function requestLocalDecision(decision: Decision, source: string | RemoteDecisionSource, signal: AbortSignal, send: (event: Record<string, unknown>) => void) {
   const origin = typeof source === 'string' ? { sessionId: source } : source;
   return remoteDecisions.request(`local_${origin.roomId || origin.sessionId}`, decision, origin, false, signal, event => {
-    if (event.type === 'decision') notifyRemote({ eventId: decision.permId, kind: 'approval', deviceId: getDeviceId(), ...(origin.sessionId ? { sessionId: origin.sessionId } : {}) });
+    if (event.type === 'decision') notifyRemote({ eventId: decision.permId, kind: 'approval', deviceId: getRemoteDeviceId(), ...(origin.sessionId ? { sessionId: origin.sessionId } : {}) });
     send(event);
   });
 }
@@ -153,8 +156,8 @@ async function handleRemoteChat(msg: any): Promise<void> {
   const reply = (event: Record<string, unknown>) => {
     const target = ws || socket;
     if (target?.readyState === WebSocket.OPEN) target.send(JSON.stringify(event));
-    if (event.type === 'decision') notifyRemote({ eventId: String(event.permId), kind: 'approval', deviceId: getDeviceId() });
-    if (event.type === 'chat-done' || event.type === 'room-done') notifyRemote({ eventId: reqId, kind: 'task', deviceId: getDeviceId(), taskId: String(event.sessionId || event.roomId || msg.sessionId || ''), taskKind: room ? 'room' : 'session' });
+    if (event.type === 'decision') notifyRemote({ eventId: String(event.permId), kind: 'approval', deviceId: getRemoteDeviceId() });
+    if (event.type === 'chat-done' || event.type === 'room-done') notifyRemote({ eventId: reqId, kind: 'task', deviceId: getRemoteDeviceId(), taskId: String(event.sessionId || event.roomId || msg.sessionId || ''), taskKind: room ? 'room' : 'session' });
   };
   const room = msg.type === "room-chat";
   const errorType = room ? "room-error" : "chat-error";
@@ -259,7 +262,7 @@ function connect() {
 
   cleanup();
   const url = `${RELAY_WS}?token=${encodeURIComponent(token)}`;
-  log("relay", "连接中 →", RELAY_WS, "deviceId=", getDeviceId().slice(0, 8));
+  log("relay", "连接中 →", RELAY_WS, "deviceId=", getRemoteDeviceId().slice(0, 8));
   try {
     ws = new WebSocket(url);
   } catch (e: any) {
@@ -273,7 +276,7 @@ function connect() {
     const name = (s?.app?.remoteDeviceName || "").trim() || hostname() || tr("ui.relay-client.message.7a6b1a2b37");
     const hello = {
       type: "hello",
-      deviceId: getDeviceId(),
+      deviceId: getRemoteDeviceId(),
       instanceId: executionInstanceId,
       protocolVersion: 2,
       activeRequests: [...remoteKinds].map(([reqId, kind]) => ({ reqId, kind,
@@ -376,4 +379,9 @@ export function refreshRelayClient() {
   } else {
     stopRelayClient();
   }
+}
+
+/** Namespace remote registration by install/channel; billing keeps the hardware ID. */
+function getRemoteDeviceId(): string {
+  return mobileIdentity.remoteIdentity({deviceId: getDeviceId(), edition: EDITION, packaged: app.isPackaged, installPath: app.isPackaged ? process.execPath : app.getAppPath(), platform: process.platform});
 }

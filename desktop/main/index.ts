@@ -1,3 +1,9 @@
+import mobileRead from "./mobile-remote/wuwei-remote-read.cjs";
+import mobileTeamDirectory from "./mobile-remote/wuwei-remote-team-directory.cjs";
+import mobileWorkspace from "./mobile-remote/wuwei-remote-workspace.cjs";
+import mobileEmployeeWorkspace from "./mobile-remote/wuwei-remote-employee-workspace.cjs";
+import mobilePagedWorkspace from "./mobile-remote/wuwei-remote-paged-workspace.cjs";
+import mobileCollaboration from "./mobile-remote/wuwei-remote-collaboration.cjs";
 import {registerVideoStudio} from "./video-studio.js";
 import {gatewayAffordability} from "../../src/gateway-affordability.js";
 import {localizeToolMetadata} from "../../src/localization/tools.js";
@@ -328,7 +334,7 @@ function flattenRemoteMsg(m: any, i: number): { id: string; role: "user" | "assi
 // 与「调研并拟计划」子会话同款做法，区别是这里要带历史、且工具按员工白名单裁剪。
 // excludeTools：本轮额外剔除的工具（私聊防递归时传 ["dm_teammate"]，见 orchestrator.runDmTurn）。
 const roomContextUsage = new Map<string, { providerId: string; model: string; usedTokens: number | null; maxTokens: number | null; capturedAt: number }>();
-const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => runBackgroundTask(`__room_${employee.id}`, send, async () => {
+const runEmployeeTurnOriginal = async ({ employee, sys, history, input, signal, onProgress, excludeTools, dmDepth, reportOrigin, taskReportScope, requestDecision, onPermission, images, providerOverride, providerBinding, remoteExecution }: RunEmployeeArgs): Promise<string> => runBackgroundTask(`__room_${employee.id}`, send, async () => {
   const executionSignal = remoteExecution?.signal ? AbortSignal.any([signal, remoteExecution.signal]) : signal;
   executionSignal.throwIfAborted();
   const origin = reportOrigin || taskReportScope?.origin;
@@ -382,6 +388,8 @@ const runEmployeeTurn = async ({ employee, sys, history, input, signal, onProgre
   const last = [...a.getMessages()].reverse().find((m: any) => m.role === "assistant");
   return last ? msgFullText(last as any) : "";
 }, (reportOrigin || taskReportScope?.origin)?.kind === 'room' ? (reportOrigin || taskReportScope?.origin)?.id : undefined, employee.name, (reportOrigin || taskReportScope?.origin)?.kind === 'session' ? (reportOrigin || taskReportScope?.origin)?.id : undefined);
+const runEmployeeTurn = (args: RunEmployeeArgs): Promise<string> => mobileCollaboration.runEmployee(args, runEmployeeTurnOriginal);
+
 
 // 私聊编排所需的注入依赖（send/log/runEmployee/baseSys），dm_teammate 工具调 runDmTurn 时用。
 function teamOrchestratorDeps(ctx?: ToolContext): OrchestratorDeps {
@@ -3312,25 +3320,74 @@ if (!gotLock) {
     });
     // 通用请求处理器(不落库同步)：手机问「会话列表/某会话分页历史」→ 读本机数据返回。团队(员工/群/SOP)后续补。
     setRemoteRequestHandler(async (method, params) => {
-      if (method === "sessions.list") {
-        // 只给普通会话(排除一人公司员工私聊，那些归 team)；按更新时间倒序
-        const list = listSessions()
-          .filter((s: any) => !s.employeeId)
-          .sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .map((s: any) => ({ id: s.id, title: s.title || tr("ui.app.new.chat.fca06b0"), updatedAt: s.updatedAt || 0,
-            run: runs.has(s.id) ? 'running' : 'idle', model: s.model, providerId: s.providerId,
-            lastMessage: (agents.get(s.id)?.getDisplayMessages() || loadMessages(s.id)).flatMap((m: any) => m.content || []).filter((b: any) => b.type === 'text').at(-1)?.text?.slice(0, 160) || '' }));
-        return { sessions: list };
+      if (["team.room.capabilities", "team.room.executions", "team.room.stop-member", "team.room.stop"].includes(method)) {
+          if (!teamEnabled(loadSettings()))
+              throw Error("请先在电脑端开启一人公司");
+          const room = loadRooms().find(r => r.id === params?.roomId);
+          if (!room)
+              throw Error("对话不属于这台电脑或已删除");
+          const api = mobileCollaboration, members = loadEmployees().filter(e => room.members.includes(e.id));
+          if (method === "team.room.capabilities")
+              return { participation: true, memberStop: true, queuedTurns: true, memberIds: room.members, type: room.type };
+          if (method === "team.room.stop-member") {
+              if (!members.some(e => e.id === params?.employeeId))
+                  throw Error("同事不属于这段对话");
+              return { ...api.stopMember(room.id, params.employeeId), employees: api.state(room.id, members) };
+          }
+          if (method === "team.room.stop") {
+              for (const e of members)
+                  api.stopMember(room.id, e.id);
+              abortRoom(room.id);
+              return { requested: true, employees: api.state(room.id, members) };
+          }
+          return { employees: api.state(room.id, members), running: isRoomRunning(room.id), memberIds: room.members };
       }
+      if (method === "workspace.page") {
+          const kind = params?.kind, enabled = teamEnabled(loadSettings()), input = kind === "sop" ? { tree: sopLoadTree() } : { enabled, employees: enabled ? loadEmployees() : [], sessions: kind === "employees" && enabled ? listSessions() : [], rooms: kind === "groups" && enabled ? loadRooms() : [], defaultModel: enabled ? { providerId: curProviderId(), model: loadConfig().model } : undefined };
+          return mobilePagedWorkspace.workspace(kind, input, params || {}, { directory: mobileTeamDirectory.teamDirectory, decode: (url: string) => nativeImage.createFromDataURL(url) });
+      }
+      if (method === "team.room.message.details") {
+          if (!teamEnabled(loadSettings()))
+              throw Error("Team unavailable");
+          const room = loadRooms().find(r => r.id === params?.roomId);
+          if (!room)
+              throw Error("Room unavailable");
+          return mobileWorkspace.messageDetails(loadRoomMessages(room.id), params);
+      }
+      const remoteRead = mobileRead;
+      const remoteDeps = { live: (id: string) => agents.get(id)?.getDisplayMessages(), load: loadMessages, running: (id: string) => runs.has(id), stat: (id: string) => statSync(join(join(homedir(), DATA_DIR_NAME, "sessions"), id + ".json")) };
+      if (method === "sessions.list")
+          return mobilePagedWorkspace.sessions(listSessions(), { running: (id: string) => runs.has(id) }, params || {});
       if (method === "sessions.messages") {
-        const sid = String(params?.sessionId || "");
-        if (!sid) throw new Error(tr("ui.index.message.ba6390b6bf"));
-        const all = agents.get(sid)?.getDisplayMessages() || loadMessages(sid);
-        const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
-        const page = all.slice(start, end).map((m: any, i: number) => flattenRemoteMsg(m, start + i)).filter(m => m.text || m.image);
-        const meta = listSessions().find(s => s.id === sid);
-        return { messages: page, hasMore, total, nextOffset,
-          meta: meta ? { title: meta.title, model: meta.model, providerId: meta.providerId, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined, employeeId: meta.employeeId } : undefined };
+          const sid = String(params?.sessionId || ""), meta = listSessions().find(s => s.id === sid);
+          if (!meta)
+              throw Error("对话不存在，请返回列表刷新");
+          const all = remoteRead.history(sid, remoteDeps), bounds = remoteHistoryBounds(all.length, params || {});
+          const page = remoteRead.page(all, bounds, params || {}, sid, runs.has(sid), (url: string) => nativeImage.createFromDataURL(url));
+          return { ...page, meta: { title: meta.title, model: meta.model, providerId: meta.providerId, employeeId: meta.employeeId, employeeName: meta.employeeId && teamEnabled(loadSettings()) ? loadEmployees().find(e => e.id === meta.employeeId)?.name : undefined } };
+      }
+      if (method === "team.overview") {
+          const enabled = teamEnabled(loadSettings());
+          return mobileWorkspace.overview({ enabled, employees: enabled ? loadEmployees() : [], sessions: enabled ? listSessions() : [], groups: enabled ? loadRooms() : [], departments: enabled ? loadDepartments() : [], defaultModel: enabled ? { providerId: curProviderId(), model: loadConfig().model } : undefined }, (url: string) => nativeImage.createFromDataURL(url));
+      }
+      if (method === "team.directory") {
+          const enabled = teamEnabled(loadSettings());
+          return mobileTeamDirectory.teamDirectory(enabled ? loadEmployees() : [], params, (url: string) => nativeImage.createFromDataURL(url), enabled);
+      }
+      if (method === "team.employee.records" || method === "team.schedule.detail") {
+          if (!teamEnabled(loadSettings()))
+              throw Error("请先在电脑端开启一人公司");
+          const api = mobileEmployeeWorkspace, input = { employees: loadEmployees(), sessions: listSessions(), rooms: loadRooms(), schedules: loadSchedules(), globalEnabled: loadTeamConfig().schedulesEnabled !== false };
+          return method === "team.employee.records" ? api.records(input, params || {}) : api.scheduleDetail(input, String(params?.id || ""), api.readRuns(join(homedir(), DATA_DIR_NAME, "team")));
+      }
+      if (method === "team.dm.messages") {
+          if (!teamEnabled(loadSettings()))
+              throw Error("请先在电脑端开启一人公司");
+          const room = loadRooms().find(r => r.id === params?.roomId && r.type === "dm" && r.members?.includes(params?.employeeId));
+          if (!room || !loadEmployees().some(e => e.id === params?.employeeId))
+              throw Error("该员工私聊不存在");
+          const all = loadRoomMessages(room.id), bounds = remoteHistoryBounds(all.length, params || {});
+          return { ...mobileWorkspace.roomPage(all, bounds, params || {}, room.id, isRoomRunning(room.id), (url: string) => nativeImage.createFromDataURL(url)), memberIds: room.members };
       }
       // ── 一人公司同步 ──
       if (method === "team.state") {
@@ -3348,11 +3405,9 @@ if (!gotLock) {
       }
       if (method === "team.room.messages") {
         const rid = String(params?.roomId || "");
-        if (!rid) throw new Error(tr("ui.index.message.6e52bffecf"));
-        const all = loadRoomMessages(rid);
-        const { total, start, end, hasMore, nextOffset } = remoteHistoryBounds(all.length, params || {});
-        const page = all.slice(start, end).map((m: any) => ({ id: m.id, speaker: m.speaker?.name || "", kind: m.speaker?.kind || "agent", text: m.text || "", images: m.images, error: !!m.error }));
-        return { messages: page, hasMore, total, nextOffset };
+        if (!loadRooms().some(r => r.id === rid)) throw new Error("群聊不存在，请返回列表刷新");
+        const all = loadRoomMessages(rid), bounds = remoteHistoryBounds(all.length, params || {});
+        return mobileWorkspace.roomPage(all, bounds, params || {}, rid, isRoomRunning(rid), (url: string) => nativeImage.createFromDataURL(url));
       }
       if (method === 'team.room.usage') {
         const room = loadRooms().find(room => room.id === params?.roomId);

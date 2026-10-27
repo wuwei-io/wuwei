@@ -14,22 +14,22 @@ interface RoomDependencies extends OrchestratorDeps {
 /** Stream the existing desktop room orchestrator and saved messages, with its real employee identities. */
 export async function runRemoteRoomTurn(args: RemoteRoomArgs, deps: RoomDependencies) {
   const room = deps.room(args.roomId);
-  if (!room || room.type === 'dm') throw new Error(tr("ui.remote-rooms.message.e57ba8cf0f"));
-  if (deps.running(room.id)) throw new Error(tr("ui.remote-rooms.message.e961287a41"));
+  if (!room) throw new Error(tr("ui.remote-rooms.message.e57ba8cf0f"));
   if (args.signal.aborted) throw new Error(tr("set.brain.exStopped"));
   if (args.mentions.some(id => id !== '*' && !room.members.includes(id))) throw new Error(tr("ui.remote-rooms.message.ae90a9a1d9"));
   const seen = new Set(deps.history(room.id).map(message => message.id));
   let failed = false;
-  const abort = () => deps.abort(room.id);
+  let ownedExecution = false;
+  const abort = () => { if (ownedExecution) deps.abort(room.id); };
   args.signal.addEventListener('abort', abort, { once: true });
-  const runEmployee = (employee: RunEmployeeArgs) => deps.runEmployee({
+  const runEmployee = (employee: RunEmployeeArgs) => { ownedExecution = true; return deps.runEmployee({
     ...employee, images: args.images, requestDecision: args.requestDecision,
     onPermission: args.onPermission ? async (name, input) => (await args.onPermission!(name, input)).action === 'allow' ? 'allow' : 'deny' : undefined,
     onProgress: event => {
       employee.onProgress?.(event);
       if (event.kind === 'image') args.onRoomEvent({ type: 'room-image', speaker: employee.employee.name, dataUrl: event.dataUrl });
     },
-  });
+  }); };
   try {
     let text = args.text;
     if (args.mentions.includes('*') && !text.includes('@所有人')) text = '@所有人 ' + text;
@@ -45,10 +45,10 @@ export async function runRemoteRoomTurn(args: RemoteRoomArgs, deps: RoomDependen
           for (const message of payload.messages || []) {
             if (seen.has(message.id)) continue;
             seen.add(message.id);
-            if (message.speaker?.kind === 'human' || message.ack) continue;
+            if (message.ack) continue;
             if (message.error) failed = true;
             args.onRoomEvent({ type: 'room-msg', msgId: message.id, speaker: message.speaker?.name || '',
-              kind: message.error ? 'system' : 'member', text: message.text || '', error: !!message.error });
+              kind: message.speaker?.kind === 'human' ? 'human' : message.error ? 'system' : 'member', speakerId: message.speaker?.id, text: message.text || '', error: !!message.error });
           }
         }
       },

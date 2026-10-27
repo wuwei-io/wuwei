@@ -365,6 +365,8 @@ async function runRoomResponders(
             images: turnImages.length ? turnImages : undefined,
           });
         } catch (e: any) {
+      if ((e as any)?.code === "WUWEI_EMPLOYEE_STOPPED") { const snap = snapshotEmp(roomId, emp.id); const text = (e as any).partialText || "本次执行已停止。"; pushAndBroadcast(deps, roomId, {speaker:{id:emp.id,name:emp.name,kind:"agent"},text,stopped:true,steps:snap.steps,thought:snap.thought}); applyProg(roomId,emp.id,emp.name,{kind:"done"}); deps.send("evt:team-room-progress",{roomId,empId:emp.id,done:true}); return; }
+
           if (ac.signal.aborted) return;
           deps.log("team", "群成员出错", emp.name, String(e?.message || e).slice(0, 200));
           pushAndBroadcast(deps, roomId, {
@@ -490,6 +492,8 @@ export async function runDmTurn(
     pushAndBroadcast(deps, dmId, { speaker: { id: emp.id, name: emp.name, kind: "agent" }, text, steps: snap.steps.length ? snap.steps : undefined, thought: snap.thought || undefined, images: turnImages.length ? turnImages : undefined });
     return text || (turnImages.length ? tr("ui.orchestrator.message.3afef113ca", {p0: turnImages.length}) : '');
   } catch (e: any) {
+      if ((e as any)?.code === "WUWEI_EMPLOYEE_STOPPED") { const snap = snapshotEmp(dmId, emp.id); const text = (e as any).partialText || "本次执行已停止。"; pushAndBroadcast(deps, dmId, {speaker:{id:emp.id,name:emp.name,kind:"agent"},text,stopped:true,steps:snap.steps,thought:snap.thought}); applyProg(dmId,emp.id,emp.name,{kind:"done"}); return text; }
+
     if (ac.signal.aborted) { if (options.strict) throw new DOMException(tr("ui.orchestrator.message.cd5493e2aa"), 'AbortError'); return ""; }
     deps.log("team", "私聊出错", emp.name, String(e?.message || e).slice(0, 200));
     const errText = tr("ui.orchestrator.message.bfac65b05f", {p0: String(e?.message || e).slice(0, 300)});
