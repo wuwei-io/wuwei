@@ -32,6 +32,7 @@
     "login.toLogin": "已有账号，去登录",
     "login.submit": "登录 / 注册",
     "login.signin": "登录",
+    "login.sessionExpiredDescription": "登录已过期，请重新登录后继续。",
     "login.register": "注册",
     "login.noAccount": "还没账号？立即注册",
     "login.haveAccount": "已有账号？去登录",

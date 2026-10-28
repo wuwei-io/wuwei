@@ -32,6 +32,7 @@
     "login.toLogin": "कोई खाता है? साइन इन करें",
     "login.submit": "जारी रखें",
     "login.signin": "साइन इन करें",
+    "login.sessionExpiredDescription": "आपका सत्र समाप्त हो गया है। जारी रखने के लिए साइन इन करें।",
     "login.register": "साइन अप करें",
     "login.noAccount": "कोई हिसाब नहीं? साइन अप करें",
     "login.haveAccount": "कोई खाता है? साइन इन करें",

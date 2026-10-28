@@ -60,7 +60,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'bootstrap': return { currentId: 'qa-session', sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
     case 'switchSession': s.switchedSession=args[0];return true;
     case 'deleteSession': s.deletedSession=args[0];return true;
-    case 'newSession': emit(s, 'evt:session-loaded', { id: 'qa-new-session', messages: [] }); return true;
+    case 'newSession': s.lastNewSessionOptions=clone(args[0]); if(args[0]?.mode==='chat')s.settings.imageMode=false;emit(s, 'evt:session-loaded', { id: (s.newSessionCount=(s.newSessionCount??0)+1)===1?'qa-new-session':'qa-new-session-'+s.newSessionCount, messages: [],...(args[0]?.mode==='chat'?{mode:'chat'}:{}) }); return true;
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
@@ -407,9 +407,11 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('!!document.querySelector(".usage-notice-secondary")'),coins>0);
     if(coins){assert.match(await f.js('document.querySelector(".usage-notice-description").textContent'),/另外您还有无为币/);await f.click('.usage-notice-secondary');await f.wait('!document.querySelector(".free-quota-notice")');await f.wait('document.querySelector(".mq-txt")?.textContent.includes("MiMo") || document.querySelector(".mq-txt")?.textContent.includes("mimo")');assert.equal(f.state.settings.model,'mimo-v2.6-flash');assert.equal(f.state.sent.length,1);assert.equal(f.state.orders,0);}
     else{await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-selector-shortage")'),false);}
+    await delay(80);const shown=f.state.tracked.filter(x=>x.event==='free_cap_guide_shown');assert.equal(shown.length,1);assert.ok(shown[0].props.notice_id);const canonical=f.state.tracked.find(x=>x.event==='usage_notice_shown');assert.equal(shown[0].props.notice_id,canonical.props.notice_id);assert.ok(f.state.tracked.some(x=>x.event==='usage_notice_action'&&x.props.notice_id===shown[0].props.notice_id));
   });
   await run('发布关键：余额不足先说明，点击立马升级后打开标准套餐',{account:account(0),settings:settings('wuwei-mimo','mimo-v2.6-flash')},async f=>{
     await f.send();await f.wait('!!document.querySelector(".balance-shortage-dialog")');assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-error,.billing-selector-shortage")'),false);assert.equal(f.state.orders,0);
+    await delay(80);const shown=f.state.tracked.filter(x=>x.event==='credits_shortage_shown'),actions=f.state.tracked.filter(x=>x.event==='credits_shortage_action');assert.equal(shown.length,1);assert.equal(actions.length,1);assert.ok(shown[0].props.notice_id);assert.equal(actions[0].props.notice_id,shown[0].props.notice_id);assert.equal(actions[0].props.action,'upgrade');
   });
   for(const lang of ['zh','en','fa'])await run('发布关键：账号菜单升级入口、年付优惠标与菜单顺序 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
     await f.click('.acct-btn');await f.wait('!!document.querySelector("[data-account-upgrade]")');await delay(180);
@@ -686,11 +688,11 @@ app.whenReady().then(async () => {
     if(loginFirst){assert.equal(await f.js('document.querySelector(".wuwei-login-layer input:not([type=password])").value'),'layer-test@example.invalid');assert.equal(await f.js('document.querySelector(".wuwei-login-layer input[type=password]").value'),'isolated-fixture');}
     assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
   });
-  await run('登录恢复：失效事件清理旧账号并只弹出一次登录框',{},async f=>{
+  await run('发布关键：登录恢复：失效事件清理旧账号并只弹出一次登录框',{},async f=>{
     f.state.account=null;
     emit(f.state,'evt:wuwei-auth-expired');
     await f.wait('!!document.querySelector(".session-expired-notice") && !!document.querySelector("input[type=password]")');
-    assert.equal(await f.js('document.querySelector(".session-expired-notice").textContent.includes("登录已失效")'),true);
+    assert.equal(await f.js('document.querySelector(".session-expired-notice").textContent.includes("请重新登录")'),true);
     await delay(180); // Let Chromium paint the newly mounted modal before capture.
     fs.writeFileSync(path.join(evidence,'session-expired-login-final.png'),(await f.state.win.webContents.capturePage()).toPNG());
     await f.js(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='×'&&b.closest('div')?.querySelector('input[type=password]'))?.click()`);
@@ -698,7 +700,44 @@ app.whenReady().then(async () => {
     emit(f.state,'evt:wuwei-auth-expired');await delay(150);
     assert.equal(await f.js('!!document.querySelector("input[type=password]")'),false);
   });
-  await run('登录恢复：余额刷新遇到网络错误保留账号且不弹登录框',{},async f=>{
+  for(const lang of ['zh','en'])await run('发布关键：登录恢复：居中登录与简洁提示 '+lang,{lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
+    emit(f.state,'evt:wuwei-auth-expired');await f.wait('!!document.querySelector(".auth-reentry")');
+    const text=await f.js('document.querySelector(".auth-reentry").textContent');assert.match(text,lang==='zh'?/请重新登录/:/Sign in to continue/);assert.doesNotMatch(text,/login\.sessionExpired/);
+    assert.equal(await f.js('document.querySelectorAll(".auth-reentry input").length'),0);
+    await f.js('document.fonts.ready');await delay(150);fs.writeFileSync(path.join(evidence,'session-expired-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    const rect=await f.js('(()=>{const r=document.querySelector(".wuwei-login-dialog").getBoundingClientRect();return {x:Math.max(0,Math.floor(r.x)-28),y:Math.max(0,Math.floor(r.y)-28),width:Math.ceil(r.width)+56,height:Math.ceil(r.height)+56}})()');
+    fs.writeFileSync(path.join(evidence,'session-expired-'+lang+'-detail.png'),(await f.state.win.webContents.capturePage(rect)).toPNG());
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：登录恢复：模态背景、键盘焦点与关闭规则',{},async f=>{
+    emit(f.state,'evt:wuwei-auth-expired');await f.wait('!!document.querySelector(".wuwei-login-dialog")');
+    await f.wait('!!document.activeElement.closest(".wuwei-login-dialog")');
+    const modal=await f.js('(()=>{const b=document.querySelector(".wuwei-login-backdrop"),s=getComputedStyle(b),d=document.querySelector(".wuwei-login-dialog");return {blur:s.backdropFilter,background:s.backgroundColor,role:d.getAttribute("role"),modal:d.getAttribute("aria-modal")}})()');
+    assert.match(modal.blur,/blur\(5px\)/);assert.notEqual(modal.background,'rgba(0, 0, 0, 0)');assert.equal(modal.role,'dialog');assert.equal(modal.modal,'true');
+    // A real outside click must hit the overlay, not the conversation underneath.
+    assert.equal(await f.js('document.elementFromPoint(300,120)?.classList.contains("wuwei-login-layer")'),true);
+    f.state.win.webContents.sendInputEvent({type:'mouseDown',x:300,y:120,button:'left',clickCount:1});
+    f.state.win.webContents.sendInputEvent({type:'mouseUp',x:300,y:120,button:'left',clickCount:1});
+    await delay(80);assert.equal(await f.js('!!document.querySelector(".wuwei-login-dialog")'),true);
+    await f.js('document.querySelector(".wuwei-login-backdrop").click()');
+    await f.js('window.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+    assert.equal(await f.js('!!document.querySelector(".wuwei-login-dialog")'),true);
+    await f.js('document.querySelector(".composer textarea")?.focus()');
+    assert.equal(await f.js('!!document.activeElement.closest(".wuwei-login-dialog")'),true,await f.js('document.activeElement.outerHTML'));
+    await f.js('const d=document.querySelector(".wuwei-login-dialog"),b=d.querySelectorAll("button:not([disabled])");b[b.length-1].focus()');
+    f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});f.state.win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});await delay(40);
+    assert.equal(await f.js('!!document.activeElement.closest(".wuwei-login-dialog")'),true);
+    await f.fill('.wuwei-login-dialog input:not([type=password])','modal-test@example.invalid');await f.fill('.wuwei-login-dialog input[type=password]','isolated-test-password');
+    f.state.loginError='Invalid login credentials';
+    await f.js('Array.from(document.querySelectorAll(".wuwei-login-dialog button")).find(b=>b.textContent.trim()==="登录")?.click()');
+    await f.wait('document.querySelector(".wuwei-login-dialog")?.textContent.includes("邮箱或密码不正确")');
+    assert.equal(await f.js('document.querySelector(".wuwei-login-dialog input:not([type=password])").value'),'modal-test@example.invalid');
+    f.state.loginError=null;
+    await f.js('Array.from(document.querySelectorAll(".wuwei-login-dialog button")).find(b=>b.textContent.trim()==="登录")?.click()');await f.wait('!document.querySelector(".wuwei-login-dialog")');
+    assert.equal(await f.js('!!document.querySelector(".wuwei-login-backdrop")'),false);
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：登录恢复：余额刷新遇到网络错误保留账号且不弹登录框',{},async f=>{
     f.state.meError='temporary network failure';
     await f.js(`[...document.querySelectorAll('button')].find(b=>b.className.includes('acct')&&!b.className.includes('refresh'))?.click()`);
     await f.wait('!!document.querySelector(".acct-balance-refresh-error")');
@@ -706,7 +745,7 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('document.body.textContent.includes("QA 隔离用户")'),true);
     f.state.meError=null;await f.click('.acct-balance-refresh');await f.wait('!document.querySelector(".acct-balance-refresh-error")');
   });
-  await run('登录恢复：旧界面缓存仍显示账号但凭证已丢失时要求重登',{},async f=>{
+  await run('发布关键：登录恢复：旧界面缓存仍显示账号但凭证已丢失时要求重登',{},async f=>{
     f.state.account=null;
     await f.js(`[...document.querySelectorAll('button')].find(b=>b.className.includes('acct')&&!b.className.includes('refresh'))?.click()`);
     await f.wait('!!document.querySelector(".session-expired-notice") && !!document.querySelector("input[type=password]")');
@@ -856,6 +895,43 @@ app.whenReady().then(async () => {
     emit(f.state, 'evt:wuwei-me', null); await f.wait('document.querySelector(".mq-select")?.textContent.includes("openrouter-auto-free")'); emit(f.state, 'evt:wuwei-me', account(200)); await f.wait('document.querySelector(".mq-select")?.textContent.includes("claude-opus-4-8")');
     await f.click('.new-session'); await delay(180); assert.equal(f.state.settings.model, 'claude-opus-4-8');
     assert.equal(f.state.sent.length, 0); assert.equal(f.state.orders, 0);
+  });
+  for(const from of ['chat','image','video'])await run('发布关键：新建文字对话：'+from+'入口始终返回文字模式',{
+    settings:{...settings(),modelPreferences:{'qa-account':{providerId:'wuwei-image',modelId:'qa-image-two'}}},
+    imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}]
+  },async f=>{
+    if(from==='image'){await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio, .image-studio-composer, .image-composer")');}
+    if(from==='video'){await f.click('.studio-mode-nav button:nth-child(3)');await f.wait('!!document.querySelector(".video-studio-root")');}
+    assert.equal(await f.js('document.querySelector(".new-session").textContent.trim().normalize("NFKC")'),'+ 新对话');
+    f.state.settingsDelay=100;
+    await f.click('.new-session');
+    await f.wait('document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true" && !!document.querySelector(".composer textarea")');
+    await delay(400);
+    assert.equal(f.state.lastNewSessionOptions?.mode,'chat');
+    assert.equal(f.state.settings.imageMode,false);
+    assert.equal(await f.js('!!document.querySelector(".video-studio-root, .image-studio-content")'),false);
+    assert.notEqual(f.state.settings.model,'qa-image-two');
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+    if(from==='image'){
+      f.state.settingsDelay=0;await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio-content")');
+      assert.equal(f.state.settings.imageMode,true);assert.equal(f.state.lastNewSessionOptions,undefined);
+      assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+    }
+  });
+  await run('发布关键：新建文字对话：保留已选文字模型',{
+    settings:{...settings('wuwei-mimo','mimo-v2.6-flash'),modelPreferences:{'qa-account':{providerId:'wuwei-mimo',modelId:'mimo-v2.6-flash'}}}
+  },async f=>{
+    await f.click('.new-session');await f.wait('document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true"');await delay(150);
+    assert.equal(f.state.settings.model,'mimo-v2.6-flash');assert.equal(f.state.settings.modelPreferences['qa-account'].modelId,'mimo-v2.6-flash');
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：新建文字对话：退出未登录图片预览',{
+    account:null,settings:settings('wuwei-free','glm-4.7-flash'),imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}]
+  },async f=>{
+    await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio-content")');
+    await f.click('.new-session');await f.wait('!document.querySelector(".image-studio-content") && document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true"');
+    await delay(150);assert.equal(f.state.settings.imageMode,false);assert.equal(await f.js('!!document.querySelector(".wuwei-login-dialog")'),false);
+    assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
   });
   await run('新建对话不继承从未主动选择过的顶级默认，已有对话绑定保留', { settings: { ...settings('wuwei-claude', 'claude-opus-4-8'), modelChoiceExplicit: false } }, async f => {
     assert.equal(f.state.settings.model, 'claude-opus-4-8'); await f.click('.new-session'); await f.wait('document.querySelector(".mq-select")?.textContent.includes("mimo-v2.6-flash")');

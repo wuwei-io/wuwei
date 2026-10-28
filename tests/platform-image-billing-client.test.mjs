@@ -1,3 +1,4 @@
+import {SessionRefreshUnavailable} from '../src/wuwei-refresh.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -15,7 +16,7 @@ async function mock(t, handler) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  return { calls, client: (source = 'platform', token = 'mock-token') => new PlatformBillingClient(`http://127.0.0.1:${server.address().port}`, () => token, source) };
+  return { calls, client: (source = 'platform', token = 'mock-token') => new PlatformBillingClient(`http://127.0.0.1:${server.address().port}`, typeof token === 'function' ? token : () => token, source) };
 }
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); }
 
@@ -158,4 +159,22 @@ test('server quote allows exact-estimate authorization and settlement-only retry
  assert.equal(m.calls[1].path,`/api/images/orders/${input.price_version}/settle`);
  assert.equal(m.calls.filter(x=>x.path==='/api/images/orders').length,0);
  for(const source of ['byok','subscription']) {await assert.rejects(m.client(source).quote(query),{code:'SOURCE_ISOLATED'});await assert.rejects(m.client(source).settle(input.price_version),{code:'SOURCE_ISOLATED'});}
+});
+
+
+test('401 renewal retries the original image submit once with the identical key and body',async t=>{
+ const m=await mock(t,(req,res,n)=>json(res,n===1?401:202,n===1?{code:'AUTH_REQUIRED'}:accepted));
+ const rejected=[];const c=m.client('platform',token=>{if(token)rejected.push(token);return token?'fresh':'old'});const attempt=c.prepare(input,sku);
+ assert.deepEqual(await c.create(attempt),accepted);assert.equal(m.calls.length,2);assert.deepEqual(rejected,['old']);assert.equal(m.calls[0].headers.authorization,'Bearer old');assert.equal(m.calls[1].headers.authorization,'Bearer fresh');assert.equal(m.calls[0].headers['idempotency-key'],m.calls[1].headers['idempotency-key']);assert.deepEqual(m.calls[0].body,m.calls[1].body);
+});
+test('image download silently refreshes 401 and keeps the same original asset',async t=>{
+ const id='11111111-1111-4111-8111-111111111111';const m=await mock(t,(req,res,n)=>{if(n===1)json(res,401,{code:'AUTH_REQUIRED'});else{res.writeHead(200,{'Content-Type':'image/png'});res.end(Buffer.from([1,2,3]))}});
+ const c=m.client('platform',token=>token?'fresh':'old');assert.deepEqual(await c.image(id),new Uint8Array([1,2,3]));assert.equal(m.calls.length,2);assert.equal(m.calls[0].path,m.calls[1].path);assert(m.calls.every(x=>x.method==='GET'));
+});
+test('renewal outages do not become expired-login errors or send a paid request',async t=>{
+ const m=await mock(t,()=>{throw Error('No paid request expected')});const c=m.client('platform',()=>{throw new SessionRefreshUnavailable()});const attempt=c.prepare(input,sku);
+ await assert.rejects(c.create(attempt),{code:'AUTH_PENDING'});assert.equal(m.calls.length,0);assert.equal(attempt.state,'ready');
+});
+test('rejected static credentials stop after one request without an auth retry loop',async t=>{
+ const m=await mock(t,(req,res)=>json(res,401,{code:'AUTH_REQUIRED'}));await assert.rejects(m.client().catalog(),{code:'AUTH_REQUIRED'});assert.equal(m.calls.length,1);
 });

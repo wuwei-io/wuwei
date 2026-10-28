@@ -1,3 +1,4 @@
+import {hostedCredentialProvider} from '../hosted-session-credentials.js';
 import {currentMessageAudit} from "../media/message-audit-context.js";
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import {createPlatformImageSession} from '../imagegen/platform-image-session.js';
@@ -395,11 +396,14 @@ class OpenAIProvider implements Provider {
     const sendMaxTokens = ctxWin && this.cfg.maxTokens >= ctxWin ? undefined : this.cfg.maxTokens;
     const hostedRequest = isWuweiHostedGateway(base);
     const clientRequestId = hostedRequest ? randomUUID() : undefined;
-    const res = await fetchWithRetry(`${base}/chat/completions`, {
+    const credential = hostedRequest && this.cfg.apiKey && !this.cfg.apiKey.startsWith('anon-')
+      ? hostedCredentialProvider(this.cfg.apiKey) : () => this.cfg.apiKey;
+    const token = await credential();
+    const request: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.cfg.apiKey}`,
+        Authorization: `Bearer ${token}`,
         ...(clientRequestId ? {"X-Wuwei-Request-Id": clientRequestId} : {}),
         ...(hostedRequest&&(handlers.messageAuditId??currentMessageAudit())?{"X-Wuwei-Message-Id":handlers.messageAuditId??currentMessageAudit()!}:{}),
         ...(handlers.requestPurpose === "model_check" && isWuweiHostedGateway(base)
@@ -417,7 +421,16 @@ class OpenAIProvider implements Provider {
         reasoning: this.cfg.effort ? { effort: this.cfg.effort } : undefined,
       }),
       signal: handlers.signal,
-    });
+    };
+    let res = await fetchWithRetry(`${base}/chat/completions`, request);
+    if (hostedRequest && res.status === 401) {
+      const renewed = await credential(token);
+      if (renewed && renewed !== token) {
+        await res.body?.cancel().catch(() => {});
+        res = await fetchWithRetry(`${base}/chat/completions`, {...request,
+          headers:{...request.headers,Authorization:`Bearer ${renewed}`}});
+      }
+    }
     if (!res.ok || !res.body) {
       const rawBody = await res.text();
       // 无为托管网关：把结构化错误(余额不足/达上限等)翻成人话，别甩原始 JSON 给用户。第三方端点保持原样。

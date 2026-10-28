@@ -4,6 +4,7 @@ import mobileWorkspace from "./mobile-remote/wuwei-remote-workspace.cjs";
 import mobileEmployeeWorkspace from "./mobile-remote/wuwei-remote-employee-workspace.cjs";
 import mobilePagedWorkspace from "./mobile-remote/wuwei-remote-paged-workspace.cjs";
 import mobileCollaboration from "./mobile-remote/wuwei-remote-collaboration.cjs";
+import {setHostedCredentialResolver,hostedCredentialProvider,accountScopedCredentialResolver} from '../../src/hosted-session-credentials.js';
 import {registerVideoStudio} from "./video-studio.js";
 import {gatewayAffordability} from "../../src/gateway-affordability.js";
 import {localizeToolMetadata} from "../../src/localization/tools.js";
@@ -3637,6 +3638,11 @@ const wuweiSessionState = createHostedSessionState({
 const studioImageApprovals = new StudioImageApprovals();
 const currentImageOwner = () => imageAccountScope(loadWuweiSession()?.accessToken || '');
 const getFreshWuweiSession = (rejectedAccessToken?: string) => wuweiSessionState.get(rejectedAccessToken);
+setHostedCredentialResolver(accountScopedCredentialResolver({
+  currentToken:()=>loadWuweiSession()?.accessToken,
+  freshToken:async rejected=>(await getFreshWuweiSession(rejected))?.accessToken,
+}));
+
 // 客户端登录埋点上报：登录成功即报；启动/运行期检测到有效会话每进程只报一次(loginReportedThisProc 节流)，
 // 避免 account:wuwei-me 被反复调用(启动拉账号、扣币刷余额)时重复上报把「登录数」灌水。显式登出后重置，重登会再报。
 let loginReportedThisProc = false;
@@ -4091,11 +4097,17 @@ function lockSessionModel(sid: string) {
   } catch { /* ignore */ }
 }
 
-ipcMain.on("session:new", () => {
+ipcMain.on("session:new", (_e, options?: { mode?: "chat" }) => {
   lockSessionModel(currentId); // ★关键修复:新建会话前先锁住正要离开的会话的模型,否则它切回来会被新会话的模型覆盖
   currentId = randomUUID();
+  const chatOnly = options?.mode === "chat";
+  if (chatOnly) {
+    const settings = loadSettings();
+    // Lock the source first, then change only the newly created conversation.
+    if (settings?.imageMode) applySettings({ ...settings, imageMode: false }, currentId);
+  }
   const a = getAgent(currentId);
-  send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
+  send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [], ...(chatOnly ? { mode: "chat" } : {}) });
   sendUsageFor(currentId);
   void emitAccount();
 });
@@ -5147,7 +5159,7 @@ let studioSelectionCatalog: { owner:string; rows:import('../../src/imagegen/imag
 async function studioCatalogForSelection(token:string) {
   const owner=imageAccountScope(token);
   if(studioSelectionCatalog?.owner===owner&&Date.now()-studioSelectionCatalog.at<60000)return studioSelectionCatalog.rows;
-  const result=await new PlatformBillingClient('https://wuweiai.io',()=>token,'platform').catalog();
+  const result=await new PlatformBillingClient('https://wuweiai.io',hostedCredentialProvider(token),'platform').catalog();
   const rows=Array.isArray(result)?result:[];
   studioSelectionCatalog={owner,rows,at:Date.now()};
   return rows;
@@ -5160,7 +5172,7 @@ ipcMain.handle("account:image-catalog", async () => {
     const rows=await response.json();if(!Array.isArray(rows))throw new Error('IMAGE_CATALOG_UNAVAILABLE');
     return rows;
   }
-  const result = await new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform').catalog();
+  const result = await new PlatformBillingClient('https://wuweiai.io', hostedCredentialProvider(sess.accessToken), 'platform').catalog();
   const rows=Array.isArray(result)?result:[];
   studioSelectionCatalog={owner:imageAccountScope(sess.accessToken),rows,at:Date.now()};
   return rows;
@@ -5171,7 +5183,7 @@ ipcMain.handle('settings:image-sku', async (_e,input:{sku_id?:unknown;sid?:unkno
   if(!input||typeof input.sku_id!=='string'||!input.sku_id||input.sku_id.length>200||typeof input.sid!=='string'||input.sid!==currentId)throw new Error('INVALID_IMAGE_SELECTION');
   const sid=currentId;
   if(!loadSettings()?.imageMode||runs.has(sid))throw new Error('IMAGE_SELECTION_CHANGED');
-  const sess=await getFreshWuweiSession().catch(()=>null);
+  const sess=await getFreshWuweiSession();
   if(!sess?.accessToken)throw new Error('AUTH_REQUIRED');
   const owner=imageAccountScope(sess.accessToken);
   const rows=await studioCatalogForSelection(sess.accessToken);
@@ -5202,7 +5214,7 @@ ipcMain.handle('account:image-recover',async(_e,input:{sid?:unknown;tool_id?:unk
   if(!query)throw new Error('INVALID_IMAGE_RECOVERY');
   studioRecoveryLocks.add(lock);
   try{
-    const session=await getFreshWuweiSession().catch(()=>null);if(!session?.accessToken)throw new Error('AUTH_REQUIRED');
+    const session=await getFreshWuweiSession();if(!session?.accessToken)throw new Error('AUTH_REQUIRED');
     const owner=imageAccountScope(session.accessToken);
     const output=await createPlatformImageSession('https://wuweiai.io',session.accessToken)(query,{cwd,sessionId:sid,toolCallId:input.tool_id});
     if(currentId!==sid||runs.has(sid)||agents.get(sid)!==agent||currentImageOwner()!==owner)throw new Error('IMAGE_SELECTION_CHANGED');
@@ -5220,9 +5232,9 @@ ipcMain.handle('account:image-quote', async (_e, input: {sku_id?:unknown;prompt?
   if(!Number.isInteger(count)||typeof count!=='number'||count<1||count>4)throw new Error('INVALID_IMAGE_COUNT');
   const sid = currentId;
   const prompt = secrets.redact(input.prompt.trim()).text.trim();
-  const sess = await getFreshWuweiSession().catch(() => null);
+  const sess = await getFreshWuweiSession();
   if (!sess?.accessToken) throw new Error('AUTH_REQUIRED');
-  const client = new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform');
+  const client = new PlatformBillingClient('https://wuweiai.io', hostedCredentialProvider(sess.accessToken), 'platform');
   const catalog = await client.catalog();
   const sku = Array.isArray(catalog) ? catalog.find(row => row.sku_id === input.sku_id) : undefined;
   if (!sku || typeof sku.price_version !== 'string' || !Number.isInteger(sku.max_prompt_bytes)
@@ -5658,9 +5670,10 @@ function hasCredential(cfg: ReturnType<typeof loadConfig>): boolean {
 ipcMain.handle("conn:check", async () => {
   const settings = loadSettings();
   if (settings?.imageMode) {
-    const sess = await getFreshWuweiSession().catch(() => null);
+    let sess;
+    try{sess=await getFreshWuweiSession()}catch{return {status:"yellow",reason:tr("ui.index.account.refresh.is.temporarily.unavailable.your.fae7799")}};
     if (!sess?.accessToken) return { status: "red", reason: tr("ui.index.sign.in.to.use.hosted.image.5b6716d") };
-    return checkImageAvailability(new PlatformBillingClient('https://wuweiai.io', () => sess.accessToken, 'platform'),
+    return checkImageAvailability(new PlatformBillingClient('https://wuweiai.io', hostedCredentialProvider(sess.accessToken), 'platform'),
       settings.imageSku || '', process.env.WUWEI_LANG === 'en' ? 'en' : 'zh');
   }
   const cfg = loadConfig();

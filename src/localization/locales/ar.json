@@ -32,6 +32,7 @@
     "login.toLogin": "هل لديك حساب؟ تسجيل الدخول",
     "login.submit": "متابعة",
     "login.signin": "تسجيل الدخول",
+    "login.sessionExpiredDescription": "انتهت جلستك. سجّل الدخول للمتابعة.",
     "login.register": "قم بالتسجيل",
     "login.noAccount": "لا يوجد حساب؟ قم بالتسجيل",
     "login.haveAccount": "هل لديك حساب؟ تسجيل الدخول",

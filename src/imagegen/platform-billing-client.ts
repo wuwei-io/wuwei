@@ -1,5 +1,7 @@
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import { randomUUID } from 'node:crypto';
+import {HostedCredentialError} from '../hosted-session-credentials.js';
+import {SessionRefreshUnavailable} from '../wuwei-refresh.js';
 
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -35,7 +37,7 @@ export interface OrderAttempt {
 export class PlatformBillingClient {
   private readonly attempts = new WeakSet<OrderAttempt>();
   private readonly base: string;
-  constructor(baseUrl: string, private readonly token: () => string | Promise<string>,
+  constructor(baseUrl: string, private readonly token: (rejectedToken?: string) => string | Promise<string>,
     private readonly source: BillingSource, private readonly timeoutMs = 15000) {
     const url = new URL(baseUrl);
     if (url.username || url.password || url.search || url.hash ||
@@ -47,22 +49,41 @@ export class PlatformBillingClient {
   private guard() {
     if (this.source !== 'platform') throw new BillingError('SOURCE_ISOLATED', tr("ui.platform.billing.client.subscriptions.and.byok.do.not.use.596a0fb"));
   }
+  private async authenticatedFetch(path: string, init: RequestInit): Promise<Response> {
+    const credentials = async (rejected?: string) => {try { return await this.token(rejected); } catch(error) {
+      if(error instanceof SessionRefreshUnavailable)throw new BillingError('AUTH_PENDING',tr('ui.index.account.refresh.is.temporarily.unavailable.your.fae7799'),503);
+      if(error instanceof HostedCredentialError)throw new BillingError(error.code,error.message);
+      throw error;
+    }};
+    const token = await credentials();
+    if (!token.trim()) throw new BillingError('AUTH_REQUIRED', tr("ui.platform.billing.client.sign.in.first.44e9920"));
+    const send = (credential: string) => fetch(this.base + path, {
+      ...init, headers: {...init.headers, Authorization: `Bearer ${credential}`},
+    });
+    const response = await send(token);
+    if (response.status !== 401) return response;
+    const renewed = await credentials(token);
+    if (!renewed.trim() || renewed === token) return response;
+    await response.body?.cancel().catch(() => {});
+    // Only an explicit rejected credential is retried, with the identical body
+    // and idempotency key. Unknown POST outcomes are never automatically resent.
+    return send(renewed);
+  }
   private async request(path: string, method = 'GET', body?: OrderInput | Omit<OrderInput, 'authorized_budget'> | {authorized_budget:number}, key?: string): Promise<unknown> {
     this.guard();
-    const token = await this.token();
-    if (!token.trim()) throw new BillingError('AUTH_REQUIRED', tr("ui.platform.billing.client.sign.in.first.44e9920"));
     let response!: Response;
     let data: any;
     for(let attempt=0;;attempt++) {
      try {
-      response = await fetch(this.base + path, {
+      response = await this.authenticatedFetch(path, {
         method, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs),
-        headers: { Authorization: `Bearer ${token}`, ...(path==='/api/images/catalog'?{'X-Wuwei-Image-Specifications':'20261025'}:{}), ...(body ? { 'Content-Type': 'application/json' } : {}),
+        headers: { ...(path==='/api/images/catalog'?{'X-Wuwei-Image-Specifications':'20261025'}:{}), ...(body ? { 'Content-Type': 'application/json' } : {}),
           ...(key ? { 'Idempotency-Key': key } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       data=await response.json();break;
-     } catch {
+     } catch(error) {
+      if(error instanceof BillingError || error instanceof HostedCredentialError || error instanceof SessionRefreshUnavailable)throw error;
       if(method==='GET' && attempt<2) {await delay(400*(attempt+1));continue;}
       throw new BillingError('UNKNOWN', tr("ui.platform.billing.client.connection.interrupted.check.the.original.order.b7f26fc"));
      }
@@ -139,7 +160,7 @@ export class PlatformBillingClient {
         throw error;
       }
       // Only explicit pre-dispatch rejection can be manually retried with the SAME key.
-      attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT','MEMBERSHIP_REQUIRED'].includes(error.code) ? 'ready' : 'unknown';
+      attempt.state = error instanceof BillingError && ['AUTH_REQUIRED', 'AUTH_PENDING', 'ACCOUNT_CHANGED', 'INSUFFICIENT_BALANCE', 'PRICE_UNAVAILABLE', 'IDEMPOTENCY_CONFLICT', 'INVALID_INPUT','MEMBERSHIP_REQUIRED'].includes(error.code) ? 'ready' : 'unknown';
       throw error;
     }
   }
@@ -162,12 +183,10 @@ export class PlatformBillingClient {
   async image(orderId: string,onProgress?:(received:number,total:number|null)=>void,signal?:AbortSignal): Promise<Uint8Array> {
     this.guard();
     if (!/^[0-9a-f-]{36}$/i.test(orderId)) throw new BillingError('INVALID_INPUT', tr("ui.platform.billing.client.invalid.order.id.c87f920"));
-    const token = await this.token();
-    if (!token.trim()) throw new BillingError('AUTH_REQUIRED', tr("ui.platform.billing.client.sign.in.first.44e9920"));
     for(let attempt=0;;attempt++) {
      try {
-    const response = await fetch(`${this.base}/api/images/orders/${encodeURIComponent(orderId)}/asset`, {
-      headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal,
+    const response = await this.authenticatedFetch(`/api/images/orders/${encodeURIComponent(orderId)}/asset`, {
+      redirect: 'error', signal,
     });
     if(response.status===401) throw new BillingError('AUTH_REQUIRED',tr("ui.platform.billing.client.your.session.expired.sign.in.again.a03f416"),401);
     if (!response.ok || response.headers.get('content-type') !== 'image/png') throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.is.not.available.to.3405ec4"), response.status);
@@ -184,7 +203,7 @@ export class PlatformBillingClient {
     if (!size) throw new BillingError('DELIVERY_UNAVAILABLE', tr("ui.platform.billing.client.the.image.response.is.empty.1e7b3a9"));
     return bytes;
      } catch(error) {
-      if(signal?.aborted||error instanceof BillingError || attempt>=2) throw error;
+      if(signal?.aborted||error instanceof BillingError || error instanceof HostedCredentialError || error instanceof SessionRefreshUnavailable || attempt>=2) throw error;
       await delay(400*(attempt+1));
      }
     }

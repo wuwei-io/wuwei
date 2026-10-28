@@ -32,6 +32,7 @@
     "login.toLogin": "Tem uma conta? Faça login",
     "login.submit": "Continuar",
     "login.signin": "Faça login",
+    "login.sessionExpiredDescription": "Sua sessão expirou. Entre para continuar.",
     "login.register": "Inscreva-se",
     "login.noAccount": "Sem conta? Inscreva-se",
     "login.haveAccount": "Tem uma conta? Faça login",

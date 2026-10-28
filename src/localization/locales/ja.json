@@ -32,6 +32,7 @@
     "login.toLogin": "アカウントをお持ちですか?サインイン",
     "login.submit": "続ける",
     "login.signin": "サインイン",
+    "login.sessionExpiredDescription": "セッションの有効期限が切れました。ログインして続けてください。",
     "login.register": "サインアップ",
     "login.noAccount": "アカウントがありませんか?サインアップ",
     "login.haveAccount": "アカウントをお持ちですか?サインイン",

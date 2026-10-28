@@ -32,6 +32,7 @@
     "login.toLogin": "Haben Sie ein Konto? Melden Sie sich an",
     "login.submit": "Weiter",
     "login.signin": "Melden Sie sich an",
+    "login.sessionExpiredDescription": "Deine Sitzung ist abgelaufen. Melde dich an, um fortzufahren.",
     "login.register": "Melden Sie sich an",
     "login.noAccount": "Kein Konto? Melden Sie sich an",
     "login.haveAccount": "Haben Sie ein Konto? Melden Sie sich an",

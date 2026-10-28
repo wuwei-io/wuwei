@@ -32,6 +32,7 @@
     "login.toLogin": "Có tài khoản? Đăng nhập",
     "login.submit": "Tiếp tục",
     "login.signin": "Đăng nhập",
+    "login.sessionExpiredDescription": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập để tiếp tục.",
     "login.register": "Đăng ký",
     "login.noAccount": "Không có tài khoản? Đăng ký",
     "login.haveAccount": "Có tài khoản? Đăng nhập",
