@@ -99,7 +99,7 @@ export interface WuweiApi {
   stop(sid?: string): void;
   reset(): void;
   undoLast(): void;
-  newSession(): void;
+  newSession(options?: { mode: "chat" }): void;
   handoffSession(sid: string): Promise<{ ok: boolean; newId?: string; goalCarried?: boolean }>; // 一键总结→开新会话接着做(带目标则自动智能继续)
   switchSession(id: string): void;
   deleteSession(id: string): void;

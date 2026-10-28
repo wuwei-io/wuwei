@@ -32,6 +32,7 @@
     "login.toLogin": "Hesabınız var mı? Oturum aç",
     "login.submit": "Devam et",
     "login.signin": "Oturum aç",
+    "login.sessionExpiredDescription": "Oturumunuzun süresi doldu. Devam etmek için giriş yapın.",
     "login.register": "Kayıt ol",
     "login.noAccount": "Hesabın yok mu? Kayıt ol",
     "login.haveAccount": "Hesabınız var mı? Oturum aç",

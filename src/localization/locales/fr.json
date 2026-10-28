@@ -32,6 +32,7 @@
     "login.toLogin": "Vous avez un compte ? Connectez-vous",
     "login.submit": "Continuer",
     "login.signin": "Connectez-vous",
+    "login.sessionExpiredDescription": "Votre session a expiré. Reconnectez-vous pour continuer.",
     "login.register": "Inscrivez-vous",
     "login.noAccount": "Pas de compte ? Inscrivez-vous",
     "login.haveAccount": "Vous avez un compte ? Connectez-vous",

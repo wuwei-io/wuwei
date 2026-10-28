@@ -32,6 +32,7 @@
     "login.toLogin": "حساب کاربری دارید؟ وارد شوید",
     "login.submit": "ادامه دهید",
     "login.signin": "وارد شوید",
+    "login.sessionExpiredDescription": "نشست شما منقضی شده است. برای ادامه وارد شوید.",
     "login.register": "ثبت نام کنید",
     "login.noAccount": "حسابی ندارید؟ ثبت نام کنید",
     "login.haveAccount": "حساب کاربری دارید؟ وارد شوید",

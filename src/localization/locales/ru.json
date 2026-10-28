@@ -32,6 +32,7 @@
     "login.toLogin": "Есть аккаунт? Войти",
     "login.submit": "Продолжить",
     "login.signin": "Войти",
+    "login.sessionExpiredDescription": "Срок действия сеанса истёк. Войдите, чтобы продолжить.",
     "login.register": "Зарегистрироваться",
     "login.noAccount": "Нет аккаунта? Зарегистрироваться",
     "login.haveAccount": "Есть аккаунт? Войти",

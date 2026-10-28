@@ -32,6 +32,7 @@
     "login.toLogin": "Punya akun? Masuk",
     "login.submit": "Lanjutkan",
     "login.signin": "Masuk",
+    "login.sessionExpiredDescription": "Sesi Anda telah berakhir. Masuk untuk melanjutkan.",
     "login.register": "Daftar",
     "login.noAccount": "Tidak ada akun? Daftar",
     "login.haveAccount": "Punya akun? Masuk",

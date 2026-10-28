@@ -32,6 +32,7 @@
     "login.toLogin": "Hai un account? Accedi",
     "login.submit": "Continua",
     "login.signin": "Accedi",
+    "login.sessionExpiredDescription": "La sessione è scaduta. Accedi per continuare.",
     "login.register": "Iscriviti",
     "login.noAccount": "Nessun conto? Iscriviti",
     "login.haveAccount": "Hai un account? Accedi",

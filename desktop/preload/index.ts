@@ -144,7 +144,7 @@ const api = {
   stop: (sid?: string) => ipcRenderer.send("chat:stop", sid),
   reset: () => ipcRenderer.send("chat:reset"),
   undoLast: () => ipcRenderer.send("chat:undo-last"),
-  newSession: () => ipcRenderer.send("session:new"),
+  newSession: (options?: { mode: "chat" }) => ipcRenderer.send("session:new", options),
   handoffSession: (sid: string) =>
     ipcRenderer.invoke("session:handoff", sid) as Promise<{ ok: boolean; newId?: string }>, // 一键总结→开新会话接着做
   switchSession: (id: string) => ipcRenderer.send("session:switch", id),

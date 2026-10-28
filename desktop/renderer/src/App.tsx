@@ -1,3 +1,4 @@
+import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
 import {PaidContextDialog} from './components/PaidContextDialog.js';
@@ -2931,6 +2932,41 @@ function WuweiLoginModal({
   const loginLayer = useRef<HTMLDivElement>(null);
   const wasCovered = useRef(covered);
   useEffect(() => {
+    if (covered) return;
+    const layer = loginLayer.current;
+    if (!layer) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const background: HTMLElement[] = [];
+    for (let branch: HTMLElement = layer; branch.parentElement && branch !== document.body; branch = branch.parentElement) {
+      for (const sibling of Array.from(branch.parentElement.children)) {
+        if (sibling !== branch && sibling instanceof HTMLElement && !sibling.inert && !["SCRIPT", "STYLE", "LINK"].includes(sibling.tagName)) {
+          sibling.inert = true;
+          background.push(sibling);
+        }
+      }
+    }
+    const focusables = () => Array.from(layer.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')).filter(el => el.getClientRects().length > 0);
+    const focusInput = () => (layer.querySelector<HTMLInputElement>('input:not([disabled])') ?? focusables()[0])?.focus();
+    focusInput();
+    const keepFocus = (event: FocusEvent) => { if (!layer.contains(event.target as Node)) focusInput(); };
+    const trapKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (event.key !== "Tab") return;
+      const items = focusables(), first = items[0], last = items[items.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || !layer.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !layer.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("focusin", keepFocus);
+    window.addEventListener("keydown", trapKey, true);
+    return () => {
+      document.removeEventListener("focusin", keepFocus);
+      window.removeEventListener("keydown", trapKey, true);
+      for (const element of background) element.inert = false;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [covered]);
+  useEffect(() => {
     if (wasCovered.current && !covered) loginLayer.current?.querySelector<HTMLInputElement>('input:not([disabled])')?.focus();
     wasCovered.current = covered;
   }, [covered]);
@@ -3111,9 +3147,14 @@ function WuweiLoginModal({
 
   return (
     <>
-      <div className="mq-overlay" inert={covered} aria-hidden={covered || undefined} onClick={onClose} />
-      <div ref={loginLayer} className="wuwei-login-layer" inert={covered} aria-hidden={covered || undefined} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+      <div className="wuwei-login-backdrop" inert={covered} aria-hidden="true" />
+      <div ref={loginLayer} className="wuwei-login-layer" onKeyDown={event => event.stopPropagation()} onMouseDown={event => { if (event.target === event.currentTarget) event.preventDefault(); }} inert={covered} aria-hidden={covered || undefined} style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
         <div
+          className="wuwei-login-dialog"
+          role="dialog"
+          aria-modal={covered ? undefined : true}
+          aria-label={mode === "email-register" ? t("login.register") : mode === "email-reset" ? t("login.resetTitle") : t("login.signin")}
+          aria-describedby={sessionExpired && mode === "email-login" ? "session-expired-description" : undefined}
           style={{
             width: 340,
             maxWidth: "90vw",
@@ -3129,6 +3170,8 @@ function WuweiLoginModal({
           {onLang && <LanguageSwitcher language={lang} onChange={onLang} />}
           <button
             onClick={onClose}
+            type="button"
+            aria-label={t("msg.close")}
             title={makeT(getLang())("msg.close")}
             style={{ position: "absolute", top: 8, right: 10, width: 26, height: 26, background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, lineHeight: 1, cursor: "pointer" }}
           >
@@ -3144,9 +3187,7 @@ function WuweiLoginModal({
                   : t("login.signin")}
             </div>
           </div>
-          {sessionExpired && <div className="session-expired-notice" role="alert">
-            {tr("ui.app.your.session.has.expired.please.sign.8c6802c")}
-          </div>}
+          {sessionExpired && mode === "email-login" && <SessionExpiredNotice/>}
           {incentive && (
             <div style={{ textAlign: "center", marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 3 }}>
@@ -4292,24 +4333,20 @@ export function App() {
   // 所有付费/提醒弹窗「展示」统一埋点：依赖用 !!state(布尔)，只在弹窗打开的一刻发一次(对象内容更新不重复发)。
   // 后台「弹窗提示总数」按这些 *_shown 事件汇总，可下钻看谁/IP/地区/时间/弹了什么/点了什么。
   useEffect(() => {
-    if (coinShortage) void window.wuwei.track?.("credits_shortage_shown", { context: coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : (coinShortage.message || "shortage"), canRebind: !!coinShortage.rebind, payPage: (getCurrentLanguage() === "zh" ? "alipay" : "paddle") });
+    if (coinShortage?.browse) void window.wuwei.track?.("credits_shortage_shown", { context: "browse", canRebind: !!coinShortage.rebind, payPage: (getCurrentLanguage() === "zh" ? "alipay" : "paddle") });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!coinShortage]);
   useEffect(() => {
     if (quotaWarn) void window.wuwei.track?.("quota_warn_shown", { model: quotaWarn.model, usedPct: quotaWarn.usedPct });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!quotaWarn]);
-  useEffect(() => {
-    if (freeCapModal) void window.wuwei.track?.("free_cap_guide_shown", { model: freeCapModal.model, balance: freeCapModal.balance });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!freeCapModal]);
   const [payFaqOpen, setPayFaqOpen] = useState(false); // 缺币弹窗「常见问题」答疑弹窗（叠在支付弹窗之上，关闭即返回）
   const [debugCtx, setDebugCtx] = useState<null | "weekly" | "shortage" | "freecap" | "browse">(null); // 仅 dev：调试快捷键强制支付弹窗的 context，覆盖真实推断
   const shortageShownAt = useRef(0); // 余额不足弹窗展示时刻，用于算用户看了多久
   // 关闭余额不足弹窗并记录用户动作 + 停留时长。action: close(叉/暂不) | upgrade(升级会员) | buy_pack(买积分包) | rebind(改用订阅)
   function closeShortage(action: string) {
     const dwellMs = shortageShownAt.current ? Date.now() - shortageShownAt.current : 0;
-    void window.wuwei.track?.("credits_shortage_action", { action, dwell_ms: dwellMs });
+    if (coinShortage?.browse) void window.wuwei.track?.("credits_shortage_action", { action, dwell_ms: dwellMs });
     usageLimitRequestRef.current = null;
     shortageShownAt.current = 0;
     setCoinShortage(null);
@@ -4839,6 +4876,11 @@ export function App() {
     setModelPickerCategory(undefined);
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".mq-select")?.focus());
   };
+  const textOnlySessionsRef = useRef(new Set<string>());
+  const defaultChoicesFor = (sid: string) => {
+    const choices = withImageSkuChoices(pickerChoicesRef.current, imageCatalogRef.current);
+    return textOnlySessionsRef.current.has(sid) ? choices.filter(choice => choice.category !== 'images' && choice.category !== 'videos') : choices;
+  };
   const modelDefaultRef = useRef<{ userId: string | null; handled: Set<string> }>({ userId: null, handled: new Set() });
   const modelDefaultSendRef = useRef<object | null>(null);
   if (modelDefaultRef.current.userId !== (wuwei?.user.id ?? null)) {
@@ -4899,7 +4941,7 @@ export function App() {
     }
     if (!automatic) setModelRetry(null);
     const userId = wuweiRef.current?.user.id;
-    const choices = pickerChoicesRef.current;
+    const choices = automatic ? defaultChoicesFor(sid) : pickerChoicesRef.current;
     const remembered = userId ? rememberedModelChoice(withImageSkuChoices(choices, imageCatalogRef.current), cur, userId) : undefined;
     if (automatic) {
       const scope = modelDefaultScopeRef.current;
@@ -5048,7 +5090,8 @@ export function App() {
     const r = await window.wuwei.getSettings();
     if (defaults !== modelDefaultRef.current || sid !== currentIdRef.current) return;
     const userId = wuweiRef.current?.user.id;
-    const choice = userId ? signedInDefaultModel(withImageSkuChoices(pickerChoices, imageCatalogRef.current), r?.settings || {}, userId) : anonymousDefaultModel(pickerChoices);
+    const choices = defaultChoicesFor(sid);
+    const choice = userId ? signedInDefaultModel(choices, r?.settings || {}, userId) : anonymousDefaultModel(choices);
     if (choice) await selectModelChoice(choice, true);
   }
   async function switchToRecommendedValue() {
@@ -5560,6 +5603,13 @@ export function App() {
           setBrowserDetached(!!payload);
           break;
         case "evt:session-loaded": {
+          if (payload.mode === "chat") {
+            textOnlySessionsRef.current.add(payload.id);
+            imagePreviewRef.current = null;
+            pendingMediaChoice.current = null;
+            setImageMode(false);
+            setImageHistory(false);
+          }
           setVideoMode(false);
           setImageHistoryOverview(false);
           setImageSessionToOpen(payload.imageSku?{sid:payload.id,sku:payload.imageSku}:null);
@@ -7601,8 +7651,15 @@ export function App() {
           );
         })()}
         {showChats && (<>
-        <button className="new-session" onClick={() => { if(videoMode){openVideoCreation();return;}void window.wuwei.track?.("new_chat"); window.wuwei.newSession(); }}>
-          {videoMode||imageMode?tr("video.newCreation"):t("session.new")}
+        <button className="new-session" onClick={() => {
+          imagePreviewRef.current = null;
+          pendingMediaChoice.current = null;
+          setImageMode(false); setVideoMode(false); setImageHistory(false); setImageHistoryOverview(false);
+          setImageSessionToOpen(null); setAppView(null); setAgiView(null);
+          void window.wuwei.track?.("new_chat");
+          window.wuwei.newSession({ mode: "chat" });
+        }}>
+          {t("session.new")}
         </button>
         <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
           <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>

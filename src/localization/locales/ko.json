@@ -32,6 +32,7 @@
     "login.toLogin": "계정이 있나요? 로그인",
     "login.submit": "계속",
     "login.signin": "로그인",
+    "login.sessionExpiredDescription": "로그인 세션이 만료되었습니다. 로그인하여 계속하세요.",
     "login.register": "가입",
     "login.noAccount": "계정이 없나요? 가입",
     "login.haveAccount": "계정이 있나요? 로그인",

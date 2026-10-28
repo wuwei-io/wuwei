@@ -74,6 +74,34 @@ class ReleaseTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 release.filename(value)
 
+    def test_windows_mac_release_requires_both_mac_architectures_without_linux(self):
+        (self.root / 'latest-linux.yml').unlink()
+        (self.root / 'wuwei-1.2.3.AppImage').unlink()
+        files = release.prepare(self.root, self.tag, ('windows', 'macos'))
+        self.assertEqual({p.name for p in files if p.suffix == '.yml'}, {'latest.yml', 'latest-mac.yml'})
+        (self.root / 'wuwei-1.2.3-arm64-mac.zip').unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.prepare(self.root, self.tag, ('windows', 'macos'))
+
+    def test_linux_feed_preserves_previous_version_urls_and_bytes(self):
+        from types import SimpleNamespace
+        old = 'https://github.com/wuwei-io/wuwei/releases/download/v1.2.2/wuwei-1.2.2.AppImage'
+        body = yaml.safe_dump({'version': '1.2.2', 'files': [{'url': old, 'size': 42, 'sha512': 'original'}], 'path': old}).encode()
+        response = SimpleNamespace(content=body, raise_for_status=lambda: None)
+        with patch.object(release.requests, 'get', return_value=response), patch.object(release, 'public_head') as head:
+            path = release.preserve_linux_feed(self.root, self.tag)
+        self.assertEqual(path.read_bytes(), body)
+        head.assert_called_once_with(old, 42)
+        response.content = body.replace(b'v1.2.2/', b'v1.2.3/')
+        with patch.object(release.requests, 'get', return_value=response), self.assertRaisesRegex(ValueError, 'untrusted'):
+            release.preserve_linux_feed(self.root, self.tag)
+
+    def test_compatibility_selection_leaves_linux_untouched(self):
+        self.assertEqual(release.selected_manifests(('windows', 'macos')), ('latest.yml', 'latest-mac.yml'))
+        for invalid in ((), ('windows', 'windows'), ('unknown',)):
+            with self.assertRaises(ValueError):
+                release.selected_manifests(invalid)
+
     def test_stable_version_required(self):
         for value in ('v1.2.3-beta', 'not-a-tag', '1.2.3/anything'):
             with self.subTest(value=value), self.assertRaises(ValueError):

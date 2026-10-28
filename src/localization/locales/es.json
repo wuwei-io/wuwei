@@ -32,6 +32,7 @@
     "login.toLogin": "¿Tienes una cuenta? Iniciar sesión",
     "login.submit": "Continuar",
     "login.signin": "Iniciar sesión",
+    "login.sessionExpiredDescription": "Tu sesión ha caducado. Inicia sesión para continuar.",
     "login.register": "Regístrate",
     "login.noAccount": "¿Sin cuenta? Regístrate",
     "login.haveAccount": "¿Tienes una cuenta? Iniciar sesión",

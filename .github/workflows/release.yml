@@ -1,6 +1,5 @@
 # push 一个 v* tag（如 git tag v1.1.0 && git push origin v1.1.0）即自动：
-# 在 Linux runner 打 AppImage/deb、macOS runner 打 dmg(Intel+Apple Silicon)、
-# Windows runner 打 exe，并发到 Release（三平台）。
+# macOS 双架构 DMG/ZIP 和 Windows EXE；Linux 暂停发版，保留上一版更新入口。
 name: Release
 
 on:
@@ -15,7 +14,7 @@ on:
       platforms:
         description: 'JSON array of build runner platforms'
         required: true
-        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+        default: '["macos-latest", "windows-latest"]'
 
 permissions:
   contents: write
@@ -25,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.platforms || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        os: ${{ fromJSON(inputs.platforms || '["macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +70,8 @@ jobs:
 
       - name: Build renderer/main
         run: npm run desktop:build
+      - name: Verify mobile remote protocol and bundled adapters
+        run: node --test tests/mobile-remote.test.cjs
 
       # Generate GitHub-compatible generic update manifests; publish only after all platforms finish.
       - name: Package Linux (AppImage/deb)
@@ -205,7 +206,7 @@ jobs:
       - run: python -m pip install requests pyyaml oss2 boto3
       - run: python -m unittest discover -s tests -p 'test_github_release.py'
       - name: Publish complete GitHub release, then update legacy manifests
-        run: python scripts/github-release.py publish --tag "$RELEASE_TAG"
+        run: python scripts/github-release.py publish --tag "$RELEASE_TAG" --platforms windows macos
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

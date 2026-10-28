@@ -32,6 +32,7 @@
     "login.toLogin": "Masz konto? Zaloguj się",
     "login.submit": "Kontynuuj",
     "login.signin": "Zaloguj się",
+    "login.sessionExpiredDescription": "Sesja wygasła. Zaloguj się, aby kontynuować.",
     "login.register": "Zarejestruj się",
     "login.noAccount": "Nie masz konta? Zarejestruj się",
     "login.haveAccount": "Masz konto? Zaloguj się",

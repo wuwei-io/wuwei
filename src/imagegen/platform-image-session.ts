@@ -8,6 +8,7 @@ import type {ToolContext,ToolResult,Decision} from '../types.js';
 import {recordMediaTransfer} from '../media/activity-telemetry.js';
 import {beginImageTransfer} from './image-transfer-progress.js';
 import {imageModelLabel} from './image-catalog.js';
+import {hostedCredentialProvider} from '../hosted-session-credentials.js';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 const billingDetails=(error:unknown)=>error instanceof BillingError ? {billing_code:error.code,billing_status:error.status} : {};
 function imageDecision(titleKey:string, question:MessageReference, options:{value:string;label:MessageReference}[]):Decision {
@@ -27,7 +28,7 @@ function emptyImageCatalog(): ToolResult {
 
 // Bound to the actual hosted provider credentials, never global settings or subscription/BYOK.
 export function createPlatformImageSession(base: string,token: string,recoveryRoot=join(homedir(),process.env.WUWEI_DATA_DIR_NAME || '.wuwei','image-orders')) {
- const client=new PlatformBillingClient(base,()=>token,'platform',180000);
+ const client=new PlatformBillingClient(base,hostedCredentialProvider(token),'platform',180000);
  return async(input:Record<string,unknown>,ctx:ToolContext):Promise<ToolResult>=>{
   try {
    ctx.signal?.throwIfAborted();

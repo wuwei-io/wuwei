@@ -32,6 +32,7 @@
     "login.toLogin": "Have an account? Sign in",
     "login.submit": "Continue",
     "login.signin": "Sign in",
+    "login.sessionExpiredDescription": "Your session has expired. Sign in to continue.",
     "login.register": "Sign up",
     "login.noAccount": "No account? Sign up",
     "login.haveAccount": "Have an account? Sign in",

@@ -1,3 +1,4 @@
+import {hostedCredentialProvider,setHostedCredentialResolver} from '../src/hosted-session-credentials.ts';
 import {currentMessageAudit} from '../src/media/message-audit-context.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,7 +24,7 @@ function harness(responses, redirect = url => url) {
   const calls = [], sleeps = [];
   const context = vm.createContext({
     Response, Headers, AbortController, DOMException, Error, Math, Number, String, process, exports: {},
-    currentMessageAudit, CLIENT_OS: 'test', devGatewayUrl: redirect, isTerminalGatewayResponse, isTerminalGatewayError,
+    hostedCredentialProvider, currentMessageAudit, CLIENT_OS: 'test', devGatewayUrl: redirect, isTerminalGatewayResponse, isTerminalGatewayError,
     fetch: async url => { calls.push(url); const response = responses.shift(); if (!response) throw Error('Unexpected resend'); return response; },
     sleep: async (ms, signal) => { if (signal?.aborted) throw new DOMException('Aborted', 'AbortError'); sleeps.push(ms); }, backoffMs: () => 1,
     tr: key => key, randomUUID: () => 'isolated-request', toOpenAIMessages: () => [],
@@ -124,4 +125,11 @@ test('only structured gateway errors or stable markers override network recovery
   assert.equal(isTerminalGatewayError(new Error('daily_cap_reached')), false);
   assert.equal(isTerminalGatewayError(new Error('[[gw:upstream_error]] daily_cap_reached')), false);
   assert.equal(isTerminalGatewayResponse({ error: { type: 'gateway_error', code: 'new_product_restriction' } }), true);
+});
+
+
+test('a hosted 401 can renew once before error conversion without retrying a quota rejection',async t=>{
+ const rejected=[];setHostedCredentialResolver(async(original,old)=>{assert.equal(original,'isolated');if(old)rejected.push(old);return old?'renewed':'isolated'});t.after(()=>setHostedCredentialResolver(undefined));
+ const h=harness([reply('invalid_token',401),reply('daily_cap_reached',429)]);const p=new h.OpenAIProvider({model:'openrouter-auto-free',baseUrl:'https://gw.wuweiai.io/api/gateway/v1',maxTokens:100,apiKey:'isolated'});
+ await assert.rejects(p.complete('',[],[],{}),/\[\[gw:daily_cap_reached\]\]/);assert.deepEqual(rejected,['isolated']);assert.equal(h.calls.length,2);assert.equal(h.sleeps.length,0);
 });

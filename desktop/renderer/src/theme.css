@@ -7346,16 +7346,6 @@ textarea.goal-node-desc { font-size: 12px !important; color: var(--text-dim) !im
 @media (prefers-reduced-motion:reduce) { .announce-overlay,.announce-dialog{animation:none} }
 .team-model-picker { position:fixed; inset:0; z-index:600; display:flex; align-items:center; justify-content:center; background:#0005; }
 .team-model-picker .model-picker { position:relative; left:auto; bottom:auto; }
-.session-expired-notice {
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-soft);
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.5;
-}
 
 /* Annual-plan offer stays attached to Upgrade without changing menu row spacing. */
 .acct-upgrade-label{position:relative;display:inline-block;padding-inline-end:39px;line-height:20px;font-family:Inter,"Microsoft YaHei",sans-serif;font-weight:500}
