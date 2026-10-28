@@ -1,3 +1,4 @@
+import mobileHistory from "./mobile-remote/wuwei-remote-history.cjs";
 import mobileRead from "./mobile-remote/wuwei-remote-read.cjs";
 import mobileTeamDirectory from "./mobile-remote/wuwei-remote-team-directory.cjs";
 import mobileWorkspace from "./mobile-remote/wuwei-remote-workspace.cjs";
@@ -3359,6 +3360,16 @@ if (!gotLock) {
       const remoteDeps = { live: (id: string) => agents.get(id)?.getDisplayMessages(), load: loadMessages, running: (id: string) => runs.has(id), stat: (id: string) => statSync(join(join(homedir(), DATA_DIR_NAME, "sessions"), id + ".json")) };
       if (method === "sessions.list")
           return mobilePagedWorkspace.sessions(listSessions(), { running: (id: string) => runs.has(id) }, params || {});
+      if (method === "sessions.preview") {
+          const sid = String(params?.sessionId || "");
+          if (!listSessions().some(s => s.id === sid)) throw Error("对话不存在，请返回列表刷新");
+          return mobileHistory.previewImage(remoteRead.history(sid, remoteDeps), (url: string) => nativeImage.createFromDataURL(url));
+      }
+      if (method === "sessions.image") {
+          const sid = String(params?.sessionId || "");
+          if (!listSessions().some(s => s.id === sid)) throw Error("对话不存在，请返回列表刷新");
+          return mobileHistory.fullImage(remoteRead.history(sid, remoteDeps), params || {}, (url: string) => nativeImage.createFromDataURL(url));
+      }
       if (method === "sessions.messages") {
           const sid = String(params?.sessionId || ""), meta = listSessions().find(s => s.id === sid);
           if (!meta)

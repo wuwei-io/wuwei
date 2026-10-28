@@ -26,9 +26,13 @@ function paginate(rows, params = {}, project = row => row) {
     const selected = available.slice(0, limit), tail = selected.at(-1);
     return { items: selected.map(project), total: sorted.length, revision, incremental: !!params.sinceRevision, removedIds, nextCursor: tail && available.length > selected.length ? JSON.stringify([tail.updatedAt || 0, tail.id]) : undefined };
 }
+function conversationType(meta) {
+    if (['text','image','video'].includes(meta.conversationType)) return meta.conversationType;
+    return meta.videoSku || meta.videoMode ? 'video' : meta.imageSku || meta.imageMode ? 'image' : 'text';
+}
 function sessions(metas, deps, params = {}) {
     // Lists never stat, parse, decode images, or load conversation bodies.
-    const rows = metas.filter(s => !s.employeeId).map(s => ({ id: s.id, title: s.title || '新对话', updatedAt: s.updatedAt || 0, run: deps.running(s.id) ? 'running' : 'idle', model: s.model, providerId: s.providerId, lastMessage: String(s.lastMessage || s.preview || '').slice(0, 180) }));
+    const rows = metas.filter(s => !s.employeeId).map(s => ({ id: s.id, conversationType: conversationType(s), imageSku: s.imageSku, done: s.done === true, title: s.title || '新对话', updatedAt: s.updatedAt || 0, run: deps.running(s.id) ? 'running' : 'idle', model: s.model, providerId: s.providerId, lastMessage: String(s.lastMessage || s.preview || '').slice(0, 180) }));
     // Keep legacy callers compatible; the paged phone explicitly supplies a limit.
     if (params.limit === undefined && !params.cursor && !params.query)
         return { sessions: rows.sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)), revision: digest(rows), total: rows.length };

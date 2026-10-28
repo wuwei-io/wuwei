@@ -83,4 +83,32 @@ function historyPage(all, bounds, params, sessionId, running, decode) {
     return { messages, running: !!running, revision, incremental: !!params.sinceRevision && !reset, unchanged: !!prior && prior.hashes.size === hashes.size && prior.total === all.length && messages.length === 0 && removedIds.length === 0,
         removedIds, total: all.length, hasMore: start > 0, nextOffset: all.length - start };
 }
-module.exports = { historyPage, project, thumbnail, digest };
+function fullImage(all, params, decode) {
+  const row = project(all, false).find(item => item.id === params?.messageId && item.sourceKey === params?.sourceKey);
+  const index = row?.imageKeys?.indexOf(params?.imageKey) ?? -1;
+  if (index < 0) throw Error('图片记录已变化，请刷新原对话');
+  const original = row.images[index];
+  if (typeof original !== 'string' || !original.startsWith('data:image/')) throw Error('图片不可用');
+  const image = decode(original);
+  if (image.isEmpty()) throw Error('图片不可用');
+  const size = image.getSize(), longest = Math.max(size.width, size.height), limit = 1_100_000;
+  if (!Number.isFinite(longest) || longest <= 0) throw Error('图片尺寸不可用');
+  if (longest <= 2560 && original.length <= 1_500_000) return { dataUrl: original, ...size, original: true };
+  for (const cap of [2560, 2048, 1600]) {
+    const edge = Math.min(cap, longest), resized = edge === longest ? image : image.resize(size.width >= size.height ? { width: edge } : { height: edge });
+    for (const quality of [92, 82, 70]) {
+      const bytes = resized.toJPEG(quality);
+      if (bytes.length && bytes.length <= limit) return { dataUrl: `data:image/jpeg;base64,${bytes.toString('base64')}`, ...resized.getSize(), original: false };
+    }
+  }
+  throw Error('高清图片暂时无法读取');
+}
+
+function previewImage(all, decode) {
+  const row = project(all, false).reverse().find(item => item.role === 'assistant' && item.images?.length);
+  if (!row) return { images: [], count: 0 };
+  const index = row.images.length - 1, image = thumbnail(row.images[index], decode);
+  return { images: image ? [image] : [], count: row.images.length, messageId: row.id, sourceKey: row.sourceKey, imageKey: row.imageKeys[index] };
+}
+
+module.exports = { previewImage, historyPage, project, thumbnail, digest, fullImage };
