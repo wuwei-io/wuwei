@@ -57,6 +57,7 @@ export interface DecisionOption {
   tone?: "safe" | "danger" | "neutral";
 }
 export interface Decision {
+  kind?: 'tool-permission'; // 由执行端标记工具授权，与实际业务选择区分。
   permId: string; // 全局唯一且每次都变
   risk: "high" | "low";
   title: string;

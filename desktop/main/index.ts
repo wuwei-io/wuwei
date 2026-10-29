@@ -1,4 +1,5 @@
 import mobileHistory from "./mobile-remote/wuwei-remote-history.cjs";
+import mobileToolPolicy from "./mobile-remote/wuwei-remote-tool-policy.cjs";
 import mobileRead from "./mobile-remote/wuwei-remote-read.cjs";
 import mobileTeamDirectory from "./mobile-remote/wuwei-remote-team-directory.cjs";
 import mobileWorkspace from "./mobile-remote/wuwei-remote-workspace.cjs";
@@ -361,7 +362,7 @@ const runEmployeeTurnOriginal = async ({ employee, sys, history, input, signal, 
   if (excludeTools?.length) tools = tools.filter((t) => !excludeTools.includes(t.name));
   const map = new Map(tools.map((t) => [t.name, t]));
   // employeeId 塞进 ToolContext：dm_teammate 据此确定「发起方」是哪名员工。
-  const remoteSys = remoteExecution ? sys + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。' : sys;
+  const remoteSys = remoteExecution ? sys + mobileToolPolicy.executionGuidance(loadSettings()?.app?.remoteToolAutoAllow !== false) : sys;
   const a = new Agent(p, remoteSys, tools, { cwd, sessionId: `__room_${employee.id}`, memoryFile: employeeMemoryPath(employee.id), employeeId: employee.id, dmDepth, reportOrigin, taskReportScope,
     remoteExecution: remoteExecution ? { ...remoteExecution, signal: executionSignal } : undefined,
     requestDecision: decisionHook }, map, { ...agentOpts, requestHistory: teamRequestHistory(origin?.kind === 'room' ? `room:${origin.id}` : `employee:${employee.id}`) });
@@ -3290,7 +3291,7 @@ if (!gotLock) {
           }
           const agent = getAgent(id);
           if (!agent) throw new Error(tr("ui.index.message.2ee7195362"));
-          agent.setProvider(selected); agent.setSystem(sysForSession(id) + '\n\n当前用户通过手机远程操控。需要用户选择时使用 ask_decision，提供白话问题与 2~3 个选项；重要或不可逆操作设为 high 并等待回复。');
+          agent.setProvider(selected); agent.setSystem(sysForSession(id) + mobileToolPolicy.executionGuidance(loadSettings()?.app?.remoteToolAutoAllow !== false));
           await ensureHostedProviderReady(id);
           return agent;
         },

@@ -202,6 +202,7 @@ export interface AppSettings {
   // --- 手机端远程设备执行(relay) --- 默认关,用户主动开。WS常驻连接是稀缺资源,不全员常连。
   remoteEnabled?: boolean; // 允许手机端远程调用本机:开了才建relay常驻连接
   remoteShareSubscription?: boolean; // 同步本机订阅版模型(Claude Code/Codex订阅)给手机:不开则上报清单剔除本地订阅
+  remoteToolAutoAllow?: boolean; // 手机发起的命令与工具调用默认自动放行；显式 false 才逐次询问。
   remoteDeviceName?: string; // 设备名(手机端显示);缺省用os.hostname
 }
 

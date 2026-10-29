@@ -79,6 +79,6 @@ test('remote IDs are stable across launches and distinct for formal, test and de
 });
 test('production bundle contains the mobile protocol adapters without external helper paths', {skip: !fs.existsSync(path.join(root,'out/main/index.cjs'))}, ()=>{
  const bundle=fs.readFileSync(path.join(root,'out/main/index.cjs'),'utf8');
- for(const method of ['workspace.page','team.employee.records','team.dm.messages','team.room.capabilities','sessions.preview','sessions.image','conversationType','imageSku'])assert.ok(bundle.includes(method),method);
+ for(const method of ['workspace.page','team.employee.records','team.dm.messages','team.room.capabilities','sessions.preview','sessions.image','conversationType','imageSku','remoteToolAutoAllow','allow_all'])assert.ok(bundle.includes(method),method);
  assert.equal(bundle.includes('require("../../wuwei-remote-'),false);
 });
