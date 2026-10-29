@@ -1,3 +1,4 @@
+import {AccountFooter, useAccountFooterLayout} from './components/AccountFooter.js';
 import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
@@ -3563,6 +3564,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
 
 export function App() {
   usePromotionConfig();
+  const accountFooterLayout = useAccountFooterLayout();
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
   const backgroundTasks = useBackgroundTasks();
@@ -8184,7 +8186,23 @@ export function App() {
                   <span style={{ color: "#C05F3C" }}>✨</span> {tr("ui.app.subscription.8e99882")}
                 </button>
               )}
-              <button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
+              <AccountFooter layout={accountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
+                avatar={<UserAvatar url={wuwei?.user.avatar} fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial")).slice(0,1).toUpperCase()}/>}
+                onPay={() => {
+                  setShowAcctMenu(false);
+                  if (!wuwei) { setShowLoginForm(true); return; }
+                  void window.wuwei.track?.("menu_item_click", {item: "upgrade"});
+                  setCoinShortage({message: "browse", balance: wuwei.coin.balance, browse: true});
+                  shortageShownAt.current = Date.now();
+                  const owner = wuwei.user.id;
+                  void window.wuwei.wuweiMe().then(me => {
+                    if (!me || me.user.id !== owner || wuweiRef.current?.user.id !== owner) return;
+                    setWuwei(me);
+                    setCoinShortage(current => current ? {...current, balance: me.coin.balance} : current);
+                  }).catch(() => {});
+                }}
+                onDetails={() => { setShowAcctMenu(false); if (!wuwei) { setShowLoginForm(true); return; } setBillingPage('ledger'); setBillingOpen(true); }}
+                classicTrigger={<button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
                 <div className={"acct-av" + (wuwei ? "" : " off")}>
                   {/* 未登录的头像首字也要跟语言：中文「游」/英文 G，别让英文界面里冒出个汉字 */}
                   <UserAvatar
@@ -8204,10 +8222,10 @@ export function App() {
                 {msgUnread > 0 && !showAcctMenu && (
                   <span className="acct-unread">{msgUnread > 99 ? "99+" : msgUnread}</span>
                 )}
-              </button>
+              </button>}>
               {showAcctMenu && (
                 <>
-                  <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />
+                  {accountFooterLayout === 'classic' && <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />}
                   <div className="acct-menu">
                     {/* 无为账号（与模型商账号合并进同一入口）。未登录只给登录入口，设置等登录后才显示 */}
                     {wuwei ? (
@@ -8613,6 +8631,7 @@ export function App() {
                   </div>
                 </>
               )}
+              </AccountFooter>
             </div>
             </>
           );

@@ -25,7 +25,7 @@ import type { BillingRequest, BillingResponse } from '../../src/billing/contract
 
 /** A fixed endpoint allowlist keeps tokens and arbitrary URLs out of the renderer. */
 export async function wuweiBillingRequest(accessToken:string, request:BillingRequest):Promise<BillingResponse|'unauthorized'> {
-  if(!request || !['catalog','quote','ledger','create-order','order'].includes(request.action)) return {error:'invalid_billing_action'};
+  if(!request || !['wallet','catalog','quote','ledger','create-order','order'].includes(request.action)) return {error:'invalid_billing_action'};
   if(request.action==='order' && !/^[a-zA-Z0-9_-]{8,100}$/.test(request.orderId??''))return {error:'invalid_order_id'};
   const endpoint=request.action==='create-order'?'orders':request.action==='order'?`orders/${request.orderId}`:request.action;
   const url=new URL(`/api/billing/${endpoint}`,SITE);
