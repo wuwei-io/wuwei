@@ -27,6 +27,8 @@
 
 ## 本地预览
 
+真实 dev 可设置 `RENDERER_VITE_ACCOUNT_FOOTER=wallet`（或 `classic`）后运行 `npm run desktop:dev:test`；只在 DEV 生效，远端配置与正式构建不受影响。去掉环境变量并重启 dev 即恢复后台控制。沿用测试版账号及会话，不使用隔离示例数据。
+
 运行本工作区 `tests/client-flows/account-wallet.cjs`，设置 `WUWEI_WALLET_PREVIEW=1`、`WUWEI_QA_OUTPUT`、`WUWEI_QA_PROFILE`。
 根工作区 outputs/account-wallet-implementation-20261030/打开客户端预览.cmd 已写好路径。
 使用实际编译的 App 渲染器和隔离 IPC 示例账户，外网请求默认拦截；菜单“打开后台配置预览”可以用实际 ConfigPanel 保存并切换本地客户端。
