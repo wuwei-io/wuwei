@@ -253,12 +253,12 @@ app.whenReady().then(async()=>{
   assert.equal(await f.js('!!document.querySelector(".acct-btn")'),false);
   fs.writeFileSync(path.join(evidence,'client-wallet-'+theme+'.png'),await captureBillingFrame(f));
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
-  assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*600[\s\S]*38.5/);
+  assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*38.5/);
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),2);
   assert.match(await f.js('document.querySelector(".account-wallet-batches").textContent'),/签到赠币[\s\S]*活动赠币/);
   assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/剩余.*\d{2}:\d{2}:\d{2}/);
   assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/签到领.*10.*币/);
-  assert(await f.js('!!(document.querySelector(".account-wallet-permanent").compareDocumentPosition(document.querySelector(".account-wallet-expiring")) & Node.DOCUMENT_POSITION_FOLLOWING)'));
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-permanent")'),false);
 
   const rect=await f.js('document.querySelector(".account-wallet-popover").getBoundingClientRect().toJSON()');
   f.state.win.webContents.sendInputEvent({type:'mouseMove',x:Math.floor(rect.x+40),y:Math.floor(rect.y+30)});await delay(350);
@@ -311,7 +311,7 @@ app.whenReady().then(async()=>{
   assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/后失效/);
   assert.equal(await f.js('!!document.querySelector(".account-wallet-checkin")'),false);
   assert.equal(await f.js('!!document.querySelector(".checkin-pop-overlay")'),false);
-  assert.match(await f.js('document.querySelector(".account-wallet-permanent").textContent'),/52/);
+  assert.match(await f.js('document.querySelector(".account-wallet-total").textContent'),/62/);
   assert.match(await f.js('document.querySelector(".account-wallet-expiring").textContent'),/签到赠币[\s\S]*10/);
   const grant=f.state.walletData.batches[0];assert(Math.abs(Date.parse(grant.expiresAt)-Date.parse(f.state.walletData.asOf)-86400000)<5);
   fs.writeFileSync(path.join(evidence,'quick-checkin-after.png'),await captureBillingFrame(f));assert.equal(f.state.orders,0);

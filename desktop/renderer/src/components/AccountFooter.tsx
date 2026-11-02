@@ -124,10 +124,6 @@ export function AccountFooter(p: Props) {
           {error && <div className="account-wallet-status" role="status">{tr(data ? 'account.wallet.stale' : 'account.wallet.unavailable')}</div>}
           {!data && !error && <div className="account-wallet-status" role="status">{tr('account.wallet.loading')}</div>}
           {data && <>
-            <section className="account-wallet-permanent">
-              <div className="account-wallet-section"><span>{tr('account.wallet.permanent')}</span><strong>{formatCredits(data.permanent)} {tr('account.wallet.unit')}</strong></div>
-              <p className="account-wallet-muted">{tr('account.wallet.noLimit')}</p>
-            </section>
             <section className="account-wallet-expiring">
               <div className="account-wallet-section"><span>{tr('account.wallet.expiringBalance')}</span><strong>{formatCredits(data.expiring)} {tr('account.wallet.unit')}</strong></div>
               <div className="account-wallet-batches">{data.batches.length ? data.batches.map((batch, index) => <div key={batch.expiresAt + batch.source + index} className="account-wallet-batch">
