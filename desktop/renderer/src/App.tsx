@@ -5868,6 +5868,12 @@ export function App() {
           break;
         case "evt:error": {
           const rawMsg = String(payload.message ?? payload);
+          if (gatewayCode(rawMsg) === 'membership_required') {
+            const sid = payload.sid || currentIdRef.current;
+            if (sid && modeOf(sid) === 'cont') { try { setMode(sid, 'auto'); } catch { /* keep the paused in-memory mode */ } }
+            if (!payload.sid || payload.sid === currentIdRef.current) openBackgroundPlans();
+            break;
+          }
           if (payload.sid && payload.sid !== currentIdRef.current) {
             // A background conversation must pause its own quota retry loop too.
             const backgroundLimit = usageLimitKind(rawMsg, false);

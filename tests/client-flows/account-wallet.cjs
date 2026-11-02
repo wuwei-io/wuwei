@@ -237,6 +237,13 @@ app.whenReady().then(async()=>{
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'底栏版本预览',submenu:[{label:'打开后台配置预览',click:()=>{const admin=new BrowserWindow({width:1150,height:850,show:true,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});admin.loadURL(url.origin+'/admin-preview.html');}},{type:'separator'},{label:'新版 · 无为币与头像',click:async()=>{f.state.footerLayout='wallet';await f.js("window.dispatchEvent(new Event('focus'))");}},{label:'原版 · 头像与昵称',click:async()=>{f.state.footerLayout='classic';await f.js("window.dispatchEvent(new Event('focus'))");}},{type:'separator'},{label:'亮色',click:()=>f.js("document.documentElement.dataset.theme='light'")},{label:'暗色',click:()=>f.js("document.documentElement.dataset.theme='dark'")}]}]));
   f.state.win.show();f.state.win.on('closed',()=>app.exit(0));return;
  }
+ await run('会员模型：服务端拒绝时打开升级并保留输入',{account:walletAccount()},async f=>{
+  await f.fill('.composer textarea','保留会员校验期间的草稿');
+  emit(f.state,'evt:error',{message:'[[gw:membership_required]] Members only'});
+  await f.wait('!!document.querySelector(".billing-top")');
+  assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留会员校验期间的草稿');
+  assert.equal(f.state.orders,0);
+ });
  await run('底栏：原版默认、配置热切换与回退保留草稿',{account:walletAccount()},async f=>{
   await f.wait('!!document.querySelector(".acct-btn")');await f.fill('.composer textarea','保留尚未发送的草稿');
   await f.click('.acct-btn');await f.wait('!!document.querySelector(".acct-menu")');assert(await f.js('!!document.querySelector(".acct-wallet-row")'));
