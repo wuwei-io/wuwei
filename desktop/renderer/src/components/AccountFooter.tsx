@@ -16,7 +16,7 @@ type Props = {
 };
 function Icon({kind}: {kind: 'coin' | 'plus' | 'spark' | 'arrow' | 'refresh'}) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{
-    kind === 'coin' ? <><circle cx="10" cy="10" r="6.5"/><path d="M10 7v6m-2-5h3a1 1 0 0 1 0 2H9a1 1 0 0 0 0 2h3m3-6a6.5 6.5 0 1 1-9 9"/></> :
+    kind === 'coin' ? <g transform="translate(0 1.25)"><circle cx="10" cy="10" r="6.5"/><path d="M10 7v6m-2-5h3a1 1 0 0 1 0 2H9a1 1 0 0 0 0 2h3m3-6a6.5 6.5 0 1 1-9 9"/></g> :
     kind === 'plus' ? <path d="M12 5v14M5 12h14"/> : kind === 'spark' ? <path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/> :
     kind === 'arrow' ? <path d="M4 12h16m-6-6 6 6-6 6"/> : <><path d="M20 5v6h-6M4 19v-6h6"/><path d="M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3A8 8 0 0 0 19 16"/></>
   }</svg>;
