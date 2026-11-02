@@ -102,7 +102,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
       if(req.action==='quote'){
         if(s.quoteDelay)await delay(s.quoteDelay);
         if(s.quoteError)return {error:typeof s.quoteError==='string'?s.quoteError:'network'};
-        const p=products.find(p=>p.sku===req.sku);return {catalogVersion:'qa-v2',...p,currency:req.currency,amountMinor:req.currency==='USD'?p.usdMinor:p.cnyMinor,creditsPerGrant:p.kind==='pack'&&s.billingMember?p.memberCredits:p.credits,grantCount:p.period==='annual'?12:1,expiryMonths:p.period==='trial'?0:p.kind==='pack'?6:1,...(p.period==='trial'?{durationDays:1,expiryDays:1}:{}),memberBonus:p.kind==='pack'&&!!s.billingMember,autoRenew:false};
+        const p=products.find(p=>p.sku===req.sku);return {catalogVersion:'qa-v2',...p,currency:req.currency,amountMinor:req.currency==='USD'?p.usdMinor:p.cnyMinor,creditsPerGrant:p.kind==='pack'&&s.billingMember?p.memberCredits:p.credits,grantCount:p.period==='annual'?12:1,expiryMonths:p.period==='trial'?0:p.kind==='pack'?6:1,...(p.period==='trial'?{durationDays:1,expiryDays:1}:{}),memberBonus:p.kind==='pack'&&!!s.billingMember&&p.memberCredits>p.credits,autoRenew:false};
       }
       if(req.action==='create-order'){
         if(s.createError)return {error:typeof s.createError==='string'?s.createError:'network'};
@@ -254,6 +254,20 @@ app.whenReady().then(async()=>{
    }
   } finally {admin.destroy();}
   assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留尚未发送的草稿');assert.equal(f.state.orders,0);
+ });
+ for(const lang of ['en','zh'])for(const member of [false,true])await run('币包梯度：'+lang+' member='+member,{lang,footerLayout:'wallet',account:{...account(100),flags:['billing_v2']},billingMember:member},async f=>{
+  await f.wait('!!document.querySelector(".account-coin-add")');await f.click('.account-coin-add');await f.wait('!!document.querySelector(".billing-panel")');
+  await f.click('[data-period=pack]');await f.wait('document.querySelectorAll(".billing-selector-option").length===4');
+  const rows=await f.js('[...document.querySelectorAll(".billing-selector-option")].map(n=>({sku:n.dataset.sku,text:n.innerText,selected:n.getAttribute("aria-pressed")}))');
+  assert.deepEqual(rows.map(r=>r.sku),['v4_pack_800','v4_pack_2000','v4_pack_3300','v4_pack_4800']);
+  for(const [i,coins,usd,cny]of [[0,'800',5,34],[1,'2,000',10,67],[2,'3,300',15,101],[3,'4,800',20,134]]){assert(rows[i].text.includes(coins));assert(rows[i].text.includes(String(lang==='en'?usd:cny)));}
+  assert.equal(rows.find(r=>r.selected==='true').sku,'v4_pack_2000');
+  fs.writeFileSync(path.join(evidence,'tiered-packs-'+lang+'-'+member+'.png'),await captureBillingFrame(f));
+  await f.click('[data-sku="v4_pack_3300"]');await f.click('.billing-plan-buy');
+  for(let i=0;i<40&&!f.state.billingCalls.some(r=>r.action==='quote'&&r.sku==='v4_pack_3300');i++)await delay(40);
+  assert(f.state.billingCalls.some(r=>r.action==='quote'&&r.sku==='v4_pack_3300'&&r.currency===(lang==='en'?'USD':'CNY')));
+  await f.wait('!document.querySelector(".billing-selector-options")');assert.equal(f.state.sent.length,0);
+  for(const r of f.state.billingCalls.filter(r=>r.action==='create-order')){assert.equal(r.expected.creditsPerGrant,3300);assert.equal(r.expected.amountMinor,lang==='en'?1500:10100);}
  });
  for(const kind of ['images','videos'])for(const status of ['nonmember','mini','eligible','guest'])await run('媒体会员：'+kind+' '+status,{
   account:status==='guest'?null:{...account(100000),flags:['billing_v2'],...(status==='mini'||status==='eligible'?{membership:{tier:'pro_month',plan:status==='mini'?'Mini':'Pro',expireAt:new Date(Date.now()+86400000).toISOString()}}:{})},
