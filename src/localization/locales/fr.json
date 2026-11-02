@@ -2800,6 +2800,7 @@
     "team.default.description": "Une équipe d'IA prête à l'emploi : Ben coordonne l'entreprise en tant que PDG, avec Wendy pour la rédaction, Cody pour les logiciels, Dana pour les données, Mia pour le design et Ivy pour le design mobile. Discutez avec chaque coéquipier individuellement ; le PDG examine les décisions avant de les faire remonter. Chaque coéquipier comprend un avatar, des responsabilités claires et une invite système dédiée.",
     "model.category.free": "Modèles gratuits",
     "model.category.economy": "Modèles de valeur populaires",
+    "model.membership.required": "Members only",
     "model.category.premium": "Modèles haut de gamme",
     "model.category.images": "Modèles d'images",
     "model.category.connections": "Mes connexions",

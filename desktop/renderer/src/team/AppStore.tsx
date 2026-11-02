@@ -11,6 +11,7 @@ import type { Employee, TeamAppCard } from "../../../../src/team/types.js";
 import { EmployeeAvatar } from "./EmployeeAvatar.js";
 import { ModelPicker } from '../components/ModelPicker.js';
 import type { ModelChoice } from '../../../../src/model-selection.js';
+import type {WuweiMe} from '../../../main/wuwei-auth.js';
 
 type TeamState = { apps: TeamAppCard[]; employees: Employee[] };
 
@@ -145,11 +146,13 @@ type ProviderOpt = { id: string; label: string; models: string[]; choices?: Mode
 // 员工编辑弹窗：独立组件，AppStore(管理页) 与 App(右键「编辑」在当前界面直接弹，不跳转到一人公司) 共用。
 // 自带草稿状态；保存/删除后回调 onSaved(带最新列表)再 onClose。
 export function EmployeeEditModal({
-  en, providers, employee, onClose, onSaved, loggedIn = false, onRequireLogin, onConnections,
+  en, providers, employee, onClose, onSaved, loggedIn = false, onRequireLogin, onConnections, membership, onRequireMembership,
 }: {
   en: boolean;
   providers?: ProviderOpt[];
   loggedIn?: boolean;
+  membership?: WuweiMe['membership'];
+  onRequireMembership?: () => void;
   onRequireLogin?: () => void;
   onConnections?: () => void;
   employee: Employee;
@@ -286,6 +289,7 @@ export function EmployeeEditModal({
       </div>
       {showModelPicker && <div className="team-model-picker" onClick={() => setShowModelPicker(false)}><div onClick={event => event.stopPropagation()}>
         <ModelPicker choices={choices} selectedKey={selectedKey} loggedIn={loggedIn} lang={(getCurrentLanguage())} loading={false}
+          membership={membership} onRequireMembership={() => { setShowModelPicker(false); onClose(); (onRequireMembership ?? onRequireLogin)?.(); }}
           onChoose={async choice => { setEdit({ ...edit, model: { providerId: choice.providerId, model: choice.modelId } }); }}
           onClose={() => setShowModelPicker(false)}
           onRequireLogin={() => { setShowModelPicker(false); onClose(); onRequireLogin?.(); }}
@@ -298,7 +302,7 @@ export function EmployeeEditModal({
   );
 }
 
-export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onRequireLogin, onConnections }: { en: boolean; onEmployees?: (list: Employee[]) => void; onOpenChat?: () => void; providers?: ProviderOpt[]; loggedIn?: boolean; onRequireLogin?: () => void; onConnections?: () => void }) {
+export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onRequireLogin, onConnections, membership, onRequireMembership }: { en: boolean; onEmployees?: (list: Employee[]) => void; onOpenChat?: () => void; providers?: ProviderOpt[]; loggedIn?: boolean; onRequireLogin?: () => void; onConnections?: () => void; membership?: WuweiMe['membership']; onRequireMembership?: () => void }) {
   const [state, setState] = useState<TeamState>({ apps: [], employees: [] });
   const [busy, setBusy] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -599,6 +603,7 @@ export function AppStore({ en, onEmployees, onOpenChat, providers, loggedIn, onR
           en={en}
           providers={providers}
           loggedIn={loggedIn}
+          membership={membership} onRequireMembership={onRequireMembership}
           onRequireLogin={onRequireLogin}
           onConnections={onConnections}
           employee={edit}

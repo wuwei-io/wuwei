@@ -2800,6 +2800,7 @@
     "team.default.description": "Ein einsatzbereites KI-Team: Ben koordiniert das Unternehmen als CEO, mit Wendy für das Texten, Cody für die Software, Dana für die Daten, Mia für das Design und Ivy für das mobile Design. Chatten Sie mit jedem Teamkollegen einzeln; Der CEO überprüft Entscheidungen vor der Eskalation. Jeder Teamkollege verfügt über einen Avatar, klare Verantwortlichkeiten und eine eigene Systemaufforderung.",
     "model.category.free": "Kostenlose Modelle",
     "model.category.economy": "Beliebte Value-Modelle",
+    "model.membership.required": "Members only",
     "model.category.premium": "Premium-Modelle",
     "model.category.images": "Bildmodelle",
     "model.category.connections": "Meine Verbindungen",

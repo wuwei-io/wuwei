@@ -2800,6 +2800,7 @@
     "team.default.description": "Pasukan AI sedia untuk digunakan: Ben menyelaraskan syarikat sebagai Ketua Pegawai Eksekutif, dengan Wendy untuk penulisan salinan, Cody untuk perisian, Dana untuk data, Mia untuk reka bentuk dan Ivy untuk reka bentuk mudah alih. Berbual dengan setiap rakan sepasukan secara individu; Ketua Pegawai Eksekutif menyemak keputusan sebelum peningkatan. Setiap rakan sepasukan termasuk avatar, tanggungjawab yang jelas dan gesaan sistem yang berdedikasi.",
     "model.category.free": "Model percuma",
     "model.category.economy": "Model nilai popular",
+    "model.membership.required": "Members only",
     "model.category.premium": "Model premium",
     "model.category.images": "Model imej",
     "model.category.connections": "sambungan saya",

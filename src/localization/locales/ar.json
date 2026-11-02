@@ -2800,6 +2800,7 @@
     "team.default.description": "فريق ذكاء اصطناعي جاهز للاستخدام: يقوم Ben بتنسيق الشركة بصفته الرئيس التنفيذي، مع Wendy لكتابة النصوص، وCody للبرمجيات، وDana للبيانات، وMia للتصميم، وIvy لتصميم الأجهزة المحمولة. الدردشة مع كل زميل في الفريق على حدة؛ يقوم الرئيس التنفيذي بمراجعة القرارات قبل التصعيد. يشتمل كل زميل في الفريق على صورة رمزية ومسؤوليات واضحة وموجه نظام مخصص.",
     "model.category.free": "نماذج مجانية",
     "model.category.economy": "نماذج القيمة الشعبية",
+    "model.membership.required": "Members only",
     "model.category.premium": "نماذج متميزة",
     "model.category.images": "نماذج الصور",
     "model.category.connections": "اتصالاتي",

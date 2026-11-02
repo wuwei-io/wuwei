@@ -2800,6 +2800,7 @@
     "team.default.description": "Un team AI pronto all'uso: Ben coordina l'azienda come CEO, con Wendy per il copywriting, Cody per il software, Dana per i dati, Mia per il design e Ivy per il mobile design. Chatta individualmente con ciascun compagno di squadra; il CEO esamina le decisioni prima dell'escalation. Ogni compagno di squadra include un avatar, responsabilità chiare e un prompt di sistema dedicato.",
     "model.category.free": "Modelli gratuiti",
     "model.category.economy": "Modelli di valore popolari",
+    "model.membership.required": "Members only",
     "model.category.premium": "Modelli premium",
     "model.category.images": "Modelli di immagine",
     "model.category.connections": "Le mie connessioni",

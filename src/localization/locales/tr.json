@@ -2800,6 +2800,7 @@
     "team.default.description": "Kullanıma hazır bir yapay zeka ekibi: Ben, CEO olarak şirketi koordine ediyor; metin yazarlığı için Wendy, yazılım için Cody, veriler için Dana, tasarım için Mia ve mobil tasarım için Ivy ile birlikte. Her takım arkadaşıyla ayrı ayrı sohbet edin; CEO, üst kademeye tırmanmadan önce kararları gözden geçirir. Her takım arkadaşının bir avatarı, net sorumlulukları ve özel bir sistem istemi bulunur.",
     "model.category.free": "Ücretsiz modeller",
     "model.category.economy": "Popüler değer modelleri",
+    "model.membership.required": "Members only",
     "model.category.premium": "Premium modeller",
     "model.category.images": "Resim modelleri",
     "model.category.connections": "Bağlantılarım",

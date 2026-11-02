@@ -2800,6 +2800,7 @@
     "team.default.description": "Gotowy do użycia zespół AI: Ben koordynuje firmę jako dyrektor generalny, z Wendy za copywriting, Cody za oprogramowanie, Dana za dane, Mia za projektowanie i Ivy za projektowanie mobilne. Rozmawiaj indywidualnie z każdym członkiem drużyny; dyrektor generalny przegląda decyzje przed eskalacją. Każdy członek drużyny ma awatara, jasne obowiązki i dedykowany monit systemowy.",
     "model.category.free": "Darmowe modele",
     "model.category.economy": "Popularne modele wartości",
+    "model.membership.required": "Members only",
     "model.category.premium": "Modele premium",
     "model.category.images": "Modele obrazu",
     "model.category.connections": "Moje połączenia",

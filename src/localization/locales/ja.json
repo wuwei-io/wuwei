@@ -2800,6 +2800,7 @@
     "team.default.description": "すぐに使える AI チーム: Ben が CEO として会社を調整し、Wendy がコピーライティング、Cody がソフトウェア、Dana がデータ、Mia がデザイン、Ivy がモバイルデザインを担当します。各チームメイトと個別にチャットします。 CEO はエスカレーションの前に決定をレビューします。各チームメイトにはアバター、明確な責任、専用のシステム プロンプトが含​​まれています。",
     "model.category.free": "無料モデル",
     "model.category.economy": "人気のバリューモデル",
+    "model.membership.required": "Members only",
     "model.category.premium": "プレミアムモデル",
     "model.category.images": "画像モデル",
     "model.category.connections": "私のつながり",

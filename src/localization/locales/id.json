@@ -2800,6 +2800,7 @@
     "team.default.description": "Tim AI yang siap digunakan: Ben mengoordinasikan perusahaan sebagai CEO, dengan Wendy untuk copywriting, Cody untuk perangkat lunak, Dana untuk data, Mia untuk desain, dan Ivy untuk desain seluler. Mengobrol dengan masing-masing rekan satu tim secara individu; CEO meninjau keputusan sebelum eskalasi. Setiap rekan satu tim menyertakan avatar, tanggung jawab yang jelas, dan perintah sistem khusus.",
     "model.category.free": "Model gratis",
     "model.category.economy": "Model nilai populer",
+    "model.membership.required": "Members only",
     "model.category.premium": "Model premium",
     "model.category.images": "Model gambar",
     "model.category.connections": "Koneksi saya",

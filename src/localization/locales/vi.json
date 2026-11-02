@@ -2800,6 +2800,7 @@
     "team.default.description": "Một nhóm AI sẵn sàng sử dụng: Ben điều phối công ty với tư cách là Giám đốc điều hành, với Wendy phụ trách viết quảng cáo, Cody phụ trách phần mềm, Dana phụ trách dữ liệu, Mia phụ trách thiết kế và Ivy phụ trách thiết kế di động. Trò chuyện riêng với từng đồng đội; Giám đốc điều hành xem xét các quyết định trước khi leo thang. Mỗi đồng đội bao gồm một hình đại diện, trách nhiệm rõ ràng và lời nhắc hệ thống chuyên dụng.",
     "model.category.free": "Mô hình miễn phí",
     "model.category.economy": "Các mô hình giá trị phổ biến",
+    "model.membership.required": "Members only",
     "model.category.premium": "Mẫu cao cấp",
     "model.category.images": "Mô hình hình ảnh",
     "model.category.connections": "Kết nối của tôi",

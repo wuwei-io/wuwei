@@ -38,3 +38,6 @@
 @media(max-width:900px){.model-picker-model{gap:8px;padding-left:8px;padding-right:8px}.model-picker-brand,.model-picker-brand>.billing-brand{width:27px;height:27px;flex-basis:27px}.model-picker-brand img{width:24px;height:24px}.model-picker-model-heading{gap:5px}.model-picker-model-heading .model-picker-capability,.model-picker-model-heading .model-picker-recommend{font-size:8px;padding-left:3px;padding-right:3px}}
 
 @media(max-height:850px){.model-picker{height:min(520px,calc(100vh - 160px))}.model-picker-model{padding-top:9px;padding-bottom:9px}}
+
+.model-picker-member-crown{display:inline-flex;align-items:center;flex:none;color:#b08a43}.model-picker-member-crown svg{width:12px;height:12px}.model-picker-model[data-membership-locked=true] .model-picker-brand{opacity:.65}
+.model-picker-model[data-membership-locked=true]{opacity:1;color:var(--text-dim)}

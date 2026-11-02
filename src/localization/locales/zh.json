@@ -2800,6 +2800,7 @@
     "team.default.description": "一套开箱即用的 AI 团队：CEO 小笨统管全局，文案小文 / 代码小码 / 数据小数 / 设计小美 / 移动端小移各司其职。装上即可分别私聊，员工请示先由 CEO 把关。每人自带头像、职责边界与系统提示词。",
     "model.category.free": "免费模型",
     "model.category.economy": "热门高性价比",
+    "model.membership.required": "会员专享",
     "model.category.premium": "顶级模型",
     "model.category.images": "生图模型",
     "model.category.connections": "我的接入",

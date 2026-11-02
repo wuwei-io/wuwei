@@ -77,7 +77,7 @@ export interface WuweiMe {
 
 // AI 提供商目录（/api/catalog，脱敏）：后台可配的平台顺序/显隐/模型。客户端拿它当默认序 + 模型源，拉不到则回退硬编码 PRESETS。
 export interface CatalogModelDto {
-  selection?: { category?: string; rank?: number; recommended?: boolean; defaultForNewUsers?: boolean; hiddenInPicker?: boolean };
+  selection?: { category?: string; rank?: number; recommended?: boolean; defaultForNewUsers?: boolean; hiddenInPicker?: boolean; membershipRequired?: 'member' | 'pro' | null };
   price?: { input: number | null; output: number | null; cache: number | null };
   id: string;
   label: string;

@@ -32,6 +32,7 @@ import { createCatalogRefresher } from '../../../src/catalog-refresh.js';
 import { createAccountRefresher, type AccountRefreshState } from '../../../src/account-refresh.js';
 import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
 import { mediaModelChoices } from '../../../src/media-model-selection.js';
+import {canUseTextModel} from '../../../src/text-model-membership.js';
 import type {VideoCatalog} from '../../../src/videogen/contracts.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import {ImageGallery} from './components/ImageGallery.js';
@@ -4929,6 +4930,7 @@ export function App() {
       if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id};
       throw new Error('Model unavailable');
     };
+    if (!canUseTextModel(resolveChoice(), wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(resolveChoice(), approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -4946,6 +4948,7 @@ export function App() {
     const r = await window.wuwei.getSettings(); const cur = r?.settings || {};
     if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid || wuweiRef.current?.user.id !== owner || (automatic&&imagePreviewRef.current)) return false;
     choice = resolveChoice();
+    if (!canUseTextModel(choice, wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(choice, approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -6186,6 +6189,8 @@ export function App() {
 
   // 真正发送一条(立即入队跑)
   function doSend(text: string, imgs: string[], imageApprovalId?: string) {
+    const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
+    if (!canUseTextModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const sid = currentIdRef.current;
     const userId = wuweiRef.current?.user.id;
     if (!imageApprovalId && userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
@@ -6551,6 +6556,8 @@ export function App() {
     } catch { push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.retry.f1bb49c") }); }
   }
   function submit(override?: string, imageApprovalId?: string) {
+    const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
+    if (!canUseTextModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const text = (typeof override === "string" ? override : input).trim();
     if (!text && pendingImages.length === 0) return;
     if (text === "/reset") {
@@ -7162,6 +7169,7 @@ export function App() {
               {(showProviderMenu || showModelMenu) && <>
                 <div className="mq-overlay" onClick={closeModelPicker} />
                 <ModelPicker choices={pickerChoices} selectedKey={selectedModelKey} loggedIn={!!wuwei} lang={lang} loading={!catalogReady}
+                  membership={wuwei?.membership} onRequireMembership={()=>{closeModelPicker();openBackgroundPlans();}}
                   initialCategory={modelPickerCategory} mediaLoading={mediaLoading} mediaError={mediaError}
                   onRetryMedia={()=>{void refreshImageCatalog();void refreshVideoCatalog();}}
                   onRequireLogin={requestModelLogin}
@@ -8692,7 +8700,7 @@ export function App() {
                   onEmployees={setTeamEmployees}
                   onOpenChat={() => setAppView(null)}
                   providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
-                  loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+                  loggedIn={!!wuwei} onRequireLogin={requestModelLogin} membership={wuwei?.membership} onRequireMembership={openBackgroundPlans}
                   onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
                 />
               ) : (
@@ -10966,7 +10974,7 @@ export function App() {
         <EmployeeEditModal
           en={lang !== "zh"}
           providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
-          loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+          loggedIn={!!wuwei} onRequireLogin={requestModelLogin} membership={wuwei?.membership} onRequireMembership={openBackgroundPlans}
           onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
           employee={editEmp}
           onClose={() => setEditEmp(null)}

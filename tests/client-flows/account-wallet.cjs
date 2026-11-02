@@ -248,6 +248,38 @@ app.whenReady().then(async()=>{
   } finally {admin.destroy();}
   assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留尚未发送的草稿');assert.equal(f.state.orders,0);
  });
+ const memberModelCatalog=clone(catalog);
+ const memberIds=['claude-fable-5-1','claude-fable-5','claude-opus-5-5','claude-opus-5'];
+ memberModelCatalog.find(p=>p.id==='wuwei-claude').models.push(...memberIds.map((id,i)=>model(id,false,false,{category:'premium',rank:-100+i},{input:3038.4,output:15192,cache:303.84})));
+ memberModelCatalog.push(provider('wuwei-gpt',false,['gpt-6-1-sol','gpt-6-sol','gpt-6-astra','gpt-6-luna'].map((id,i)=>model(id,false,false,{category:'premium',rank:-80+i},{input:1519.2,output:7596,cache:151.92}))));
+ const modelTarget='[data-model-key="wuwei-claude/claude-fable-5-1"]';
+ const premiumList=async f=>{await f.click('.mq-select');await f.wait('!!document.querySelector(".model-picker")');await f.click('.model-picker nav button:nth-child(3)');await f.wait('!!document.querySelector('+JSON.stringify(modelTarget)+')');};
+ await run('会员模型：非会员有余额也进入升级且仅七个模型带皇冠',{account:{...account(100000),flags:['billing_v2']},modelCatalog:memberModelCatalog},async f=>{
+  await f.fill('.composer textarea','尚未发送的内容');await premiumList(f);
+  assert.equal(await f.js('document.querySelectorAll(".model-picker-member-crown").length'),7);
+  assert.equal(await f.js(`document.querySelector('[data-model-key="wuwei-gpt/gpt-6-luna"]').hasAttribute("data-membership-locked")`),false);
+  fs.writeFileSync(path.join(evidence,'nonmember-model-list.png'),await captureBillingFrame(f));
+  await f.click(modelTarget);await f.wait('!!document.querySelector(".billing-panel")');
+  assert.equal(await f.js('!!document.querySelector(".model-picker-confirm")'),false);assert.equal(f.state.settings.model,'nemotron-super-free');
+  assert.equal(await f.js('document.querySelector(".composer textarea").value'),'尚未发送的内容');assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+  fs.writeFileSync(path.join(evidence,'nonmember-upgrade.png'),await captureBillingFrame(f));
+ });
+ for(const plan of ['Mini','Pro'])await run('会员模型：有效 '+plan+' 可以确认选用且仍提示价格',{account:{...account(100000),membership:{tier:'pro_month',plan,expireAt:new Date(Date.now()+86400000).toISOString()},flags:['billing_v2']},modelCatalog:memberModelCatalog},async f=>{
+  await premiumList(f);assert.equal(await f.js('document.querySelector('+JSON.stringify(modelTarget)+').hasAttribute("data-membership-locked")'),false);
+  await f.click(modelTarget);await f.wait('!!document.querySelector("[data-action=confirm-premium]")');
+  assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);
+  await f.click('[data-action=confirm-premium]');await f.wait('!document.querySelector(".model-picker")');assert.equal(f.state.settings.model,'claude-fable-5-1');assert.equal(f.state.orders,0);
+ });
+ await run('会员模型：过期账号转升级',{account:{...account(100000),membership:{tier:'pro_month',plan:'Pro',expireAt:new Date(Date.now()-1000).toISOString()},flags:['billing_v2']},modelCatalog:memberModelCatalog},async f=>{
+  await premiumList(f);await f.click(modelTarget);await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+ });
+ await run('会员模型：游客点击进入登录入口',{account:null,modelCatalog:memberModelCatalog},async f=>{
+  await premiumList(f);await f.click(modelTarget);await f.wait('!!document.querySelector("input[type=password]")');assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
+ });
+ await run('会员模型：旧会话未付费发送时保留草稿并阻止请求',{account:{...account(100000),flags:['billing_v2']},settings:settings('wuwei-claude','claude-fable-5-1'),modelCatalog:memberModelCatalog},async f=>{
+  await f.send();await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  assert.equal(await f.js('document.querySelector(".composer textarea").value'),'隔离流程测试');
+ });
  for(const theme of ['light','dark']) await run('底栏：余额头像菜单、付费详情与品牌 '+theme,{account:walletAccount(),footerLayout:'wallet',settings:{...settings(),theme}},async f=>{
   await f.wait('!!document.querySelector(".account-coin-pill")');await f.js(`document.documentElement.dataset.theme='${theme}'`);
   assert.equal(await f.js('!!document.querySelector(".acct-btn")'),false);

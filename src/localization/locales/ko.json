@@ -2800,6 +2800,7 @@
     "team.default.description": "즉시 사용 가능한 AI 팀: Ben은 카피라이팅을 위한 Wendy, 소프트웨어를 위한 Cody, 데이터를 위한 Dana, 디자인을 위한 Mia, 모바일 디자인을 위한 Ivy와 함께 CEO로서 회사를 조정합니다. 각 팀원과 개별적으로 채팅하세요. CEO는 에스컬레이션하기 전에 결정을 검토합니다. 각 팀원에게는 아바타, 명확한 책임 및 전용 시스템 프롬프트가 포함됩니다.",
     "model.category.free": "무료 모델",
     "model.category.economy": "인기 있는 가치 모델",
+    "model.membership.required": "Members only",
     "model.category.premium": "프리미엄 모델",
     "model.category.images": "이미지 모델",
     "model.category.connections": "내 연결",

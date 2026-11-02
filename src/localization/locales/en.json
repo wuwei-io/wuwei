@@ -2800,6 +2800,7 @@
     "team.default.description": "A ready-to-use AI team: Ben coordinates the company as CEO, with Wendy for copywriting, Cody for software, Dana for data, Mia for design and Ivy for mobile design. Chat with each teammate individually; the CEO reviews decisions before escalation. Each teammate includes an avatar, clear responsibilities and a dedicated system prompt.",
     "model.category.free": "Free models",
     "model.category.economy": "Popular value models",
+    "model.membership.required": "Members only",
     "model.category.premium": "Premium models",
     "model.category.images": "Image models",
     "model.category.connections": "My connections",
