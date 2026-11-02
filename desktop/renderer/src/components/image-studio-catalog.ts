@@ -1,6 +1,7 @@
 import type { ImageCatalogEntry } from '../../../../src/imagegen/image-catalog.js';
 import {studioModelProfile} from '../../../../src/imagegen/studio-models.js';
 import type { ModelChoice } from '../../../../src/model-selection.js';
+import {imageModelAccess} from '../../../../src/media-model-selection.js';
 
 // The catalogue is the only source of selectable specifications and displayed prices.
 // A batch uses individually accounted single-image orders under one click approval.
@@ -29,7 +30,7 @@ export function withImageSkuChoices(choices: ModelChoice[], catalog: ImageCatalo
   return [...choices, ...imageStudioRows(catalog).flatMap(row => {
     const key = `wuwei-image/${row.sku_id}`;
     const model = choices.find(choice => choice.category === 'images' && choice.imageModel === row.model);
-    return model && !choices.some(choice => choice.key === key) ? [{...model,key,modelId:row.sku_id}] : [];
+    return model && !choices.some(choice => choice.key === key) ? [{...model,key,modelId:row.sku_id,...imageModelAccess(row)}] : [];
   })];
 }
 export function imageVariantDimensions(row?: ImageCatalogEntry) {

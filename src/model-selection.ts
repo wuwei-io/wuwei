@@ -8,6 +8,8 @@ export type ModelChoice = {
   category: ModelCategory; rank: number; recommended: boolean; defaultForNewUsers: boolean;
   free: boolean; needsLogin: boolean; badge?: string | null;
   membershipRequired?: 'member' | 'pro' | null;
+  /** Media eligibility belongs to the authenticated image/video catalog, not the text-plan rule. */
+  membershipEligible?: boolean;
   imageInput?: boolean;
   price?: { input: number | null; output: number | null; cache: number | null };
   videoCoins?: number | null;

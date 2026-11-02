@@ -64,6 +64,13 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
+    case 'videoRequest': {
+      const request=clone(args[0]);(s.videoCalls??=[]).push(request);
+      if(request.action==='catalog')return clone(s.videoCatalog??{version:'qa',enabled:false,models:[]});
+      if(['orders','history','cached_orders'].includes(request.action))return [];
+      if(request.action==='draft'){if(request.draft)s.videoDraft=request.draft;return s.videoDraft??null;}
+      return null;
+    }
     case 'supportThread': return {messages:[],unread:0};
     case 'getModelPricing': return { providers: [] };
     case 'fetchModels': return [];
@@ -247,6 +254,31 @@ app.whenReady().then(async()=>{
    }
   } finally {admin.destroy();}
   assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留尚未发送的草稿');assert.equal(f.state.orders,0);
+ });
+ for(const kind of ['images','videos'])for(const status of ['nonmember','mini','eligible','guest'])await run('媒体会员：'+kind+' '+status,{
+  account:status==='guest'?null:{...account(100000),flags:['billing_v2'],...(status==='mini'||status==='eligible'?{membership:{tier:'pro_month',plan:status==='mini'?'Mini':'Pro',expireAt:new Date(Date.now()+86400000).toISOString()}}:{})},
+  imageCatalog:[{sku_id:'open-image',model:'gpt-image-2',quality:'medium',size:'1024x1024',aspect_ratio:'1:1',resolution:'1K',coins_per_image:2,eligible:true},{sku_id:'member-image',model:'dola-seedream-5-0-pro-260628',quality:'default',aspect_ratio:'1:1',resolution:'1K',size:'1024x1024',coins_per_image:31,membership_required:'pro',eligible:status==='eligible'}],
+  videoCatalog:{enabled:true,version:'qa',models:[{id:'open-video',name:'Open Video',brand:'xai',premium:false,eligible:true,min_coins:10,ratios:['16:9'],resolutions:['720p'],durations:[5],frames:[],audio:false,timing:null},{id:'minimax/hailuo-3-max',name:'H3 Max',brand:'minimax',premium:true,eligible:status==='eligible',min_coins:184.53,ratios:['16:9'],resolutions:['720p'],durations:[5],frames:[],audio:false,timing:null}]}
+ },async f=>{
+  await f.fill('.composer textarea','保留媒体选择前的草稿');await f.click('.mq-select');await f.wait('!!document.querySelector(".model-picker")');
+  await f.click('.model-picker nav button:nth-child('+(kind==='images'?4:5)+')');
+  const key=kind==='images'?'wuwei-image/member-image':'wuwei-video/minimax/hailuo-3-max',open=kind==='images'?'wuwei-image/open-image':'wuwei-video/open-video';
+  const target='[data-model-key="'+key+'"]';await f.wait('!!document.querySelector('+JSON.stringify(target)+')');
+  assert.equal(await f.js('document.querySelector('+JSON.stringify(target)+').querySelectorAll(".model-picker-member-crown").length'),1);
+  assert.equal(await f.js('document.querySelector('+JSON.stringify('[data-model-key="'+open+'"]')+').querySelectorAll(".model-picker-member-crown").length'),0);
+  assert.equal(await f.js('document.querySelector('+JSON.stringify(target)+').hasAttribute("data-membership-locked")'),status!=='eligible');
+  if(status==='nonmember')fs.writeFileSync(path.join(evidence,kind+'-member-crowns.png'),await captureBillingFrame(f));
+  await f.click(target);
+  if(status==='guest'){await f.wait('!!document.querySelector("input[type=password]")');}
+  else if(status==='eligible'){
+   if(kind==='images'){await f.wait('document.querySelector(".studio-control")?.textContent.includes("Seedream 5.0 Pro")');assert.equal(f.state.settings.imageSku,'member-image');}
+   else await f.wait('!!document.querySelector(".vs-header")');
+   assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);
+  }else{
+   await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.settings.model,'nemotron-super-free');
+   assert.equal(await f.js('document.querySelector(".composer textarea").value'),'保留媒体选择前的草稿');
+  }
+  assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);assert.equal((f.state.videoCalls??[]).some(r=>r.action==='create'),false);
  });
  const memberModelCatalog=clone(catalog);
  const memberIds=['claude-fable-5-1','claude-fable-5','claude-opus-5-5','claude-opus-5'];

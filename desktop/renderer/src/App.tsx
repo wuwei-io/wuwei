@@ -31,8 +31,8 @@ import { arrangeProviderEntries } from '../../../src/provider-order.js';
 import { createCatalogRefresher } from '../../../src/catalog-refresh.js';
 import { createAccountRefresher, type AccountRefreshState } from '../../../src/account-refresh.js';
 import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
-import { mediaModelChoices } from '../../../src/media-model-selection.js';
-import {canUseTextModel} from '../../../src/text-model-membership.js';
+import { mediaModelChoices, imageModelAccess } from '../../../src/media-model-selection.js';
+import {canUseModel} from '../../../src/model-membership.js';
 import type {VideoCatalog} from '../../../src/videogen/contracts.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import {ImageGallery} from './components/ImageGallery.js';
@@ -4865,7 +4865,7 @@ export function App() {
   }));
   const pickerChoices: ModelChoice[] = [
     ...catalogModelChoices([...pickerCatalog, ...extraConnections], selectedModelKey),
-    ...mediaModelChoices(imageCatalog,videoCatalog),
+    ...mediaModelChoices(mediaOwners.current.images===(wuwei?.user.id??'anonymous')?imageCatalog:[],mediaOwners.current.videos===(wuwei?.user.id??'anonymous')?videoCatalog:null),
   ];
   const selectedChoice = pickerChoices.find((choice) => choice.key === selectedModelKey);
   const pickerChoicesRef = useRef(pickerChoices);
@@ -4927,10 +4927,10 @@ export function App() {
       // real SKU of that same model. Revalidate it on both sides of the await.
       const variant = imageCatalogRef.current.find(row => row.sku_id === choice.modelId && row.model === choice.imageModel);
       const imageChoice = variant && choice.category === 'images' && pickerChoicesRef.current.find(c => c.category === 'images' && c.imageModel === variant.model);
-      if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id};
+      if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id,...imageModelAccess(variant!)};
       throw new Error('Model unavailable');
     };
-    if (!canUseTextModel(resolveChoice(), wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
+    if (!canUseModel(resolveChoice(), wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(resolveChoice(), approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -4948,7 +4948,7 @@ export function App() {
     const r = await window.wuwei.getSettings(); const cur = r?.settings || {};
     if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid || wuweiRef.current?.user.id !== owner || (automatic&&imagePreviewRef.current)) return false;
     choice = resolveChoice();
-    if (!canUseTextModel(choice, wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
+    if (!canUseModel(choice, wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(choice, approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -4989,6 +4989,8 @@ export function App() {
     return true;
   }
   async function selectPickerChoice(choice:ModelChoice){
+    const current=pickerChoicesRef.current.find(row=>row.key===choice.key)??choice;
+    if(!canUseModel(current,wuweiRef.current)){closeModelPicker();openBackgroundPlans();return;}
     if(choice.category==='images'||choice.category==='videos'){
       if(!wuweiRef.current){pendingMediaChoice.current={category:choice.category,modelId:choice.modelId,imageModel:choice.imageModel};requestModelLogin();return;}
       if(busy)throw Error('CREATION_BUSY');
@@ -6190,7 +6192,7 @@ export function App() {
   // 真正发送一条(立即入队跑)
   function doSend(text: string, imgs: string[], imageApprovalId?: string) {
     const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
-    if (!canUseTextModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
+    if (!canUseModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const sid = currentIdRef.current;
     const userId = wuweiRef.current?.user.id;
     if (!imageApprovalId && userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
@@ -6557,7 +6559,7 @@ export function App() {
   }
   function submit(override?: string, imageApprovalId?: string) {
     const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
-    if (!canUseTextModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
+    if (!canUseModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const text = (typeof override === "string" ? override : input).trim();
     if (!text && pendingImages.length === 0) return;
     if (text === "/reset") {
