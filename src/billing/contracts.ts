@@ -70,7 +70,7 @@ export interface AccountWallet {
   asOf: string;
   plan: { name: string | null; period: string | null; endsAt: string | null; member: boolean };
   daily?: { amount: number; bonus: number; claimed: boolean; resetsAt: string; expiryHours: number | null };
-  batches: { source: 'gift' | 'purchase' | 'other'; remaining: number; expiresAt: string }[];
+  batches: { source: 'gift' | 'purchase' | 'other'; receiptSource?: string | null; remaining: number; expiresAt: string }[];
 }
 export interface BillingFailure { error: string; message?: string }
 export interface BillingOrder {

@@ -113,7 +113,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
       if(old.daily?.claimed)return {success:false,amount:0};
       const at=Date.now(),amount=old.daily.amount+old.daily.bonus;
       if(s.account?.user.id===owner){
-        const batch={source:'gift',remaining:amount,expiresAt:new Date(at+(s.checkinExpiryMs??86400000)).toISOString()};
+        const batch={source:'gift',receiptSource:'signin',remaining:amount,expiresAt:new Date(at+(s.checkinExpiryMs??86400000)).toISOString()};
         s.walletData={...old,asOf:new Date(at).toISOString(),balance:old.balance+amount,expiring:old.expiring+amount,batches:[...old.batches,batch],daily:{...old.daily,claimed:true}};
         s.account={...s.account,coin:{...s.account.coin,balance:s.walletData.balance,lastSignin:new Date(at).toISOString().slice(0,10)}};
       }
@@ -217,7 +217,7 @@ const server = http.createServer((req,res) => {
   if (!file.startsWith(path.join(repo,'out/renderer')+path.sep)) {res.writeHead(403);res.end();return;}
   try {res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream'});res.end(fs.readFileSync(file));} catch {res.writeHead(404);res.end();}
 });
-const walletSnapshot = (userId='qa-account') => ({userId,balance:638.5,permanent:600,expiring:38.5,asOf:new Date().toISOString(),daily:{amount:10,bonus:0,claimed:false,resetsAt:new Date(Date.now()+9*3600000).toISOString(),expiryHours:24},plan:{name:'Mini',period:'monthly',endsAt:'2026-11-30T00:00:00Z',member:true},batches:[{source:'gift',remaining:30,expiresAt:new Date(Date.now()+7.5*3600000).toISOString()},{source:'gift',remaining:8.5,expiresAt:new Date(Date.now()+2*86400000).toISOString()}]});
+const walletSnapshot = (userId='qa-account') => ({userId,balance:638.5,permanent:600,expiring:38.5,asOf:new Date().toISOString(),daily:{amount:10,bonus:0,claimed:false,resetsAt:new Date(Date.now()+9*3600000).toISOString(),expiryHours:24},plan:{name:'Mini',period:'monthly',endsAt:'2026-11-30T00:00:00Z',member:true},batches:[{source:'gift',receiptSource:'signin',remaining:30,expiresAt:new Date(Date.now()+7.5*3600000).toISOString()},{source:'gift',receiptSource:'activity_reward',remaining:8.5,expiresAt:new Date(Date.now()+2*86400000).toISOString()}]});
 const walletAccount=()=>({...account(638.5),user:{id:'qa-account',name:'huihui pang',email:'huihui@example.com',avatar:null},membership:{tier:'pro_month',plan:'Mini',expireAt:'2026-11-30T00:00:00Z'},flags:['billing_v2']});
 const hover=(f,selector)=>f.js(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))`);
 app.disableHardwareAcceleration();
@@ -255,6 +255,7 @@ app.whenReady().then(async()=>{
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
   assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*600[\s\S]*38.5/);
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),2);
+  assert.match(await f.js('document.querySelector(".account-wallet-batches").textContent'),/签到赠币[\s\S]*活动赠币/);
   assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/剩余.*\d{2}:\d{2}:\d{2}/);
   assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/签到领.*10.*币/);
   assert(await f.js('!!(document.querySelector(".account-wallet-permanent").compareDocumentPosition(document.querySelector(".account-wallet-expiring")) & Node.DOCUMENT_POSITION_FOLLOWING)'));
@@ -311,7 +312,7 @@ app.whenReady().then(async()=>{
   assert.equal(await f.js('!!document.querySelector(".account-wallet-checkin")'),false);
   assert.equal(await f.js('!!document.querySelector(".checkin-pop-overlay")'),false);
   assert.match(await f.js('document.querySelector(".account-wallet-permanent").textContent'),/52/);
-  assert.match(await f.js('document.querySelector(".account-wallet-expiring").textContent'),/10/);
+  assert.match(await f.js('document.querySelector(".account-wallet-expiring").textContent'),/签到赠币[\s\S]*10/);
   const grant=f.state.walletData.batches[0];assert(Math.abs(Date.parse(grant.expiresAt)-Date.parse(f.state.walletData.asOf)-86400000)<5);
   fs.writeFileSync(path.join(evidence,'quick-checkin-after.png'),await captureBillingFrame(f));assert.equal(f.state.orders,0);
  });

@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useId, useRef, useState, useSyncExternalStore} from 'react';
 import type {WuweiMe} from '../../../main/wuwei-auth.js';
 import type {AccountWallet} from '../../../../src/billing/contracts.js';
-import {isAccountWallet, accountWalletDaily, walletCountdown} from '../../../../src/account-wallet.js';
+import {isAccountWallet, accountWalletDaily, walletCountdown, walletBatchSourceKey} from '../../../../src/account-wallet.js';
 import {getAccountFooterLayout, subscribeAccountFooterLayout} from '../../../../src/account-footer-config.js';
 import {formatCredits} from '../../../../src/billing/presentation.js';
 import {tr, getCurrentLanguage} from '../../../../src/localization/index.js';
@@ -131,7 +131,7 @@ export function AccountFooter(p: Props) {
             <section className="account-wallet-expiring">
               <div className="account-wallet-section"><span>{tr('account.wallet.expiringBalance')}</span><strong>{formatCredits(data.expiring)} {tr('account.wallet.unit')}</strong></div>
               <div className="account-wallet-batches">{data.batches.length ? data.batches.map((batch, index) => <div key={batch.expiresAt + batch.source + index} className="account-wallet-batch">
-                <div><span>{tr('account.wallet.' + batch.source)}</span><strong>{formatCredits(batch.remaining)} {tr('account.wallet.unit')}</strong></div>
+                <div><span>{tr(walletBatchSourceKey(batch))}</span><strong>{formatCredits(batch.remaining)} {tr('account.wallet.unit')}</strong></div>
                 <div className="account-wallet-countdown">{Date.parse(batch.expiresAt) <= now ? tr('account.wallet.expiring') : countdown(batch.expiresAt)}</div>
                 <time dateTime={batch.expiresAt} title={new Date(batch.expiresAt).toLocaleString(lang)}>{tr('account.wallet.expires', {time: new Date(batch.expiresAt).toLocaleString(lang, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})})}</time>
               </div>) : <p>{tr('account.wallet.noExpiry')}</p>}</div>
