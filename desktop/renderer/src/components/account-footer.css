@@ -3,3 +3,11 @@
 
 :root[data-theme="light"] .account-wallet-popover,:root[data-theme="light"] .account-footer-wallet .acct-menu{background:var(--bg)}
 .account-footer-wallet .acct-tier.pro{background:var(--accent-soft);color:var(--accent);box-shadow:none;border-color:var(--border)}
+
+.account-wallet-permanent,.account-wallet-expiring,.account-wallet-daily{text-align:start}
+.account-wallet-permanent .account-wallet-section{margin-top:12px}
+.account-wallet-expiring,.account-wallet-daily{border-top:1px solid var(--border);margin-top:12px;padding-top:1px}
+.account-wallet-countdown{font-variant-numeric:tabular-nums;font-size:12px;font-weight:500;color:var(--accent);margin-top:7px;line-height:1.6}
+.account-wallet-reset{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline;font-size:11px;margin:9px 0;color:var(--text-dim)}
+.account-wallet-reset time{font-variant-numeric:tabular-nums;color:var(--text);font-weight:500}
+.account-wallet-daily-status{font-size:11px;color:var(--text-dim);margin:6px 0}

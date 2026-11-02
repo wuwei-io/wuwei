@@ -3737,6 +3737,17 @@
     "account.wallet.login": "Sign in to view your credits",
     "account.wallet.loading": "Loading credit details…",
     "account.wallet.unavailable": "Details unavailable. Please refresh to retry.",
-    "account.wallet.stale": "Refresh failed. Showing previously loaded details."
+    "account.wallet.stale": "Refresh failed. Showing previously loaded details.",
+    "account.wallet.countdown": "{time} remaining",
+    "account.wallet.countdownDays": "{days}d {time} remaining",
+    "account.wallet.resetPending": "Refreshing…",
+    "account.wallet.daily": "Daily check-in credits",
+    "account.wallet.dailyClaimed": "Checked in today",
+    "account.wallet.dailyAvailable": "Available today · Check in from your avatar menu",
+    "account.wallet.dailyReset": "Next eligibility reset",
+    "account.wallet.dailyExpiry": "Claim by checking in; expires {hours} hours after receipt",
+    "account.wallet.dailyPermanent": "Claim by checking in; received credits do not expire",
+    "account.wallet.dailyUnavailable": "Daily check-in details unavailable. Please refresh.",
+    "account.wallet.dailyBonus": "Extra streak bonus today: +{amount} credits"
   }
 }

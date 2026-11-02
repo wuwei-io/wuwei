@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useId, useRef, useState, useSyncExternalStore} from 'react';
 import type {WuweiMe} from '../../../main/wuwei-auth.js';
 import type {AccountWallet} from '../../../../src/billing/contracts.js';
-import {isAccountWallet} from '../../../../src/account-wallet.js';
+import {isAccountWallet, accountWalletDaily, walletCountdown} from '../../../../src/account-wallet.js';
 import {getAccountFooterLayout, subscribeAccountFooterLayout} from '../../../../src/account-footer-config.js';
 import {formatCredits} from '../../../../src/billing/presentation.js';
 import {tr, getCurrentLanguage} from '../../../../src/localization/index.js';
@@ -29,8 +29,10 @@ export function AccountFooter(p: Props) {
   const [walletOpen, setWalletOpen] = useState(false), [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<AccountWallet | null>(null), [error, setError] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const clock = useRef({server: Date.now(), observed: performance.now()});
   const panelId = useId(), lang = getCurrentLanguage();
   const data = snapshot?.userId === p.account?.user.id ? snapshot : null;
+  const daily = accountWalletDaily(data);
   useEffect(() => { setSnapshot(null); }, [p.account?.coin.balance]);
   const cancelClose = () => { clearTimeout(closeTimer.current); };
   const close = useCallback(() => { setWalletOpen(false); p.onMenuChange(false); }, [p.onMenuChange]);
@@ -51,25 +53,33 @@ export function AccountFooter(p: Props) {
     const result = await billingRequest({action: 'wallet'}, 15000);
     if (generation !== epoch.current || owner.current !== userId) return;
     loading.current = false; setBusy(false);
-    if (isAccountWallet(result, userId)) { setSnapshot(result); setNow(Date.now()); }
+    if (isAccountWallet(result, userId)) { clock.current = {server: Date.parse(result.asOf), observed: performance.now()}; setSnapshot(result); setNow(clock.current.server); }
     else { setError(true); if ('error' in result && ['not_logged_in', 'unauthorized'].includes(result.error)) setSnapshot(null); }
   }, []);
   useEffect(() => {
     if (!walletOpen || !p.account) return;
-    void load(); const timer = setInterval(() => { setNow(Date.now()); void load(); }, 30000);
-    return () => clearInterval(timer);
+    void load();
+    const timer = setInterval(() => { void load(); }, 30000);
+    const ticker = setInterval(() => setNow(clock.current.server + performance.now() - clock.current.observed), 1000);
+    return () => { clearInterval(timer); clearInterval(ticker); };
   }, [walletOpen, p.account?.coin.balance, load]);
+  useEffect(() => {
+    if (!walletOpen || !data) return;
+    const deadlines = [...data.batches.map(b => Date.parse(b.expiresAt)), ...(daily ? [Date.parse(daily.resetsAt)] : [])]
+      .filter(at => at > Date.parse(data.asOf));
+    if (!deadlines.length) return;
+    const delay = Math.min(2147483647, Math.max(0, Math.min(...deadlines) - (clock.current.server + performance.now() - clock.current.observed)) + 100);
+    const timer = setTimeout(() => { void load(); }, delay);
+    return () => clearTimeout(timer);
+  }, [walletOpen, data, load]);
+  const countdown = (at: string) => {
+    const remaining = walletCountdown(Date.parse(at) - now);
+    return remaining ? tr(remaining.days ? 'account.wallet.countdownDays' : 'account.wallet.countdown', {...remaining}) : tr('account.wallet.resetPending');
+  };
   const openWallet = () => { cancelClose(); p.onMenuChange(false); setWalletOpen(true); };
   const openMenu = () => { cancelClose(); setWalletOpen(false); p.onMenuChange(true); };
   const pay = () => { close(); p.onPay(); };
   const details = () => { close(); p.onDetails(); };
-  const expiry = (at: string) => {
-    const seconds = (Date.parse(at) - now) / 1000;
-    if (seconds <= 0) return tr('account.wallet.expiring');
-    const unit = seconds >= 86400 ? 'day' : seconds >= 3600 ? 'hour' : 'minute';
-    const value = Math.max(1, Math.ceil(seconds / (unit === 'day' ? 86400 : unit === 'hour' ? 3600 : 60)));
-    return tr('account.wallet.expires', {time: new Intl.RelativeTimeFormat(lang, {numeric: 'always'}).format(value, unit)});
-  };
   return <div className={'account-footer-shell account-footer-' + p.layout} ref={root}
     onMouseEnter={cancelClose} onMouseLeave={() => { if (p.layout === 'wallet') closeTimer.current = setTimeout(close, 220); }}
     onBlur={e => { if (p.layout === 'wallet' && !e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
@@ -97,13 +107,27 @@ export function AccountFooter(p: Props) {
           {error && <div className="account-wallet-status" role="status">{tr(data ? 'account.wallet.stale' : 'account.wallet.unavailable')}</div>}
           {!data && !error && <div className="account-wallet-status" role="status">{tr('account.wallet.loading')}</div>}
           {data && <>
-            <div className="account-wallet-section"><span>{tr('account.wallet.expiringBalance')}</span><strong>{formatCredits(data.expiring)} {tr('account.wallet.unit')}</strong></div>
-            <div className="account-wallet-batches">{data.batches.length ? data.batches.map((batch, index) => <div key={batch.expiresAt + batch.source + index} className="account-wallet-batch">
-              <div><span>{tr('account.wallet.' + batch.source)}</span><strong>{formatCredits(batch.remaining)}</strong></div>
-              <time dateTime={batch.expiresAt} title={new Date(batch.expiresAt).toLocaleString(lang)}>{expiry(batch.expiresAt)} · {new Date(batch.expiresAt).toLocaleString(lang, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</time>
-            </div>) : <p>{tr('account.wallet.noExpiry')}</p>}</div>
-            <div className="account-wallet-section"><span>{tr('account.wallet.permanent')}</span><strong>{formatCredits(data.permanent)} {tr('account.wallet.unit')}</strong></div>
-            <p className="account-wallet-muted">{tr('account.wallet.noLimit')}</p>
+            <section className="account-wallet-permanent">
+              <div className="account-wallet-section"><span>{tr('account.wallet.permanent')}</span><strong>{formatCredits(data.permanent)} {tr('account.wallet.unit')}</strong></div>
+              <p className="account-wallet-muted">{tr('account.wallet.noLimit')}</p>
+            </section>
+            <section className="account-wallet-expiring">
+              <div className="account-wallet-section"><span>{tr('account.wallet.expiringBalance')}</span><strong>{formatCredits(data.expiring)} {tr('account.wallet.unit')}</strong></div>
+              <div className="account-wallet-batches">{data.batches.length ? data.batches.map((batch, index) => <div key={batch.expiresAt + batch.source + index} className="account-wallet-batch">
+                <div><span>{tr('account.wallet.' + batch.source)}</span><strong>{formatCredits(batch.remaining)} {tr('account.wallet.unit')}</strong></div>
+                <div className="account-wallet-countdown">{Date.parse(batch.expiresAt) <= now ? tr('account.wallet.expiring') : countdown(batch.expiresAt)}</div>
+                <time dateTime={batch.expiresAt} title={new Date(batch.expiresAt).toLocaleString(lang)}>{tr('account.wallet.expires', {time: new Date(batch.expiresAt).toLocaleString(lang, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})})}</time>
+              </div>) : <p>{tr('account.wallet.noExpiry')}</p>}</div>
+            </section>
+            <section className="account-wallet-daily">
+              <div className="account-wallet-section"><span>{tr('account.wallet.daily')}</span><strong>{daily ? `${formatCredits(daily.amount)} ${tr('account.wallet.unit')}` : '—'}</strong></div>
+              {daily ? <>
+                <p className="account-wallet-daily-status">{Date.parse(daily.resetsAt) <= now ? tr('account.wallet.resetPending') : tr(daily.claimed ? 'account.wallet.dailyClaimed' : 'account.wallet.dailyAvailable')}</p>
+                {!daily.claimed && daily.bonus > 0 && <p className="account-wallet-muted">{tr('account.wallet.dailyBonus', {amount: formatCredits(daily.bonus)})}</p>}
+                <div className="account-wallet-reset"><span>{tr('account.wallet.dailyReset')}</span><time dateTime={daily.resetsAt} title={new Date(daily.resetsAt).toLocaleString(lang)}>{countdown(daily.resetsAt)}</time></div>
+                <p className="account-wallet-muted">{tr(daily.expiryHours === null ? 'account.wallet.dailyPermanent' : 'account.wallet.dailyExpiry', {hours: daily.expiryHours ?? 0})}</p>
+              </> : <p className="account-wallet-muted">{tr('account.wallet.dailyUnavailable')}</p>}
+            </section>
           </>}
         </>}
         <button type="button" className="account-wallet-details" onClick={details}>{tr('account.wallet.details')}<Icon kind="arrow"/></button>

@@ -14,3 +14,16 @@ export function isAccountWallet(value: unknown, userId: string): value is Accoun
     && (v.plan.period === null || typeof v.plan.period === 'string')
     && (v.plan.endsAt === null || Number.isFinite(Date.parse(v.plan.endsAt)));
 }
+
+/** Optional metadata remains separate so old servers can still return usable balances. */
+export function accountWalletDaily(wallet: AccountWallet | null): AccountWallet['daily'] | null {
+  const d = wallet?.daily;
+  return d && Number.isFinite(d.amount) && d.amount >= 0 && Number.isFinite(d.bonus) && d.bonus >= 0
+    && typeof d.claimed === 'boolean' && Number.isFinite(Date.parse(d.resetsAt))
+    && (d.expiryHours === null || (Number.isFinite(d.expiryHours) && d.expiryHours > 0)) ? d : null;
+}
+export function walletCountdown(milliseconds: number): {days: number; time: string} | null {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return null;
+  const total = Math.ceil(milliseconds / 1000);
+  return {days: Math.floor(total / 86400), time: [Math.floor(total / 3600) % 24, Math.floor(total / 60) % 60, total % 60].map(n => String(n).padStart(2, '0')).join(':')};
+}

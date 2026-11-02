@@ -203,7 +203,7 @@ const server = http.createServer((req,res) => {
   if (!file.startsWith(path.join(repo,'out/renderer')+path.sep)) {res.writeHead(403);res.end();return;}
   try {res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream'});res.end(fs.readFileSync(file));} catch {res.writeHead(404);res.end();}
 });
-const walletSnapshot = (userId='qa-account') => ({userId,balance:638.5,permanent:600,expiring:38.5,asOf:new Date().toISOString(),plan:{name:'Mini',period:'monthly',endsAt:'2026-11-30T00:00:00Z',member:true},batches:[{source:'gift',remaining:30,expiresAt:new Date(Date.now()+7.5*3600000).toISOString()},{source:'gift',remaining:8.5,expiresAt:new Date(Date.now()+2*86400000).toISOString()}]});
+const walletSnapshot = (userId='qa-account') => ({userId,balance:638.5,permanent:600,expiring:38.5,asOf:new Date().toISOString(),daily:{amount:10,bonus:0,claimed:false,resetsAt:new Date(Date.now()+9*3600000).toISOString(),expiryHours:24},plan:{name:'Mini',period:'monthly',endsAt:'2026-11-30T00:00:00Z',member:true},batches:[{source:'gift',remaining:30,expiresAt:new Date(Date.now()+7.5*3600000).toISOString()},{source:'gift',remaining:8.5,expiresAt:new Date(Date.now()+2*86400000).toISOString()}]});
 const walletAccount=()=>({...account(638.5),user:{id:'qa-account',name:'huihui pang',email:'huihui@example.com',avatar:null},membership:{tier:'pro_month',plan:'Mini',expireAt:'2026-11-30T00:00:00Z'},flags:['billing_v2']});
 const hover=(f,selector)=>f.js(`document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent('mouseover',{bubbles:true}))`);
 app.disableHardwareAcceleration();
@@ -239,8 +239,12 @@ app.whenReady().then(async()=>{
   assert.equal(await f.js('!!document.querySelector(".acct-btn")'),false);
   fs.writeFileSync(path.join(evidence,'client-wallet-'+theme+'.png'),await captureBillingFrame(f));
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
-  assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*38.5[\s\S]*600/);
+  assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*600[\s\S]*38.5/);
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),2);
+  assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/剩余.*\d{2}:\d{2}:\d{2}/);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/每日签到可领.*10.*今日可领取/);
+  assert(await f.js('!!(document.querySelector(".account-wallet-permanent").compareDocumentPosition(document.querySelector(".account-wallet-expiring")) & Node.DOCUMENT_POSITION_FOLLOWING)'));
+
   const rect=await f.js('document.querySelector(".account-wallet-popover").getBoundingClientRect().toJSON()');
   f.state.win.webContents.sendInputEvent({type:'mouseMove',x:Math.floor(rect.x+40),y:Math.floor(rect.y+30)});await delay(350);
   assert(await f.js('!!document.querySelector(".account-wallet-popover")'));
@@ -256,6 +260,28 @@ app.whenReady().then(async()=>{
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-details")');await f.click('.account-wallet-details');
   await f.wait('!!document.querySelector(".billing-ledger") || !!document.querySelector(".billing-ledger-view") || !!document.querySelector(".billing-ledger-table")');
   for(let i=0;i<40&&!f.state.billingCalls.some(r=>r.action==='ledger');i++)await delay(30);assert(f.state.billingCalls.some(r=>r.action==='ledger'));assert.equal(f.state.orders,0);
+ });
+ await run('底栏：倒计时逐秒更新、边界自动刷新',{account:walletAccount(),footerLayout:'wallet'},async f=>{
+  f.state.walletData=walletSnapshot();
+  f.state.walletData.asOf=new Date().toISOString();
+  f.state.walletData.batches[0].expiresAt=new Date(Date.now()+2400).toISOString();
+  f.state.walletData.daily.resetsAt=f.state.walletData.batches[0].expiresAt;
+  f.state.walletData.daily.claimed=true;
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-countdown")');
+  const before=await f.js('document.querySelector(".account-wallet-countdown").textContent');
+  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日已签到/);
+  await delay(1100);
+  const after=await f.js('document.querySelector(".account-wallet-countdown").textContent');assert.notEqual(before,after);
+  f.state.walletData={...walletSnapshot(),balance:608.5,permanent:600,expiring:8.5,batches:[walletSnapshot().batches[1]]};
+  await f.wait('document.querySelectorAll(".account-wallet-batch").length===1',4000);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日可领取/);
+  assert.equal(f.state.orders,0);
+ });
+ await run('底栏：旧服务不伪造每日数量',{account:walletAccount(),footerLayout:'wallet'},async f=>{
+  f.state.walletData=walletSnapshot();delete f.state.walletData.daily;
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
+  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/—.*暂不可用/);
+  assert.equal(f.state.orders,0);
  });
  await run('底栏：失败保留提示、迟到账号数据隔离',{account:walletAccount(),footerLayout:'wallet'},async f=>{
   await f.wait('!!document.querySelector(".account-coin-pill")');await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');

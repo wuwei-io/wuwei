@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {isAccountWallet} from '../src/account-wallet.ts';
+import {isAccountWallet, accountWalletDaily, walletCountdown} from '../src/account-wallet.ts';
 import {setAccountFooterLayout,getAccountFooterLayout,subscribeAccountFooterLayout} from '../src/account-footer-config.ts';
 const snapshot=()=>({userId:'a',balance:638.5,permanent:600,expiring:38.5,asOf:'2026-10-30T00:00:00Z',plan:{name:'Mini',period:'monthly',endsAt:'2026-11-30T00:00:00Z',member:true},batches:[{source:'gift',remaining:30,expiresAt:'2026-10-31T00:00:00Z'},{source:'purchase',remaining:8.5,expiresAt:'2026-11-10T00:00:00Z'}]});
 test('both layouts can switch and immediately roll back, invalid values safely restore classic',()=>{
@@ -16,4 +16,18 @@ test('expiry buckets reconcile with balance, independent of membership expiry',(
 });
 test('another account, a partial read or inconsistent expiry never becomes usable balance data',()=>{
  for(const v of [null,{}, {error:'network'}, {...snapshot(),userId:'b'}, {...snapshot(),balance:639}, {...snapshot(),expiring:40}, {...snapshot(),batches:[]}, {...snapshot(),permanent:NaN}, {...snapshot(),plan:null}, {...snapshot(),batches:[{source:'gift',remaining:38.5,expiresAt:'infinity'}]}])assert.equal(isAccountWallet(v,'a'),false);
+});
+
+test('countdowns cross days, seconds and expiry without negative values',()=>{
+ assert.deepEqual(walletCountdown((86400+9*3600+13*60+28)*1000),{days:1,time:'09:13:28'});
+ assert.deepEqual(walletCountdown(1001),{days:0,time:'00:00:02'});
+ assert.deepEqual(walletCountdown(1),{days:0,time:'00:00:01'});
+ for(const n of [0,-1,NaN,Infinity]) assert.equal(walletCountdown(n),null);
+});
+test('daily metadata never invents entitlement on old or malformed responses',()=>{
+ assert.equal(accountWalletDaily(snapshot()),null);
+ const d={amount:10,bonus:0,claimed:false,resetsAt:'2026-11-03T00:00:00Z',expiryHours:24};
+ assert.deepEqual(accountWalletDaily({...snapshot(),daily:d}),d);
+ assert.deepEqual(accountWalletDaily({...snapshot(),daily:{...d,amount:40,expiryHours:null,bonus:20}}),{...d,amount:40,expiryHours:null,bonus:20});
+ for(const daily of [{...d,amount:-1},{...d,bonus:NaN},{...d,claimed:'false'},{...d,resetsAt:'bad'},{...d,expiryHours:0}]) assert.equal(accountWalletDaily({...snapshot(),daily}),null);
 });
