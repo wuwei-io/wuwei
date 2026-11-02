@@ -12,7 +12,7 @@ type Props = {
   layout: 'classic' | 'wallet'; account: WuweiMe | null; avatar: React.ReactNode;
   classicTrigger: React.ReactNode; children: React.ReactNode; menuOpen: boolean;
   onMenuChange: (open: boolean) => void; onPay: () => void; onDetails: () => void;
-  unread: number;
+  unread: number; onCheckin: () => Promise<boolean>; checkinBusy: boolean;
 };
 function Icon({kind}: {kind: 'coin' | 'plus' | 'spark' | 'arrow' | 'refresh'}) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{
@@ -24,6 +24,8 @@ function Icon({kind}: {kind: 'coin' | 'plus' | 'spark' | 'arrow' | 'refresh'}) {
 export function AccountFooter(p: Props) {
   const root = useRef<HTMLDivElement>(null), closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const suppressFocus = useRef(false);
+  const claimPending = useRef(false);
+  const [claiming, setClaiming] = useState(false), [claimError, setClaimError] = useState(false);
   const epoch = useRef(0), loading = useRef(false), owner = useRef(p.account?.user.id);
   owner.current = p.account?.user.id;
   const [walletOpen, setWalletOpen] = useState(false), [busy, setBusy] = useState(false);
@@ -37,7 +39,7 @@ export function AccountFooter(p: Props) {
   const cancelClose = () => { clearTimeout(closeTimer.current); };
   const close = useCallback(() => { setWalletOpen(false); p.onMenuChange(false); }, [p.onMenuChange]);
   useEffect(() => {
-    epoch.current++; loading.current = false; setBusy(false); setSnapshot(null); setError(false); setWalletOpen(false); p.onMenuChange(false);
+    epoch.current++; loading.current = false; claimPending.current = false; setClaiming(false); setClaimError(false); setBusy(false); setSnapshot(null); setError(false); setWalletOpen(false); p.onMenuChange(false);
     return () => { epoch.current++; clearTimeout(closeTimer.current); };
   }, [p.account?.user.id, p.layout]);
   useEffect(() => {
@@ -48,7 +50,7 @@ export function AccountFooter(p: Props) {
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keyboard); };
   }, [p.layout, close]);
   const load = useCallback(async (manual = false) => {
-    const userId = owner.current; if (!userId || loading.current) return;
+    const userId = owner.current; if (!userId || loading.current || claimPending.current) return;
     const generation = epoch.current; loading.current = true; setBusy(true); setError(false);
     const [result] = await Promise.all([billingRequest({action: 'wallet'}, 15000), manual ? new Promise<void>(resolve => setTimeout(resolve, 450)) : Promise.resolve()]);
     if (generation !== epoch.current || owner.current !== userId) return;
@@ -72,6 +74,21 @@ export function AccountFooter(p: Props) {
     const timer = setTimeout(() => { void load(); }, delay);
     return () => clearTimeout(timer);
   }, [walletOpen, data, load]);
+  const claim = async () => {
+    const userId = owner.current, generation = epoch.current;
+    if (!userId || claimPending.current || loading.current || p.checkinBusy || daily?.claimed) return;
+    claimPending.current = true; setClaiming(true); setClaimError(false);
+    try {
+      const ok = await p.onCheckin();
+      if (owner.current !== userId || epoch.current !== generation) return;
+      claimPending.current = false;
+      if (ok) await load(); else setClaimError(true);
+    } catch {
+      if (owner.current === userId && epoch.current === generation) setClaimError(true);
+    } finally {
+      if (owner.current === userId && epoch.current === generation) { claimPending.current = false; setClaiming(false); }
+    }
+  };
   const countdown = (at: string) => {
     const remaining = walletCountdown(Date.parse(at) - now);
     return remaining ? tr(remaining.days ? 'account.wallet.countdownDays' : 'account.wallet.countdown', {...remaining}) : tr('account.wallet.resetPending');
@@ -81,7 +98,7 @@ export function AccountFooter(p: Props) {
   const pay = () => { close(); p.onPay(); };
   const details = () => { close(); p.onDetails(); };
   return <div className={'account-footer-shell account-footer-' + p.layout} ref={root}
-    onMouseEnter={cancelClose} onMouseLeave={() => { if (p.layout === 'wallet') closeTimer.current = setTimeout(close, 220); }}
+    onMouseEnter={cancelClose} onMouseLeave={() => { if (p.layout === 'wallet' && !claiming) closeTimer.current = setTimeout(close, 220); }}
     onBlur={e => { if (p.layout === 'wallet' && !e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
     {p.layout === 'classic' ? p.classicTrigger : <>
       <button type="button" className="account-upgrade" onClick={pay}><Icon kind="spark"/>{tr('account.wallet.upgrade')}</button>
@@ -124,7 +141,11 @@ export function AccountFooter(p: Props) {
               {daily ? <>
                 <p className="account-wallet-daily-status">{Date.parse(daily.resetsAt) <= now ? tr('account.wallet.resetPending') : tr(daily.claimed ? 'account.wallet.dailyClaimed' : 'account.wallet.dailyAvailable')}</p>
                 {!daily.claimed && daily.bonus > 0 && <p className="account-wallet-muted">{tr('account.wallet.dailyBonus', {amount: formatCredits(daily.bonus)})}</p>}
-                <div className="account-wallet-reset"><span>{tr('account.wallet.dailyReset')}</span><time dateTime={daily.resetsAt} title={new Date(daily.resetsAt).toLocaleString(lang)}>{countdown(daily.resetsAt)}</time></div>
+                {!daily.claimed && <button type="button" className="account-wallet-checkin" disabled={busy || claiming || p.checkinBusy || daily.amount + daily.bonus <= 0} aria-busy={claiming || p.checkinBusy} onClick={() => { void claim(); }}>
+                  {(claiming || p.checkinBusy) && <span className="acct-checkin-spin" aria-hidden="true"/>}
+                  {tr(claiming || p.checkinBusy ? 'account.wallet.claiming' : 'account.wallet.claim', {amount: formatCredits(daily.amount + daily.bonus)})}
+                </button>}
+                {claimError && <p className="account-wallet-claim-error" role="status">{tr('account.wallet.claimFailed')}</p>}
                 <p className="account-wallet-muted">{tr(daily.expiryHours === null ? 'account.wallet.dailyPermanent' : 'account.wallet.dailyExpiry', {hours: daily.expiryHours ?? 0})}</p>
               </> : <p className="account-wallet-muted">{tr('account.wallet.dailyUnavailable')}</p>}
             </section>

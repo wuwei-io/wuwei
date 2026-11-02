@@ -17,3 +17,8 @@
 .account-wallet-refresh.is-refreshing svg{animation:account-wallet-refresh-spin .8s linear infinite;transform-origin:center}
 
 .account-footer-wallet .account-coin-pill button:focus-visible{outline-offset:-3px}
+
+.account-wallet-checkin{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:34px;margin:10px 0 8px;padding:7px 12px;border:0;border-radius:7px;background:var(--accent);color:var(--bg-raised);font:inherit;font-weight:600}
+.account-wallet-checkin:hover:not(:disabled){filter:brightness(1.1)}
+.account-wallet-checkin:disabled{opacity:.6;cursor:default}
+.account-wallet-claim-error{font-size:11px;color:var(--warn);line-height:1.6}

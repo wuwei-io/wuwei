@@ -3738,16 +3738,19 @@
     "account.wallet.loading": "Loading credit details…",
     "account.wallet.unavailable": "Details unavailable. Please refresh to retry.",
     "account.wallet.stale": "Refresh failed. Showing previously loaded details.",
-    "account.wallet.countdown": "{time} remaining",
-    "account.wallet.countdownDays": "{days}d {time} remaining",
+    "account.wallet.countdown": "Expires in {time}",
+    "account.wallet.countdownDays": "Expires in {days}d {time}",
     "account.wallet.resetPending": "Refreshing…",
     "account.wallet.daily": "Daily check-in credits",
     "account.wallet.dailyClaimed": "Checked in today",
-    "account.wallet.dailyAvailable": "Available today · Check in from your avatar menu",
+    "account.wallet.dailyAvailable": "Not checked in today",
     "account.wallet.dailyReset": "Next eligibility reset",
-    "account.wallet.dailyExpiry": "Claim by checking in; expires {hours} hours after receipt",
+    "account.wallet.dailyExpiry": "Use within {hours} hours of receipt; unused credits expire automatically",
     "account.wallet.dailyPermanent": "Claim by checking in; received credits do not expire",
     "account.wallet.dailyUnavailable": "Daily check-in details unavailable. Please refresh.",
-    "account.wallet.dailyBonus": "Extra streak bonus today: +{amount} credits"
+    "account.wallet.dailyBonus": "Extra streak bonus today: +{amount} credits",
+    "account.wallet.claim": "Check in · Claim {amount} credits",
+    "account.wallet.claiming": "Checking in…",
+    "account.wallet.claimFailed": "Check-in could not be completed. Please try again."
   }
 }

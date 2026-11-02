@@ -4211,6 +4211,7 @@ export function App() {
   const [showBrainIntro, setShowBrainIntro] = useState(false); // 免费脑网络功能介绍弹窗
   const [checkinToast, setCheckinToast] = useState(""); // 每日签到到账轻量提示
   const [checkinDone, setCheckinDone] = useState(false); // 今日是否已签到（手动签或已签后置 true）
+  const checkinInFlight = useRef<{owner: string} | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false); // 签到请求中，防重复点击
   const [checkinPop, setCheckinPop] = useState<{ amount: number; streak?: number } | "already" | null>(null); // 居中签到弹窗
   const [loginResume, setLoginResume] = useState(false); // 登录成功后是否续发刚才拦下的消息
@@ -4484,25 +4485,32 @@ export function App() {
   const sidebarSessions:SessionMeta[]=[...sessions,...videoHistory.map(row=>({id:'video:'+row.requestId,videoRequestId:row.requestId,title:row.title,updatedAt:row.updatedAt}))];
   function openVideoCreation(id?:string){setImagePreview(null);setRequestedVideoCreation(id?{id,version:Date.now()}:undefined);if(!id)setVideoNewVersion(v=>v+1);setAppView(null);setAgiView(null);setVideoMode(true)}
   function deleteVideoCreation(requestId:string){const owner=wuweiRef.current?.user.id;if(!owner)return;askConfirm({title:tr('video.deleteHistory'),message:tr('video.deleteHistoryConfirm'),danger:true,onOk:()=>{void(async()=>{if(wuweiRef.current?.user.id!==owner)return;for(const member of videoCreationMembers(owner,requestId)){if(wuweiRef.current?.user.id!==owner)return;const result=await window.wuwei.videoRequest({action:'delete_history',request_id:member});if(result&&typeof result==='object'&&'error'in result)throw Error(String(result.error));}if(wuweiRef.current?.user.id!==owner)return;setVideoHistoryVersion(v=>v+1);await loadVideoHistory();if(requestedVideoCreation?.id===requestId)openVideoCreation()})().catch(()=>push({type:'notice',text:tr('video.error.unavailable')}))}})}
-  // 手动签到：账号面板点「签到」触发。后端幂等，给币则弹 toast + 刷新余额；无论刚签/已签都标记当天完成。
-  async function doCheckin() {
-    if (checkinBusy || checkinDone) return;
-    void window.wuwei.track?.("menu_item_click", { item: "checkin" });
+  // 共用签到入口：原菜单保留成功弹窗，快捷签到在钱包内刷新；后端幂等，迟到响应按账号隔离。
+  async function doCheckin(inline = false): Promise<boolean> {
+    const owner = wuweiRef.current?.user.id;
+    if (!owner || checkinInFlight.current?.owner === owner || (!inline && checkinDone)) return false;
+    const request = {owner}; checkinInFlight.current = request;
+    void window.wuwei.track?.("menu_item_click", { item: inline ? "wallet_checkin" : "checkin" });
     setCheckinBusy(true);
+    const current = () => wuweiRef.current?.user.id === owner && checkinInFlight.current === request;
     try {
       const r = await window.wuwei.checkin();
-      if (r?.success && (r.amount ?? 0) > 0) {
-        setCheckinPop({ amount: r.amount ?? 0, streak: r.streak }); // 居中成功弹窗
-        window.wuwei.wuweiMe().then((m) => { if (m) setWuwei(m); }).catch(() => {});
-      } else if (r) {
-        setCheckinPop("already"); // 今日已签到，也给个反馈
+      if (!current() || !r || typeof r.success !== 'boolean' || ('error' in r && r.error)) return false;
+      setCheckinDone(true);
+      if (!inline) {
+        setCheckinPop(r.success && (r.amount ?? 0) > 0 ? {amount: r.amount ?? 0, streak: r.streak} : "already");
+        setTimeout(() => { if (wuweiRef.current?.user.id === owner) setCheckinPop(null); }, 2800);
       }
-      if (r) setCheckinDone(true);
-      if (r) setTimeout(() => setCheckinPop(null), 2800); // 自动消失
-    } catch {
-      /* 忽略，稍后可重试 */
-    } finally {
-      setCheckinBusy(false);
+      const me = await window.wuwei.wuweiMe().catch(() => null);
+      if (!current()) return false;
+      if (me?.user.id === owner) setWuwei(me);
+      return true;
+    } catch { return false; }
+    finally {
+      if (checkinInFlight.current === request) {
+        checkinInFlight.current = null;
+        if (wuweiRef.current?.user.id === owner) setCheckinBusy(false);
+      }
     }
   }
   // 海外结账：英文用户点购买/升级 → 系统浏览器打开网页 Paddle 结账页(已验证可付+webhook发币)。
@@ -5448,8 +5456,9 @@ export function App() {
   // 今日已签到判定：拿到账号数据后，若最近签到日=今天(UTC，与后端签到日一致)则按钮直接显「已签到」且禁用，不用点了才知道。
   useEffect(() => {
     const last = wuwei?.coin.lastSignin;
-    if (last && last === new Date().toISOString().slice(0, 10)) setCheckinDone(true);
-  }, [wuwei?.coin.lastSignin]);
+    setCheckinDone(!!wuwei?.user.id && last === new Date().toISOString().slice(0, 10));
+    setCheckinBusy(!!wuwei?.user.id && checkinInFlight.current?.owner === wuwei.user.id);
+  }, [wuwei?.user.id, wuwei?.coin.lastSignin]);
 
   async function checkUpdateNow() {
     setShowAcctMenu(false); // 关菜单，结果用居中弹窗显示
@@ -8186,7 +8195,7 @@ export function App() {
                   <span style={{ color: "#C05F3C" }}>✨</span> {tr("ui.app.subscription.8e99882")}
                 </button>
               )}
-              <AccountFooter layout={accountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
+              <AccountFooter onCheckin={() => doCheckin(true)} checkinBusy={checkinBusy} layout={accountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
                 avatar={<UserAvatar url={wuwei?.user.avatar} fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial")).slice(0,1).toUpperCase()}/>}
                 onPay={() => {
                   setShowAcctMenu(false);
@@ -8319,7 +8328,7 @@ export function App() {
                                 type="button"
                                 className={"acct-checkin" + (checkinDone ? " done" : "")}
                                 disabled={checkinDone || checkinBusy}
-                                onClick={doCheckin}
+                                onClick={() => { void doCheckin(); }}
                                 title={
                                   checkinDone
                                     ? t("menu.checkedInTitle")

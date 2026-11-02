@@ -105,6 +105,20 @@ ipcMain.handle('qa:api', async (event, method, args) => {
       if(req.action==='ledger')return {balance:1578.362704,total:req.type==='model_check'?1:101,limit:req.limit||50,offset:req.offset||0,hasMore:(req.offset||0)+(req.limit||50)<(req.type==='model_check'?1:101),records:req.type==='model_check'?[{id:'check-only',type:'model_check',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-24T00:00:00Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]:[{id:'record-'+(req.offset||0),type:'spend',source:'model_usage',description:'无为托管模型调用',createdAt:'2026-10-20T15:14:12Z',amount:-0.03039,balanceAfter:1578.362704,model:'mimo-v2.6-flash',parameters:{turn_kind:'tool_cont',input_tokens:100}},{id:'free-record',type:'spend',source:'free_model',description:'免费模型 glm-4.7-flash',createdAt:'2026-10-20T15:05:49Z',amount:0,balanceAfter:1578.362704,model:'glm-4.7-flash'}]};
       return {error:'unknown_action'};
     }
+    case 'checkin': {
+      s.checkinCalls=(s.checkinCalls??0)+1;
+      const owner=s.account?.user.id, old=clone(s.walletData??walletSnapshot(owner));
+      if(s.checkinDelay)await delay(s.checkinDelay);
+      if(s.checkinFail)return {error:'network'};
+      if(old.daily?.claimed)return {success:false,amount:0};
+      const at=Date.now(),amount=old.daily.amount+old.daily.bonus;
+      if(s.account?.user.id===owner){
+        const batch={source:'gift',remaining:amount,expiresAt:new Date(at+(s.checkinExpiryMs??86400000)).toISOString()};
+        s.walletData={...old,asOf:new Date(at).toISOString(),balance:old.balance+amount,expiring:old.expiring+amount,batches:[...old.batches,batch],daily:{...old.daily,claimed:true}};
+        s.account={...s.account,coin:{...s.account.coin,balance:s.walletData.balance,lastSignin:new Date(at).toISOString().slice(0,10)}};
+      }
+      return {success:true,amount,streak:1};
+    }
     case 'payCreate': s.orders++; s.orderSkus.push(args[0]); return s.payError ? { error: s.payError } : { orderId: 'qa-order-' + s.orders, qr: 'https://qa.invalid/fake-payment-' + s.orders };
     case 'payStatus': if (s.paid) { s.account = account(500); return { status: 'paid', balance: 500 }; } return { status: 'pending' };
     case 'openExternal': (s.externalURLs??=[]).push(args[0]);return true;
@@ -242,7 +256,7 @@ app.whenReady().then(async()=>{
   assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*600[\s\S]*38.5/);
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),2);
   assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/剩余.*\d{2}:\d{2}:\d{2}/);
-  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/每日签到可领.*10.*今日可领取/);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/每日签到可领.*10.*今日尚未签到/);
   assert(await f.js('!!(document.querySelector(".account-wallet-permanent").compareDocumentPosition(document.querySelector(".account-wallet-expiring")) & Node.DOCUMENT_POSITION_FOLLOWING)'));
 
   const rect=await f.js('document.querySelector(".account-wallet-popover").getBoundingClientRect().toJSON()');
@@ -274,7 +288,7 @@ app.whenReady().then(async()=>{
   const after=await f.js('document.querySelector(".account-wallet-countdown").textContent');assert.notEqual(before,after);
   f.state.walletData={...walletSnapshot(),balance:608.5,permanent:600,expiring:8.5,batches:[walletSnapshot().batches[1]]};
   await f.wait('document.querySelectorAll(".account-wallet-batch").length===1',4000);
-  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日可领取/);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日尚未签到/);
   assert.equal(f.state.orders,0);
  });
  await run('底栏：旧服务不伪造每日数量',{account:walletAccount(),footerLayout:'wallet'},async f=>{
@@ -282,6 +296,39 @@ app.whenReady().then(async()=>{
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
   assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/—.*暂不可用/);
   assert.equal(f.state.orders,0);
+ });
+ await run('底栏：快捷签到到账后开始失效倒计时',{account:{...walletAccount(),coin:{balance:52}},footerLayout:'wallet'},async f=>{
+  f.state.walletData={...walletSnapshot(),balance:52,permanent:52,expiring:0,batches:[]};f.state.checkinDelay=350;
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-checkin:not(:disabled)")');
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-reset")'),false);
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-countdown")'),false);
+  fs.writeFileSync(path.join(evidence,'quick-checkin-before.png'),await captureBillingFrame(f));
+  await f.click('.account-wallet-checkin');await f.wait('document.querySelector(".account-wallet-checkin")?.disabled');
+  await f.click('.account-wallet-checkin');assert.equal(f.state.checkinCalls,1);
+  await f.wait('document.querySelector(".account-wallet-total")?.textContent.includes("62")');
+  await f.wait('!!document.querySelector(".account-wallet-countdown")');
+  assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/后失效/);
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-checkin")'),false);
+  assert.equal(await f.js('!!document.querySelector(".checkin-pop-overlay")'),false);
+  assert.match(await f.js('document.querySelector(".account-wallet-permanent").textContent'),/52/);
+  assert.match(await f.js('document.querySelector(".account-wallet-expiring").textContent'),/10/);
+  const grant=f.state.walletData.batches[0];assert(Math.abs(Date.parse(grant.expiresAt)-Date.parse(f.state.walletData.asOf)-86400000)<5);
+  fs.writeFileSync(path.join(evidence,'quick-checkin-after.png'),await captureBillingFrame(f));assert.equal(f.state.orders,0);
+ });
+ await run('底栏：快捷签到失败可重试且不污染切换账号',{account:walletAccount(),footerLayout:'wallet'},async f=>{
+  f.state.walletData=walletSnapshot();f.state.checkinFail=true;
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-checkin:not(:disabled)")');
+  await f.click('.account-wallet-checkin');await f.wait('!!document.querySelector(".account-wallet-claim-error")');
+  assert.equal(await f.js('document.querySelector(".account-wallet-checkin").disabled'),false);
+  assert.match(await f.js('document.querySelector(".account-wallet-total").textContent'),/638.5/);
+  f.state.checkinFail=false;f.state.checkinDelay=700;await f.click('.account-wallet-checkin');
+  f.state.account={...walletAccount(),user:{...walletAccount().user,id:'account-b'},coin:{balance:10}};
+  f.state.walletData={...walletSnapshot('account-b'),balance:10,permanent:10,expiring:0,batches:[]};
+  emit(f.state,'evt:wuwei-me',clone(f.state.account));await delay(1000);await hover(f,'.account-coin-pill');
+  await f.wait('document.querySelector(".account-wallet-total")?.textContent.includes("10")');
+  assert.equal(f.state.account.user.id,'account-b');assert.equal(f.state.account.coin.balance,10);
+  await f.wait('document.querySelector(".account-wallet-checkin")?.disabled===false');
+  assert.equal(await f.js('!!document.querySelector(".checkin-pop-overlay")'),false);assert.equal(f.state.orders,0);
  });
  await run('底栏：手动刷新旋转、防重复并更新真实响应',{account:walletAccount(),footerLayout:'wallet'},async f=>{
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');

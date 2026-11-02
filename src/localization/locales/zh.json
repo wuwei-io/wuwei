@@ -3738,16 +3738,19 @@
     "account.wallet.loading": "正在读取余额明细…",
     "account.wallet.unavailable": "暂时无法读取明细，请刷新重试",
     "account.wallet.stale": "刷新失败，以下为上次读取的明细",
-    "account.wallet.countdown": "剩余 {time}",
-    "account.wallet.countdownDays": "剩余 {days} 天 {time}",
+    "account.wallet.countdown": "剩余 {time} 后失效",
+    "account.wallet.countdownDays": "剩余 {days} 天 {time} 后失效",
     "account.wallet.resetPending": "正在刷新…",
     "account.wallet.daily": "每日签到可领",
     "account.wallet.dailyClaimed": "今日已签到",
-    "account.wallet.dailyAvailable": "今日可领取 · 通过头像菜单签到",
+    "account.wallet.dailyAvailable": "今日尚未签到",
     "account.wallet.dailyReset": "下次领取资格重置",
-    "account.wallet.dailyExpiry": "需签到领取；到账后 {hours} 小时到期",
+    "account.wallet.dailyExpiry": "签到到账后 {hours} 小时内使用，未用余额到期自动失效",
     "account.wallet.dailyPermanent": "需签到领取；领取的币无到期限制",
     "account.wallet.dailyUnavailable": "每日签到信息暂不可用，请刷新重试",
-    "account.wallet.dailyBonus": "今日连续签到额外 +{amount} 币"
+    "account.wallet.dailyBonus": "今日连续签到额外 +{amount} 币",
+    "account.wallet.claim": "立即签到，领取 {amount} 币",
+    "account.wallet.claiming": "正在签到…",
+    "account.wallet.claimFailed": "签到未完成，请重试"
   }
 }
