@@ -3720,7 +3720,7 @@
     "account.wallet.menu": "Open account menu",
     "account.wallet.refresh": "Refresh balance",
     "account.wallet.details": "Credit details",
-    "account.wallet.expiringBalance": "Credits with expiry",
+    "account.wallet.expiringBalance": "Daily credits",
     "account.wallet.permanent": "Credits without expiry",
     "account.wallet.noLimit": "No expiry limit",
     "account.wallet.noExpiry": "No credits due to expire",

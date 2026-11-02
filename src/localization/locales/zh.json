@@ -3720,7 +3720,7 @@
     "account.wallet.menu": "打开账号菜单",
     "account.wallet.refresh": "刷新余额",
     "account.wallet.details": "消费详情",
-    "account.wallet.expiringBalance": "有期限无为币",
+    "account.wallet.expiringBalance": "每日无为币",
     "account.wallet.permanent": "无期限无为币",
     "account.wallet.noLimit": "无到期限制",
     "account.wallet.noExpiry": "当前没有将到期的无为币",
