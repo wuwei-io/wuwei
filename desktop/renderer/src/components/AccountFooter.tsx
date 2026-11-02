@@ -101,7 +101,7 @@ export function AccountFooter(p: Props) {
     onMouseEnter={cancelClose} onMouseLeave={() => { if (p.layout === 'wallet' && !claiming) closeTimer.current = setTimeout(close, 220); }}
     onBlur={e => { if (p.layout === 'wallet' && !e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
     {p.layout === 'classic' ? p.classicTrigger : <>
-      <button type="button" className="account-upgrade" onClick={pay}><Icon kind="spark"/>{tr('account.wallet.upgrade')}</button>
+      <button type="button" className="account-upgrade" title={tr('menu.annualDiscount')} onClick={pay}><Icon kind="spark"/><span>{tr('menu.upgradeEntry')}</span><span className="account-upgrade-discount" aria-hidden="true">−50%</span></button>
       <div className="account-footer-row">
         <div className="account-coin-pill" onMouseEnter={openWallet}>
           <button type="button" className="account-coin-balance" aria-label={tr('account.wallet.balance')} aria-expanded={walletOpen} aria-controls={panelId}
