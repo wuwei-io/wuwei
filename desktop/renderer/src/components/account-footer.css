@@ -11,3 +11,7 @@
 .account-wallet-reset{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline;font-size:11px;margin:9px 0;color:var(--text-dim)}
 .account-wallet-reset time{font-variant-numeric:tabular-nums;color:var(--text);font-weight:500}
 .account-wallet-daily-status{font-size:11px;color:var(--text-dim);margin:6px 0}
+
+@keyframes account-wallet-refresh-spin{to{transform:rotate(360deg)}}
+.account-wallet-refresh.is-refreshing{color:var(--accent);cursor:wait}
+.account-wallet-refresh.is-refreshing svg{animation:account-wallet-refresh-spin .8s linear infinite;transform-origin:center}

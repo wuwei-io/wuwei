@@ -283,6 +283,27 @@ app.whenReady().then(async()=>{
   assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/—.*暂不可用/);
   assert.equal(f.state.orders,0);
  });
+ await run('底栏：手动刷新旋转、防重复并更新真实响应',{account:walletAccount(),footerLayout:'wallet'},async f=>{
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
+  const before=f.state.billingCalls.filter(r=>r.action==='wallet').length;
+  f.state.walletDelay=750;f.state.walletData={...walletSnapshot(),balance:637.5,permanent:599};
+  await f.click('.account-wallet-refresh');await f.wait('document.querySelector(".account-wallet-refresh")?.getAttribute("aria-busy")==="true"');
+  assert(await f.js('document.querySelector(".account-wallet-refresh").disabled'));
+  assert.equal(await f.js('getComputedStyle(document.querySelector(".account-wallet-refresh svg")).animationName'),'account-wallet-refresh-spin');
+  const first=await f.js('getComputedStyle(document.querySelector(".account-wallet-refresh svg")).transform');await delay(120);
+  assert.notEqual(await f.js('getComputedStyle(document.querySelector(".account-wallet-refresh svg")).transform'),first);
+  await f.click('.account-wallet-refresh');assert.equal(f.state.billingCalls.filter(r=>r.action==='wallet').length,before+1);
+  await f.wait('document.querySelector(".account-wallet-refresh")?.getAttribute("aria-busy")==="false"');
+  assert.match(await f.js('document.querySelector(".account-wallet-total").textContent'),/637.5/);
+  assert.match(await f.js('document.querySelector(".account-coin-balance").textContent'),/637.5/);
+  assert.equal(await f.js('getComputedStyle(document.querySelector(".account-wallet-refresh svg")).animationName'),'none');
+  assert.equal(await f.js('document.querySelector(".account-wallet-refresh").disabled'),false);
+  f.state.walletFail=true;await f.click('.account-wallet-refresh');await f.wait('document.querySelector(".account-wallet-status")?.textContent.includes("刷新失败")');
+  assert.match(await f.js('document.querySelector(".account-wallet-total").textContent'),/637.5/);
+  assert.equal(await f.js('document.querySelector(".account-wallet-refresh").disabled'),false);
+  f.state.walletFail=false;await f.click('.account-wallet-refresh');await f.wait('document.querySelector(".account-wallet-refresh")?.getAttribute("aria-busy")==="false"');
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-status")'),false);assert.equal(f.state.orders,0);
+ });
  await run('底栏：失败保留提示、迟到账号数据隔离',{account:walletAccount(),footerLayout:'wallet'},async f=>{
   await f.wait('!!document.querySelector(".account-coin-pill")');await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
   f.state.walletFail=true;await f.click('.account-wallet-heading button');await f.wait('document.querySelector(".account-wallet-status")?.textContent.includes("刷新失败")');

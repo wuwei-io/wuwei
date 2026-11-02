@@ -47,10 +47,10 @@ export function AccountFooter(p: Props) {
     document.addEventListener('pointerdown', outside); document.addEventListener('keydown', keyboard);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', keyboard); };
   }, [p.layout, close]);
-  const load = useCallback(async () => {
+  const load = useCallback(async (manual = false) => {
     const userId = owner.current; if (!userId || loading.current) return;
     const generation = epoch.current; loading.current = true; setBusy(true); setError(false);
-    const result = await billingRequest({action: 'wallet'}, 15000);
+    const [result] = await Promise.all([billingRequest({action: 'wallet'}, 15000), manual ? new Promise<void>(resolve => setTimeout(resolve, 450)) : Promise.resolve()]);
     if (generation !== epoch.current || owner.current !== userId) return;
     loading.current = false; setBusy(false);
     if (isAccountWallet(result, userId)) { clock.current = {server: Date.parse(result.asOf), observed: performance.now()}; setSnapshot(result); setNow(clock.current.server); }
@@ -99,7 +99,7 @@ export function AccountFooter(p: Props) {
         </button>
       </div>
       {walletOpen && <div className="account-wallet-popover" id={panelId} role="region" aria-label={tr('account.wallet.balance')} onMouseEnter={cancelClose}>
-        <div className="account-wallet-heading"><span>{tr('account.wallet.balance')}</span><button type="button" disabled={busy || !p.account} aria-label={tr('account.wallet.refresh')} onClick={() => { void load(); }}><Icon kind="refresh"/></button></div>
+        <div className="account-wallet-heading"><span>{tr('account.wallet.balance')}</span><button type="button" className={'account-wallet-refresh' + (busy ? ' is-refreshing' : '')} disabled={busy || !p.account} aria-busy={busy} aria-label={tr('account.wallet.refresh')} title={tr('account.wallet.refresh')} onClick={() => { void load(true); }}><Icon kind="refresh"/></button></div>
         <div className="account-wallet-total">{p.account ? formatCredits(data?.balance ?? p.account.coin.balance) : '—'} <small>{tr('account.wallet.unit')}</small></div>
         <div className="account-wallet-plan"><span>{tr('account.wallet.plan')}</span><strong>{data ? data.plan.name ?? tr(data.plan.member ? 'account.wallet.member' : 'account.wallet.free') : p.account?.membership?.plan ?? tr(p.account?.membership?.tier && p.account.membership.tier !== 'free' ? 'account.wallet.member' : 'account.wallet.free')}{data?.plan.period && <small> · {tr('account.wallet.' + (['monthly','annual','trial','pack'].includes(data.plan.period) ? data.plan.period : 'member'))}</small>}</strong></div>
         {data?.plan.endsAt && <div className="account-wallet-plan-end">{tr('account.wallet.membershipEnds', {date: new Date(data.plan.endsAt).toLocaleDateString(lang)})}</div>}
