@@ -1,0 +1,9 @@
+.account-language-trigger>span{flex:1}
+.account-language-trigger small{font-size:10px;font-weight:400;max-width:65px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)}
+.account-language-trigger svg.account-language-chevron{width:12px;height:12px}
+.account-language-trigger[aria-expanded=true]{background:var(--bg-soft);color:var(--text)}
+.account-language-popup{position:fixed;z-index:100;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;padding:6px;border:1px solid var(--border-strong);border-radius:10px;background:var(--bg);color:var(--text);box-shadow:0 8px 26px #0002;font-size:12px;-webkit-app-region:no-drag}
+.account-language-popup>button{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:7px 8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;text-align:start;cursor:pointer}
+.account-language-check{width:14px;flex:none;color:var(--accent)}
+.account-language-popup>button:hover,.account-language-popup>button:focus-visible{background:var(--bg-soft);outline:none}
+.account-language-popup>button[aria-checked=true]{color:var(--accent);font-weight:600}

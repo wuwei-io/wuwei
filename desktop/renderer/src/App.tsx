@@ -13,6 +13,7 @@ import { formatCredits } from "../../../src/billing/presentation.js";
 import {localizeToolMetadata} from "../../../src/localization/tools.js";
 import systemData from "../../../src/localization/content/system-data.json";
 import { LanguagePicker } from "./components/LanguagePicker.js";
+import { AccountLanguageMenu } from "./components/AccountLanguageMenu.js";
 import { LanguageSwitcher } from "./components/LanguageSwitcher.js";
 import { tr, getCurrentLanguage, localizeStoredText, setSystemLanguage } from "../../../src/localization/index.js";
 /// <reference types="vite/client" />
@@ -8465,6 +8466,7 @@ export function App() {
                                   </span>
                                 )}
                               </button>
+                              <AccountLanguageMenu language={lang} onChange={changeLang}/>
                               <button
                                 className="acct-it danger"
                                 onClick={() => {
