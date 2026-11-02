@@ -22,4 +22,4 @@
 .account-wallet-checkin:disabled{opacity:.6;cursor:default}
 .account-wallet-claim-error{font-size:11px;color:var(--warn);line-height:1.6}
 
-.account-upgrade-discount{position:absolute;top:-7px;right:8px;display:inline-flex;align-items:center;justify-content:center;min-height:17px;padding:0 5px;border:1px solid #fff;border-radius:4px;background:#d83a4b;color:#fff;font-size:10px;font-weight:700;line-height:15px;letter-spacing:0;white-space:nowrap;direction:ltr;pointer-events:none;box-shadow:0 1px 3px #16191e29}
+.account-upgrade-discount{position:absolute;top:-7px;right:8px;display:inline-flex;align-items:center;justify-content:center;min-height:17px;padding:0 5px;border:0;border-radius:4px;background:#d83a4b;color:#fff;font-size:10px;font-weight:700;line-height:15px;letter-spacing:0;white-space:nowrap;direction:ltr;pointer-events:none;box-shadow:0 1px 3px #16191e29}
