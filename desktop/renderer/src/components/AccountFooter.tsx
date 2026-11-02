@@ -136,19 +136,17 @@ export function AccountFooter(p: Props) {
                 <time dateTime={batch.expiresAt} title={new Date(batch.expiresAt).toLocaleString(lang)}>{tr('account.wallet.expires', {time: new Date(batch.expiresAt).toLocaleString(lang, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})})}</time>
               </div>) : <p>{tr('account.wallet.noExpiry')}</p>}</div>
             </section>
-            <section className="account-wallet-daily">
-              <div className="account-wallet-section"><span>{tr('account.wallet.daily')}</span><strong>{daily ? `${formatCredits(daily.amount)} ${tr('account.wallet.unit')}` : '—'}</strong></div>
+            {!daily?.claimed && <section className="account-wallet-daily">
               {daily ? <>
-                <p className="account-wallet-daily-status">{Date.parse(daily.resetsAt) <= now ? tr('account.wallet.resetPending') : tr(daily.claimed ? 'account.wallet.dailyClaimed' : 'account.wallet.dailyAvailable')}</p>
-                {!daily.claimed && daily.bonus > 0 && <p className="account-wallet-muted">{tr('account.wallet.dailyBonus', {amount: formatCredits(daily.bonus)})}</p>}
-                {!daily.claimed && <button type="button" className="account-wallet-checkin" disabled={busy || claiming || p.checkinBusy || daily.amount + daily.bonus <= 0} aria-busy={claiming || p.checkinBusy} onClick={() => { void claim(); }}>
+                <button type="button" className="account-wallet-checkin" disabled={busy || claiming || p.checkinBusy || daily.amount + daily.bonus <= 0} aria-busy={claiming || p.checkinBusy}
+                  title={tr(daily.expiryHours === null ? 'account.wallet.dailyPermanent' : 'account.wallet.dailyExpiry', {hours: daily.expiryHours ?? 0})} onClick={() => { void claim(); }}>
                   {(claiming || p.checkinBusy) && <span className="acct-checkin-spin" aria-hidden="true"/>}
                   {tr(claiming || p.checkinBusy ? 'account.wallet.claiming' : 'account.wallet.claim', {amount: formatCredits(daily.amount + daily.bonus)})}
-                </button>}
+                </button>
                 {claimError && <p className="account-wallet-claim-error" role="status">{tr('account.wallet.claimFailed')}</p>}
-                <p className="account-wallet-muted">{tr(daily.expiryHours === null ? 'account.wallet.dailyPermanent' : 'account.wallet.dailyExpiry', {hours: daily.expiryHours ?? 0})}</p>
               </> : <p className="account-wallet-muted">{tr('account.wallet.dailyUnavailable')}</p>}
-            </section>
+            </section>}
+
           </>}
         </>}
         <button type="button" className="account-wallet-details" onClick={details}>{tr('account.wallet.details')}<Icon kind="arrow"/></button>

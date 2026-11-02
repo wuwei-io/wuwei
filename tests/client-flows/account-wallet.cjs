@@ -256,7 +256,7 @@ app.whenReady().then(async()=>{
   assert.match(await f.js('document.querySelector(".account-wallet-popover").textContent'),/638.5[\s\S]*600[\s\S]*38.5/);
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),2);
   assert.match(await f.js('document.querySelector(".account-wallet-countdown").textContent'),/剩余.*\d{2}:\d{2}:\d{2}/);
-  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/每日签到可领.*10.*今日尚未签到/);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/签到领.*10.*币/);
   assert(await f.js('!!(document.querySelector(".account-wallet-permanent").compareDocumentPosition(document.querySelector(".account-wallet-expiring")) & Node.DOCUMENT_POSITION_FOLLOWING)'));
 
   const rect=await f.js('document.querySelector(".account-wallet-popover").getBoundingClientRect().toJSON()');
@@ -283,18 +283,18 @@ app.whenReady().then(async()=>{
   f.state.walletData.daily.claimed=true;
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-countdown")');
   const before=await f.js('document.querySelector(".account-wallet-countdown").textContent');
-  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日已签到/);
+  assert.equal(await f.js('!!document.querySelector(".account-wallet-daily")'),false);
   await delay(1100);
   const after=await f.js('document.querySelector(".account-wallet-countdown").textContent');assert.notEqual(before,after);
   f.state.walletData={...walletSnapshot(),balance:608.5,permanent:600,expiring:8.5,batches:[walletSnapshot().batches[1]]};
   await f.wait('document.querySelectorAll(".account-wallet-batch").length===1',4000);
-  assert.match(await f.js('document.querySelector(".account-wallet-daily-status").textContent'),/今日尚未签到/);
+  assert(await f.js('!!document.querySelector(".account-wallet-checkin")'));
   assert.equal(f.state.orders,0);
  });
  await run('底栏：旧服务不伪造每日数量',{account:walletAccount(),footerLayout:'wallet'},async f=>{
   f.state.walletData=walletSnapshot();delete f.state.walletData.daily;
   await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
-  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/—.*暂不可用/);
+  assert.match(await f.js('document.querySelector(".account-wallet-daily").textContent'),/暂不可用/);
   assert.equal(f.state.orders,0);
  });
  await run('底栏：快捷签到到账后开始失效倒计时',{account:{...walletAccount(),coin:{balance:52}},footerLayout:'wallet'},async f=>{

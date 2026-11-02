@@ -3749,7 +3749,7 @@
     "account.wallet.dailyPermanent": "Claim by checking in; received credits do not expire",
     "account.wallet.dailyUnavailable": "Daily check-in details unavailable. Please refresh.",
     "account.wallet.dailyBonus": "Extra streak bonus today: +{amount} credits",
-    "account.wallet.claim": "Check in · Claim {amount} credits",
+    "account.wallet.claim": "Check in · {amount} credits",
     "account.wallet.claiming": "Checking in…",
     "account.wallet.claimFailed": "Check-in could not be completed. Please try again."
   }

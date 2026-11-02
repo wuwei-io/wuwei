@@ -3749,7 +3749,7 @@
     "account.wallet.dailyPermanent": "需签到领取；领取的币无到期限制",
     "account.wallet.dailyUnavailable": "每日签到信息暂不可用，请刷新重试",
     "account.wallet.dailyBonus": "今日连续签到额外 +{amount} 币",
-    "account.wallet.claim": "立即签到，领取 {amount} 币",
+    "account.wallet.claim": "签到领 {amount} 币",
     "account.wallet.claiming": "正在签到…",
     "account.wallet.claimFailed": "签到未完成，请重试"
   }
