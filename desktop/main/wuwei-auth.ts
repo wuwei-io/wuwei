@@ -25,7 +25,7 @@ import type { BillingRequest, BillingResponse } from '../../src/billing/contract
 
 /** A fixed endpoint allowlist keeps tokens and arbitrary URLs out of the renderer. */
 export async function wuweiBillingRequest(accessToken:string, request:BillingRequest):Promise<BillingResponse|'unauthorized'> {
-  if(!request || !['catalog','quote','ledger','create-order','order'].includes(request.action)) return {error:'invalid_billing_action'};
+  if(!request || !['wallet','catalog','quote','ledger','create-order','order'].includes(request.action)) return {error:'invalid_billing_action'};
   if(request.action==='order' && !/^[a-zA-Z0-9_-]{8,100}$/.test(request.orderId??''))return {error:'invalid_order_id'};
   const endpoint=request.action==='create-order'?'orders':request.action==='order'?`orders/${request.orderId}`:request.action;
   const url=new URL(`/api/billing/${endpoint}`,SITE);
@@ -77,7 +77,7 @@ export interface WuweiMe {
 
 // AI 提供商目录（/api/catalog，脱敏）：后台可配的平台顺序/显隐/模型。客户端拿它当默认序 + 模型源，拉不到则回退硬编码 PRESETS。
 export interface CatalogModelDto {
-  selection?: { category?: string; rank?: number; recommended?: boolean; defaultForNewUsers?: boolean; hiddenInPicker?: boolean };
+  selection?: { category?: string; rank?: number; recommended?: boolean; defaultForNewUsers?: boolean; hiddenInPicker?: boolean; membershipRequired?: 'member' | 'pro' | null };
   price?: { input: number | null; output: number | null; cache: number | null };
   id: string;
   label: string;

@@ -1,3 +1,4 @@
+import {AccountFooter, useAccountFooterLayout} from './components/AccountFooter.js';
 import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
@@ -12,6 +13,7 @@ import { formatCredits } from "../../../src/billing/presentation.js";
 import {localizeToolMetadata} from "../../../src/localization/tools.js";
 import systemData from "../../../src/localization/content/system-data.json";
 import { LanguagePicker } from "./components/LanguagePicker.js";
+import { AccountLanguageMenu } from "./components/AccountLanguageMenu.js";
 import { LanguageSwitcher } from "./components/LanguageSwitcher.js";
 import { tr, getCurrentLanguage, localizeStoredText, setSystemLanguage } from "../../../src/localization/index.js";
 /// <reference types="vite/client" />
@@ -29,7 +31,8 @@ import { arrangeProviderEntries } from '../../../src/provider-order.js';
 import { createCatalogRefresher } from '../../../src/catalog-refresh.js';
 import { createAccountRefresher, type AccountRefreshState } from '../../../src/account-refresh.js';
 import { anonymousDefaultModel, catalogModelChoices, MODEL_CATEGORIES, rememberedModelChoice, shouldApplyEconomyDefault, type ModelChoice, type ModelCategory } from '../../../src/model-selection.js';
-import { mediaModelChoices } from '../../../src/media-model-selection.js';
+import { mediaModelChoices, imageModelAccess } from '../../../src/media-model-selection.js';
+import {canUseModel} from '../../../src/model-membership.js';
 import type {VideoCatalog} from '../../../src/videogen/contracts.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import {ImageGallery} from './components/ImageGallery.js';
@@ -3563,6 +3566,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
 
 export function App() {
   usePromotionConfig();
+  const accountFooterLayout = useAccountFooterLayout();
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
   const backgroundTasks = useBackgroundTasks();
@@ -4209,6 +4213,7 @@ export function App() {
   const [showBrainIntro, setShowBrainIntro] = useState(false); // 免费脑网络功能介绍弹窗
   const [checkinToast, setCheckinToast] = useState(""); // 每日签到到账轻量提示
   const [checkinDone, setCheckinDone] = useState(false); // 今日是否已签到（手动签或已签后置 true）
+  const checkinInFlight = useRef<{owner: string} | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false); // 签到请求中，防重复点击
   const [checkinPop, setCheckinPop] = useState<{ amount: number; streak?: number } | "already" | null>(null); // 居中签到弹窗
   const [loginResume, setLoginResume] = useState(false); // 登录成功后是否续发刚才拦下的消息
@@ -4482,25 +4487,32 @@ export function App() {
   const sidebarSessions:SessionMeta[]=[...sessions,...videoHistory.map(row=>({id:'video:'+row.requestId,videoRequestId:row.requestId,title:row.title,updatedAt:row.updatedAt}))];
   function openVideoCreation(id?:string){setImagePreview(null);setRequestedVideoCreation(id?{id,version:Date.now()}:undefined);if(!id)setVideoNewVersion(v=>v+1);setAppView(null);setAgiView(null);setVideoMode(true)}
   function deleteVideoCreation(requestId:string){const owner=wuweiRef.current?.user.id;if(!owner)return;askConfirm({title:tr('video.deleteHistory'),message:tr('video.deleteHistoryConfirm'),danger:true,onOk:()=>{void(async()=>{if(wuweiRef.current?.user.id!==owner)return;for(const member of videoCreationMembers(owner,requestId)){if(wuweiRef.current?.user.id!==owner)return;const result=await window.wuwei.videoRequest({action:'delete_history',request_id:member});if(result&&typeof result==='object'&&'error'in result)throw Error(String(result.error));}if(wuweiRef.current?.user.id!==owner)return;setVideoHistoryVersion(v=>v+1);await loadVideoHistory();if(requestedVideoCreation?.id===requestId)openVideoCreation()})().catch(()=>push({type:'notice',text:tr('video.error.unavailable')}))}})}
-  // 手动签到：账号面板点「签到」触发。后端幂等，给币则弹 toast + 刷新余额；无论刚签/已签都标记当天完成。
-  async function doCheckin() {
-    if (checkinBusy || checkinDone) return;
-    void window.wuwei.track?.("menu_item_click", { item: "checkin" });
+  // 共用签到入口：原菜单保留成功弹窗，快捷签到在钱包内刷新；后端幂等，迟到响应按账号隔离。
+  async function doCheckin(inline = false): Promise<boolean> {
+    const owner = wuweiRef.current?.user.id;
+    if (!owner || checkinInFlight.current?.owner === owner || (!inline && checkinDone)) return false;
+    const request = {owner}; checkinInFlight.current = request;
+    void window.wuwei.track?.("menu_item_click", { item: inline ? "wallet_checkin" : "checkin" });
     setCheckinBusy(true);
+    const current = () => wuweiRef.current?.user.id === owner && checkinInFlight.current === request;
     try {
       const r = await window.wuwei.checkin();
-      if (r?.success && (r.amount ?? 0) > 0) {
-        setCheckinPop({ amount: r.amount ?? 0, streak: r.streak }); // 居中成功弹窗
-        window.wuwei.wuweiMe().then((m) => { if (m) setWuwei(m); }).catch(() => {});
-      } else if (r) {
-        setCheckinPop("already"); // 今日已签到，也给个反馈
+      if (!current() || !r || typeof r.success !== 'boolean' || ('error' in r && r.error)) return false;
+      setCheckinDone(true);
+      if (!inline) {
+        setCheckinPop(r.success && (r.amount ?? 0) > 0 ? {amount: r.amount ?? 0, streak: r.streak} : "already");
+        setTimeout(() => { if (wuweiRef.current?.user.id === owner) setCheckinPop(null); }, 2800);
       }
-      if (r) setCheckinDone(true);
-      if (r) setTimeout(() => setCheckinPop(null), 2800); // 自动消失
-    } catch {
-      /* 忽略，稍后可重试 */
-    } finally {
-      setCheckinBusy(false);
+      const me = await window.wuwei.wuweiMe().catch(() => null);
+      if (!current()) return false;
+      if (me?.user.id === owner) setWuwei(me);
+      return true;
+    } catch { return false; }
+    finally {
+      if (checkinInFlight.current === request) {
+        checkinInFlight.current = null;
+        if (wuweiRef.current?.user.id === owner) setCheckinBusy(false);
+      }
     }
   }
   // 海外结账：英文用户点购买/升级 → 系统浏览器打开网页 Paddle 结账页(已验证可付+webhook发币)。
@@ -4853,7 +4865,7 @@ export function App() {
   }));
   const pickerChoices: ModelChoice[] = [
     ...catalogModelChoices([...pickerCatalog, ...extraConnections], selectedModelKey),
-    ...mediaModelChoices(imageCatalog,videoCatalog),
+    ...mediaModelChoices(mediaOwners.current.images===(wuwei?.user.id??'anonymous')?imageCatalog:[],mediaOwners.current.videos===(wuwei?.user.id??'anonymous')?videoCatalog:null),
   ];
   const selectedChoice = pickerChoices.find((choice) => choice.key === selectedModelKey);
   const pickerChoicesRef = useRef(pickerChoices);
@@ -4915,9 +4927,10 @@ export function App() {
       // real SKU of that same model. Revalidate it on both sides of the await.
       const variant = imageCatalogRef.current.find(row => row.sku_id === choice.modelId && row.model === choice.imageModel);
       const imageChoice = variant && choice.category === 'images' && pickerChoicesRef.current.find(c => c.category === 'images' && c.imageModel === variant.model);
-      if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id};
+      if (imageChoice) return {...imageChoice,key:`wuwei-image/${variant!.sku_id}`,modelId:variant!.sku_id,...imageModelAccess(variant!)};
       throw new Error('Model unavailable');
     };
+    if (!canUseModel(resolveChoice(), wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(resolveChoice(), approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -4935,6 +4948,7 @@ export function App() {
     const r = await window.wuwei.getSettings(); const cur = r?.settings || {};
     if (modelDefaultRef.current !== defaults || currentIdRef.current !== sid || wuweiRef.current?.user.id !== owner || (automatic&&imagePreviewRef.current)) return false;
     choice = resolveChoice();
+    if (!canUseModel(choice, wuweiRef.current)) { if (!automatic) { closeModelPicker(); openBackgroundPlans(); } return false; }
     if (!automatic && premiumSelectionNeedsConfirmation(choice, approved)) {
       setModelPickerCategory('premium'); setShowModelMenu(false); setShowProviderMenu(true);
       return false;
@@ -4975,6 +4989,8 @@ export function App() {
     return true;
   }
   async function selectPickerChoice(choice:ModelChoice){
+    const current=pickerChoicesRef.current.find(row=>row.key===choice.key)??choice;
+    if(!canUseModel(current,wuweiRef.current)){closeModelPicker();openBackgroundPlans();return;}
     if(choice.category==='images'||choice.category==='videos'){
       if(!wuweiRef.current){pendingMediaChoice.current={category:choice.category,modelId:choice.modelId,imageModel:choice.imageModel};requestModelLogin();return;}
       if(busy)throw Error('CREATION_BUSY');
@@ -5446,8 +5462,9 @@ export function App() {
   // 今日已签到判定：拿到账号数据后，若最近签到日=今天(UTC，与后端签到日一致)则按钮直接显「已签到」且禁用，不用点了才知道。
   useEffect(() => {
     const last = wuwei?.coin.lastSignin;
-    if (last && last === new Date().toISOString().slice(0, 10)) setCheckinDone(true);
-  }, [wuwei?.coin.lastSignin]);
+    setCheckinDone(!!wuwei?.user.id && last === new Date().toISOString().slice(0, 10));
+    setCheckinBusy(!!wuwei?.user.id && checkinInFlight.current?.owner === wuwei.user.id);
+  }, [wuwei?.user.id, wuwei?.coin.lastSignin]);
 
   async function checkUpdateNow() {
     setShowAcctMenu(false); // 关菜单，结果用居中弹窗显示
@@ -5851,6 +5868,12 @@ export function App() {
           break;
         case "evt:error": {
           const rawMsg = String(payload.message ?? payload);
+          if (gatewayCode(rawMsg) === 'membership_required') {
+            const sid = payload.sid || currentIdRef.current;
+            if (sid && modeOf(sid) === 'cont') { try { setMode(sid, 'auto'); } catch { /* keep the paused in-memory mode */ } }
+            if (!payload.sid || payload.sid === currentIdRef.current) openBackgroundPlans();
+            break;
+          }
           if (payload.sid && payload.sid !== currentIdRef.current) {
             // A background conversation must pause its own quota retry loop too.
             const backgroundLimit = usageLimitKind(rawMsg, false);
@@ -6174,6 +6197,8 @@ export function App() {
 
   // 真正发送一条(立即入队跑)
   function doSend(text: string, imgs: string[], imageApprovalId?: string) {
+    const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
+    if (!canUseModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const sid = currentIdRef.current;
     const userId = wuweiRef.current?.user.id;
     if (!imageApprovalId && userId && modelDefaultScopeRef.current.empty && selectedCategory !== 'connections' && !modelDefaultRef.current.handled.has(sid)) {
@@ -6539,6 +6564,8 @@ export function App() {
     } catch { push({ type: 'notice', text: tr("ui.app.could.not.switch.models.please.retry.f1bb49c") }); }
   }
   function submit(override?: string, imageApprovalId?: string) {
+    const target = pickerChoicesRef.current.find(choice => choice.key === selectedModelKey) ?? {key:selectedModelKey,category:selectedCategory,free:quotaModelRef.current.free};
+    if (!canUseModel(target, wuweiRef.current)) { openBackgroundPlans(); return; }
     const text = (typeof override === "string" ? override : input).trim();
     if (!text && pendingImages.length === 0) return;
     if (text === "/reset") {
@@ -7150,6 +7177,7 @@ export function App() {
               {(showProviderMenu || showModelMenu) && <>
                 <div className="mq-overlay" onClick={closeModelPicker} />
                 <ModelPicker choices={pickerChoices} selectedKey={selectedModelKey} loggedIn={!!wuwei} lang={lang} loading={!catalogReady}
+                  membership={wuwei?.membership} onRequireMembership={()=>{closeModelPicker();openBackgroundPlans();}}
                   initialCategory={modelPickerCategory} mediaLoading={mediaLoading} mediaError={mediaError}
                   onRetryMedia={()=>{void refreshImageCatalog();void refreshVideoCatalog();}}
                   onRequireLogin={requestModelLogin}
@@ -8184,7 +8212,23 @@ export function App() {
                   <span style={{ color: "#C05F3C" }}>✨</span> {tr("ui.app.subscription.8e99882")}
                 </button>
               )}
-              <button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
+              <AccountFooter onCheckin={() => doCheckin(true)} checkinBusy={checkinBusy} layout={accountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
+                avatar={<UserAvatar url={wuwei?.user.avatar} fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial")).slice(0,1).toUpperCase()}/>}
+                onPay={() => {
+                  setShowAcctMenu(false);
+                  if (!wuwei) { setShowLoginForm(true); return; }
+                  void window.wuwei.track?.("menu_item_click", {item: "upgrade"});
+                  setCoinShortage({message: "browse", balance: wuwei.coin.balance, browse: true});
+                  shortageShownAt.current = Date.now();
+                  const owner = wuwei.user.id;
+                  void window.wuwei.wuweiMe().then(me => {
+                    if (!me || me.user.id !== owner || wuweiRef.current?.user.id !== owner) return;
+                    setWuwei(me);
+                    setCoinShortage(current => current ? {...current, balance: me.coin.balance} : current);
+                  }).catch(() => {});
+                }}
+                onDetails={() => { setShowAcctMenu(false); if (!wuwei) { setShowLoginForm(true); return; } setBillingPage('ledger'); setBillingOpen(true); }}
+                classicTrigger={<button className="acct-btn" onClick={() => setShowAcctMenu((v) => !v)}>
                 <div className={"acct-av" + (wuwei ? "" : " off")}>
                   {/* 未登录的头像首字也要跟语言：中文「游」/英文 G，别让英文界面里冒出个汉字 */}
                   <UserAvatar
@@ -8204,10 +8248,10 @@ export function App() {
                 {msgUnread > 0 && !showAcctMenu && (
                   <span className="acct-unread">{msgUnread > 99 ? "99+" : msgUnread}</span>
                 )}
-              </button>
+              </button>}>
               {showAcctMenu && (
                 <>
-                  <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />
+                  {accountFooterLayout === 'classic' && <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />}
                   <div className="acct-menu">
                     {/* 无为账号（与模型商账号合并进同一入口）。未登录只给登录入口，设置等登录后才显示 */}
                     {wuwei ? (
@@ -8301,7 +8345,7 @@ export function App() {
                                 type="button"
                                 className={"acct-checkin" + (checkinDone ? " done" : "")}
                                 disabled={checkinDone || checkinBusy}
-                                onClick={doCheckin}
+                                onClick={() => { void doCheckin(); }}
                                 title={
                                   checkinDone
                                     ? t("menu.checkedInTitle")
@@ -8438,6 +8482,7 @@ export function App() {
                                   </span>
                                 )}
                               </button>
+                              <AccountLanguageMenu language={lang} onChange={changeLang}/>
                               <button
                                 className="acct-it danger"
                                 onClick={() => {
@@ -8613,6 +8658,7 @@ export function App() {
                   </div>
                 </>
               )}
+              </AccountFooter>
             </div>
             </>
           );
@@ -8662,7 +8708,7 @@ export function App() {
                   onEmployees={setTeamEmployees}
                   onOpenChat={() => setAppView(null)}
                   providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
-                  loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+                  loggedIn={!!wuwei} onRequireLogin={requestModelLogin} membership={wuwei?.membership} onRequireMembership={openBackgroundPlans}
                   onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
                 />
               ) : (
@@ -10936,7 +10982,7 @@ export function App() {
         <EmployeeEditModal
           en={lang !== "zh"}
           providers={providerList.map((p) => ({ id: p.id, label: p.label || p.id, models: (p.models || []) as string[], choices: pickerChoices.filter(c => c.providerId === p.id) }))}
-          loggedIn={!!wuwei} onRequireLogin={requestModelLogin}
+          loggedIn={!!wuwei} onRequireLogin={requestModelLogin} membership={wuwei?.membership} onRequireMembership={openBackgroundPlans}
           onConnections={() => { setSettingsTab('platforms'); setShowSettings(true); }}
           employee={editEmp}
           onClose={() => setEditEmp(null)}

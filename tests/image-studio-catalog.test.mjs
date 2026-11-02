@@ -48,3 +48,11 @@ test('remembered quality resolves to the exact real SKU while the visible picker
   assert.equal(rememberedModelChoice(withImageSkuChoices(choices,[low]),settings,'user'),undefined);
   assert.equal(choices.length,1);
 });
+
+test('exact image quality uses its own membership permission rather than inheriting another SKU',()=>{
+ const grouped=[{key:'wuwei-image/low',modelId:'low',providerId:'wuwei-image',imageModel:'gpt-image-1',category:'images',membershipRequired:null,membershipEligible:true}];
+ const choices=withImageSkuChoices(grouped,[low,{...medium,membership_required:'pro',eligible:false}]);
+ const exact=choices.find(c=>c.modelId==='medium');
+ assert.equal(exact.membershipRequired,'pro');assert.equal(exact.membershipEligible,false);
+ assert.equal(choices[0].membershipRequired,null);
+});

@@ -1,7 +1,7 @@
 // Product limits/auth/configuration failures cannot recover by resending the
 // same request. Keep temporary gateway/upstream failures eligible for backoff.
 const TRANSIENT_GATEWAY_CODES = new Set([
-  'upstream_error', 'upstream_rate_limited', 'upstream_unavailable', 'auth_unavailable',
+  'upstream_error', 'upstream_rate_limited', 'upstream_unavailable', 'auth_unavailable', 'membership_unavailable',
 ]);
 
 function terminalCode(code: unknown): boolean {

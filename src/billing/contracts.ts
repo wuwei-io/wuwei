@@ -62,6 +62,16 @@ export interface CreditLedger {
   total?: number;
   limit?: number;
 }
+export interface AccountWallet {
+  userId: string;
+  balance: number;
+  permanent: number;
+  expiring: number;
+  asOf: string;
+  plan: { name: string | null; period: string | null; endsAt: string | null; member: boolean };
+  daily?: { amount: number; bonus: number; claimed: boolean; resetsAt: string; expiryHours: number | null };
+  batches: { source: 'gift' | 'purchase' | 'other'; receiptSource?: string | null; remaining: number; expiresAt: string }[];
+}
 export interface BillingFailure { error: string; message?: string }
 export interface BillingOrder {
   id:string;
@@ -80,7 +90,7 @@ export interface BillingOrder {
   startsAt?:string;
 }
 export interface BillingRequest {
-  action: 'catalog' | 'quote' | 'ledger' | 'create-order' | 'order';
+  action: 'wallet' | 'catalog' | 'quote' | 'ledger' | 'create-order' | 'order';
   sku?: string;
   currency?: BillingCurrency;
   offset?: number;
@@ -95,4 +105,4 @@ export interface BillingRequest {
   chain?:'solana'|'bsc'|'tron';
   expected?:Pick<BillingQuote,'catalogVersion'|'amountMinor'|'creditsPerGrant'|'startsAt'>;
 }
-export type BillingResponse = BillingCatalog | BillingQuote | CreditLedger | BillingOrder | BillingFailure;
+export type BillingResponse = AccountWallet | BillingCatalog | BillingQuote | CreditLedger | BillingOrder | BillingFailure;

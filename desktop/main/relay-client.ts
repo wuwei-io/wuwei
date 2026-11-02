@@ -1,6 +1,7 @@
 import { app } from "electron";
 import { EDITION } from "./edition.js";
 import mobileIdentity from "./mobile-remote/wuwei-remote-identity.cjs";
+import mobileToolPolicy from "./mobile-remote/wuwei-remote-tool-policy.cjs";
 import { tr } from "../../src/localization/index.js";
 // 手机端远程设备执行 · relay 常驻连接（电脑端，M1）。
 // ⚠️ 仅当用户在设置里开「允许手机端远程调用本机」(remoteEnabled) 才启动。
@@ -20,6 +21,7 @@ import { configuredRemoteChannels, type RemoteChannel } from './remote-models.js
 import { notifyRemote } from './remote-notify.js';
 import {
   loadSettings,
+  saveSettings,
   remoteEnabled,
   remoteShareSubscription,
   loadRateLimits,
@@ -98,6 +100,15 @@ export type RemoteRoomExecutor = (args: RemoteRoomArgs) => Promise<void>;
 let _remoteRoomExecutor: RemoteRoomExecutor | null = null;
 export function setRemoteRoomExecutor(fn: RemoteRoomExecutor | null) { _remoteRoomExecutor = fn; }
 const remoteDecisions = new RemoteDecisions();
+const remoteToolPolicy = mobileToolPolicy.install(remoteDecisions, {
+  getEnabled: () => loadSettings()?.app?.remoteToolAutoAllow !== false,
+  getLanguage: () => loadSettings()?.app?.lang || process.env.WUWEI_LANG || 'en',
+  saveEnabled: enabled => {
+    const settings = loadSettings();
+    if (!settings) throw new Error('Settings unavailable');
+    saveSettings({ ...settings, app: { ...settings.app, remoteToolAutoAllow: enabled } });
+  },
+});
 export function requestLocalDecision(decision: Decision, source: string | RemoteDecisionSource, signal: AbortSignal, send: (event: Record<string, unknown>) => void) {
   const origin = typeof source === 'string' ? { sessionId: source } : source;
   return remoteDecisions.request(`local_${origin.roomId || origin.sessionId}`, decision, origin, false, signal, event => {
@@ -126,6 +137,7 @@ async function handleRemoteReq(msg: any): Promise<void> {
     reply({ type: "resp", reqId, data: { perms: remoteDecisions.list() } }); return;
   }
   if (method === "perms.policy") {
+    if (typeof msg.params?.toolAutoAllow === 'boolean') remoteToolPolicy.setEnabled(msg.params.toolAutoAllow);
     remoteDecisions.setSmartTimer(msg.params?.smartTimer === true);
     reply({ type: "resp", reqId, data: { ok: true } }); return;
   }
@@ -180,7 +192,7 @@ async function handleRemoteChat(msg: any): Promise<void> {
     onImage: dataUrl => reply({ type: "image", reqId, dataUrl }),
     requestDecision,
     onPermission: (tool, input) => requestDecision({
-      permId: randomUUID(), risk: "high", title: tr("ui.index.message.47a1580dc5"),
+      kind: 'tool-permission', permId: randomUUID(), risk: "high", title: tr("ui.index.message.47a1580dc5"),
       question: tr("ui.relay-client.message.b8305aec63"),
       options: [{ label: tr("ui.index.message.7caaf0c897"), value: "deny", recommended: true, tone: "safe" }, { label: tr("ui.index.message.fe73513fd6"), value: "allow", tone: "danger" }],
       allowCustom: false, timeoutSec: null, rawDetail: tool + "\n" + JSON.stringify(input, null, 2),

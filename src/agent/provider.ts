@@ -55,7 +55,10 @@ function humanizeGatewayError(status: number, rawBody: string): string | null {
     case "upstream_error":
       return tr("ui.provider.the.model.provider.is.temporarily.unavailable.cfbc4bc");
     case "auth_unavailable":
+    case "membership_unavailable":
       return tr("ui.provider.the.account.service.is.temporarily.unreachable.14847f2");
+    case "membership_required":
+      return tr("model.membership.required");
     case "invalid_token":
     case "no_token":
       return tr("ui.provider.your.session.has.expired.please.sign.586074e");

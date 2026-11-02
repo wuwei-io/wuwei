@@ -77,18 +77,7 @@
     "recommended": false
   },
   {
-    "sku": "v2_pack_100",
-    "kind": "pack",
-    "name": "100",
-    "period": "pack",
-    "usdMinor": 100,
-    "cnyMinor": 700,
-    "credits": 100,
-    "memberCredits": 100,
-    "recommended": false
-  },
-  {
-    "sku": "v2_pack_800",
+    "sku": "v4_pack_800",
     "kind": "pack",
     "name": "800",
     "period": "pack",
@@ -96,10 +85,10 @@
     "cnyMinor": 3400,
     "credits": 800,
     "memberCredits": 800,
-    "recommended": true
+    "recommended": false
   },
   {
-    "sku": "v2_pack_2000",
+    "sku": "v4_pack_2000",
     "kind": "pack",
     "name": "2000",
     "period": "pack",
@@ -107,17 +96,28 @@
     "cnyMinor": 6700,
     "credits": 2000,
     "memberCredits": 2000,
+    "recommended": true
+  },
+  {
+    "sku": "v4_pack_3300",
+    "kind": "pack",
+    "name": "3300",
+    "period": "pack",
+    "usdMinor": 1500,
+    "cnyMinor": 10100,
+    "credits": 3300,
+    "memberCredits": 3300,
     "recommended": false
   },
   {
-    "sku": "v2_pack_4000",
+    "sku": "v4_pack_4800",
     "kind": "pack",
-    "name": "4000",
+    "name": "4800",
     "period": "pack",
     "usdMinor": 2000,
     "cnyMinor": 13400,
-    "credits": 4000,
-    "memberCredits": 4000,
+    "credits": 4800,
+    "memberCredits": 4800,
     "recommended": false
   }
 ]
