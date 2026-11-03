@@ -490,8 +490,31 @@ app.whenReady().then(async()=>{
   await f.wait('document.querySelector(".account-wallet-popover")?.textContent.includes("无法读取")');
   assert.equal(await f.js('document.querySelectorAll(".account-wallet-batch").length'),0);assert.equal(f.state.orders,0);
  });
- await run('底栏：游客先登录、键盘关闭、窄窗浮层',{account:null,footerLayout:'wallet'},async f=>{
-  await f.wait('!!document.querySelector(".account-coin-pill")');await f.click('.account-coin-add');await f.wait('!!document.querySelector("input[type=password]")');assert.equal(f.state.orders,0);
+ for(const lang of ['zh','en'])for(const theme of ['light','dark'])await run('游客底栏：原游客入口、登录与退出 '+lang+' '+theme,{account:null,footerLayout:'wallet',lang,settings:{...settings(),theme,app:{teamEnabled:false,lang}}},async f=>{
+  await f.js(`document.documentElement.dataset.theme='${theme}'`);
+  await f.wait('!!document.querySelector(".acct-btn .acct-av.off")');
+  const assertGuest=async()=>{
+   assert.equal(await f.js('!!document.querySelector(".account-footer-classic .acct-btn")'),true);
+   assert.equal(await f.js('!!document.querySelector(".account-upgrade,.account-upgrade-discount,.account-coin-pill,.account-wallet-popover")'),false);
+  };
+  await assertGuest();assert.equal((f.state.billingCalls??[]).filter(r=>r.action==='wallet').length,0);
+  fs.writeFileSync(path.join(evidence,'guest-default-'+lang+'-'+theme+'.png'),await captureBillingFrame(f));
+  await f.fill('.composer textarea','guest draft');await f.click('.acct-btn');await f.wait('!!document.querySelector(".acct-menu")');
+  assert.equal(await f.js('!!document.querySelector(".mq-overlay")'),true);await assertGuest();
+  fs.writeFileSync(path.join(evidence,'guest-footer-'+lang+'-'+theme+'.png'),await captureBillingFrame(f));
+  const signin=lang==='zh'?'登录':'Sign in';
+  await f.js(`Array.from(document.querySelectorAll('.acct-menu button')).find(b=>b.textContent.trim()===${JSON.stringify(signin)}).click()`);await f.wait('!!document.querySelector("input[type=password]")');assert.equal(f.state.orders,0);
+  await f.fill(lang==='zh'?'input[placeholder="邮箱"]':'input[placeholder="Email"]','guest-footer@example.invalid');await f.fill('input[type=password]','isolated-password');
+  await f.js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===${JSON.stringify(signin)}).click()`);
+  await f.wait('!!document.querySelector(".account-footer-wallet .account-coin-pill")');assert.equal(await f.js('!!document.querySelector(".account-upgrade")'),true);
+  assert.equal(await f.js('document.querySelector(".composer textarea").value'),'guest draft');
+  await hover(f,'.account-coin-pill');await f.wait('!!document.querySelector(".account-wallet-batch")');
+  await hover(f,'.account-avatar-only');await f.wait('!!document.querySelector(".acct-menu")');
+  const signout=lang==='zh'?'退出':'Sign out';
+  await f.js(`Array.from(document.querySelectorAll('.acct-menu .acct-it')).find(b=>b.textContent.trim()===${JSON.stringify(signout)}).click()`);
+  await f.wait('!!document.querySelector(".acct-btn .acct-av.off")');await assertGuest();
+  assert.equal(await f.js('!!document.querySelector(".acct-menu")'),false);assert.equal(await f.js('document.querySelector(".composer textarea").value'),'guest draft');
+  assert.equal(f.state.orders,0);
  });
  await run('底栏：键盘可进入、离开关闭、窄窗不截断',{account:walletAccount(),footerLayout:'wallet'},async f=>{
   await f.wait('document.querySelector(".account-coin-balance")?.textContent.includes("638.5")');f.state.win.setContentSize(840,720);await delay(200);
