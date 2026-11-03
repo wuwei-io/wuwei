@@ -4253,6 +4253,7 @@ export function App() {
     trialEligible?: boolean; // 从未付费 → 缺币弹 ¥1 体验；否则弹「升级正式会员」
     providers?: { hidden?: string[] };
   } | null>(null);
+  const visibleAccountFooterLayout = wuwei ? accountFooterLayout : 'classic';
   setTrackingOwner(wuwei?.user.id);
   const visibleBackgroundTasks = accountBackgroundTasks(backgroundTasks,wuwei?.user.id);
   // Keep reserved/queued turns busy for injection and continuation guards, but
@@ -8212,7 +8213,7 @@ export function App() {
                   <span style={{ color: "#C05F3C" }}>✨</span> {tr("ui.app.subscription.8e99882")}
                 </button>
               )}
-              <AccountFooter onCheckin={() => doCheckin(true)} checkinBusy={checkinBusy} layout={accountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
+              <AccountFooter onCheckin={() => doCheckin(true)} checkinBusy={checkinBusy} layout={visibleAccountFooterLayout} account={wuwei} menuOpen={showAcctMenu} onMenuChange={setShowAcctMenu} unread={msgUnread}
                 avatar={<UserAvatar url={wuwei?.user.avatar} fallback={(wuwei?.user.name || wuwei?.user.email || t("acct.guestInitial")).slice(0,1).toUpperCase()}/>}
                 onPay={() => {
                   setShowAcctMenu(false);
@@ -8251,7 +8252,7 @@ export function App() {
               </button>}>
               {showAcctMenu && (
                 <>
-                  {accountFooterLayout === 'classic' && <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />}
+                  {visibleAccountFooterLayout === 'classic' && <div className="mq-overlay" onClick={() => setShowAcctMenu(false)} />}
                   <div className="acct-menu">
                     {/* 无为账号（与模型商账号合并进同一入口）。未登录只给登录入口，设置等登录后才显示 */}
                     {wuwei ? (
