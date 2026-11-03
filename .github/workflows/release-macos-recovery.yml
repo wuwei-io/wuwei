@@ -1,0 +1,178 @@
+# Manual fallback for unavailable macOS ARM runners. Client source stays pinned to the original tag.
+name: Release macOS recovery
+'on':
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing unpublished stable release tag
+        required: true
+        type: string
+      windows_run_id:
+        description: Completed original Release workflow retaining a verified Windows payload
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build_macos:
+    name: build (macos-latest, Intel recovery)
+    runs-on: macos-15-intel
+    outputs:
+      windows_artifact_id: ${{ steps.retained.outputs.windows_artifact_id }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag }}
+        fetch-depth: 0
+    - name: Verify release tag matches package version
+      run: node -e "if ('v' + require('./package.json').version !== process.env.RELEASE_TAG) throw new Error('Release tag
+        must match package version')"
+      env:
+        RELEASE_TAG: ${{ inputs.tag }}
+    - name: Validate retained Windows artifact and unpublished source tag
+      id: retained
+      run: |
+        python3 - <<'PY'
+        import os,re,json,subprocess
+        def api(path):
+            return json.loads(subprocess.check_output(['gh','api',path],text=True,encoding='utf-8'))
+        repo=os.environ['GITHUB_REPOSITORY'];tag=os.environ['RELEASE_TAG'];run=os.environ['WINDOWS_RUN_ID']
+        assert repo=='wuwei-io/wuwei' and re.fullmatch(r'v\d+\.\d+\.\d+',tag) and re.fullmatch(r'\d+',run)
+        head=subprocess.check_output(['git','rev-parse','HEAD'],text=True,encoding='utf-8').strip()
+        assert head==subprocess.check_output(['git','rev-parse',tag+'^{commit}'],text=True,encoding='utf-8').strip()
+        assert 'v'+json.load(open('package.json',encoding='utf-8'))['version']==tag
+        source=api(f'repos/{repo}/actions/runs/{run}')
+        assert source['head_sha']==head and source['path']=='.github/workflows/release.yml'
+        assert source['status']=='completed', 'Original workflow must stop before recovery publishes'
+        jobs=api(f'repos/{repo}/actions/runs/{run}/jobs?filter=all&per_page=100')
+        assert jobs['total_count']<=100
+        assert any(j['name']=='build (windows-latest)'and j['conclusion']=='success'for j in jobs['jobs'])
+        artifacts=api(f'repos/{repo}/actions/runs/{run}/artifacts?per_page=100')
+        windows=[a for a in artifacts['artifacts']if a['name']=='signed-release-windows-latest'and not a['expired']]
+        assert len(windows)==1, 'One verified Windows artifact is required'
+        assert not any(a['name']=='signed-release-macos-latest'for a in artifacts['artifacts']), 'Do not rebuild an existing signed Mac payload'
+        existing=subprocess.run(['gh','api',f'repos/{repo}/releases/tags/{tag}'],capture_output=True,text=True,encoding='utf-8')
+        if existing.returncode==0:
+            release=json.loads(existing.stdout)
+            assert release['draft'], 'Published release binaries must never be rebuilt'
+            assert not any(a['name'].endswith(('.dmg','.zip'))for a in release['assets']), 'Draft already contains Mac binaries'
+        else:
+            assert 'HTTP 404' in existing.stderr, 'Cannot safely inspect existing release'
+        with open(os.environ['GITHUB_OUTPUT'],'a')as output:
+            output.write(f"windows_artifact_id={windows[0]['id']}\n")
+        print(json.dumps({'tag':tag,'sourceCommit':head,'windowsRun':run,'windowsArtifactId':windows[0]['id'],'windowsArtifactValidated':True,'existingMacBinaries':False}))
+
+        PY
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_TAG: ${{ inputs.tag }}
+        WINDOWS_RUN_ID: ${{ inputs.windows_run_id }}
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+    - name: Prepare macOS signing and validate notarization credentials
+      run: node scripts/macos-release.mjs prepare
+      env:
+        MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+        MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+    - name: Install deps
+      run: npm install --legacy-peer-deps
+    - name: Validate images, model vision and asynchronous task reports
+      run: |
+        npm run typecheck
+        node scripts/test-release.mjs
+    - name: Repair electron-builder temporary keychain password
+      run: node scripts/fix-macos-keychain.mjs
+    - name: Build renderer/main
+      run: npm run desktop:build
+    - name: Verify mobile remote protocol and bundled adapters
+      run: node --test tests/mobile-remote.test.cjs
+    - name: Package macOS (dmg + zip)
+      run: npx electron-builder --mac --config electron-builder.wuwei.yml --publish never -c.forceCodeSigning=true
+      env:
+        CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+        CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+    - name: Verify macOS signatures and notarization tickets (both architectures)
+      run: node scripts/macos-release.mjs verify
+      env:
+        APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+    - name: Remove temporary Apple credentials
+      if: always()
+      run: node scripts/macos-release.mjs cleanup
+    - uses: actions/upload-artifact@v4
+      with:
+        name: signed-release-macos-latest
+        path: |
+          release/*.dmg
+          release/*.zip
+          release/*.blockmap
+          release/latest-mac.yml
+        if-no-files-found: error
+        retention-days: 1
+  publish:
+    needs: build_macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: wuwei-production-downloads
+      cancel-in-progress: false
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag }}
+    - name: Download newly verified Mac payload
+      uses: actions/download-artifact@v4
+      with:
+        name: signed-release-macos-latest
+        path: release
+    - name: Reuse verified Windows payload from original workflow
+      uses: actions/download-artifact@v4
+      with:
+        name: signed-release-windows-latest
+        path: release
+        run-id: ${{ inputs.windows_run_id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - run: python -m pip install requests pyyaml oss2 boto3
+    - run: python -m unittest discover -s tests -p 'test_github_release.py'
+    - name: Publish complete GitHub release, then update legacy manifests
+      run: python scripts/github-release.py publish --tag "$RELEASE_TAG" --platforms windows macos
+      env:
+        RELEASE_TAG: ${{ inputs.tag }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+        OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: previous-update-manifests
+        path: compatibility-backup/
+        if-no-files-found: ignore
+        retention-days: 30
+    - name: Remove temporary signed payloads after verified publication
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WINDOWS_ARTIFACT_ID: ${{ needs.build_macos.outputs.windows_artifact_id }}
+      run: |
+        ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name | startswith("signed-release-")) | .id')
+        for id in $ids; do
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+        done
+        gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$WINDOWS_ARTIFACT_ID"
