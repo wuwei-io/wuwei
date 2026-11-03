@@ -94,6 +94,12 @@ jobs:
       run: npm run desktop:build
     - name: Verify mobile remote protocol and bundled adapters
       run: node --test tests/mobile-remote.test.cjs
+    # GitHub's maintained workaround for Intel runner HTTP/3 packet loss:
+    # https://github.com/actions/runner-images/issues/14924
+    - name: Use HTTPS TCP for Apple ticket delivery on this temporary runner
+      run: |
+        printf '%s\n' 'block return out quick proto udp from any to any port 443' | sudo pfctl -f -
+        sudo pfctl -E
     - name: Package macOS (dmg + zip)
       run: npx electron-builder --mac --config electron-builder.wuwei.yml --publish never -c.forceCodeSigning=true
       env:
