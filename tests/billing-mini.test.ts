@@ -16,9 +16,12 @@ test('Mini is a repeatable monthly plan, independent of old trial eligibility',(
   const monthly=billingProductsForPeriod(available,'monthly');
   assert.equal(monthly[0].sku,MINI_SKU);assert.equal(monthly[0].usdMinor,300);assert.equal(monthly.length,4);
   assert.equal(monthly.find(p=>p.recommended)?.name,'Mini');
-  assert.equal(billingProductsForPeriod(available,'annual').length,3);
+  const annual = billingProductsForPeriod(available, 'annual');
+  assert.equal(annual.length, 4);
+  assert.equal(annual[0].period, 'monthly');
   assert.ok(billingProductsForPeriod(available,'pack').every(p=>p.kind==='pack'));
-  assert.deepEqual(billingPeriods(available),['free','monthly','annual','pack']);
+  assert.deepEqual(billingPeriods(c), ['monthly', 'pack']);
+  assert.deepEqual(billingPeriods({ showFreePlan: true, showAnnualPlan: true }), ['free', 'monthly', 'annual', 'pack']);
  }
  assert.deepEqual(availableBillingProducts(null),[]);
 });

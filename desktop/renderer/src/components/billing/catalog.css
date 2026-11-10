@@ -52,7 +52,7 @@
 
 /* Keep the short Chinese coin delivery label on one line. */
 .packs .billing-selector-name{min-width:0}
-.packs .billing-selector-name b,.packs .billing-selector-name small{white-space:nowrap}
+.billing-selector-name b,.billing-selector-name small{white-space:nowrap}
 
 /* Annual comparisons use subdued list prices and a clear annual payable total. */
 .billing-original-monthly,.billing-original-annual{color:var(--billing-muted);font-weight:500;text-decoration-thickness:1px;font-variant-numeric:tabular-nums}
@@ -97,7 +97,7 @@
 
 .billing-context-note{flex-shrink:0;margin:12px 24px 0;padding:10px 13px;border:1px solid var(--billing-line);border-radius:7px;background:var(--billing-soft);color:var(--billing-ink);font-size:11px;line-height:1.8;overflow-wrap:anywhere}
 
-.billing-model-disclosure{flex-shrink:0;border-bottom:1px solid var(--billing-line);padding-bottom:12px;margin-bottom:14px}.billing-model-disclosure summary{cursor:pointer;font-size:12px;color:var(--billing-ink)}.billing-model-disclosure[open] .billing-catalog-scroll{max-height:180px}.billing-call-example{line-height:1.9}.billing-call-example small{display:block;margin-top:6px;color:var(--billing-muted);font-size:10px;font-weight:400}.billing-exit-feedback{display:flex;align-items:center;gap:10px;margin:8px 0;padding:9px 12px;border:1px solid #d6dfe6;border-radius:8px;color:inherit;font-size:11px;flex-wrap:wrap}.billing-exit-feedback select{font:inherit;background:var(--bg);color:inherit;border:1px solid #d6dfe6;border-radius:5px;padding:5px;max-width:100%}.billing-exit-feedback button{border:0;background:transparent;color:inherit;margin-inline-start:auto;cursor:pointer;font-size:17px}.billing-return-task{margin:16px 0}
+.billing-model-disclosure{flex-shrink:0;border-bottom:1px solid var(--billing-line);padding-bottom:12px;margin-bottom:14px}.billing-model-disclosure summary{cursor:pointer;font-size:12px;color:var(--billing-ink)}.billing-model-disclosure[open] .billing-catalog-scroll{max-height:180px}.billing-call-example{line-height:1.9}.billing-call-example small{display:block;margin-top:6px;color:var(--billing-muted);font-size:10px;font-weight:400}.billing-return-task{margin:16px 0}
 
 /* Show every plan together; grow the dialog before tightening shorter windows. */
 @media(min-width:681px){
@@ -143,7 +143,7 @@
 }
 @media(min-width:681px) and (max-height:660px){
  .billing-selector-view .billing-selector>section{padding:13px 20px}
- .billing-selector-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .billing-selector-options{grid-template-columns:minmax(0,1fr);gap:10px}
  .billing-selector-view .billing-selector-options .billing-selector-option{display:grid;grid-template-columns:17px minmax(0,1fr);gap:3px 8px;min-height:94px;padding:9px 11px!important}
  .billing-selector-option>i{grid-row:1/3;width:17px;height:17px}
  .billing-selector-name{grid-column:2}
@@ -163,8 +163,13 @@
 
 .billing-request-context{margin-top:4px}.billing-request-context summary{cursor:pointer;color:var(--billing-accent)}.billing-request-context[open]{max-height:125px;overflow:auto;scrollbar-width:thin}.billing-request-context p{margin:5px 0}.billing-request-context small{font-size:10px;color:var(--billing-muted)}
 
-/* Mini uses the same red badge treatment as the annual saving label. */
-.billing-selector-ribbon.billing-mini-hot,.billing-plan-ribbon.billing-mini-hot{background:#d83a4b;color:#fff;border-radius:6px;font-weight:600;letter-spacing:.03em}
+.billing-selector-ribbon.billing-mini-hot,.billing-plan-ribbon.billing-mini-hot{background:#c12848;color:#fff;font-size:10px;line-height:16px;white-space:nowrap}
+.billing-selector-periods button>.billing-mini-tab-badge,.billing-plans-periods button>.billing-mini-tab-badge{
+  margin:0;margin-inline-start:5px;padding:1px 5px;border-radius:999px;vertical-align:1px;
+  background:color-mix(in srgb,#c12848 11%,var(--billing-paper));
+  color:light-dark(#a92240,#ffadc0);font-size:10px;font-weight:600
+}
+.billing-selector-name .billing-mini-credits{color:light-dark(#a92240,#ffadc0)}
 
 /* Selected flagship models keep a red TOP label beside the model name. */
 .billing-selector-models .billing-model-name{display:inline-flex;align-items:center;gap:5px}

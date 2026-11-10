@@ -21,3 +21,11 @@
 @media(min-width:1000px) and (max-height:780px){.billing-plans:has(.four-plans) .billing-plans-periods{margin-bottom:12px}.four-plans .billing-plan-card{padding-top:10px;padding-bottom:10px}.four-plans .billing-plan-models{margin-top:6px}.four-plans .billing-plan-features{margin-top:7px;padding-top:7px;gap:4px}}
 
 @media(min-width:1001px){.billing-plan-grid:has([data-sku="v2_plan_mini_monthly"]){grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.billing-plan-grid:has([data-sku="v2_plan_mini_monthly"]) .billing-plan-card{padding-left:16px;padding-right:16px}}
+.billing-purchase-actions { display: grid; gap: 6px; }
+.billing-purchase-actions details { color: var(--billing-accent); font-size: 11px; }
+.billing-purchase-actions summary { cursor: pointer; padding: 5px 0; width: fit-content; }
+.billing-panel .billing-alternate-method { padding: 6px; color: var(--billing-accent); text-align: start; border-radius: 5px; }
+.billing-alternate-method span { margin-inline-start: 6px; }
+.billing-alternate-method:hover { background: var(--billing-soft); }
+.billing-mini-offer { margin: 8px 0; padding: 8px 10px; border-radius: 7px; background: var(--billing-soft); color: var(--billing-accent); font-size: 11px; }
+.billing-mini-offer p { margin-top: 3px; }

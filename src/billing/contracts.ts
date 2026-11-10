@@ -1,6 +1,7 @@
 export type BillingPeriod = 'monthly' | 'annual' | 'pack' | 'trial';
 export type BillingCurrency = 'CNY' | 'USD';
 export type BillingChannel = 'alipay' | 'paddle' | 'crypto';
+export interface MiniOffer { baseCredits: number; credits: number; limit: number; remaining: number }
 export interface BillingProduct {
   sku: string;
   kind: 'plan' | 'pack';
@@ -28,6 +29,7 @@ export interface BillingQuote {
   durationDays?: number;
   durationMonths?: number;
   creditsNeverExpire?: boolean;
+  miniOffer?: MiniOffer;
   expiryDays?: number;
   startsAt?: string;
 }
@@ -37,6 +39,10 @@ export interface BillingCatalog {
   member: boolean;
   checkoutReady: boolean;
   channels: Record<BillingChannel, boolean>;
+  usdOnly?: boolean;
+  showFreePlan?: boolean;
+  showAnnualPlan?: boolean;
+  miniOffer?: MiniOffer | null;
   trial?: {enabled:boolean;eligible:boolean;repeatAllowed?:boolean;cryptoChains?:string[]};
   backgroundPolicy?: {enabled:boolean;version:string;free:number;plans:Record<string,number>};
 }

@@ -13,6 +13,9 @@ export function isBillingCatalog(value: unknown): value is BillingCatalog {
     || typeof value.member !== 'boolean' || typeof value.checkoutReady !== 'boolean' || !record(value.channels)) return false;
   const channels = value.channels;
   if (!['alipay', 'paddle', 'crypto'].every(key => typeof channels[key] === 'boolean')) return false;
+  if (['usdOnly', 'showFreePlan', 'showAnnualPlan'].some(key => value[key] !== undefined && typeof value[key] !== 'boolean')) return false;
+  const offer = value.miniOffer;
+  if (offer != null && (!record(offer) || !['baseCredits', 'credits', 'limit', 'remaining'].every(key => Number.isSafeInteger(offer[key]) && Number(offer[key]) > 0))) return false;
   return value.products.every((product: unknown) => record(product) && text(product.sku) && text(product.name)
     && ['plan', 'pack'].includes(String(product.kind)) && ['monthly', 'annual', 'pack', 'trial'].includes(String(product.period))
     && amount(product.usdMinor) && Number.isSafeInteger(product.usdMinor) && amount(product.cnyMinor) && Number.isSafeInteger(product.cnyMinor)
@@ -25,6 +28,10 @@ function snapshot(catalog: BillingCatalog): BillingCatalog {
   const products = catalog.products.map((p): BillingProduct => ({ sku: p.sku, kind: p.kind, name: p.name, period: p.period,
     usdMinor: p.usdMinor, cnyMinor: p.cnyMinor, credits: p.credits, memberCredits: p.memberCredits, recommended: p.recommended }));
   return { version: catalog.version, products, member: catalog.member, checkoutReady: catalog.checkoutReady,
+    ...(typeof catalog.usdOnly === 'boolean' && { usdOnly: catalog.usdOnly }),
+    ...(typeof catalog.showFreePlan === 'boolean' && { showFreePlan: catalog.showFreePlan }),
+    ...(typeof catalog.showAnnualPlan === 'boolean' && { showAnnualPlan: catalog.showAnnualPlan }),
+    ...(catalog.miniOffer !== undefined && { miniOffer: catalog.miniOffer }),
     channels: { alipay: catalog.channels.alipay, paddle: catalog.channels.paddle, crypto: catalog.channels.crypto },
     ...(catalog.trial && typeof catalog.trial.enabled === 'boolean' && typeof catalog.trial.eligible === 'boolean'
       ? { trial: { enabled: catalog.trial.enabled, eligible: catalog.trial.eligible,
