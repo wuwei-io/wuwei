@@ -6,6 +6,7 @@ import {getAccountFooterLayout, subscribeAccountFooterLayout} from '../../../../
 import {formatCredits} from '../../../../src/billing/presentation.js';
 import {tr, getCurrentLanguage} from '../../../../src/localization/index.js';
 import {billingRequest} from './billing/request.js';
+import {getLiveMiniOffer, subscribeMiniOffer} from './billing/catalog-cache.js';
 import './account-footer.css';
 export const useAccountFooterLayout = () => useSyncExternalStore(subscribeAccountFooterLayout, getAccountFooterLayout, getAccountFooterLayout);
 type Props = {
@@ -33,6 +34,8 @@ export function AccountFooter(p: Props) {
   const [now, setNow] = useState(Date.now());
   const clock = useRef({server: Date.now(), observed: performance.now()});
   const panelId = useId(), lang = getCurrentLanguage();
+  const miniOffer = useSyncExternalStore(subscribeMiniOffer, () => getLiveMiniOffer(p.account?.user.id));
+  const miniBonus = miniOffer ? formatCredits(miniOffer.credits - miniOffer.baseCredits, lang) : '';
   const data = snapshot?.userId === p.account?.user.id ? snapshot : null;
   const daily = accountWalletDaily(data);
   useEffect(() => { setSnapshot(null); }, [p.account?.coin.balance]);
@@ -101,7 +104,13 @@ export function AccountFooter(p: Props) {
     onMouseEnter={cancelClose} onMouseLeave={() => { if (p.layout === 'wallet' && !claiming) closeTimer.current = setTimeout(close, 220); }}
     onBlur={e => { if (p.layout === 'wallet' && !e.currentTarget.contains(e.relatedTarget as Node)) close(); }}>
     {p.layout === 'classic' ? p.classicTrigger : <>
-      <button type="button" className="account-upgrade" title={tr('menu.annualDiscount')} onClick={pay}><Icon kind="spark"/><span>{tr('menu.upgradeEntry')}</span><span className="account-upgrade-discount" aria-hidden="true">−50%</span></button>
+      <button type="button" className="account-upgrade" onClick={pay}
+        aria-label={miniBonus ? tr('menu.upgradeEntry') + ' · ' + tr('billing.mini.bonusDescription', { credits: miniBonus }) : undefined}>
+        <Icon kind="spark"/><span>{tr('menu.upgradeEntry')}</span>
+        {miniBonus && <span className="account-upgrade-discount" aria-hidden="true">
+          {tr('billing.mini.bonusBadge', { credits: miniBonus })}
+        </span>}
+      </button>
       <div className="account-footer-row">
         <div className="account-coin-pill" onMouseEnter={openWallet}>
           <button type="button" className="account-coin-balance" aria-label={tr('account.wallet.balance')} aria-expanded={walletOpen} aria-controls={panelId}

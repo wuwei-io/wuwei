@@ -3565,7 +3565,7 @@ function CryptoPayModal({ en, sku, planName, priceLabel, onClose, onContact, onP
 }
 
 export function App() {
-  usePromotionConfig();
+  const billingExitFeedbackEnabled = usePromotionConfig();
   const accountFooterLayout = useAccountFooterLayout();
   const [items, setItems] = useState<Item[]>([]);
   const [now, setNow] = useState(() => Date.now()); // 相对时间戳每 30s 刷新一次
@@ -4277,9 +4277,12 @@ export function App() {
     const owner = wuwei?.user.id;
     if (!owner) return;
     let live = true;
-    // Warm price metadata after login; never delay opening a notice or panel.
-    void refreshBillingCatalogCache(owner, () => live && wuweiRef.current?.user.id === owner);
-    return () => { live = false; };
+    // Refresh first-purchase eligibility as well as warming the next billing panel.
+    const refresh = () => { void refreshBillingCatalogCache(owner, () => live && wuweiRef.current?.user.id === owner); };
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    window.addEventListener('focus', refresh);
+    return () => { live = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [wuwei?.user.id, wuwei?.membership?.tier, wuwei?.trialEligible]);
   const wuweiRevisionRef = useRef(0);
   function setWuwei(value: React.SetStateAction<typeof wuwei>) {
@@ -4332,6 +4335,22 @@ export function App() {
   const [coinShortage, setCoinShortage] = useState<{ message: string; balance?: number; gatewayFailure?: GatewayAffordability; rebind?: { providerId: string; model: string; label: string }; browse?: boolean; freecap?: boolean } | null>(null);
   const billingFeedbackSeen=useRef(new Map<string,number>());
   const [billingFeedback,setBillingFeedback]=useState<(BillingExit&{sid:string;userId:string})|null>(null);
+  useEffect(() => {
+    setBillingFeedback(previous => previous && billingExitFeedbackEnabled &&
+      previous.userId === wuwei?.user.id && previous.sid === currentId ? previous : null);
+  }, [billingExitFeedbackEnabled, wuwei?.user.id, currentId]);
+
+  function showBillingExitFeedback(visit: BillingExit, userId: string) {
+    if (!billingExitFeedbackEnabled) return;
+    const key = 'wuwei_billing_feedback_' + userId;
+    let last = billingFeedbackSeen.current.get(key) ?? 0;
+    try { last = Math.max(last, Number(localStorage.getItem(key)) || 0); } catch {}
+    const now = Date.now();
+    if (!billingFeedbackEligible(visit, last, now)) return;
+    billingFeedbackSeen.current.set(key, now);
+    try { localStorage.setItem(key, String(now)); } catch {}
+    setBillingFeedback({ ...visit, sid: currentIdRef.current, userId });
+  }
   const [freeCapModal, setFreeCapModal] = useState<{ model: string; balance: number; hasMemberQuota?: boolean } | null>(null);
   const usageLimitHandlerRef = useRef<(kind: 'free' | 'balance', message: string, diagnostic?: GatewayAffordability) => void>(() => {});
   const usageLimitRequestRef = useRef<{ user: string; sid: string; model: string; at: number; pending: boolean } | null>(null);
@@ -8382,12 +8401,12 @@ export function App() {
                             <div className="acct-sep" />
                             <div className="acct-items">
                               {(wuwei.flags?.includes('billing_v2') || billingPreview) && <button className="acct-it" onClick={()=>{setShowAcctMenu(false);setBillingPage('ledger');setBillingOpen(true);}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>{tr("ui.app.credit.details.a3a619a")}</button>}
-                              <button className="acct-it acct-upgrade-action" data-account-upgrade title={tr("menu.annualDiscount")} onClick={openPlan}>
+                              <button className="acct-it acct-upgrade-action" data-account-upgrade onClick={openPlan}>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                   <rect x="3" y="5" width="18" height="14" rx="2.5" />
                                   <path d="M3 10h18M7 15h4" />
                                 </svg>
-                                <span className="acct-upgrade-label">{tr("menu.upgradeEntry")}<span className="acct-upgrade-discount">−50%</span></span>
+                                <span className="acct-upgrade-label">{tr("menu.upgradeEntry")}</span>
                               </button>
                               <button
                                 className="acct-it"
@@ -8670,7 +8689,7 @@ export function App() {
 
       {/* 主区 */}
       <div className={"main" + (videoMode && appView === null && !agiView ? " video-studio-main" : imageMode && appView === null && !agiView ? " image-studio-main" : "")}>
-        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>setPlanOpen(true)} onBack={()=>setVideoMode(false)} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
+        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onBack={()=>setVideoMode(false)} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
@@ -9626,7 +9645,6 @@ export function App() {
               </div>
             );
           })()}
-          {billingFeedback&&billingFeedback.userId===wuwei?.user.id&&billingFeedback.sid===currentId&&!imageMode&&!videoMode&&<BillingExitFeedback visit={billingFeedback} onReason={reason=>{void window.wuwei.track?.('billing_exit_reason',{billing_session_id:billingFeedback.session,sku:billingFeedback.sku,context:billingFeedback.context,reason});setBillingFeedback(null)}} onDismiss={()=>{void window.wuwei.track?.('billing_exit_feedback_dismiss',{billing_session_id:billingFeedback.session});setBillingFeedback(null)}}/>}
           {/* 非鉴权类错误：中断类主推「继续」（一键从中断处接着做），其它错误仍给「删除这条」。
               注意判断要中英都认——英文界面的报错以 "Error" 开头，旧代码只认「出错」，导致英文下这条提示条从不出现。 */}
           {!busy &&
@@ -10791,101 +10809,32 @@ export function App() {
       {wuwei && coinShortage && !coinShortage.browse && (
         <BalanceShortageDialog balance={coinShortage.balance} onClose={() => closeShortage("close")} onUpgrade={upgradeFromShortage} />
       )}
-      {/* 旧版主动浏览入口仍保留兼容；余额不足先显示独立说明。 */}
-      {coinShortage?.browse && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
-        <TrialPayModal
-          en={lang !== "zh"}
-          balance={coinShortage.balance != null ? coinShortage.balance : wuwei?.coin.balance ?? 0}
-          rebind={coinShortage.rebind}
-          context={debugCtx ?? (coinShortage.freecap ? "freecap" : coinShortage.browse ? "browse" : ((wuwei?.membership?.weeklyQuota?.active && (wuwei.membership.weeklyQuota.remainingPct ?? 0) <= 0) ? "weekly" : "shortage"))}
-          opts={payOpts}
-          defaultSku={payDefaultSku}
-          onClose={() => closeShortage("close")}
-          onRebind={async () => {
-            const rb = coinShortage.rebind!;
-            closeShortage("rebind");
-            await applyBoundModel(rb.providerId, rb.model);
-            push({
-              type: "notice",
-              text:
-                tr("ui.app.switched.this.chat.to.direct.no.37523df", { p0: rb.label }),
-            });
-          }}
-          onPaddle={(opt) => { closeShortage("pay_paddle"); startEnCheckout(opt.sku); }}
-          onCrypto={(opt) => {
-            if (!wuwei?.user.id) { setShowLoginForm(true); return; }
-            closeShortage("pay_crypto");
-            setCryptoPay({ sku: opt.sku, name: lang !== "zh" ? opt.nameEn : opt.name, price: money(lang !== "zh", opt.price, opt.priceUsd) });
-          }}
-          onContact={() => { closeShortage("contact"); setShowSupportChat(true); }}
-          onFaq={() => { void window.wuwei.track?.("credits_shortage_action", { action: "faq" }); setPayFaqOpen(true); }}
-          onNeedLogin={() => {
-            closeShortage("need_login");
-            setWuwei(null);
-            setLoginResume(false);
-            setShowLoginForm(true);
-          }}
-          onPaid={(balance, orderId, opt) => {
-            closeShortage("pay_paid");
-            if (opt.kind === "pack") {
-              // 积分包：到账即加无为币，走「积分到账」结果页
-              setPayResult({ kind: "coin", added: opt.coins, bonus: 0, balance: balance ?? (wuwei?.coin.balance ?? 0) + opt.coins, order: orderId || "" });
-            } else {
-              setPayResult({
-                kind: "pro",
-                planName: lang !== "zh" ? opt.nameEn : opt.name,
-                expire: fmtDate(opt.kind === "trial" ? new Date(Date.now() + opt.days * 24 * 3600_000) : addMonths(new Date(), 1)),
-                giftCoins: opt.coins,
-                signin: opt.signin,
-                perks: (PRO_FEATS()).map(([tt]) => tt),
-                saved: opt.saved,
-                order: orderId || "",
-              });
-            }
-            void window.wuwei.wuweiMe().then((me) => { if (me) setWuwei(me); }).catch(() => {}); // 拉最新会员/余额
-          }}
-        />
-      )}
       {payFaqOpen && <PayFaqModal en={lang !== "zh"} onClose={() => setPayFaqOpen(false)} />}
-      {coinPackOpen && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
-        <CoinPackModal
-          t={t}
-          lang={lang}
-          packs={wuwei?.flags?.includes("coinpack_test") ? [TEST_COIN_PACK, ...COIN_PACKS] : COIN_PACKS}
-          onClose={() => setCoinPackOpen(false)}
-          onCheckout={(pack) => {
-            setCoinPackOpen(false);
-            if (lang !== "zh") { startEnCheckout(pack.sku); return; } // 海外走网页 Paddle 结账
-            setPayCheckout({ kind: "pack", pack });
-          }}
-          onUpgrade={() => {
-            setCoinPackOpen(false);
-            setPlanOpen(true);
-          }}
-        />
-      )}
-      {planOpen && !wuwei?.flags?.includes('billing_v2') && !billingPreview && (
-        <PlanModal
-          t={t}
-          lang={lang}
-          onClose={() => setPlanOpen(false)}
-          onCheckout={(plan) => {
-            setPlanOpen(false);
-            if (lang !== "zh") { startEnCheckout(plan.sku); return; } // 海外走网页 Paddle 结账
-            setPayCheckout({ kind: "plan", plan });
-          }}
-        />
-      )}
-      {wuwei && (billingOpen || ((wuwei.flags?.includes('billing_v2') || billingPreview) && (coinShortage?.browse || coinPackOpen || planOpen))) && (
+      {wuwei && (billingOpen || coinShortage?.browse || coinPackOpen || planOpen) && (
         <BillingPanel onVideo={id=>{setRequestedVideo(v=>({id,version:(v?.version??0)+1}));setAppView(null);setAgiView(null);setVideoMode(true);setPlanOpen(false);}} key={wuwei.user.id}
           lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
           initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"monthly"}
           insufficient={!!coinShortage&&!coinShortage.browse} contextMessage={coinShortage&&!coinShortage.browse&&!coinShortage.freecap?coinShortage.message:undefined} gatewayFailure={coinShortage?.gatewayFailure} imageMode={imageMode}
-          onExit={visit=>{if(imageMode||videoMode)return;const key='wuwei_billing_feedback_'+wuwei.user.id;let last=billingFeedbackSeen.current.get(key)??0;try{last=Math.max(last,Number(localStorage.getItem(key)||0)||0)}catch{}if(billingFeedbackEligible(visit,last)){billingFeedbackSeen.current.set(key,Date.now());try{localStorage.setItem(key,String(Date.now()))}catch{}setBillingFeedback({...visit,sid:currentIdRef.current,userId:wuwei.user.id})}}}
+          onExit={visit => showBillingExitFeedback(visit, wuwei.user.id)}
           onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage("close");}}
           onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
           onPaid={()=>{const paidUser=wuwei.user.id;void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===paidUser)setWuwei(current=>current?.user.id===paidUser?me:current);}).catch(()=>{});}}
           onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:tr("billing.switch.ready")});}}
+        />
+      )}
+      {billingExitFeedbackEnabled && billingFeedback && billingFeedback.userId === wuwei?.user.id &&
+        billingFeedback.sid === currentId && (
+        <BillingExitFeedback key={billingFeedback.session} visit={billingFeedback}
+          onSubmit={(reason, note) => {
+            void window.wuwei.track?.('billing_exit_reason', {
+              billing_session_id: billingFeedback.session, sku: billingFeedback.sku, context: billingFeedback.context, reason,
+            }, note);
+            setBillingFeedback(null);
+          }}
+          onDismiss={() => {
+            void window.wuwei.track?.('billing_exit_feedback_dismiss', { billing_session_id: billingFeedback.session });
+            setBillingFeedback(null);
+          }}
         />
       )}
       {payCheckout && (

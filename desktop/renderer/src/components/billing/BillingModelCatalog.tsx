@@ -8,7 +8,7 @@ import {BillingBrand} from './BillingBrand.js';
 
 const TOP_MODELS=new Set(['gpt-6-1-sol','kimi-k3-1-pro','claude-opus-5-5']);
 
-export function BillingModelCatalog(p:{models:ModelChoice[];lang:string;onRules:()=>void;onVideo?:(id:string)=>void;showPrices?:boolean}){
+export function BillingModelCatalog(p:{models:ModelChoice[];lang:string;onRules:()=>void;onVideo?:(id:string)=>void;showPrices?:boolean;onModelCount?:(count:number)=>void}){
   const [filter,setFilter]=useState('all'),[search,setSearch]=useState('');
   const scroll=useRef<HTMLDivElement>(null),models=useMemo(()=>billingModelCatalog(p.models),[p.models]);
   const priceText=(m:ModelChoice)=>{const input=m.price?.input,output=m.price?.output;if(m.free||typeof input!=='number'||typeof output!=='number'||!Number.isFinite(input)||!Number.isFinite(output))return '';const fmt=(n:number)=>new Intl.NumberFormat(p.lang,{maximumFractionDigits:6}).format(n);return tr('ui.modelpicker.in.out.coins.tokens.695a162',{p0:fmt(input),p1:fmt(output)})};
@@ -16,6 +16,7 @@ export function BillingModelCatalog(p:{models:ModelChoice[];lang:string;onRules:
   const [videos,setVideos]=useState<VideoModel[]>([]),[failed,setFailed]=useState(false),[retry,setRetry]=useState(0);
   useEffect(()=>{let alive=true;setFailed(false);void window.wuwei.videoRequest({action:'catalog'}).then(result=>{if(!alive)return;if(!result||typeof result!=='object'||'error'in result)throw Error('catalog');const c=result as VideoCatalog;setVideos(c.enabled?c.models:[])}).catch(()=>{if(alive)setFailed(true)});return()=>{alive=false}},[retry]);
   const entries=[...models.map(m=>({id:m.imageModel??m.modelId,key:m.key,label:p.lang==='zh'?m.label:m.labelEn,category:category(m),provider:m.providerId,recommended:m.recommended,free:m.free,premium:false,priceNote:priceText(m),search:[m.label,m.labelEn,m.modelId,m.imageModel,m.providerId].join(' '),video:undefined as VideoModel|undefined})),...videos.map(m=>({id:m.id,key:'video:'+m.id,label:m.name,category:'video',provider:m.brand,recommended:false,free:false,premium:m.premium,priceNote:m.min_coins===null?'':tr('video.fromCoins',{n:new Intl.NumberFormat(p.lang,{maximumFractionDigits:2}).format(m.min_coins)}),search:m.name+' '+m.id+' '+m.brand+' '+tr('video.model.'+m.id),video:m}))];
+  useEffect(() => { p.onModelCount?.(entries.length); }, [p.onModelCount, entries.length]);
   const query=search.trim().toLocaleLowerCase();
   const visible=entries.filter(m=>(filter==='all'||m.category===filter)&&m.search.toLocaleLowerCase().includes(query));
   const fmt=(n:number)=>new Intl.NumberFormat(p.lang).format(n);
