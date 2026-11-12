@@ -26,7 +26,7 @@ export function createHostedSessionState(deps: {
     // A late 401 for an older token must not rotate the new token again.
     const force = rejectedAccessToken === session.accessToken;
     if (!force && session.expiresAt - now() > 90_000) return session;
-    if (inFlight?.revision === revision) return inFlight.promise;
+    if (inFlight?.revision === revision) return useRefresh(inFlight.promise);
     const started = revision;
     const pending = { revision: started, promise: null! as Promise<HostedSession | null> };
     pending.promise = Promise.resolve().then(() => deps.refresh(session.refreshToken)).then(fresh => {
@@ -43,7 +43,17 @@ export function createHostedSessionState(deps: {
       return fresh;
     }).finally(() => { if (inFlight === pending) inFlight = null; });
     inFlight = pending;
-    return pending.promise;
+    return useRefresh(pending.promise);
+
+    async function useRefresh(promise: Promise<HostedSession | null>) {
+      try {
+        return await promise;
+      } catch (error) {
+        const current = deps.load();
+        if (!force && !loggedOut && current?.accessToken === session?.accessToken && current && current.expiresAt > now()) return current;
+        throw error;
+      }
+    }
   }
   return { get, accept, logout, isLoggedOut: () => loggedOut };
 }

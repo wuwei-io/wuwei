@@ -8,7 +8,8 @@
 // 桌面端此文件为 safeStorage 加密态；CLI 端(纯 node 无 safeStorage)若需要登录，自管其明文 token，
 // 二者互不读取。登录一次成本低，换来桌面端 token 加密落盘。
 import { safeStorage } from "electron";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "./logger.js";
@@ -43,6 +44,16 @@ function canEncrypt(): boolean {
   }
 }
 
+function writeSession(contents: string): void {
+  const temp = `${FILE}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temp, contents, { encoding: "utf8", mode: 0o600, flag: "wx", flush: true });
+    renameSync(temp, FILE);
+  } finally {
+    try { rmSync(temp, { force: true }); } catch { /* keep the original error */ }
+  }
+}
+
 export function saveWuweiSession(s: WuweiSession): void {
   mkdirSync(DIR, { recursive: true });
   const plain = JSON.stringify(toStored(s));
@@ -55,12 +66,7 @@ export function saveWuweiSession(s: WuweiSession): void {
     log("wuweiAuth", "safeStorage 不可用，回退明文落盘");
     out = plain;
   }
-  writeFileSync(FILE, out, "utf8");
-  try {
-    chmodSync(FILE, 0o600); // Windows 无效（靠 DPAPI 加密兜底）
-  } catch {
-    /* ignore */
-  }
+  writeSession(out);
 }
 
 export function loadWuweiSession(): WuweiSession | null {
@@ -95,7 +101,7 @@ export function loadWuweiSession(): WuweiSession | null {
 
 export function clearWuweiSession(): void {
   try {
-    if (existsSync(FILE)) writeFileSync(FILE, "{}", "utf8");
+    if (existsSync(FILE)) writeSession("{}");
   } catch {
     /* ignore */
   }

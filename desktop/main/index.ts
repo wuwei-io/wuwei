@@ -14,7 +14,7 @@ import { tr, getCurrentLanguage, getLanguages } from "../../src/localization/ind
 import { resolveEmployee, employeeLabel, employeeRoster, TEAM_TOOL_EN } from "../../src/team/default-localization.js";
 // Electron 主进程：创建窗口，复用核心(agent/tools/config)，
 // 通过 IPC 把 Agent 流式 hooks 推给渲染进程，权限确认走 IPC 往返。
-import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, session, clipboard, Menu, safeStorage, Tray, nativeImage, dialog, screen, nativeTheme } from "electron";
+import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, shell, session, clipboard, Menu, safeStorage, Tray, nativeImage, dialog, screen, nativeTheme, powerMonitor } from "electron";
 // ⚠️ 必须是最靠前的本地 import：它的顶层副作用会设好 WUWEI_DATA_DIR_NAME，
 //    之后 sessions/settings/brain 等模块初始化时才能按正确版本(wuwei/minicc/test)选数据目录。
 import { EDITION, IS_MINICC, IS_TEST, APP_NAME, APP_ID, DATA_DIR_NAME, appDisplayName } from "./edition.js";
@@ -179,7 +179,7 @@ import { saveWuweiSession, loadWuweiSession, clearWuweiSession } from "./wuwei-s
 import { backgroundTokenSubject, setBackgroundTokenResolver, withoutBackgroundTask } from "../../src/agent/background.js";
 import { runBackgroundTask, getBackgroundTasks } from "./background-tasks.js";
 import { createHostedSessionState } from "../../src/wuwei-session-state.js";
-import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
+import { startRelayClient, stopRelayClient, refreshRelayClient, resumeRelayClient, setRelaySessionResolver, setRemoteExecutor, setRemoteRoomExecutor, setRemoteRequestHandler, detectChannels, requestLocalDecision, answerLocalDecision } from "./relay-client.js";
 import { notifyRemote } from './remote-notify.js';
 import { runRemoteSessionTurn, waitForRemoteResult } from './remote-sessions.js';
 import { resolveRemoteSelection, providerKindForId } from './remote-models.js';
@@ -3597,6 +3597,13 @@ function startClientTelemetry(): void {
   }
   // 手机端远程执行relay连接:仅当用户开了允许手机端远程调用本机才真正连(内部已判断,默认关=不连)
   try { startRelayClient(); } catch { /* relay连接失败不拖累启动 */ }
+  const renewSession = () => { void getFreshWuweiSession().catch(() => {}); };
+  const sessionTimer = setInterval(renewSession, 60_000);
+  sessionTimer.unref();
+  powerMonitor.on("resume", () => {
+    renewSession();
+    resumeRelayClient();
+  });
 }
 
 app.on("window-all-closed", () => {
@@ -3650,6 +3657,7 @@ const wuweiSessionState = createHostedSessionState({
 const studioImageApprovals = new StudioImageApprovals();
 const currentImageOwner = () => imageAccountScope(loadWuweiSession()?.accessToken || '');
 const getFreshWuweiSession = (rejectedAccessToken?: string) => wuweiSessionState.get(rejectedAccessToken);
+setRelaySessionResolver(getFreshWuweiSession);
 setHostedCredentialResolver(accountScopedCredentialResolver({
   currentToken:()=>loadWuweiSession()?.accessToken,
   freshToken:async rejected=>(await getFreshWuweiSession(rejected))?.accessToken,
