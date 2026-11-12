@@ -151,8 +151,7 @@ setTimeout(function(){
 </script></body>`;
 
 /** 弹系统浏览器走完整登录，成功返回会话；用户放弃/超时返回 null。 */
-// forceSwitch=true(用户显式退出后再登)：给中转页带 switch=1，让它先在浏览器里 signOut 旧会话
-// 再跳 /login 重新选账号——否则浏览器残留的旧会话会被直接复用，导致"换不了账号、跳回原账号"。
+// switch=1 让 Google 显示账号选择，同时保留浏览器与其他设备的登录。
 export function wuweiLogin(forceSwitch = false): Promise<WuweiSession | null> {
   const state = randomBytes(16).toString("hex");
   return new Promise((resolve) => {
@@ -184,25 +183,25 @@ export function wuweiLogin(forceSwitch = false): Promise<WuweiSession | null> {
       const access = u.searchParams.get("access_token");
       if (!access) {
         // 第一跳：还没带 token（token 在 fragment 里）→ 回 JS 把 # 转成 query 再打回来
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
         res.end(hashBridgeHtml());
         return;
       }
       // 第二跳：拿到 token
       const gotState = u.searchParams.get("state") ?? "";
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(doneHtml());
       if (gotState !== state) {
         log("wuweiAuth", "state 不匹配，拒绝");
-        finish(null);
+        res.writeHead(400, { "Cache-Control": "no-store" }).end();
         return;
       }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      res.end(doneHtml());
       const sess: WuweiSession = {
         accessToken: access,
         refreshToken: u.searchParams.get("refresh_token") ?? "",
         expiresAt: (Number(u.searchParams.get("expires_at")) || 0) * 1000,
       };
-      log("wuweiAuth", "✓ 收到会话 token", access.slice(0, 10) + "…");
+      log("wuweiAuth", "Native login completed");
       finish(sess);
     });
 
@@ -219,8 +218,7 @@ export function wuweiLogin(forceSwitch = false): Promise<WuweiSession | null> {
         return;
       }
       const authUrl = `${SITE}/auth/desktop?port=${port}&state=${state}${forceSwitch ? "&switch=1" : ""}`;
-      // 直接开中转页：已登录直接回传、未登录中转页会自跳 /login?next=；switch=1 则先退干净旧会话再重登
-      log("wuweiAuth", "打开浏览器登录", authUrl);
+      log("wuweiAuth", "Opening browser for native login");
       void shell.openExternal(authUrl);
     });
 

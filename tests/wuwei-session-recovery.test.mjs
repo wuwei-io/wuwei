@@ -42,6 +42,16 @@ test('transient failure permits the next request to renew without another login'
   await assert.rejects(f.manager.get());online=true;assert.deepEqual(await f.manager.get(),next);
   assert.equal(f.state.clears,0);assert.equal(f.state.prompts,0);
 });
+test('a valid token survives an early refresh outage, but a rejected token is never reused', async () => {
+  const f = fixture(async () => { throw new SessionRefreshUnavailable(); });
+  const valid = { ...saved(), expiresAt: Date.now() + 45_000 };
+  f.manager.accept(valid);
+  const [proactive, forced] = await Promise.allSettled([f.manager.get(), f.manager.get(valid.accessToken)]);
+  assert.deepEqual(proactive, { status: 'fulfilled', value: valid });
+  assert.equal(forced.status, 'rejected');
+  assert.equal(f.state.calls, 1);
+  assert.equal(f.state.clears, 0);
+});
 test('logout during refresh cannot resurrect a session or prompt again',async()=>{
   const pending=deferred(),f=fixture(()=>pending.promise),request=f.manager.get();await Promise.resolve();
   f.manager.logout();pending.resolve(fresh());assert.equal(await request,null);assert.equal(f.state.session,null);assert.equal(f.state.writes,0);assert.equal(f.state.prompts,0);

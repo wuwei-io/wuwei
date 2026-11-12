@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { RemoteDecisions, type RemoteDecisionSource } from "./remote-decisions.js";
 import { hostname, platform } from "node:os";
 import { getDeviceId } from "../../src/device-id.js";
-import { loadWuweiSession } from "./wuwei-session.js";
+import type { WuweiSession } from "./wuwei-auth.js";
 import { log } from "./logger.js";
 import type { Decision, DecisionResponse } from "../../src/types.js";
 import { configuredRemoteChannels, type RemoteChannel } from './remote-models.js';
@@ -47,6 +47,14 @@ let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectDelay = RECONNECT_BASE_MS;
 let stopped = true; // 默认停止；start 时置 false
 let connectedAccount = '';
+let connectionAttempt = 0;
+let triedAuthRecovery = false;
+let lastPong = 0;
+let resolveSession: (rejectedToken?: string) => Promise<WuweiSession | null> = async () => null;
+
+export function setRelaySessionResolver(resolve: typeof resolveSession) {
+  resolveSession = resolve;
+}
 const executionInstanceId = randomUUID();
 const remoteKinds = new Map<string, 'chat' | 'room-chat'>();
 
@@ -229,6 +237,7 @@ function cleanup(abortExecutions = false) {
   if (ws) {
     try {
       ws.removeAllListeners();
+      ws.on("error", () => {}); // Cancelling a pending handshake can emit an error.
       ws.close();
     } catch {
       /* ignore */
@@ -242,49 +251,63 @@ function cleanup(abortExecutions = false) {
   }
 }
 
-function scheduleReconnect() {
+function scheduleReconnect(rejectedToken?: string) {
   if (stopped) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    connect();
+    void connect(rejectedToken);
   }, reconnectDelay);
   reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
 }
 
-function connect() {
+async function connect(rejectedToken?: string) {
   if (stopped) return;
+  const attempt = ++connectionAttempt;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   const s = loadSettings();
   if (!remoteEnabled(s)) {
     // 运行中被关掉 → 停
     stopRelayClient();
     return;
   }
-  const token = loadWuweiSession()?.accessToken || "";
+  let session: WuweiSession | null;
+  try {
+    session = await resolveSession(rejectedToken);
+  } catch {
+    if (attempt !== connectionAttempt) return;
+    log("relay", "Authentication temporarily unavailable. Retrying remote connection.");
+    scheduleReconnect(rejectedToken);
+    return;
+  }
+  if (attempt !== connectionAttempt) return;
+  if (!session) {
+    stopRelayClient();
+    return;
+  }
+  const token = session.accessToken;
   let account = '';
   try { account = JSON.parse(Buffer.from(token.split('.')[1] || '', 'base64url').toString()).sub || ''; } catch { /* invalid credentials cannot expose the pending pool */ }
   if (connectedAccount && connectedAccount !== account) cleanup(true);
   connectedAccount = account;
-  if (!token) {
-    // 未登录：无法鉴权，稍后重试。这是「手机端看不到这台电脑」最常见的原因之一——提示要在电脑端登录无为账号。
-    log("relay", "未登录无为账号(无 access_token)，无法连 relay；请在电脑端登录后再试。稍后重连。");
-    scheduleReconnect();
-    return;
-  }
-
   cleanup();
   const url = `${RELAY_WS}?token=${encodeURIComponent(token)}`;
   log("relay", "连接中 →", RELAY_WS, "deviceId=", getRemoteDeviceId().slice(0, 8));
   try {
-    ws = new WebSocket(url);
+    ws = new WebSocket(url, { handshakeTimeout: 12_000 });
   } catch (e: any) {
     log("relay", "WebSocket 构造失败:", String(e?.message || e));
     scheduleReconnect();
     return;
   }
 
-  ws.on("open", () => {
-    reconnectDelay = RECONNECT_BASE_MS; // 连上即重置退避
+  const socket = ws;
+  let rejectedHandshake = false;
+  socket.on("open", () => {
+    lastPong = Date.now();
     const name = (s?.app?.remoteDeviceName || "").trim() || hostname() || tr("ui.relay-client.message.7a6b1a2b37");
     const hello = {
       type: "hello",
@@ -307,6 +330,10 @@ function connect() {
     // 心跳
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(() => {
+      if (Date.now() - lastPong > 2 * PING_INTERVAL_MS) {
+        socket.terminate();
+        return;
+      }
       try {
         ws?.send(JSON.stringify({ type: "ping" }));
       } catch {
@@ -322,7 +349,12 @@ function connect() {
     } catch {
       return;
     }
-    if (msg.type === "registered") {
+    if (msg.type === "pong") {
+      lastPong = Date.now();
+    } else if (msg.type === "registered") {
+      reconnectDelay = RECONNECT_BASE_MS;
+      triedAuthRecovery = false;
+      lastPong = Date.now();
       // 上线成功：此刻起手机端 /devices 就能看到这台电脑
       log("relay", "注册成功，已上线。手机端现在应能在「执行位置」看到这台电脑。");
     } else if (msg.type === "error") {
@@ -349,10 +381,13 @@ function connect() {
   ws.on("close", (code: number, reason: Buffer) => {
     log("relay", "连接关闭 code=", code, "reason=", reason?.toString()?.slice(0, 120) || "", "→", Math.round(reconnectDelay / 1000), "s 后重连");
     cleanup();
-    scheduleReconnect();
+    if (attempt !== connectionAttempt) return;
+    const retryAuth = (code === 4401 || rejectedHandshake) && !triedAuthRecovery;
+    if (retryAuth) triedAuthRecovery = true;
+    scheduleReconnect(retryAuth ? token : undefined);
   });
-  ws.on("error", (e: any) => {
-    // 交给 close 处理重连；先记一笔错误原因(如证书/网络/401)
+  ws.on("error", (e: Error) => {
+    rejectedHandshake = e.message === "Unexpected server response: 401";
     log("relay", "连接错误:", String(e?.message || e));
   });
 }
@@ -367,17 +402,25 @@ export function startRelayClient() {
   log("relay", "启动 relay 常驻连接(远程开关=开)");
   stopped = false;
   reconnectDelay = RECONNECT_BASE_MS;
-  connect();
+  triedAuthRecovery = false;
+  void connect();
 }
 
 /** 停止并断开（设置里关掉开关时调用）。 */
 export function stopRelayClient() {
   stopped = true;
+  connectionAttempt++;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
   cleanup(true);
+  connectedAccount = "";
+}
+
+/** Reconnect promptly after the operating system wakes up. */
+export function resumeRelayClient() {
+  if (!stopped && (!ws || Date.now() - lastPong > PING_INTERVAL_MS)) void connect();
 }
 
 /** 设置变更后调用：根据最新 remoteEnabled 决定启或停（并让 hello 用最新设备名/渠道）。 */
@@ -387,7 +430,8 @@ export function refreshRelayClient() {
     // 重连以带上最新设置（设备名/订阅同步变化）
     stopped = false;
     reconnectDelay = RECONNECT_BASE_MS;
-    connect();
+    triedAuthRecovery = false;
+    void connect();
   } else {
     stopRelayClient();
   }

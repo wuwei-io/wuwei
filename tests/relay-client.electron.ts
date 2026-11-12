@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import WebSocket from 'ws';
-import { startRelayClient, stopRelayClient, refreshRelayClient, setRemoteExecutor, setRemoteRoomExecutor } from '../desktop/main/relay-client.js';
+import { startRelayClient, stopRelayClient, refreshRelayClient, setRelaySessionResolver, setRemoteExecutor, setRemoteRoomExecutor } from '../desktop/main/relay-client.js';
 import { runRemoteSessionTurn } from '../desktop/main/remote-sessions.js';
 import { Agent } from '../src/agent/loop.js';
 import { TOOL_MAP } from '../src/tools/index.js';
@@ -42,6 +42,7 @@ async function main() {
     assert.equal(response.value, 'backup');
     args.onRoomEvent({ type: 'room-msg', msgId: 'result', speaker: 'Worker', kind: 'member', text: 'group-result' });
   });
+  setRelaySessionResolver(async () => ({ accessToken: token, refreshToken: 'fixture-refresh', expiresAt: Date.now() + 3_600_000 }));
   startRelayClient();
   const http = base.replace(/^ws/, 'http').replace(/\/ws$/, '/devices');
   let online = false;
