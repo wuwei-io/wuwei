@@ -40,7 +40,7 @@ import {ImageCreationHistory} from './components/ImageCreationHistory.js';
 import type {StudioArtwork} from './components/image-gallery-data.js';
 import {VideoStudio} from './components/VideoStudio.js';
 import type {VideoHistoryEntry} from '../../../src/videogen/contracts.js';
-import { ImageStudio, ImageStudioHeader } from './components/ImageStudio.js';
+import { ImageStudio } from './components/ImageStudio.js';
 import { withImageSkuChoices } from './components/image-studio-catalog.js';
 import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
 import { BillingPanel } from './components/billing/BillingPanel.js';
@@ -158,6 +158,13 @@ interface SessionMeta {
   discuss?: boolean;
   employeeId?: string; // 绑定的员工(一人公司私聊会话)；这类会话不进普通列表，只在一人公司板块下访问
 }
+
+const SIDEBAR_ENTRIES = [
+  { id: "chat", label: "studio.chat" },
+  { id: "image", label: "studio.title" },
+  { id: "video", label: "video.title" },
+] as const;
+type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number]["id"];
 
 // 优先级方案：高/中/低 + 艾森豪威尔四象限。weight 用于排序(大在前)，tag=徽标短标签，label=全称
 const PRIO_HL = [
@@ -4050,6 +4057,13 @@ export function App() {
   // 顶部图标控制两块的显隐：一人公司 / 对话列表，各自独立收起或展开(至少留一个开着)
   const [showTeam, setShowTeam] = useState(() => localStorage.getItem("wuwei-side-show-team") !== "0");
   const [showChats, setShowChats] = useState(() => localStorage.getItem("wuwei-side-show-chats") !== "0");
+  const [visibleSidebarEntries, setVisibleSidebarEntries] = useState<SidebarEntry[]>(() =>
+    SIDEBAR_ENTRIES.map(({ id }) => id).filter((id) => localStorage.getItem(`wuwei-sidebar-entry-${id}`) === "1"),
+  );
+  function changeSidebarEntry(id: SidebarEntry, visible: boolean) {
+    localStorage.setItem(`wuwei-sidebar-entry-${id}`, visible ? "1" : "0");
+    setVisibleSidebarEntries((entries) => visible ? [...entries, id] : entries.filter((entry) => entry !== id));
+  }
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   // 输入框草稿：每个会话【各存各的】，切会话互不影响。存 localStorage(wuwei-drafts: {sid:{text,images}})，重开/更新后恢复。
   // draftLoadedRef 保证「先加载完再回写」，避免初始空草稿把已存内容冲掉。
@@ -6103,7 +6117,10 @@ export function App() {
       if (!r) return;
       setSessions(r.sessions || []);
       setGroups(r.groups || []);
-      if (r.currentId) setCurrentId(r.currentId);
+      if (r.currentId) {
+        if (r.mode === "chat") textOnlySessionsRef.current.add(r.currentId);
+        setCurrentId(r.currentId);
+      }
       atBottomRef.current = true; // 初次打开：定位到最新(底部)
       setAwayFromBottom(false);
       setItems(messagesToItems(r.messages || []));
@@ -7709,11 +7726,19 @@ export function App() {
         }}>
           {t("session.new")}
         </button>
-        <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
-          <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>
-          <button className={imageMode&&!videoMode ? 'active' : ''} aria-pressed={imageMode&&!videoMode} onClick={() => { void beginImageCreation(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>{tr('studio.title')}</button>
-          <button className={videoMode?'active':''} aria-pressed={videoMode} onClick={()=>openVideoCreation()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>{tr('video.title')}</button>
-        </nav>
+        {visibleSidebarEntries.length > 0 && (
+          <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
+            {visibleSidebarEntries.includes("chat") && (
+              <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>
+            )}
+            {visibleSidebarEntries.includes("image") && (
+              <button className={imageMode&&!videoMode ? 'active' : ''} aria-pressed={imageMode&&!videoMode} onClick={() => { void beginImageCreation(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>{tr('studio.title')}</button>
+            )}
+            {visibleSidebarEntries.includes("video") && (
+              <button className={videoMode?'active':''} aria-pressed={videoMode} onClick={()=>openVideoCreation()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>{tr('video.title')}</button>
+            )}
+          </nav>
+        )}
         {/* AGI 板块：数字婴儿入口(迁自 minicc)。默认隐藏，设置里开 */}
         {agiEnabled && (
         <div className="agi-panel">
@@ -8689,7 +8714,6 @@ export function App() {
 
       {/* 主区 */}
       <div className={"main" + (videoMode && appView === null && !agiView ? " video-studio-main" : imageMode && appView === null && !agiView ? " image-studio-main" : "")}>
-        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onBack={()=>setVideoMode(false)} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
@@ -9060,6 +9084,7 @@ export function App() {
               if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.my.company.05b42c6")}</span></>;
               if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.groups.f080cef")}</span></>;
               if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.sops.3f7e53e")}</span></>;
+              if (videoMode && appView === null) return <><WuweiMark /><span className="tb-title-txt">{tr("splash.brand")}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
               const isDefault = !st || st === tr("ui.app.new.chat.fca06b0", {}, "zh") || st === tr("ui.app.new.chat.fca06b0", {}, "en");
               return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (tr("splash.brand")) : tx(st)}</span></>;
@@ -9204,7 +9229,7 @@ export function App() {
           </div>
         )}
 
-        {imageMode && appView === null && !agiView && <ImageStudioHeader historyAvailable={!!wuwei} historyOpen={imageHistory || busy} onHistory={() => {if(imageHistory||busy)void beginImageCreation();else void showImageHistory()}} onBack={() => void leaveImageStudio()} />}
+        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         <div
           className={"stream" + (imageMode?" studio-gallery-stream":"") + (imageMode && !imageHistory && !busy ? " image-studio-stream-hidden" : "")}
           ref={streamRef}
@@ -9782,6 +9807,7 @@ export function App() {
           {imageMode ? <ImageStudio key={`${currentId}/${wuwei?.user.id || 'anonymous'}`} catalog={imageCatalog} skuId={imageSku} scope={`${currentId}/${wuwei?.user.id || 'anonymous'}`} value={input} onChange={setInput} reuseVersion={imageReuseVersion}
             onSelect={selectStudioSku} onGenerate={approvalId => submit(undefined, approvalId)} onStop={stop} onRefresh={refreshImageCatalog}
             busy={busy} compact={imageHistory || busy} loggedIn={!!wuwei} onLogin={()=>requestStudioLogin()} onUpgrade={openBackgroundPlans}
+            historyOpen={imageHistory} onHistory={() => { if (imageHistory) void beginImageCreation(); else void showImageHistory(); }}
             references={pendingImages} onRemoveReference={i => setPendingImages(xs => xs.filter((_,j) => i !== j))} textareaRef={taRef} /> : <div className="input-wrap">
             <textarea dir="ltr"
               ref={taRef}
@@ -10550,6 +10576,8 @@ export function App() {
           }}
           showEffortPicker={showEffortPicker}
           onShowEffortPicker={changeShowEffortPicker}
+          visibleSidebarEntries={visibleSidebarEntries}
+          onSidebarEntryChange={changeSidebarEntry}
           lang={lang}
           onLang={changeLang}
           t={t}
@@ -14000,6 +14028,8 @@ function SettingsModal({
   onWatchdog,
   showEffortPicker,
   onShowEffortPicker,
+  visibleSidebarEntries,
+  onSidebarEntryChange,
   lang,
   onLang,
   t,
@@ -14028,6 +14058,8 @@ function SettingsModal({
   onWatchdog: (interval: number, idle: number) => void;
   showEffortPicker: boolean;
   onShowEffortPicker: (v: boolean) => void;
+  visibleSidebarEntries: readonly SidebarEntry[];
+  onSidebarEntryChange: (id: SidebarEntry, visible: boolean) => void;
   lang: Lang;
   onLang: (l: Lang) => void;
   t: T;
@@ -15102,6 +15134,21 @@ function SettingsModal({
           {tab === "general" && (
             <>
               <LanguagePicker language={lang} onChange={onLang}/>
+              <div className="app-set-group" id="sidebar-entries-label">{t("set.g.sidebarEntries")}</div>
+              <div role="group" aria-labelledby="sidebar-entries-label">
+                {SIDEBAR_ENTRIES.map(({ id, label }) => (
+                  <label className="app-set-row" key={id}>
+                    <span className="app-set-label">{t(label)}</span>
+                    <input
+                      type="checkbox"
+                      className="app-set-toggle"
+                      value={id}
+                      checked={visibleSidebarEntries.includes(id)}
+                      onChange={(e) => onSidebarEntryChange(id, e.target.checked)}
+                    />
+                  </label>
+                ))}
+              </div>
               <div className="app-set-group">{t("set.g.grouping")}</div>
               <div className="theme-pick" style={{ marginBottom: "6px" }}>
                 {[

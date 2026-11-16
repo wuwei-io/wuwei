@@ -26,13 +26,11 @@ const qualityLabel = (quality?: string) => tr(quality === 'low' ? 'studio.light'
 const unique = <T,>(rows:T[]) => [...new Set(rows)];
 function storedCount(scope:string){try{const count=Number(sessionStorage.getItem('image-studio-count/'+scope));return Number.isInteger(count)&&count>=1&&count<=4?count:1;}catch{return 1;}}
 
-export function ImageStudioHeader({historyOpen,onHistory,onBack,historyAvailable=true}: {historyOpen:boolean;onHistory:()=>void;onBack:()=>void;historyAvailable?:boolean}) {
-  return <header className="image-studio image-studio-header"><div><span>{tr('studio.workspace')}</span><i>/</i><b>{tr('studio.title')}</b></div><div>{historyAvailable&&<><button aria-pressed={historyOpen} onClick={onHistory}><Icon name="clock"/>{historyOpen ? tr('studio.backCreate') : tr('studio.history')}</button><i></i></>}<button onClick={onBack}>{tr('studio.backChat')}<span>↗</span></button></div></header>;
-}
 interface Props {
   catalog:ImageCatalogEntry[]; skuId:string; scope:string; reuseVersion?:number; value:string; onChange:(value:string)=>void;
   onSelect:(sku:string)=>Promise<void>; onGenerate:(approvalId:string)=>void; onStop:()=>void; onRefresh:()=>Promise<void>;
   busy:boolean; compact:boolean; loggedIn:boolean; onLogin:()=>void; onUpgrade:()=>void;
+  historyOpen:boolean; onHistory:()=>void;
   references:string[]; onRemoveReference:(index:number)=>void; textareaRef:React.RefObject<HTMLTextAreaElement|null>;
 }
 export function ImageStudio(p:Props) {
@@ -93,7 +91,7 @@ export function ImageStudio(p:Props) {
     if(!open || !panel.current || !controls.current)return;
     const fit=()=>{
       const box=panel.current!,trigger=controls.current!.getBoundingClientRect();
-      const top=document.querySelector('.image-studio-header')?.getBoundingClientRect().bottom??48;
+      const top=document.querySelector('.image-studio-main > .titlebar')?.getBoundingClientRect().bottom??0;
       if(open==='parameters') {
         box.classList.remove('is-below');box.style.maxHeight='none';
         const anchor=controls.current!.querySelector('[data-studio-parameters]')!.getBoundingClientRect();
@@ -135,7 +133,16 @@ export function ImageStudio(p:Props) {
   return <div className={'image-studio image-studio-content'+(p.compact?' is-compact':'')+(collapsed?' is-collapsed':'')} ref={root}>
     {!p.compact&&<section className="studio-hero"><div className="studio-eyebrow"><i/>IMAGE STUDIO</div><h1>{tr('studio.hero')}</h1><p>{tr('studio.lead')}</p></section>}
     <section className="studio-card">
-      <div className="studio-card-heading"><span><Icon name="image"/>{tr('studio.description')}</span><div className="studio-composer-heading-actions"><button type="button" onClick={fillExample}>{tr('studio.example')}<Icon name="arrow"/></button><StudioComposerToggle collapsed={collapsed} onToggle={toggleCollapsed}/></div></div>
+      <div className="studio-card-heading">
+        <span><Icon name="image"/>{tr('studio.description')}</span>
+        <div className="studio-composer-heading-actions">
+          {p.loggedIn && <button type="button" disabled={p.busy} onClick={p.onHistory}>
+            <Icon name="clock"/>{tr(p.historyOpen ? 'studio.backCreate' : 'studio.history')}
+          </button>}
+          <button type="button" onClick={fillExample}>{tr('studio.example')}<Icon name="arrow"/></button>
+          <StudioComposerToggle collapsed={collapsed} onToggle={toggleCollapsed}/>
+        </div>
+      </div>
       <div className="studio-prompt-area">
         <div className="studio-references">{p.references.map((src,i)=><div className="studio-reference-thumb" key={src+i}><img src={src} alt={tr('studio.referenceNumber',{number:i+1})}/><button className="studio-remove" onClick={()=>p.onRemoveReference(i)} aria-label={tr('studio.removeReference',{number:i+1})}><Icon name="close"/></button><small>{i+1}</small></div>)}
           <button className="studio-reference-add" aria-disabled="true" aria-describedby={referenceHint?'studio-reference-note':undefined} onClick={()=>setReferenceHint(v=>!v)} title={tr('studio.referenceUnavailable')}><Icon name="plus"/><span>{tr('studio.reference')}</span><small>{tr('studio.unavailable')}</small></button></div>
@@ -172,7 +179,6 @@ export function ImageStudio(p:Props) {
     </section>
     {p.loggedIn&&rows.length>0&&!selected&&<div role="alert" className="studio-error">{tr('studio.modelUnavailable')}<button onClick={()=>{setProvider(providers[0]);setOpen('models');}}>{tr('studio.chooseModel')}</button></div>}
     {(error||activeQuote?.error)&&<div role="alert" className="studio-error">{error||tr('studio.quoteError')}<button onClick={()=>{setError('');setQuote(null);setRetry(v=>v+1);void p.onRefresh();}}>{tr('studio.retry')}</button></div>}
-    <div className="studio-footnote"><span><Icon name="coin"/>{p.loggedIn&&selected&&selected.eligible!==false&&generationPrompt&&promptValid&&!quoted&&!activeQuote?.error?tr('studio.quoting'):quoted?tr('studio.directCost',{estimated:activeQuote!.data!.estimated_coins}):tr('studio.feeNote')}</span><span>Ctrl / ⌘ + Enter</span></div>
     {!p.compact&&<div className="studio-inspiration"><span>{tr('studio.inspiration')}</span><div>{(['product','poster','illustration'] as const).map((kind,i)=><button key={kind} onClick={()=>fillPreset(kind)}><Icon name={(['grid','image','folder'] as const)[i]}/>{tr(`studio.preset.${kind}`)}</button>)}</div></div>}
   </div>;
 }

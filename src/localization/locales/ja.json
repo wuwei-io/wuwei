@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "ツール",
     "set.tab.secrets": "秘密",
+    "set.g.sidebarEntries": "サイドバーのショートカットを表示",
     "set.g.grouping": "セッションのグループ化",
     "set.g.manual": "マニュアル",
     "set.g.byDate": "日付順",

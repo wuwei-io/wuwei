@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "Tools",
     "set.tab.secrets": "Secrets",
+    "set.g.sidebarEntries": "Show sidebar shortcuts",
     "set.g.grouping": "Session grouping",
     "set.g.manual": "Manual",
     "set.g.byDate": "By date",

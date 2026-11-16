@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "Werkzeuge",
     "set.tab.secrets": "Geheimnisse",
+    "set.g.sidebarEntries": "Verknüpfungen in der Seitenleiste anzeigen",
     "set.g.grouping": "Sitzungsgruppierung",
     "set.g.manual": "Handbuch",
     "set.g.byDate": "Nach Datum",
