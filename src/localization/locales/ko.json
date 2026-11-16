@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "도구",
     "set.tab.secrets": "비밀",
+    "set.g.sidebarEntries": "사이드바 바로가기 표시",
     "set.g.grouping": "세션 그룹화",
     "set.g.manual": "매뉴얼",
     "set.g.byDate": "날짜별",

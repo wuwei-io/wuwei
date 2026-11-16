@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "Инструменты",
     "set.tab.secrets": "Секреты",
+    "set.g.sidebarEntries": "Показывать ярлыки на боковой панели",
     "set.g.grouping": "Группировка сеансов",
     "set.g.manual": "Вручную",
     "set.g.byDate": "По дате",

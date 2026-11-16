@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "Ferramentas",
     "set.tab.secrets": "Segredos",
+    "set.g.sidebarEntries": "Mostrar atalhos na barra lateral",
     "set.g.grouping": "Agrupamento de sessões",
     "set.g.manual": "Manuais",
     "set.g.byDate": "Por data",

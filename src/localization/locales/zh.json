@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "工具",
     "set.tab.secrets": "密钥",
+    "set.g.sidebarEntries": "显示侧栏入口",
     "set.g.grouping": "会话分组",
     "set.g.manual": "手动分组",
     "set.g.byDate": "按日期",

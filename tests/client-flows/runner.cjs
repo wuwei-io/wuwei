@@ -315,9 +315,9 @@ app.whenReady().then(async () => {
   const changeLanguage = async (f, code) => f.js(`(()=>{const select=document.querySelector('.language-switcher');if(!select)throw Error('Missing language selector');select.value=${JSON.stringify(code)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const uiLanguage = async (f, code) => f.js(`(()=>{localStorage.setItem('wuwei_lang',${JSON.stringify(code)});window.dispatchEvent(new StorageEvent('storage',{key:'wuwei_lang'}));})()`);
 
-  const openLanguageSettings=async f=>{await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');await f.click('.set-tabs button:first-child');await f.wait('!!document.querySelector(".language-picker-trigger")');};
+  const openGeneralSettings=async f=>{await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');await f.click('.set-tabs button:first-child');await f.wait('!!document.querySelector(".language-picker-trigger")');};
   await run('发布关键：多语言：18种语言搜索、键盘选择、即时切换及原文保留',{lang:'zh'},async f=>{
-    await f.fill('.composer textarea','原始草稿 keep original');await openLanguageSettings(f);
+    await f.fill('.composer textarea','原始草稿 keep original');await openGeneralSettings(f);
     await f.click('.language-picker-trigger');await f.wait('document.querySelectorAll(".language-picker-options [role=option]").length===19');
     await f.fill('.language-picker-search input','рус');assert.equal(await f.js('document.querySelectorAll(".language-picker-options [role=option]").length'),1);
     f.state.win.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});await f.wait('document.documentElement.lang==="ru"&&!document.querySelector(".language-picker-popup")');assert.equal(f.state.appLanguage,'ru');
@@ -345,7 +345,7 @@ app.whenReady().then(async () => {
   });
   for(const [systemLanguage,expected] of [['ru-RU','ru'],['ja-JP','ja'],['fa-IR','fa']]) await run('发布关键：多语言：默认跟随电脑系统语言 '+expected,{lang:'system',systemLanguage,settings:{...settings(),app:{teamEnabled:false,lang:'system'}}},async f=>{
     await f.wait('document.documentElement.lang==='+JSON.stringify(expected));assert.equal(f.state.appLanguage,'system');assert.equal(await f.js('localStorage.getItem("wuwei_lang")'),'system');
-    await openLanguageSettings(f);await f.click('.language-picker-trigger');await f.click('.language-picker-options [data-language-code="en"]');await f.wait('document.documentElement.lang==="en"');assert.equal(f.state.appLanguage,'en');
+    await openGeneralSettings(f);await f.click('.language-picker-trigger');await f.click('.language-picker-options [data-language-code="en"]');await f.wait('document.documentElement.lang==="en"');assert.equal(f.state.appLanguage,'en');
     await f.click('.language-picker-trigger');await f.click('.language-picker-options [data-language-code="system"]');await f.wait('document.documentElement.lang==='+JSON.stringify(expected));assert.equal(f.state.appLanguage,'system');
   });
   for (const lang of ['zh','en']) await run('发布关键：侧栏显示：已完成会话保持单行布局、悬停删除和切换交互 '+lang, {
@@ -967,16 +967,69 @@ app.whenReady().then(async () => {
     await f.click('.new-session'); await delay(180); assert.equal(f.state.settings.model, 'claude-opus-4-8');
     assert.equal(f.state.sent.length, 0); assert.equal(f.state.orders, 0);
   });
+  const sidebarEntryControl = id => `[aria-labelledby="sidebar-entries-label"] input[value="${id}"]`;
+  async function enableSidebarEntry(f, id) {
+    await openGeneralSettings(f);
+    await f.click(sidebarEntryControl(id));
+    await f.wait('!!document.querySelector(".studio-mode-nav button")');
+    await f.click('.set-win-btn:last-child');
+    await f.wait('!document.querySelector(".settings")');
+  }
+  await run('发布关键：侧栏入口默认隐藏、独立开关并保留选择', {
+    sessions: [
+      { id: 'qa-session', title: '历史对话', updatedAt: Date.now() },
+      { id: 'qa-image', title: '历史图片', imageSku: 'qa-image-two', updatedAt: Date.now() },
+      { id: 'video:qa-video', title: '历史视频', videoRequestId: 'qa-video', updatedAt: Date.now() },
+    ],
+  }, async f => {
+    const shortcuts = 'Array.from(document.querySelectorAll(".studio-mode-nav button"), button => button.textContent.trim())';
+    const entries = [['chat', '对话'], ['image', '图片创作'], ['video', '视频创作']];
+    await f.wait('document.querySelectorAll(".s-title").length === 3');
+    assert.equal(await f.js('!!document.querySelector(".studio-mode-nav")'), false);
+    assert.equal(await f.js('!!document.querySelector(".new-session")'), true);
+    await openGeneralSettings(f);
+    for (const [id, label] of entries) {
+      const control = sidebarEntryControl(id);
+      assert.equal(await f.js(`document.querySelector(${JSON.stringify(control)}).checked`), false);
+      await f.click(control);
+      assert.deepEqual(await f.js(shortcuts), [label]);
+      await f.click(control);
+      assert.equal(await f.js('!!document.querySelector(".studio-mode-nav")'), false);
+    }
+    await f.click(sidebarEntryControl('video'));
+    await f.click(sidebarEntryControl('chat'));
+    await f.click('.set-win-btn:last-child');
+    assert.deepEqual(await f.js(shortcuts), ['对话', '视频创作']);
+    await f.state.win.loadURL(url.href);
+    await f.wait(`(${shortcuts}).length === 2`);
+    assert.deepEqual(await f.js(shortcuts), ['对话', '视频创作']);
+    await openGeneralSettings(f);
+    for (const [id] of entries) {
+      assert.equal(await f.js(`document.querySelector(${JSON.stringify(sidebarEntryControl(id))}).checked`), id !== 'image');
+    }
+    await f.click(sidebarEntryControl('video'));
+    assert.deepEqual(await f.js(shortcuts), ['对话']);
+    await f.click(sidebarEntryControl('chat'));
+    await f.click('.set-win-btn:last-child');
+    assert.equal(await f.js('!!document.querySelector(".studio-mode-nav")'), false);
+    await f.wait('document.querySelectorAll(".s-title").length === 3');
+    await f.click('.new-session');
+    await f.wait('!!document.querySelector(".composer textarea")');
+    assert.equal(f.state.lastNewSessionOptions?.mode, 'chat');
+  });
   for(const from of ['chat','image','video'])await run('发布关键：新建文字对话：'+from+'入口始终返回文字模式',{
     settings:{...settings(),modelPreferences:{'qa-account':{providerId:'wuwei-image',modelId:'qa-image-two'}}},
     imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}]
   },async f=>{
-    if(from==='image'){await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio, .image-studio-composer, .image-composer")');}
-    if(from==='video'){await f.click('.studio-mode-nav button:nth-child(3)');await f.wait('!!document.querySelector(".video-studio-root")');}
+    if (from !== 'chat') {
+      await enableSidebarEntry(f, from);
+      await f.click('.studio-mode-nav button');
+      await f.wait(from === 'image' ? '!!document.querySelector(".image-studio-content")' : '!!document.querySelector(".video-studio-root")');
+    }
     assert.equal(await f.js('document.querySelector(".new-session").textContent.trim().normalize("NFKC")'),'+ 新对话');
     f.state.settingsDelay=100;
     await f.click('.new-session');
-    await f.wait('document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true" && !!document.querySelector(".composer textarea")');
+    await f.wait('!!document.querySelector(".composer textarea") && !document.querySelector(".image-studio-main, .video-studio-main")');
     await delay(400);
     assert.equal(f.state.lastNewSessionOptions?.mode,'chat');
     assert.equal(f.state.settings.imageMode,false);
@@ -984,7 +1037,7 @@ app.whenReady().then(async () => {
     assert.notEqual(f.state.settings.model,'qa-image-two');
     assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
     if(from==='image'){
-      f.state.settingsDelay=0;await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio-content")');
+      f.state.settingsDelay=0;await f.click('.studio-mode-nav button');await f.wait('!!document.querySelector(".image-studio-content")');
       assert.equal(f.state.settings.imageMode,true);assert.equal(f.state.lastNewSessionOptions,undefined);
       assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
     }
@@ -992,15 +1045,16 @@ app.whenReady().then(async () => {
   await run('发布关键：新建文字对话：保留已选文字模型',{
     settings:{...settings('wuwei-mimo','mimo-v2.6-flash'),modelPreferences:{'qa-account':{providerId:'wuwei-mimo',modelId:'mimo-v2.6-flash'}}}
   },async f=>{
-    await f.click('.new-session');await f.wait('document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true"');await delay(150);
+    await f.click('.new-session');await f.wait('!!document.querySelector(".composer textarea") && !document.querySelector(".image-studio-main, .video-studio-main")');await delay(150);
     assert.equal(f.state.settings.model,'mimo-v2.6-flash');assert.equal(f.state.settings.modelPreferences['qa-account'].modelId,'mimo-v2.6-flash');
     assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
   });
   await run('发布关键：新建文字对话：退出未登录图片预览',{
     account:null,settings:settings('wuwei-free','glm-4.7-flash'),imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}]
   },async f=>{
-    await f.click('.studio-mode-nav button:nth-child(2)');await f.wait('!!document.querySelector(".image-studio-content")');
-    await f.click('.new-session');await f.wait('!document.querySelector(".image-studio-content") && document.querySelector(".studio-mode-nav button:first-child")?.getAttribute("aria-pressed")==="true"');
+    await enableSidebarEntry(f, 'image');
+    await f.click('.studio-mode-nav button');await f.wait('!!document.querySelector(".image-studio-content")');
+    await f.click('.new-session');await f.wait('!document.querySelector(".image-studio-content") && !!document.querySelector(".composer textarea")');
     await delay(150);assert.equal(f.state.settings.imageMode,false);assert.equal(await f.js('!!document.querySelector(".wuwei-login-dialog")'),false);
     assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
   });

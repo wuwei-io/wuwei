@@ -159,6 +159,13 @@ interface SessionMeta {
   employeeId?: string; // 绑定的员工(一人公司私聊会话)；这类会话不进普通列表，只在一人公司板块下访问
 }
 
+const SIDEBAR_ENTRIES = [
+  { id: "chat", label: "studio.chat" },
+  { id: "image", label: "studio.title" },
+  { id: "video", label: "video.title" },
+] as const;
+type SidebarEntry = (typeof SIDEBAR_ENTRIES)[number]["id"];
+
 // 优先级方案：高/中/低 + 艾森豪威尔四象限。weight 用于排序(大在前)，tag=徽标短标签，label=全称
 const PRIO_HL = [
   { tag: systemData.priorityTags[0], weight: 3, get label() { return tr("ui.helpmanualmodal.high.29b7559"); }, get labelEn() { return tr("ui.helpmanualmodal.high.29b7559"); } },
@@ -4050,6 +4057,13 @@ export function App() {
   // 顶部图标控制两块的显隐：一人公司 / 对话列表，各自独立收起或展开(至少留一个开着)
   const [showTeam, setShowTeam] = useState(() => localStorage.getItem("wuwei-side-show-team") !== "0");
   const [showChats, setShowChats] = useState(() => localStorage.getItem("wuwei-side-show-chats") !== "0");
+  const [visibleSidebarEntries, setVisibleSidebarEntries] = useState<SidebarEntry[]>(() =>
+    SIDEBAR_ENTRIES.map(({ id }) => id).filter((id) => localStorage.getItem(`wuwei-sidebar-entry-${id}`) === "1"),
+  );
+  function changeSidebarEntry(id: SidebarEntry, visible: boolean) {
+    localStorage.setItem(`wuwei-sidebar-entry-${id}`, visible ? "1" : "0");
+    setVisibleSidebarEntries((entries) => visible ? [...entries, id] : entries.filter((entry) => entry !== id));
+  }
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   // 输入框草稿：每个会话【各存各的】，切会话互不影响。存 localStorage(wuwei-drafts: {sid:{text,images}})，重开/更新后恢复。
   // draftLoadedRef 保证「先加载完再回写」，避免初始空草稿把已存内容冲掉。
@@ -7709,11 +7723,19 @@ export function App() {
         }}>
           {t("session.new")}
         </button>
-        <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
-          <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>
-          <button className={imageMode&&!videoMode ? 'active' : ''} aria-pressed={imageMode&&!videoMode} onClick={() => { void beginImageCreation(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>{tr('studio.title')}</button>
-          <button className={videoMode?'active':''} aria-pressed={videoMode} onClick={()=>openVideoCreation()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>{tr('video.title')}</button>
-        </nav>
+        {visibleSidebarEntries.length > 0 && (
+          <nav className="studio-mode-nav" aria-label={tr('studio.workspace')}>
+            {visibleSidebarEntries.includes("chat") && (
+              <button className={!imageMode&&!videoMode ? 'active' : ''} aria-pressed={!imageMode&&!videoMode} onClick={() => { setVideoMode(false);setAppView(null); setAgiView(null); if(imageMode)void leaveImageStudio(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 11a8 8 0 0 1-8 8H5l-3 2V11a9 9 0 0 1 18 0Z"/><path d="M7 10h8M7 14h5"/></svg>{tr('studio.chat')}</button>
+            )}
+            {visibleSidebarEntries.includes("image") && (
+              <button className={imageMode&&!videoMode ? 'active' : ''} aria-pressed={imageMode&&!videoMode} onClick={() => { void beginImageCreation(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>{tr('studio.title')}</button>
+            )}
+            {visibleSidebarEntries.includes("video") && (
+              <button className={videoMode?'active':''} aria-pressed={videoMode} onClick={()=>openVideoCreation()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>{tr('video.title')}</button>
+            )}
+          </nav>
+        )}
         {/* AGI 板块：数字婴儿入口(迁自 minicc)。默认隐藏，设置里开 */}
         {agiEnabled && (
         <div className="agi-panel">
@@ -10550,6 +10572,8 @@ export function App() {
           }}
           showEffortPicker={showEffortPicker}
           onShowEffortPicker={changeShowEffortPicker}
+          visibleSidebarEntries={visibleSidebarEntries}
+          onSidebarEntryChange={changeSidebarEntry}
           lang={lang}
           onLang={changeLang}
           t={t}
@@ -14000,6 +14024,8 @@ function SettingsModal({
   onWatchdog,
   showEffortPicker,
   onShowEffortPicker,
+  visibleSidebarEntries,
+  onSidebarEntryChange,
   lang,
   onLang,
   t,
@@ -14028,6 +14054,8 @@ function SettingsModal({
   onWatchdog: (interval: number, idle: number) => void;
   showEffortPicker: boolean;
   onShowEffortPicker: (v: boolean) => void;
+  visibleSidebarEntries: readonly SidebarEntry[];
+  onSidebarEntryChange: (id: SidebarEntry, visible: boolean) => void;
   lang: Lang;
   onLang: (l: Lang) => void;
   t: T;
@@ -15102,6 +15130,21 @@ function SettingsModal({
           {tab === "general" && (
             <>
               <LanguagePicker language={lang} onChange={onLang}/>
+              <div className="app-set-group" id="sidebar-entries-label">{t("set.g.sidebarEntries")}</div>
+              <div role="group" aria-labelledby="sidebar-entries-label">
+                {SIDEBAR_ENTRIES.map(({ id, label }) => (
+                  <label className="app-set-row" key={id}>
+                    <span className="app-set-label">{t(label)}</span>
+                    <input
+                      type="checkbox"
+                      className="app-set-toggle"
+                      value={id}
+                      checked={visibleSidebarEntries.includes(id)}
+                      onChange={(e) => onSidebarEntryChange(id, e.target.checked)}
+                    />
+                  </label>
+                ))}
+              </div>
               <div className="app-set-group">{t("set.g.grouping")}</div>
               <div className="theme-pick" style={{ marginBottom: "6px" }}>
                 {[

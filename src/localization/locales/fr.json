@@ -107,6 +107,7 @@
     "set.tab.mcp": "MCP",
     "set.tab.tools": "Outils",
     "set.tab.secrets": "Secrets",
+    "set.g.sidebarEntries": "Afficher les raccourcis dans la barre latérale",
     "set.g.grouping": "Regroupement de sessions",
     "set.g.manual": "Manuel",
     "set.g.byDate": "Par date",
