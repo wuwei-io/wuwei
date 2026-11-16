@@ -293,7 +293,15 @@ app.whenReady().then(async()=>{
   if(status==='guest'){await f.wait('!!document.querySelector("input[type=password]")');}
   else if(status==='eligible'){
    if(kind==='images'){await f.wait('document.querySelector(".studio-control")?.textContent.includes("Seedream 5.0 Pro")');assert.equal(f.state.settings.imageSku,'member-image');}
-   else await f.wait('!!document.querySelector(".vs-header")');
+   else {
+    await f.wait('!!document.querySelector(".video-studio-root")');
+    assert.equal(await f.js('!!document.querySelector(".vs-header")'), false);
+    assert.equal(await f.js('document.querySelector(".main > .titlebar").getBoundingClientRect().height > 0'), true);
+    await f.click('.vs-composer-heading > div > button:first-child');
+    await f.wait('!!document.querySelector(".vs-history-scroll")');
+    await f.click('.vs-composer-heading > div > button:first-child');
+    await f.wait('!!document.querySelector(".vs-landing")');
+   }
    assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);
   }else{
    await f.wait('!!document.querySelector(".billing-panel")');assert.equal(f.state.settings.model,'nemotron-super-free');

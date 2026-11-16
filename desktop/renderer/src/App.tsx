@@ -40,7 +40,7 @@ import {ImageCreationHistory} from './components/ImageCreationHistory.js';
 import type {StudioArtwork} from './components/image-gallery-data.js';
 import {VideoStudio} from './components/VideoStudio.js';
 import type {VideoHistoryEntry} from '../../../src/videogen/contracts.js';
-import { ImageStudio, ImageStudioHeader } from './components/ImageStudio.js';
+import { ImageStudio } from './components/ImageStudio.js';
 import { withImageSkuChoices } from './components/image-studio-catalog.js';
 import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
 import { BillingPanel } from './components/billing/BillingPanel.js';
@@ -6117,7 +6117,10 @@ export function App() {
       if (!r) return;
       setSessions(r.sessions || []);
       setGroups(r.groups || []);
-      if (r.currentId) setCurrentId(r.currentId);
+      if (r.currentId) {
+        if (r.mode === "chat") textOnlySessionsRef.current.add(r.currentId);
+        setCurrentId(r.currentId);
+      }
       atBottomRef.current = true; // 初次打开：定位到最新(底部)
       setAwayFromBottom(false);
       setItems(messagesToItems(r.messages || []));
@@ -8711,7 +8714,6 @@ export function App() {
 
       {/* 主区 */}
       <div className={"main" + (videoMode && appView === null && !agiView ? " video-studio-main" : imageMode && appView === null && !agiView ? " image-studio-main" : "")}>
-        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onBack={()=>setVideoMode(false)} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         {/* 数字婴儿面板(迁自 minicc)：agiView==="baby" 时占据主区 */}
         {/* 应用中心 / 房间（可选模块）：整块占据主区，与数字婴儿面板同级。摘除模块时删掉这个块。 */}
         {teamEnabled && (appView === "store" || appView === "rooms") && (
@@ -9082,6 +9084,7 @@ export function App() {
               if (teamEnabled && appView === "store") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.my.company.05b42c6")}</span></>;
               if (teamEnabled && appView === "rooms") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.groups.f080cef")}</span></>;
               if (teamEnabled && appView === "sop") return <><WuweiMark /><span className="tb-title-txt">{tr("ui.app.sops.3f7e53e")}</span></>;
+              if (videoMode && appView === null) return <><WuweiMark /><span className="tb-title-txt">{tr("splash.brand")}</span></>;
               const st = sessions.find((s) => s.id === currentId)?.title;
               const isDefault = !st || st === tr("ui.app.new.chat.fca06b0", {}, "zh") || st === tr("ui.app.new.chat.fca06b0", {}, "en");
               return <><WuweiMark /><span className="tb-title-txt">{isDefault ? (tr("splash.brand")) : tx(st)}</span></>;
@@ -9226,7 +9229,7 @@ export function App() {
           </div>
         )}
 
-        {imageMode && appView === null && !agiView && <ImageStudioHeader historyAvailable={!!wuwei} historyOpen={imageHistory || busy} onHistory={() => {if(imageHistory||busy)void beginImageCreation();else void showImageHistory()}} onBack={() => void leaveImageStudio()} />}
+        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         <div
           className={"stream" + (imageMode?" studio-gallery-stream":"") + (imageMode && !imageHistory && !busy ? " image-studio-stream-hidden" : "")}
           ref={streamRef}
@@ -9804,6 +9807,7 @@ export function App() {
           {imageMode ? <ImageStudio key={`${currentId}/${wuwei?.user.id || 'anonymous'}`} catalog={imageCatalog} skuId={imageSku} scope={`${currentId}/${wuwei?.user.id || 'anonymous'}`} value={input} onChange={setInput} reuseVersion={imageReuseVersion}
             onSelect={selectStudioSku} onGenerate={approvalId => submit(undefined, approvalId)} onStop={stop} onRefresh={refreshImageCatalog}
             busy={busy} compact={imageHistory || busy} loggedIn={!!wuwei} onLogin={()=>requestStudioLogin()} onUpgrade={openBackgroundPlans}
+            historyOpen={imageHistory} onHistory={() => { if (imageHistory) void beginImageCreation(); else void showImageHistory(); }}
             references={pendingImages} onRemoveReference={i => setPendingImages(xs => xs.filter((_,j) => i !== j))} textareaRef={taRef} /> : <div className="input-wrap">
             <textarea dir="ltr"
               ref={taRef}

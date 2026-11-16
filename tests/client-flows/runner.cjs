@@ -58,13 +58,15 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'getSettings': { const value = { settings: clone(s.settings), systemLanguage:s.systemLanguage, backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
-    case 'bootstrap': return { currentId: 'qa-session', sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
+    case 'bootstrap': return { currentId: 'qa-session', mode: s.startupMode, sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
     case 'switchSession': s.switchedSession=args[0];return true;
     case 'deleteSession': s.deletedSession=args[0];return true;
     case 'newSession': s.lastNewSessionOptions=clone(args[0]); if(args[0]?.mode==='chat')s.settings.imageMode=false;emit(s, 'evt:session-loaded', { id: (s.newSessionCount=(s.newSessionCount??0)+1)===1?'qa-new-session':'qa-new-session-'+s.newSessionCount, messages: [],...(args[0]?.mode==='chat'?{mode:'chat'}:{}) }); return true;
     case 'wuweiMe': { if (s.meError) throw Error(s.meError); const value = clone(s.account); if (s.meDelay) await delay(s.meDelay); return value; }
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
+    case 'imageHistory': return [];
+    case 'goalGet': return null;
     case 'supportThread': return {messages:[],unread:0};
     case 'getModelPricing': return { providers: [] };
     case 'fetchModels': return [];
@@ -1017,6 +1019,20 @@ app.whenReady().then(async () => {
     await f.wait('!!document.querySelector(".composer textarea")');
     assert.equal(f.state.lastNewSessionOptions?.mode, 'chat');
   });
+  await run('发布关键：启动文字对话不恢复上次图片模型', {
+    startupMode: 'chat',
+    historyMessages: [],
+    sessions: [{ id: 'qa-image', title: '历史图片', imageSku: 'qa-image-two', updatedAt: Date.now() }],
+    settings: { ...settings(), imageSku: 'qa-image-two', modelPreferences: { 'qa-account': { providerId: 'wuwei-image', modelId: 'qa-image-two' } } },
+    imageCatalog: [{ sku_id: 'qa-image-two', model: 'gpt-image-2', coins_per_image: 36 }],
+  }, async f => {
+    await f.wait('!!document.querySelector(".composer .input-wrap textarea") && document.querySelector(".tb-title-txt")?.textContent === "无为"');
+    assert.equal(await f.js('!!document.querySelector(".image-studio-content, .video-studio-root")'), false);
+    assert.equal(await f.js('document.querySelector(".composer .input-wrap textarea").value'), '');
+    assert.equal(await f.js('document.querySelector(".s-title")?.textContent'), '历史图片');
+    assert.equal(Boolean(f.state.settings.imageMode), false);
+    assert.equal(f.state.lastNewSessionOptions, undefined);
+  });
   for(const from of ['chat','image','video'])await run('发布关键：新建文字对话：'+from+'入口始终返回文字模式',{
     settings:{...settings(),modelPreferences:{'qa-account':{providerId:'wuwei-image',modelId:'qa-image-two'}}},
     imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}]
@@ -1025,6 +1041,36 @@ app.whenReady().then(async () => {
       await enableSidebarEntry(f, from);
       await f.click('.studio-mode-nav button');
       await f.wait(from === 'image' ? '!!document.querySelector(".image-studio-content")' : '!!document.querySelector(".video-studio-root")');
+      assert.equal(await f.js('!!document.querySelector(".image-studio-header, .vs-header, .studio-footnote, .vs-composer-note, .vs-hero-chips")'), false);
+      assert.equal(await f.js('document.querySelector(".main > .titlebar").getBoundingClientRect().height > 0'), true);
+    }
+    if (from === 'image') {
+      await f.wait('document.querySelector(".tb-title-txt")?.textContent === "无为"');
+      const geometry = `(() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+        const top = rect('.main > .titlebar').bottom;
+        const bottom = rect('.main').bottom;
+        const hero = rect('.studio-hero');
+        const inspiration = rect('.studio-inspiration');
+        const reference = rect('.studio-reference-add');
+        return {
+          topGap: hero.top - top,
+          centerOffset: (hero.top + inspiration.bottom - top - bottom) / 2,
+          promptTopGap: reference.top - rect('.studio-card-heading').bottom,
+          promptBottomGap: rect('.studio-toolbar').top - reference.bottom,
+        };
+      })()`;
+      for (const [width, height, minimumGap] of [[1200, 920, 100], [920, 660, 35]]) {
+        f.state.win.setContentSize(width, height);
+        await f.wait(`innerWidth === ${width} && innerHeight === ${height}`);
+        const layout = await f.js(geometry);
+        assert.ok(layout.topGap > minimumGap && Math.abs(layout.centerOffset) < 3, JSON.stringify(layout));
+        assert.ok(Math.abs(layout.promptTopGap - layout.promptBottomGap) < 1, JSON.stringify(layout));
+      }
+      await f.click('.studio-composer-heading-actions > button:first-child');
+      await f.wait('!!document.querySelector(".image-creation-history")');
+      await f.click('.studio-composer-heading-actions > button:first-child');
+      await f.wait('!!document.querySelector(".studio-hero") && !document.querySelector(".image-creation-history")');
     }
     assert.equal(await f.js('document.querySelector(".new-session").textContent.trim().normalize("NFKC")'),'+ 新对话');
     f.state.settingsDelay=100;

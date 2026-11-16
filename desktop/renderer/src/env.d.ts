@@ -149,7 +149,7 @@ export interface WuweiApi {
   checkUpdate(): Promise<{ available: boolean; downloaded?: boolean; version?: string; notes?: string; error?: string }>;
   installUpdate(): void;
   deleteExchange(sid: string, ordinal: number): void;
-  bootstrap(): Promise<{ sessions: any[]; groups?: string[]; currentId: string; messages: any[]; usage?: any; rateLimits?: any; interrupted?: { id: string; title: string }[] }>;
+  bootstrap(): Promise<{ sessions: any[]; groups?: string[]; currentId: string; mode?: "chat"; messages: any[]; usage?: any; rateLimits?: any; interrupted?: { id: string; title: string }[] }>;
   getSettings(): Promise<{ settings: any; systemLanguage?: string; backend: string; model: string; defaultPrompt?: string; defaultBrainPrompt?: string; defaultSecretsPrompt?: string }>;
   setSettings(s: any): void;
   getMemory(): Promise<string>;

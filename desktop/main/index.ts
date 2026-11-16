@@ -228,6 +228,7 @@ const backendBySid = new Map<string, string>();
 // 每会话最近一轮的自足用量（onUsage 的 round），供「非托管」平台每轮结束后自报统计（见 reportExternalUsage 调用处）。
 const lastRoundBySid = new Map<string, { input: number; output: number; cacheHit: number; steps: number }>();
 let currentId = "";
+let startupChatId = "";
 
 // 权限往返：id → resolve
 const pendingPerm = new Map<number, (d: "allow" | "deny") => void>();
@@ -2626,15 +2627,17 @@ function sendUsageFor(id: string) {
   send("evt:usage", a ? a.getUsage() : EMPTY_USAGE);
 }
 
-// 启动时：选最近会话或新建，推送列表与当前会话历史
+function startupChatMode() {
+  return currentId === startupChatId && !loadSettings()?.imageMode ? "chat" : undefined;
+}
+
+// 启动和渲染器重载时，推送历史列表和主进程当前会话。
 function bootstrapSessions() {
   autoPurgeTrash(); // 启动先清掉回收站里超过 7 天的
-  const list = listSessions();
-  currentId = list[0]?.id ?? randomUUID();
   const a = getAgent(currentId);
   send("evt:sessions", listSessions());
   send("evt:trash", listTrash());
-  send("evt:session-loaded", { id: currentId, messages: a ? a.getMessages() : [] });
+  send("evt:session-loaded", { id: currentId, messages: a ? a.getDisplayMessages() : [], mode: startupChatMode() });
   const rl = loadRateLimits(curProviderId()); // 上次的订阅额度快照（按平台），打开即显示
   if (rl) send("evt:ratelimits", rl);
   sendUsageFor(currentId); // 当前会话自己的用量
@@ -3524,7 +3527,10 @@ if (!gotLock) {
       return res;
     });
     Menu.setApplicationMenu(null); // 去掉原生菜单栏(File/Edit/View/Window)
+    startupChatId = currentId = randomUUID();
     try {
+      const settings = loadSettings();
+      if (settings?.imageMode) saveSettings({ ...settings, imageMode: false });
       initProvider();
     } catch {
       // 凭证等问题：窗口起来后提示
@@ -4432,10 +4438,6 @@ ipcMain.on("chat:undo-last", () => {
 // —— 设置（provider/model）——
 // 渲染端挂载时主动拉取(避免启动推送早于监听注册导致会话列表丢失=空白页)
 ipcMain.handle("session:bootstrap", () => {
-  if (!currentId) {
-    const list = listSessions();
-    currentId = list[0]?.id ?? randomUUID();
-  }
   // Clear stale process state without suggesting or starting another turn.
   if (!interruptDetected) {
     interruptDetected = true;
@@ -4446,6 +4448,7 @@ ipcMain.handle("session:bootstrap", () => {
     sessions: listSessions(),
     groups: listGroups(),
     currentId,
+    mode: startupChatMode(),
     messages: a ? a.getDisplayMessages() : [],
     usage: a ? a.getUsage() : EMPTY_USAGE,
     rateLimits: loadRateLimits(curProviderId()) || null,
