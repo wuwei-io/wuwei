@@ -1,0 +1,35 @@
+name: China installer mirror
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: china-installer-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests oss2
+      - run: python scripts/china-download-mirror.py
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: china-mirror-verification
+          path: mirror-verification.json
+          retention-days: 30
