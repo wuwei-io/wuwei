@@ -56,5 +56,13 @@ every free model has daily limits.
   The separate main-process typecheck has a pre-existing `unknown` JSON access in
   `desktop/main/video-studio.ts:25`; this unchanged file is outside this change.
 
-These controls are in the local test build on `fix/qwen-trial-context`; no public
-client release or replacement of the user's installed client was performed.
+## Version 1.7.78 release validation
+
+The release retains the defaults above and introduces these controls in the
+standard client. Core and complete desktop typechecks now pass: the existing
+video error response is narrowed before reading its error code. Chinese and
+English production-renderer tests exercise the toggles, retained memory, settings
+reopening, anonymous trial selection and the corrected no-daily-quota wording.
+Windows offscreen resize tests tolerate the observed two-pixel rounding while
+retaining the actual page-layout assertions. The installed user profile is not
+used or replaced by acceptance tests. See `docs/releases/1.7.78.md` for scope.

@@ -115,9 +115,11 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'getTools': {
       const pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/zh.json'),'utf8')).messages;
       const entries=s.allToolMessages?JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/builtin-tool-messages.json'),'utf8')):[];
-      const tools=entries.map(row=>({name:row.name,description:pack[row.descriptionKey],readOnly:true,inputSchema:{type:'object',properties:Object.fromEntries(Object.entries(row.parameters).map(([name,key])=>[name,{type:'string',description:pack[key]}]))}}));
+      const tools=(s.inputTools||entries.map(row=>({name:row.name,description:pack[row.descriptionKey],readOnly:true,inputSchema:{type:'object',properties:Object.fromEntries(Object.entries(row.parameters).map(([name,key])=>[name,{type:'string',description:pack[key]}]))}}))).map(tool=>({...tool,enabled:s.settings.app?.toolsEnabled!==false&&!s.settings.app?.disabledTools?.includes(tool.name)&&!(tool.name==='remember'&&s.settings.app?.memoryEnabled===false)}));
       return {tools,disabled:[],groups:[{source:'内置工具',kind:'builtin',tools}],total:tools.length};
     }
+    case 'setInputControls': s.settings.app={...s.settings.app,...clone(args[0])};(s.inputPatches??=[]).push(clone(args[0]));return clone(s.settings.app);
+    case 'getInputPreview': return {parts:s.settings.app?.systemPromptEnabled===false?[]:[{id:'base',text:'QA base prompt'}],systemChars:s.settings.app?.systemPromptEnabled===false?0:14,toolCount:s.settings.app?.toolsEnabled===false?0:(s.inputTools||[]).filter(tool=>!s.settings.app?.disabledTools?.includes(tool.name)&&!(tool.name==='remember'&&s.settings.app?.memoryEnabled===false)).length,toolSchemaChars:s.settings.app?.toolsEnabled===false?2:100};
     case 'getMcp': return { config: '', status: [] };
     case 'brainGraph': return { nodes: [], edges: [] };
     case 'brainStats': return {nodes:0,edges:0,embedded:0};
@@ -126,7 +128,9 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'brainDocProgress': return {building:false,phase:'idle',files:0,total:0,done:0};
     case 'brainConceptProgress': return {running:false,phase:'idle',total:0,done:0,created:0,skipped:0};
     case 'secretsList': return {entries:[],available:true};
-    case 'getMemory': case 'stopRulesGet': return '';
+    case 'getMemory': return s.memory??'';
+    case 'setMemory': s.memory=args[0];return true;
+    case 'stopRulesGet': return '';
     case 'track': (s.tracked??=[]).push({event:args[0],props:clone(args[1]??{}),detail:args[2]});return true;
     case 'rememberSet': case 'draftSet': return true;
     default: s.defaults.add(method); return [];
@@ -1062,7 +1066,9 @@ app.whenReady().then(async () => {
       })()`;
       for (const [width, height, minimumGap] of [[1200, 920, 100], [920, 660, 35]]) {
         f.state.win.setContentSize(width, height);
-        await f.wait(`innerWidth === ${width} && innerHeight === ${height}`);
+        // Windows offscreen content sizes can round by up to two CSS pixels.
+        // Keep testing the actual layout below instead of failing on that rounding.
+        await f.wait(`Math.abs(innerWidth - ${width}) <= 2 && Math.abs(innerHeight - ${height}) <= 2`);
         const layout = await f.js(geometry);
         assert.ok(layout.topGap > minimumGap && Math.abs(layout.centerOffset) < 3, JSON.stringify(layout));
         assert.ok(Math.abs(layout.promptTopGap - layout.promptBottomGap) < 1, JSON.stringify(layout));
@@ -1360,6 +1366,45 @@ app.whenReady().then(async () => {
     assert.equal(f.state.orders,0);assert.equal(f.state.sent.length,0);
     await f.click('.billing-top .billing-close');await f.wait('!!document.querySelector(".tc-room-queue .background-queue-notice")');
     emit(f.state,'evt:background-queue',{taskId:'room-queued',roomId:'qa-room',accountId:'qa-account',queued:false,finished:true});await f.wait('!document.querySelector(".tc-room-queue .background-queue-notice")');
+  });
+  for(const lang of ['zh','en'])await run('发布关键：输入控制与免费试用文案 '+lang,{
+    account:null,lang,historyMessages:[],memory:'QA_MEMORY_KEEP',
+    settings:{...settings('wuwei-free','openrouter-auto-free'),modelChoiceExplicit:false,app:{teamEnabled:false,lang}},
+    modelCatalog:[provider('wuwei-free',true,[model('openrouter-auto-free',true,true),model('qwen3-4b-local-trial',true,true)])],
+    inputTools:['read_file','write_file','remember','mcp_demo'].map(name=>({name,description:'QA tool',readOnly:name!=='write_file',inputSchema:{type:'object'}})),
+  },async f=>{
+    assert.equal(f.state.settings.model,'openrouter-auto-free');
+    await f.click('.mq-select');await f.wait(`!!document.querySelector('[data-model-key="wuwei-free/qwen3-4b-local-trial"]')`);
+    const row=await f.js(`document.querySelector('[data-model-key="wuwei-free/qwen3-4b-local-trial"]').textContent`);
+    assert.match(row,lang==='zh'?/不设每日调用次数/:/No daily request quota/);
+    assert.doesNotMatch(row,lang==='zh'?/有每日额度/:/daily limits apply/i);
+    await f.click('[data-model-key="wuwei-free/qwen3-4b-local-trial"]');
+    await f.wait('!document.querySelector(".model-picker")');
+    assert.equal(f.state.settings.model,'qwen3-4b-local-trial');
+    assert.equal(f.state.account,null);
+    await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');
+    await f.click('[data-testid=settings-tab-tools]');await f.wait('document.querySelectorAll(".tool-row input").length===4');
+    await f.click('[data-testid=input-tools-all-off]');await f.wait('!document.querySelector("[data-testid=input-tools-enabled]").checked');
+    assert.equal(f.state.settings.app.toolsEnabled,false);
+    await f.wait('[...document.querySelectorAll(".tool-row input")].every(input=>input.disabled&&!input.checked)');
+    await f.click('[data-testid=input-tools-all-on]');await f.wait('[...document.querySelectorAll(".tool-row input")].every(input=>input.checked)');
+    await f.click('.tool-row input[aria-label="write_file"]');await f.wait('!document.querySelector(".tool-row input[aria-label=write_file]").checked');
+    assert.deepEqual(f.state.settings.app.disabledTools,['write_file']);
+    await f.click('.tools-group-h input');await f.wait('[...document.querySelectorAll(".tool-row input")].every(input=>input.checked)');
+    assert.deepEqual(f.state.settings.app.disabledTools,[]);
+    await f.click('[data-testid=settings-tab-memory]');await f.wait('!!document.querySelector("[data-testid=input-memory-enabled]")');
+    await f.click('[data-testid=input-memory-enabled]');await f.wait('!document.querySelector("[data-testid=input-memory-enabled]").checked');
+    assert.equal(f.state.memory,'QA_MEMORY_KEEP');assert.equal(f.state.settings.app.memoryEnabled,false);
+    await f.click('[data-testid=settings-tab-prompt]');await f.click('[data-testid=input-base-enabled]');await f.wait('!document.querySelector("[data-testid=input-base-enabled]").checked');
+    assert.equal(f.state.settings.app.systemPromptEnabled,false);
+    await f.click('.set-win-btn:last-child');await f.wait('!document.querySelector(".settings")');
+    await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');
+    await f.click('[data-testid=settings-tab-memory]');await f.wait('!document.querySelector("[data-testid=input-memory-enabled]")?.checked');
+    await f.wait('document.querySelector(".prompt-pane textarea")?.value==="QA_MEMORY_KEEP"');
+    await f.click('[data-testid=settings-tab-prompt]');await f.wait('!document.querySelector("[data-testid=input-base-enabled]")?.checked');
+    assert.equal(f.state.settings.model,'qwen3-4b-local-trial');
+    assert.equal(f.state.orders,0);
+    assert.equal(await f.js('!!document.querySelector(".login-intro,.login-card,.coin-shortage")'),false);
   });
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);
