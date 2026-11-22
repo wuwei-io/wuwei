@@ -1,4 +1,5 @@
 import {AccountFooter, useAccountFooterLayout} from './components/AccountFooter.js';
+import {isLocalQwenTrial} from '../../../src/local-qwen-trial.js';
 import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
@@ -8597,7 +8598,7 @@ export function App() {
                           )}
                         </div>
                         <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
-                          {tr("ui.app.free.models.have.daily.limits.paid.eb2cb7e")}
+                          {isLocalQwenTrial(selectedChoice)?tr('set.input.trialPolicy'):tr("ui.app.free.models.have.daily.limits.paid.eb2cb7e")}
                         </div>
                         {/* 具体模型名，让「顶级」落地 */}
                         <div
@@ -13541,7 +13542,7 @@ function swapMemHeader(text: string, lang: Lang): string {
 }
 
 
-type ToolGroupRaw = { source: string; kind: "builtin" | "browser" | "mcp"; tools: { name: string; description: string; readOnly: boolean; inputSchema: any }[] };
+type ToolGroupRaw = { source: string; kind: "builtin" | "browser" | "mcp"; tools: { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean }[] };
 const toolDesc = (name: string, fallback: string, lang: Lang) => localizeToolMetadata({ name, description: fallback, inputSchema: {} }, lang).description;
 // 把 getTools 返回的分组按语言彻底本地化：source 名、工具描述、inputSchema 参数说明（List/JSON 视图共用）。
 function localizeToolGroups(groups: ToolGroupRaw[], lang: Lang): ToolGroupRaw[] { return groups.map(group => ({ ...group, source: localizeStoredText(group.source, lang), tools: group.tools.map(tool => localizeToolMetadata(tool, lang)) })); }
@@ -14223,21 +14224,44 @@ function SettingsModal({
   const [mcpOnlineOpen, setMcpOnlineOpen] = useState<string | null>(null); // 展开详情的在线结果
   const mcpSearchRef = useRef(""); // 当前搜索词(翻页时校验没变)
   // ── 工具面板：当前生效的全部工具（按来源分组）──
-  type ToolInfo = { name: string; description: string; readOnly: boolean; inputSchema: any };
+  type ToolInfo = { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean };
   type ToolGroup = { source: string; kind: "builtin" | "browser" | "mcp"; tools: ToolInfo[] };
   const [rawToolGroups, setToolGroups] = useState<ToolGroup[]>([]);
   const toolGroups = localizeToolGroups(rawToolGroups, lang);
   const [toolTotal, setToolTotal] = useState(0);
+  type InputControls = Parameters<typeof window.wuwei.setInputControls>[0];
+  const [inputControls, setInputControlsState] = useState<InputControls>({});
+  const inputControlsRef = useRef<InputControls>({});
+  const inputSaveRef = useRef(Promise.resolve());
+  const [inputSaveError, setInputSaveError] = useState('');
+  const [inputPreview, setInputPreview] = useState<Awaited<ReturnType<typeof window.wuwei.getInputPreview>> | null>(null);
+  function refreshInputPreview() {
+    return Promise.all([window.wuwei.getTools(),window.wuwei.getInputPreview()]).then(([tools,preview])=>{
+      setToolGroups(tools.groups);setToolTotal(tools.total);setInputPreview(preview);
+    });
+  }
+  function changeInputControls(patch: InputControls) {
+    const next = {...inputControlsRef.current,...patch};
+    inputControlsRef.current=next;setInputControlsState(next);
+    loadedRef.current={...loadedRef.current,app:{...loadedRef.current.app,...patch}};
+    setInputSaveError('');
+    inputSaveRef.current=inputSaveRef.current.catch(()=>{}).then(async()=>{
+      await window.wuwei.setInputControls(patch);
+      await refreshInputPreview();
+    }).catch(error=>{setInputSaveError(String(error));});
+  }
+  function changeTools(names:string[],enabled:boolean) {
+    const disabled=new Set(inputControlsRef.current.disabledTools??[]);
+    for(const name of names) {if(enabled)disabled.delete(name);else disabled.add(name);}
+    changeInputControls({disabledTools:[...disabled]});
+  }
   const [toolView, setToolView] = useState<"list" | "json">("list"); // 列表 / JSON 视图
   const [toolSel, setToolSel] = useState<ToolInfo | null>(null); // 点开看详情的工具
   const [toolFilter, setToolFilter] = useState(""); // 工具名/描述过滤
   // 切到「工具」页时拉一次当前工具集
   useEffect(() => {
-    if (tab !== "tools") return;
-    window.wuwei.getTools().then((r) => {
-      setToolGroups(r.groups);
-      setToolTotal(r.total);
-    });
+    if (!['tools','prompt','memory'].includes(tab)) return;
+    refreshInputPreview().catch(error=>setInputSaveError(String(error)));
   }, [tab, lang]);
   // 切到「脑网络」页时拉一次图谱 + 文档库统计，并监听建索引/概念抽取进度。
   // 关键：主进程是进度真相源——重开设置时先查一次当前状态回填，避免"关了再开状态就没了"。
@@ -14556,6 +14580,8 @@ function SettingsModal({
       const s = r?.settings;
       if (!s) return;
       loadedRef.current = s; // 存完整 settings，保存时 spread 保留本页不管的字段
+      inputControlsRef.current=s.app??{};
+      setInputControlsState(s.app??{});
       // 三个应用级开关：undefined 视为开
       setSecretsDetect(s.app?.secretsDetect !== false);
       setBrainOn(s.app?.brainEnabled !== false);
@@ -15058,10 +15084,10 @@ function SettingsModal({
           <button type="button" className={"set-tab" + (tab === "platforms" ? " on" : "")} onClick={() => setTab("platforms")}>
             {t("set.tab.platforms")}
           </button>
-          <button type="button" className={"set-tab" + (tab === "prompt" ? " on" : "")} onClick={() => setTab("prompt")}>
+          <button type="button" data-testid="settings-tab-prompt" className={"set-tab" + (tab === "prompt" ? " on" : "")} onClick={() => setTab("prompt")}>
             {t("set.tab.prompt")}
           </button>
-          <button type="button" className={"set-tab" + (tab === "memory" ? " on" : "")} onClick={() => setTab("memory")}>
+          <button type="button" data-testid="settings-tab-memory" className={"set-tab" + (tab === "memory" ? " on" : "")} onClick={() => setTab("memory")}>
             {t("set.tab.memory")}
           </button>
           <button
@@ -15074,7 +15100,7 @@ function SettingsModal({
           <button type="button" className={"set-tab" + (tab === "mcp" ? " on" : "")} onClick={() => setTab("mcp")}>
             {t("set.tab.mcp")}
           </button>
-          <button type="button" className={"set-tab" + (tab === "tools" ? " on" : "")} onClick={() => setTab("tools")}>
+          <button type="button" data-testid="settings-tab-tools" className={"set-tab" + (tab === "tools" ? " on" : "")} onClick={() => setTab("tools")}>
             {t("set.tab.tools")}
           </button>
           <button type="button" className={"set-tab" + (tab === "secrets" ? " on" : "")} onClick={() => setTab("secrets")}>
@@ -15960,6 +15986,13 @@ function SettingsModal({
           {/* ── 板块三：系统提示词（全局默认 + 每平台可覆盖）── */}
           {tab === "prompt" && (
             <div className="prompt-pane">
+              <label className="prov-override-toggle pp-fixed"><input data-testid="input-base-enabled" type="checkbox" checked={inputControls.systemPromptEnabled!==false} onChange={e=>changeInputControls({systemPromptEnabled:e.target.checked})}/>{tr('set.input.baseEnabled')}</label>
+              <p className="s-note pp-fixed">{tr('set.input.baseHint')}</p>
+              {inputSaveError&&<p role="alert">{inputSaveError}</p>}
+              {inputPreview&&<details className="pp-fixed"><summary>{tr('set.input.breakdown',{system:inputPreview.systemChars,tools:inputPreview.toolCount,schema:inputPreview.toolSchemaChars})}</summary>
+                <p className="s-note">{tr('set.input.previewHint')}</p>
+                {inputPreview.parts.map(part=><details key={part.id}><summary>{tr('set.input.part.'+part.id)} · {part.text.length}</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:180,overflow:'auto'}}>{part.text}</pre></details>)}
+              </details>}
               <label className="field pp-grow">
                 <span>
                   {t("set.pr.globalPrompt")}
@@ -16028,6 +16061,9 @@ function SettingsModal({
           {/* ── 板块四：记忆（全局长期记忆，注入每次对话）── */}
           {tab === "memory" && (
             <div className="prompt-pane">
+              <label className="prov-override-toggle pp-fixed"><input data-testid="input-memory-enabled" type="checkbox" checked={inputControls.memoryEnabled!==false} onChange={e=>changeInputControls({memoryEnabled:e.target.checked})}/>{tr('set.input.memoryEnabled')}</label>
+              <p className="s-note pp-fixed">{tr('set.input.memoryHint')}</p>
+              {inputSaveError&&<p role="alert">{inputSaveError}</p>}
               <label className="field pp-grow">
                 <span>{t("set.mem.global")}</span>
                 <textarea dir="ltr"
@@ -16923,6 +16959,11 @@ function SettingsModal({
                 kind === "builtin" ? t("set.tools.badgeBuiltin") : kind === "browser" ? t("set.tools.badgeBrowser") : t("set.tools.badgeMcp");
               return (
                 <div className="tools-pane">
+                  <label className="prov-override-toggle"><input data-testid="input-tools-enabled" type="checkbox" checked={inputControls.toolsEnabled!==false} onChange={e=>changeInputControls({toolsEnabled:e.target.checked})}/>{tr('set.input.toolsEnabled')}</label>
+                  <div className="tools-bar tools-viewsw"><button className="tv-btn" data-testid="input-tools-all-on" type="button" onClick={()=>changeInputControls({toolsEnabled:true,disabledTools:[]})}>{tr('set.input.allOn')}</button><button className="tv-btn" data-testid="input-tools-all-off" type="button" onClick={()=>changeInputControls({toolsEnabled:false})}>{tr('set.input.allOff')}</button></div>
+                  <p className="s-note">{tr('set.input.toolsHint')}</p>
+                  {inputSaveError&&<p role="alert">{inputSaveError}</p>}
+                  {inputPreview&&<p className="s-note">{tr('set.input.breakdown',{system:inputPreview.systemChars,tools:inputPreview.toolCount,schema:inputPreview.toolSchemaChars})}</p>}
                   <div className="tools-bar">
                     <input
                       className="mcp-search"
@@ -16970,23 +17011,25 @@ function SettingsModal({
                     filtered.map((g) => (
                       <div key={g.source} className="tools-group">
                         <div className="tools-group-h">
+                          <input type="checkbox" aria-label={g.source} disabled={inputControls.toolsEnabled===false} checked={g.tools.every(tool=>tool.enabled)} onChange={e=>changeTools(g.tools.map(tool=>tool.name),e.target.checked)}/>
                           <span className={"tools-badge k-" + g.kind}>{badge(g.kind)}</span>
                           <span className="tools-group-name">{g.source}</span>
                           <span className="tools-group-n">{g.tools.length}</span>
                         </div>
                         {g.tools.map((tool) => (
-                          <button
+                          <div
                             key={tool.name}
-                            type="button"
                             className="tool-row"
-                            onClick={() => setToolSel(tool)}
                           >
+                            <input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={inputControls.toolsEnabled===false||(tool.name==='remember'&&inputControls.memoryEnabled===false)} onChange={e=>changeTools([tool.name],e.target.checked)}/>
+                            <button type="button" className="tool-summary" onClick={()=>setToolSel(tool)}>
                             <span className="tool-name">
                               {tool.name}
                               {tool.readOnly && <span className="tool-ro">{t("set.tools.readOnly")}</span>}
                             </span>
                             <span className="tool-desc">{toolDesc(tool.name, tool.description, lang)}</span>
-                          </button>
+                            </button>
+                          </div>
                         ))}
                       </div>
                     ))

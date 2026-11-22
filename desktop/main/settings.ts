@@ -1,4 +1,5 @@
 import { normalizeLanguage } from "../../src/localization/index.js";
+import type { InputControls } from "../../src/agent/input-controls.js";
 // 用户设置持久化：模型后端(provider)与模型选择，存 ~/.wuwei/config.json。
 import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync } from "node:fs";
 import { homedir } from "node:os";
@@ -190,7 +191,7 @@ export interface CustomStation {
 }
 
 // 应用级设置：放在专门的「设置」弹窗里，跨平台通用
-export interface AppSettings {
+export interface AppSettings extends InputControls {
   lang?: string; // 已有桌面语言偏好
   claudeAutoRefresh?: boolean; // Claude 订阅 token 快过期时用 refreshToken 自动续期(undefined=默认开；关掉可保护本机 claude CLI 登录不被顶掉)
   secretsDetect?: boolean; // 发送前扫描/拦截疑似新密钥(默认开=undefined 视为 true)；关掉后长 token 不再被切成一堆弹窗

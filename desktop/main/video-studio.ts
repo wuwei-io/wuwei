@@ -22,7 +22,7 @@ export function registerVideoStudio(options:{root:string;token:()=>string|undefi
  const request=async(path:string,method='GET',body?:unknown,offset=0)=>{
   const original=scope();const send=(token:string)=>fetch('https://wuweiai.io/api/videos'+path,{method,redirect:'error',...(!path.endsWith('/content')?{signal:AbortSignal.timeout(25000)}:{}),headers:{Authorization:'Bearer '+token,...(offset?{Range:`bytes=${offset}-`}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});let response:Response;try{response=await send(original.token)}catch{throw Error('VIDEO_CONNECTION_PENDING')}
   if(response.status===401&&options.refresh){const token=await options.refresh(original.token);if(scope().owner!==original.owner)throw Error('ACCOUNT_CHANGED');if(token)try{response=await send(token)}catch{throw Error('VIDEO_CONNECTION_PENDING')}}
-  if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(typeof data.code==='string'?data.code:'VIDEO_UNAVAILABLE')}return response;
+  if(!response.ok){const data:unknown=await response.json().catch(()=>({}));throw Error(data&&typeof data==='object'&&'code' in data&&typeof data.code==='string'?data.code:'VIDEO_UNAVAILABLE')}return response;
  };
  async function asset(orderId:string,completed?:VideoOrder):Promise<string>{
   const {owner}=scope(),key=owner+'/'+id(orderId),existing=pending.get(key);if(existing)return existing;

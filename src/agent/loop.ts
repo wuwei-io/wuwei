@@ -42,6 +42,7 @@ function isContextOverflow(e: unknown): boolean {
 export type PermissionDecision = "allow" | "deny";
 
 export interface AgentOptions {
+  toolFilter?: (tools: Tool[]) => Tool[];
   /** Project only the request context; retain full original history for display/persistence. */
   requestHistory?: (messages: Message[]) => Message[];
   compactThreshold?: number; // 上一轮 input tokens 超过此值触发压缩（0=关闭）
@@ -169,6 +170,7 @@ function recoverLeakedToolCalls(
 }
 
 export class Agent {
+  private toolFilter?: (tools: Tool[]) => Tool[];
   private messages: Message[] = [];
   private usage: SessionUsage = {
     totalInput: 0,
@@ -197,6 +199,7 @@ export class Agent {
     private toolMap: Map<string, Tool>,
     opts: AgentOptions = {},
   ) {
+    this.toolFilter = opts.toolFilter;
     this.contextWindow = provider.contextWindow ?? 0;
     this.explicitCompactThreshold = opts.compactThreshold;
     this.compactThreshold = this.contextWindow && opts.compactThreshold !== undefined
@@ -449,7 +452,7 @@ export class Agent {
 
       // 长回复/网络中断自动退避重试(静默)：1s→3s→…→10min，全部失败才抛给上层提示手动重试。
       const stepProvider = this.provider;
-      const stepTools = this.tools.filter(t => (!t.requiresImageGeneration || !!stepProvider.generateImage)
+      const stepTools = (this.toolFilter?.(this.tools) ?? this.tools).filter(t => (!t.requiresImageGeneration || !!stepProvider.generateImage)
         && (t.name !== 'platform_imagegen' || !!stepProvider.platformImage)
         && (t.name !== 'ask_decision' || !!(hooks.requestDecision || this.ctx.requestDecision))
         && (t.name !== 'ask_user' || !(hooks.remoteExecution || this.ctx.remoteExecution)));
@@ -588,7 +591,9 @@ export class Agent {
         if (call.name === 'platform_imagegen' && call.input.action === 'generate' && hooks.preferredImageSku && !call.input.order_id && !call.input.recovery_key) {
           call.input = { ...call.input, sku_id: hooks.preferredImageSku };
         }
-        const tool = stepToolMap.get(call.name);
+        const currentTool = this.toolMap.get(call.name);
+        const allowedNow = currentTool && (this.toolFilter?.([currentTool]) ?? [currentTool]).length > 0;
+        const tool = allowedNow ? stepToolMap.get(call.name) : undefined;
         if (!tool || (tool.name==='platform_imagegen' && !stepProvider.platformImage) || (tool.requiresImageGeneration && !stepProvider.generateImage)) {
           resultsBlocks[idx] = {
             type: "tool_result",
@@ -631,6 +636,12 @@ export class Agent {
         }
 
         const job = (async () => {
+          // Settings can revoke a tool while a model response or approval is in flight.
+          const current = this.toolMap.get(call.name);
+          if (!current || !(this.toolFilter?.([current]) ?? [current]).length) {
+            resultsBlocks[idx] = {type:'tool_result',tool_use_id:call.id,content:tr("ui.loop.unknown.tool.c9bb36d",{p0:call.name}),is_error:true};
+            return;
+          }
           hooks.onToolStart?.(call.id, call.name, call.input);
           const execute = () => tool.run(call.input, { ...this.ctx, signal, turnId, toolCallId:call.id,
             remoteExecution: hooks.remoteExecution || this.ctx.remoteExecution,
