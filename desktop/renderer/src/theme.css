@@ -5050,10 +5050,12 @@ body {
 .tools-badge.k-mcp { color: #a4794a; border-color: #a4794a; }
 
 .tool-row {
-  display: block; width: 100%; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
   border: 1px solid var(--border); border-radius: 8px;
   background: transparent; padding: 8px 12px; margin-bottom: 6px;
 }
+.tool-summary { flex: 1; min-width: 0; border: 0; padding: 0; background: transparent; text-align: start; cursor: pointer; }
+.tool-row input[type="checkbox"] { flex: 0 0 auto; }
 .tool-row:hover { border-color: var(--accent); background: var(--accent-soft); }
 .tool-name {
   display: flex; align-items: center; gap: 8px;

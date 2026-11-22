@@ -38,7 +38,8 @@ import { loadConfig } from "../../src/config.js";
 import { makeProvider, setImageCapper } from "../../src/agent/provider.js";
 import { prepareModelImage } from "../../src/image-preparation.js";
 import { Agent } from "../../src/agent/loop.js";
-import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN } from "../../src/agent/prompt.js";
+import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN, withImageToolInstructions, withResponseLanguage } from "../../src/agent/prompt.js";
+import { selectEnabledTools, normalizeInputControls, toolSchemaChars } from "../../src/agent/input-controls.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
 import type { Tool, ToolResult, ToolContext, TaskReportScope, RateLimits, Decision, DecisionResponse } from "../../src/types.js";
@@ -214,7 +215,7 @@ let quitting = false;
 // provider/系统提示全局共享；每个会话一个 Agent（各自 messages）
 let provider: ReturnType<typeof makeProvider> | null = null;
 let sysPrompt = "";
-let agentOpts: { compactThreshold?: number; compactMsgThreshold: number; keepRecent: number } = { compactMsgThreshold: 0, keepRecent: 6 };
+let agentOpts: { toolFilter?: (tools:Tool[])=>Tool[]; compactThreshold?: number; compactMsgThreshold: number; keepRecent: number } = { compactMsgThreshold: 0, keepRecent: 6 };
 let backendLabel = "";
 let modelLabel = "";
 let ctxWindow = 1_000_000; // 当前模型上下文窗口(占用条用真实值)
@@ -1266,37 +1267,44 @@ export const DEFAULT_BRAIN_NOTE_EN =
   tr("agent.brainNote", {}, "en");
 
 // 构造系统提示词：优先本平台专属覆盖(creds[pid].systemPrompt)，再全局(settings.systemPrompt)，都没有=默认模板；渲染 {model}/{cwd}
-function buildSysPrompt(cwd: string, model: string, providerId?: string): string {
+function buildSysPromptParts(cwd: string, model: string, providerId?: string): {id:string; text:string}[] {
   const st = loadSettings();
   const lang = st?.app?.lang && st.app.lang !== "system" ? st.app.lang : detectSysLang(); // 未手动设过→按系统语言
   const override = providerId ? st?.creds?.[providerId]?.systemPrompt : undefined;
   const custom = typeof override === "string" ? override : st?.systemPrompt;
-  let base = typeof custom === "string" ? renderPrompt(custom, cwd, model) : systemPrompt(cwd, model, lang);
+  const parts: {id:string; text:string}[] = [];
+  const tools = new Set(desktopTools().map(tool => tool.name));
+  if (st?.app?.systemPromptEnabled !== false) parts.push({id:'base',text:typeof custom === "string" ? renderPrompt(custom, cwd, model) : systemPrompt(cwd, model, lang)});
   // 记忆：始终告知可用 remember 工具，并附上已记住的内容(跨会话)
-  const mem = loadMemory().trim();
-  base +=
-    tr("ui.index.long.term.memory.when.the.user.82e3dcd");
-  if (mem) base += tr("ui.index.remembered.follow.refer.to.actively.f5690b5", { p0: mem });
+  if (st?.app?.memoryEnabled !== false) {
+    const mem = loadMemory().trim();
+    if (tools.has('remember')) parts.push({id:'memoryTool',text:tr("ui.index.long.term.memory.when.the.user.82e3dcd")});
+    if (mem) parts.push({id:'memory',text:tr("ui.index.remembered.follow.refer.to.actively.f5690b5", {p0:mem})});
+  }
   // 本地知识网络（Brain）：概念化的项目/部署知识，按需 recall；提示词可在设置里覆盖。
   // 关掉「脑网络」或非会员：不注入说明、不追加概念目录(brain_* 工具也在别处一并停掉)。
-  if (brainAvailable(st)) {
-    base += typeof st?.brainPrompt === "string" ? st.brainPrompt : tr("agent.brainNote", {}, lang);
+  if (brainAvailable(st) && [...tools].some(name=>name.startsWith('brain_'))) {
+    let brainText = typeof st?.brainPrompt === "string" ? st.brainPrompt : tr("agent.brainNote", {}, lang);
     try {
       const idx = brain.conceptIndex(40);
       // 这段拼在系统提示里，中文会把英文用户的回复语言也带偏，跟着 lang 走
       if (idx.length)
-        base +=
+        brainText +=
           tr("ui.index.concepts.already.stored.expand.with.brain.a98ba5c", { p0: (lang !== "zh" ? idx.join(", ") : idx.join("、")) });
     } catch {
       /* brain 不可用不影响主流程 */
     }
+    parts.push({id:'brain',text:brainText});
   }
   // 密钥说明：告知模型密钥走本地保险箱/环境变量，无需明文；提示词可在设置里覆盖
-  base += typeof st?.secretsPrompt === "string" ? st.secretsPrompt : secrets.secretsSystemNote(lang);
+  // The vault guidance remains visible; disabling prompt text never disables secret protection.
+  parts.push({id:'secrets',text:typeof st?.secretsPrompt === "string" ? st.secretsPrompt : secrets.secretsSystemNote(lang)});
   // 与用户交互：需要用户拍板时必须弹选择框(强引导，否则模型习惯用文字罗列)
-  base +=
-    tr("ui.index.interacting.with.the.user.must.follow.4295d0e");
-  return base;
+  if (tools.has('ask_user')) parts.push({id:'interaction',text:tr("ui.index.interacting.with.the.user.must.follow.4295d0e")});
+  return parts;
+}
+function buildSysPrompt(cwd: string, model: string, providerId?: string): string {
+  return buildSysPromptParts(cwd,model,providerId).map(part=>part.text).join('');
 }
 
 // 把「扫描相关文档」开关同步到 brain 模块(recall 据此决定是否连带扫文档冷存储)
@@ -1334,6 +1342,7 @@ function initProvider() {
   ctxWindow = cfg.contextWindow;
   sysPrompt = buildSysPrompt(cwd, modelLabel, st?.providerId);
   agentOpts = {
+    toolFilter: tools=>selectEnabledTools(tools,loadSettings()?.app),
     compactThreshold: st?.compactThreshold && st.compactThreshold > 0 ? st.compactThreshold : process.env.MINICC_COMPACT_THRESHOLD ? cfg.compactThreshold : undefined,
     compactMsgThreshold: st?.compactMsgThreshold && st.compactMsgThreshold > 0 ? st.compactMsgThreshold : 0,
     keepRecent: st?.keepRecent && st.keepRecent > 0 ? st.keepRecent : cfg.keepRecentTurns,
@@ -1367,6 +1376,7 @@ function applySettings(sIn: Settings, forceSid?: string) {
   // 原来只在启动时算一次 → 启动时用 200k 的模型、中途切到 1M 的，阈值还卡在旧的 16 万，
   // 长会话十几万 token 就被压掉。用户显式填过的阈值/条数优先，不被自动值覆盖。
   agentOpts = {
+    toolFilter: tools=>selectEnabledTools(tools,loadSettings()?.app),
     compactThreshold: s?.compactThreshold && s.compactThreshold > 0 ? s.compactThreshold : process.env.MINICC_COMPACT_THRESHOLD ? cfg.compactThreshold : undefined,
     compactMsgThreshold: s?.compactMsgThreshold && s.compactMsgThreshold > 0 ? s.compactMsgThreshold : 0,
     keepRecent: s?.keepRecent && s.keepRecent > 0 ? s.keepRecent : cfg.keepRecentTurns,
@@ -2517,7 +2527,7 @@ function tt(zh: string, en: string): string {
 
 function localizeToolEn(t: Tool): Tool { return localizeToolMetadata(t); }
 
-function desktopTools(): Tool[] {
+function desktopAvailableTools(): Tool[] {
   const brainOn = brainAvailable(loadSettings());
   const base = brainOn ? ALL_TOOLS : ALL_TOOLS.filter((t) => !t.name.startsWith("brain_"));
   const en = getCurrentLanguage() !== "zh";
@@ -2529,6 +2539,9 @@ function desktopTools(): Tool[] {
   if (en) tools = tools.map(localizeToolEn); // 英文用户：模型侧工具描述也走英文
   return tools.map(wrapSecret);
 }
+function desktopTools(): Tool[] {
+  return selectEnabledTools(desktopAvailableTools(), loadSettings()?.app);
+}
 function desktopToolMap(): Map<string, Tool> {
   return new Map(desktopTools().map((t) => [t.name, t]));
 }
@@ -2536,7 +2549,11 @@ function desktopToolMap(): Map<string, Tool> {
 function refreshAgentTools() {
   const tools = desktopTools();
   const map = desktopToolMap();
-  for (const a of agents.values()) a.setTools(tools, map);
+  for (const [sid,a] of agents) {
+    const meta = listSessions().find(session=>session.id===sid);
+    const selected = meta?.employeeId && teamEnabled(loadSettings()) ? applyEmployee(meta.employeeId,'',tools).tools : tools;
+    a.setTools(selected,new Map(selected.map(tool=>[tool.name,map.get(tool.name)!])));
+  }
 }
 
 // 取/建某会话的 Agent（懒加载并恢复其历史）
@@ -4474,6 +4491,14 @@ function hotRefreshSys() {
   sysPrompt = buildSysPrompt(cwd, modelLabel, loadSettings()?.providerId);
   for (const [sid, a] of agents) a.setSystem(sysForSession(sid)); // 绑员工则保留人格
 }
+ipcMain.handle('settings:set-input-controls', (_e, patch: unknown) => {
+  const s = loadSettings() || ({} as Settings);
+  s.app = {...s.app,...normalizeInputControls(patch)};
+  saveSettings(s);
+  hotRefreshSys();
+  refreshAgentTools();
+  return s.app;
+});
 ipcMain.on("settings:set-brain-prompt", (_e, text: string | null) => {
   const s = loadSettings() || ({} as Settings);
   if (typeof text === "string" && text.trim()) s.brainPrompt = text;
@@ -4907,15 +4932,20 @@ ipcMain.handle("secrets:scan", (_e, text: string) => {
 
 // 「工具」面板：把当前生效的全部工具（内置 + 浏览器 + 各 MCP 服务器）按来源分组返回
 ipcMain.handle("tools:get", () => {
+  const available = desktopAvailableTools();
+  const active = new Set(desktopTools().map(tool=>tool.name));
   const mk = (t: Tool) => ({
     name: t.name,
     description: t.description || "",
     readOnly: !!t.readOnly,
     inputSchema: t.inputSchema || { type: "object", properties: {} },
+    enabled: active.has(t.name),
   });
+  const browserNames = new Set(BROWSER_TOOLS.map(tool=>tool.name));
+  const mcpNames = new Set(mcpTools().map(tool=>tool.name));
   const groups: { source: string; kind: "builtin" | "browser" | "mcp"; tools: ReturnType<typeof mk>[] }[] = [
-    { source: tr("ui.index.message.6b2c4f3afc"), kind: "builtin", tools: ALL_TOOLS.map(mk) },
-    { source: tr("set.tools.badgeBrowser"), kind: "browser", tools: BROWSER_TOOLS.map(mk) },
+    { source: tr("ui.index.message.6b2c4f3afc"), kind: "builtin", tools: available.filter(tool=>!browserNames.has(tool.name)&&!mcpNames.has(tool.name)).map(mk) },
+    { source: tr("set.tools.badgeBrowser"), kind: "browser", tools: available.filter(tool=>browserNames.has(tool.name)).map(mk) },
     ...mcpToolsBySource().map((g) => ({
       source: g.server,
       kind: "mcp" as const,
@@ -4923,7 +4953,18 @@ ipcMain.handle("tools:get", () => {
     })),
   ];
   const total = groups.reduce((n, g) => n + g.tools.length, 0);
-  return { groups, total };
+  return { groups, total, enabled:active.size, schemaChars:toolSchemaChars(desktopTools()) };
+});
+
+ipcMain.handle('input:preview', () => {
+  const parts = buildSysPromptParts(cwd, modelLabel, loadSettings()?.providerId);
+  const base = parts.map(part=>part.text).join('');
+  const tools = desktopTools().filter(tool=>(!tool.requiresImageGeneration||!!provider?.generateImage)&&(tool.name!=='platform_imagegen'||!!provider?.platformImage));
+  const image = withImageToolInstructions('',tools,process.env.WUWEI_LANG);
+  const language = withResponseLanguage('',process.env.WUWEI_LANG);
+  if (image) parts.push({id:'images',text:image});
+  parts.push({id:'language',text:language});
+  return {parts,systemChars:base.length+image.length+language.length,toolCount:tools.length,toolSchemaChars:toolSchemaChars(tools)};
 });
 
 // —— 浏览器面板：把 WebContentsView 贴到主窗口指定区域(前端量好 bounds 发来) ——

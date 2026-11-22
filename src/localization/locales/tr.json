@@ -3784,6 +3784,26 @@
     "billing.mini.offerDetails": "İlk satın alımda {bonus} bonus jetonla birlikte toplam {coins} jeton alın.",
     "billing.pricing.oneMembership": "One allowance across GPT, Claude and other models",
     "billing.pricing.oneMembershipCount": "One allowance for {count} models, including GPT and Claude",
-    "billing.exit.skip": "Skip for now"
+    "billing.exit.skip": "Skip for now",
+    "set.input.baseEnabled": "Include the base system prompt",
+    "set.input.baseHint": "Applies to the global prompt and provider override. Runtime guidance is listed below; its security protections remain active.",
+    "set.input.memoryEnabled": "Include global long-term memory",
+    "set.input.memoryHint": "Turning this off keeps saved memory and stops injecting it or offering remember. Existing chat history and employee memory are separate.",
+    "set.input.toolsEnabled": "Enable tools",
+    "set.input.allOn": "Enable all tools",
+    "set.input.allOff": "Disable all tools",
+    "set.input.toolsHint": "Changes apply immediately to future steps in every chat. Disabled tools are not sent to the model and cannot run. Module and model capabilities still apply; tool permissions stay separate.",
+    "set.input.breakdown": "System: {system} characters · Tools: {tools} · Tool definitions: {schema} characters",
+    "set.input.previewHint": "Character counts, not tokens. Preview of the current global prompt; chat history, tool results, attachments and employee instructions are additional. Actual tokens depend on the model.",
+    "set.input.part.base": "Base system prompt",
+    "set.input.part.memoryTool": "Memory tool guidance",
+    "set.input.part.memory": "Global memory",
+    "set.input.part.brain": "Knowledge network",
+    "set.input.part.secrets": "Vault guidance",
+    "set.input.part.interaction": "Interaction guidance",
+    "set.input.part.images": "Image tool guidance",
+    "set.input.part.language": "Reply language",
+    "set.input.trialPrice": "Free · No daily request quota",
+    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue."
   }
 }

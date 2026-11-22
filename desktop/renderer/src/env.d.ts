@@ -200,10 +200,14 @@ export interface WuweiApi {
     groups: {
       source: string;
       kind: "builtin" | "browser" | "mcp";
-      tools: { name: string; description: string; readOnly: boolean; inputSchema: any }[];
+      tools: { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean }[];
     }[];
     total: number;
+    enabled:number;
+    schemaChars:number;
   }>;
+  setInputControls(patch: import('../../../src/agent/input-controls.js').InputControls): Promise<import('../../../src/agent/input-controls.js').InputControls>;
+  getInputPreview(): Promise<{parts:{id:string;text:string}[];systemChars:number;toolCount:number;toolSchemaChars:number}>;
   searchMcp(
     query: string,
     cursor?: string,

@@ -353,10 +353,14 @@ const api = {
       groups: {
         source: string;
         kind: "builtin" | "browser" | "mcp";
-        tools: { name: string; description: string; readOnly: boolean; inputSchema: any }[];
+        tools: { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean }[];
       }[];
       total: number;
+      enabled:number;
+      schemaChars:number;
     }>,
+  setInputControls: (patch: unknown) => ipcRenderer.invoke('settings:set-input-controls',patch),
+  getInputPreview: () => ipcRenderer.invoke('input:preview'),
   searchMcp: (query: string, cursor?: string) =>
     ipcRenderer.invoke("mcp:search", query, cursor) as Promise<{
       results: {

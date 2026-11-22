@@ -3784,6 +3784,26 @@
     "account.wallet.packCredits": "币包充值",
     "billing.pricing.oneMembership": "一份会员额度，跨 GPT、Claude 等模型使用",
     "billing.pricing.oneMembershipCount": "一份会员额度，畅选 GPT、Claude 等 {count} 款模型",
-    "billing.exit.skip": "暂时跳过"
+    "billing.exit.skip": "暂时跳过",
+    "set.input.baseEnabled": "注入基础系统提示词",
+    "set.input.baseHint": "控制全局提示词及平台专属覆盖。运行说明在下方单独列出；密钥保护始终有效。",
+    "set.input.memoryEnabled": "注入全局长期记忆",
+    "set.input.memoryHint": "关闭后保留已存记忆，不再注入，也不提供 remember 工具。已有聊天历史、员工专属记忆另行管理。",
+    "set.input.toolsEnabled": "启用工具",
+    "set.input.allOn": "全部启用",
+    "set.input.allOff": "全部关闭",
+    "set.input.toolsHint": "立即作用于所有会话的后续步骤。关闭的工具不发送给模型，也不能执行。模块及模型能力仍会限制可用工具；执行权限单独管理。",
+    "set.input.breakdown": "系统提示 {system} 字符 · 工具 {tools} 个 · 工具定义 {schema} 字符",
+    "set.input.previewHint": "此处统计字符数，并非 token。预览当前全局提示词；聊天历史、工具结果、附件和员工指令会额外占用。实际 token 由模型决定。",
+    "set.input.part.base": "基础系统提示词",
+    "set.input.part.memoryTool": "记忆工具说明",
+    "set.input.part.memory": "全局记忆",
+    "set.input.part.brain": "知识网络",
+    "set.input.part.secrets": "密钥保险箱说明",
+    "set.input.part.interaction": "交互工具说明",
+    "set.input.part.images": "图片工具说明",
+    "set.input.part.language": "回复语言",
+    "set.input.trialPrice": "免费 · 不设每日调用次数",
+    "set.input.trialPolicy": "当前 Qwen3 4B 试用无需登录，不设每日调用次数，繁忙时可能排队。"
   }
 }
