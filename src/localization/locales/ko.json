@@ -3803,7 +3803,21 @@
     "set.input.part.interaction": "Interaction guidance",
     "set.input.part.images": "Image tool guidance",
     "set.input.part.language": "Reply language",
-    "set.input.trialPrice": "Free · No daily request quota",
-    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue."
+    "set.input.trialPrice": "무료 · 무제한",
+    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue.",
+    "set.tools.category.basic": "기본 내장 도구",
+    "set.tools.category.imagegen": "이미지 생성",
+    "set.tools.category.vision": "이미지 보기",
+    "set.tools.category.brain": "지식 네트워크",
+    "set.tools.category.chrome": "Chrome 브라우저",
+    "set.tools.category.browser": "내장 브라우저",
+    "set.tools.category.computer": "컴퓨터 데스크톱",
+    "set.tools.category.sop": "SOP 도구",
+    "set.tools.category.company": "1인 기업 도구",
+    "set.tools.category.schedule": "예약 작업",
+    "set.tools.basicOnly": "기본 도구만",
+    "set.tools.presets": "도구 빠른 선택",
+    "set.tools.selectionHint": "기본 도구로 시작하세요. 다른 도구는 분류별로 켤 수 있습니다.",
+    "set.tools.enabledCount": "{enabled} / {total} 활성화"
   }
 }

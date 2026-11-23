@@ -3803,7 +3803,21 @@
     "set.input.part.interaction": "Interaction guidance",
     "set.input.part.images": "Image tool guidance",
     "set.input.part.language": "Reply language",
-    "set.input.trialPrice": "Free · No daily request quota",
-    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue."
+    "set.input.trialPrice": "मुफ़्त · असीमित",
+    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue.",
+    "set.tools.category.basic": "अंतर्निहित मूल उपकरण",
+    "set.tools.category.imagegen": "छवि निर्माण",
+    "set.tools.category.vision": "छवि देखना",
+    "set.tools.category.brain": "ज्ञान नेटवर्क",
+    "set.tools.category.chrome": "Chrome ब्राउज़र",
+    "set.tools.category.browser": "अंतर्निहित ब्राउज़र",
+    "set.tools.category.computer": "कंप्यूटर डेस्कटॉप",
+    "set.tools.category.sop": "SOP उपकरण",
+    "set.tools.category.company": "एक व्यक्ति की कंपनी",
+    "set.tools.category.schedule": "निर्धारित कार्य",
+    "set.tools.basicOnly": "केवल मूल उपकरण",
+    "set.tools.presets": "उपकरण विकल्प",
+    "set.tools.selectionHint": "मूल उपकरणों से शुरू करें। अन्य उपकरण श्रेणी के अनुसार चालू करें।",
+    "set.tools.enabledCount": "{enabled} / {total} चालू"
   }
 }

@@ -1,3 +1,5 @@
+import { isBasicTool } from '../tools/catalog.js';
+
 // These preferences control model input, independently of execution permissions.
 export interface InputControls {
   systemPromptEnabled?: boolean;
@@ -8,8 +10,13 @@ export interface InputControls {
 
 export function selectEnabledTools<T extends { name: string }>(tools: readonly T[], controls?: InputControls): T[] {
   if (controls?.toolsEnabled === false) return [];
-  const disabled = new Set(controls?.disabledTools ?? []);
+  const disabled = new Set(disabledToolNames(tools, controls));
   return tools.filter(tool => !disabled.has(tool.name) && !(controls?.memoryEnabled === false && tool.name === 'remember'));
+}
+
+export function disabledToolNames(tools: readonly {name: string}[], controls?: InputControls): string[] {
+  // An explicit empty list means the user chose to enable every tool.
+  return controls?.disabledTools ?? tools.filter(tool => !isBasicTool(tool.name)).map(tool => tool.name);
 }
 
 export function normalizeInputControls(patch: unknown): InputControls {

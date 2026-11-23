@@ -1,4 +1,7 @@
 import {AccountFooter, useAccountFooterLayout} from './components/AccountFooter.js';
+import {disabledToolNames} from '../../../src/agent/input-controls.js';
+import {recoverAssistantStep} from './assistant-recovery.js';
+import {isBasicTool} from '../../../src/tools/catalog.js';
 import {isLocalQwenTrial} from '../../../src/local-qwen-trial.js';
 import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
@@ -5868,17 +5871,7 @@ export function App() {
           // 清理泄漏工具调用/噪音后：把屏上那条 assistant 换成干净正文(为空则移除该气泡)
           if (payload.sid !== currentIdRef.current) break;
           flushDelta(true);
-          setItems((p) => {
-            const c = [...p];
-            for (let k = c.length - 1; k >= 0; k--) {
-              if (c[k].type === "assistant") {
-                if ((payload.text || "").trim()) c[k] = { ...(c[k] as any), text: payload.text };
-                else c.splice(k, 1); // 清理后无正文→去掉空气泡
-                break;
-              }
-            }
-            return c;
-          });
+          setItems((p) => recoverAssistantStep<Item>(p, payload.text || "", text => ({type:"assistant",text,ts:Date.now()})));
           break;
         case "evt:compact":
           if (payload.sid !== currentIdRef.current) break;
@@ -13542,7 +13535,7 @@ function swapMemHeader(text: string, lang: Lang): string {
 }
 
 
-type ToolGroupRaw = { source: string; kind: "builtin" | "browser" | "mcp"; tools: { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean }[] };
+type ToolGroupRaw = { id?: string; source: string; kind: "builtin" | "browser" | "mcp"; tools: { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean }[] };
 const toolDesc = (name: string, fallback: string, lang: Lang) => localizeToolMetadata({ name, description: fallback, inputSchema: {} }, lang).description;
 // 把 getTools 返回的分组按语言彻底本地化：source 名、工具描述、inputSchema 参数说明（List/JSON 视图共用）。
 function localizeToolGroups(groups: ToolGroupRaw[], lang: Lang): ToolGroupRaw[] { return groups.map(group => ({ ...group, source: localizeStoredText(group.source, lang), tools: group.tools.map(tool => localizeToolMetadata(tool, lang)) })); }
@@ -14103,10 +14096,6 @@ function SettingsModal({
   const [brainPromptDefault, setBrainPromptDefault] = useState("");
   const [brainPromptDefaultEn, setBrainPromptDefaultEn] = useState("");
   const [brainPromptTouched, setBrainPromptTouched] = useState(false);
-  const [secretsPrompt, setSecretsPrompt] = useState("");
-  const [secretsPromptDefault, setSecretsPromptDefault] = useState("");
-  const [secretsPromptDefaultEn, setSecretsPromptDefaultEn] = useState("");
-  const [secretsPromptTouched, setSecretsPromptTouched] = useState(false);
   const [platPromptOn, setPlatPromptOn] = useState(false); // 当前平台是否用专属提示词覆盖全局
   const [platPrompt, setPlatPrompt] = useState(""); // 当前平台专属提示词内容
   const [sKeyWaiting, setSKeyWaiting] = useState(false); // 设置里：已开官网，等复制 key 自动检测
@@ -14225,7 +14214,7 @@ function SettingsModal({
   const mcpSearchRef = useRef(""); // 当前搜索词(翻页时校验没变)
   // ── 工具面板：当前生效的全部工具（按来源分组）──
   type ToolInfo = { name: string; description: string; readOnly: boolean; inputSchema: any; enabled:boolean };
-  type ToolGroup = { source: string; kind: "builtin" | "browser" | "mcp"; tools: ToolInfo[] };
+  type ToolGroup = { id?: string; source: string; kind: "builtin" | "browser" | "mcp"; tools: ToolInfo[] };
   const [rawToolGroups, setToolGroups] = useState<ToolGroup[]>([]);
   const toolGroups = localizeToolGroups(rawToolGroups, lang);
   const [toolTotal, setToolTotal] = useState(0);
@@ -14251,7 +14240,7 @@ function SettingsModal({
     }).catch(error=>{setInputSaveError(String(error));});
   }
   function changeTools(names:string[],enabled:boolean) {
-    const disabled=new Set(inputControlsRef.current.disabledTools??[]);
+    const disabled=new Set(disabledToolNames(rawToolGroups.flatMap(group=>group.tools),inputControlsRef.current));
     for(const name of names) {if(enabled)disabled.delete(name);else disabled.add(name);}
     changeInputControls({disabledTools:[...disabled]});
   }
@@ -14455,7 +14444,6 @@ function SettingsModal({
   useEffect(() => {
     if (!sysPromptTouched && sysPromptDefaultEn) setSysPrompt(tr("agent.defaultPrompt", {}, lang));
     if (!brainPromptTouched && brainPromptDefaultEn) setBrainPrompt(tr("agent.brainNote", {}, lang));
-    if (!secretsPromptTouched && secretsPromptDefaultEn) setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
   useEffect(() => {
@@ -14655,18 +14643,6 @@ function SettingsModal({
       } else {
         setBrainPrompt(tr("agent.brainNote", {}, lang));
         setBrainPromptTouched(false);
-      }
-      // 密钥说明提示词：同上
-      const sDefZh = (r as any)?.defaultSecretsPrompt || "";
-      const sDefEn = (r as any)?.defaultSecretsPromptEn || sDefZh;
-      setSecretsPromptDefault(sDefZh);
-      setSecretsPromptDefaultEn(sDefEn);
-      if (typeof s.secretsPrompt === "string") {
-        setSecretsPrompt(s.secretsPrompt);
-        setSecretsPromptTouched(true);
-      } else {
-        setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
-        setSecretsPromptTouched(false);
       }
     });
   }, []);
@@ -15090,6 +15066,9 @@ function SettingsModal({
           <button type="button" data-testid="settings-tab-memory" className={"set-tab" + (tab === "memory" ? " on" : "")} onClick={() => setTab("memory")}>
             {t("set.tab.memory")}
           </button>
+          <button type="button" data-testid="settings-tab-tools" className={"set-tab" + (tab === "tools" ? " on" : "")} onClick={() => setTab("tools")}>
+            {t("set.tab.tools")}
+          </button>
           <button
             type="button"
             className={"set-tab" + (tab === "brain" ? " on" : "")}
@@ -15099,9 +15078,6 @@ function SettingsModal({
           </button>
           <button type="button" className={"set-tab" + (tab === "mcp" ? " on" : "")} onClick={() => setTab("mcp")}>
             {t("set.tab.mcp")}
-          </button>
-          <button type="button" data-testid="settings-tab-tools" className={"set-tab" + (tab === "tools" ? " on" : "")} onClick={() => setTab("tools")}>
-            {t("set.tab.tools")}
           </button>
           <button type="button" className={"set-tab" + (tab === "secrets" ? " on" : "")} onClick={() => setTab("secrets")}>
             {t("set.tab.secrets")}
@@ -16945,7 +16921,7 @@ function SettingsModal({
               const filtered = toolGroups
                 .map((g) => ({
                   ...g,
-                  tools: q
+                  tools: q && !g.source.toLowerCase().includes(q)
                     ? g.tools.filter(
                         (t) =>
                           t.name.toLowerCase().includes(q) ||
@@ -16955,13 +16931,29 @@ function SettingsModal({
                 }))
                 .filter((g) => g.tools.length > 0);
               const shownTotal = filtered.reduce((n, g) => n + g.tools.length, 0);
+              const allTools = toolGroups.flatMap(group => group.tools);
+              const enabledCount = allTools.filter(tool => tool.enabled).length;
+              const basicOnly = inputControls.toolsEnabled !== false && allTools.every(tool => tool.enabled === (isBasicTool(tool.name) && !(tool.name === 'remember' && inputControls.memoryEnabled === false)));
               const badge = (kind: ToolGroup["kind"]) =>
                 kind === "builtin" ? t("set.tools.badgeBuiltin") : kind === "browser" ? t("set.tools.badgeBrowser") : t("set.tools.badgeMcp");
               return (
                 <div className="tools-pane">
-                  <label className="prov-override-toggle"><input data-testid="input-tools-enabled" type="checkbox" checked={inputControls.toolsEnabled!==false} onChange={e=>changeInputControls({toolsEnabled:e.target.checked})}/>{tr('set.input.toolsEnabled')}</label>
-                  <div className="tools-bar tools-viewsw"><button className="tv-btn" data-testid="input-tools-all-on" type="button" onClick={()=>changeInputControls({toolsEnabled:true,disabledTools:[]})}>{tr('set.input.allOn')}</button><button className="tv-btn" data-testid="input-tools-all-off" type="button" onClick={()=>changeInputControls({toolsEnabled:false})}>{tr('set.input.allOff')}</button></div>
-                  <p className="s-note">{tr('set.input.toolsHint')}</p>
+                  <div className="tools-control-card">
+                    <div className="tools-control-heading">
+                      <div className="tools-control-title"><strong>{t('set.tab.tools')}</strong><span className="tools-enabled-count" aria-live="polite">{tr('set.tools.enabledCount',{enabled:enabledCount,total:toolTotal})}</span></div>
+                      <label className="tools-master-switch">
+                        <span>{tr('set.input.toolsEnabled')}</span>
+                        <input data-testid="input-tools-enabled" type="checkbox" role="switch" checked={inputControls.toolsEnabled!==false} onChange={e=>changeInputControls({toolsEnabled:e.target.checked})}/>
+                        <span className="tools-switch-track" aria-hidden="true"/>
+                      </label>
+                    </div>
+                    <div className="tools-presets" role="group" aria-label={tr('set.tools.presets')}>
+                      <button className={'tools-preset'+(basicOnly?' on':'')} data-testid="input-tools-basic" type="button" aria-pressed={basicOnly} onClick={()=>changeInputControls({toolsEnabled:true,disabledTools:allTools.filter(tool=>!isBasicTool(tool.name)).map(tool=>tool.name)})}><span aria-hidden="true">✦</span>{tr('set.tools.basicOnly')}</button>
+                      <button className={'tools-preset'+(inputControls.toolsEnabled!==false&&enabledCount===toolTotal?' on':'')} data-testid="input-tools-all-on" type="button" aria-pressed={inputControls.toolsEnabled!==false&&enabledCount===toolTotal} onClick={()=>changeInputControls({toolsEnabled:true,disabledTools:[]})}><span aria-hidden="true">＋</span>{tr('set.input.allOn')}</button>
+                      <button className={'tools-preset'+(inputControls.toolsEnabled===false?' on':'')} data-testid="input-tools-all-off" type="button" aria-pressed={inputControls.toolsEnabled===false} onClick={()=>changeInputControls({toolsEnabled:false})}><span aria-hidden="true">−</span>{tr('set.input.allOff')}</button>
+                    </div>
+                    <p className="tools-control-hint">{tr('set.tools.selectionHint')}</p>
+                  </div>
                   {inputSaveError&&<p role="alert">{inputSaveError}</p>}
                   {inputPreview&&<p className="s-note">{tr('set.input.breakdown',{system:inputPreview.systemChars,tools:inputPreview.toolCount,schema:inputPreview.toolSchemaChars})}</p>}
                   <div className="tools-bar">
@@ -16998,6 +16990,7 @@ function SettingsModal({
                             name: t.name,
                             description: t.description,
                             readOnly: t.readOnly,
+                            enabled: t.enabled,
                             inputSchema: t.inputSchema,
                           })),
                         })),
@@ -17009,12 +17002,12 @@ function SettingsModal({
                     <div className="mcp-empty">{t("set.tools.noMatch")}</div>
                   ) : (
                     filtered.map((g) => (
-                      <div key={g.source} className="tools-group">
+                      <div key={g.id || g.source} className="tools-group" data-tool-category={g.id || g.source}>
                         <div className="tools-group-h">
-                          <input type="checkbox" aria-label={g.source} disabled={inputControls.toolsEnabled===false} checked={g.tools.every(tool=>tool.enabled)} onChange={e=>changeTools(g.tools.map(tool=>tool.name),e.target.checked)}/>
+                          <input type="checkbox" aria-label={g.source} aria-checked={g.tools.every(tool=>tool.enabled)?true:g.tools.some(tool=>tool.enabled)?'mixed':false} ref={input=>{if(input)input.indeterminate=g.tools.some(tool=>tool.enabled)&&!g.tools.every(tool=>tool.enabled);}} disabled={inputControls.toolsEnabled===false} checked={g.tools.every(tool=>tool.enabled)} onChange={e=>changeTools(g.tools.map(tool=>tool.name),e.target.checked)}/>
                           <span className={"tools-badge k-" + g.kind}>{badge(g.kind)}</span>
-                          <span className="tools-group-name">{g.source}</span>
-                          <span className="tools-group-n">{g.tools.length}</span>
+                          <span className="tools-group-name">{g.id?tr('set.tools.category.'+g.id):g.source}</span>
+                          <span className="tools-group-n">{g.tools.filter(tool=>tool.enabled).length} / {g.tools.length}</span>
                         </div>
                         {g.tools.map((tool) => (
                           <div
@@ -17270,41 +17263,7 @@ function SettingsModal({
                 )}
               </div>
 
-              {/* 密钥说明提示词：拼进系统提示词的那段，查看/修改 */}
-              <details className="sec-prompt" style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text)" }}>
-                  {t("set.sec.promptLabel")} {secretsPromptTouched ? t("set.pr.customized") : t("set.pr.default")}{t("set.sec.promptViewEdit")}
-                </summary>
-                <label className="field" style={{ marginTop: 8, display: "block" }}>
-                  <textarea dir="ltr"
-                    className="sysprompt-area"
-                    style={{ minHeight: 140, width: "100%" }}
-                    value={secretsPrompt}
-                    onChange={(e) => {
-                      setSecretsPrompt(e.target.value);
-                      setSecretsPromptTouched(true);
-                    }}
-                    onBlur={() => window.wuwei.setSecretsPrompt(secretsPromptTouched ? secretsPrompt : null)}
-                    placeholder={t("set.sec.promptPlaceholder")}
-                  />
-                </label>
-                <p className="s-note">
-                  {t("set.sec.promptNote")}
-                  {secretsPromptTouched && (
-                    <button
-                      type="button"
-                      className="link-inline"
-                      onClick={() => {
-                        setSecretsPrompt(tr("agent.secretsNote", systemData.secretDelimiters, lang));
-                        setSecretsPromptTouched(false);
-                        window.wuwei.setSecretsPrompt(null);
-                      }}
-                    >
-                      {t("set.pr.restore")}
-                    </button>
-                  )}
-                </p>
-              </details>
+
             </div>
           )}
         </div>

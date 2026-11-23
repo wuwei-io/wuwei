@@ -33,7 +33,7 @@ test('all 18 packs resolve system prompts, interpolation and native metadata loc
   }
 });
 
-test('an existing conversation uses the selected response language on its next request, including custom prompts',async()=>{
+test('language changes do not append a response policy to custom or restored conversation prompts',async()=>{
   const old=process.env.WUWEI_LANG,requests=[];
   const provider={name:'openai',complete:async(system,messages)=>{requests.push({system,messages:structuredClone(messages)});return {content:[{type:'text',text:'QA reply'}],stopReason:'end_turn'};}};
   try{
@@ -41,10 +41,9 @@ test('an existing conversation uses the selected response language on its next r
     for(const language of ['ru','ja','fa','en','zh']){setCurrentLanguage(language);await agent.send('Original user content',{});}
     for(const [index,language] of ['ru','ja','fa','en','zh'].entries()){
       const locale=getLanguages().find(locale=>locale.code===language),request=requests[index];
-      assert.ok(request.system.startsWith('User-owned custom prompt\n\n'));
+      assert.equal(request.system,'User-owned custom prompt');
       const policy=tr('language.replyPolicy',{language:locale.nativeName},language);
-      assert.ok(request.system.endsWith(policy),language);
-      assert.equal(request.system.split(policy).length,2);
+      assert.ok(!request.system.includes(policy),language);
       assert.equal(request.messages.filter(message=>message.role==='user').length,index+1);
       assert.ok(request.messages.filter(message=>message.role==='user').every(message=>message.content[0].text==='Original user content'));
     }

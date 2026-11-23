@@ -1,3 +1,4 @@
+import {modelDisplayLabel} from './local-qwen-trial.js';
 import { tr, localizeStoredText } from "./localization/index.js";
 import { hostedModelImageInput } from './model-image-input.js';
 
@@ -28,7 +29,7 @@ function englishCatalogLabel(label: string, fallback: string): string {
 export function catalogModelChoices(providers: Provider[], selectedKey: string): ModelChoice[] {
   return providers.flatMap(p=>p.models.filter(m=>!m.selection?.hiddenInPicker || `${p.id}/${m.id}`===selectedKey).map((m,index)=>({
     key:`${p.id}/${m.id}`,providerId:p.id,modelId:m.id,
-    label:(m.free && /自动/.test(m.label) ? m.label.replace(/^免费模型\s*[·・]?\s*/, '') : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),labelEn:(p.hosted ? englishCatalogLabel(m.labelEn || m.label_en || m.label || m.id, m.id) : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,''),
+    label:modelDisplayLabel(m.id,(m.free && /自动/.test(m.label) ? m.label.replace(/^免费模型\s*[·・]?\s*/, '') : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,'')),labelEn:modelDisplayLabel(m.id,(p.hosted ? englishCatalogLabel(m.labelEn || m.label_en || m.label || m.id, m.id) : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,'')),
     connectionLabel:p.labelEn || (p.hosted ? englishCatalogLabel(p.label, p.id) : p.label),
     category:(m.free?'free':!p.hosted?'connections':m.selection?.category==='economy'?'economy':'premium') as ModelCategory,
     rank:m.selection?.rank ?? p.sort*100+index,recommended:m.selection?.recommended===true,defaultForNewUsers:m.selection?.defaultForNewUsers===true,

@@ -10,12 +10,13 @@ test('no-daily-quota display is restricted to the published free trial identity'
   assert.equal(isLocalQwenTrial(trial),true);
   for(const patch of [{providerId:'custom'},{modelId:'glm-4.7-flash'},{free:false}])assert.equal(isLocalQwenTrial({...trial,...patch}),false);
 });
-test('defaults preserve tools; master switch and exclusions apply to newly connected tools',()=>{
-  assert.deepEqual(selectEnabledTools(specs),specs);
+test('defaults select basic tools; explicit selections, master switch and exclusions remain effective',()=>{
+  assert.deepEqual(selectEnabledTools(specs),specs.slice(0,3));
+  assert.deepEqual(selectEnabledTools(specs,{disabledTools:[]}),specs);
   assert.deepEqual(selectEnabledTools(specs,{toolsEnabled:false}),[]);
   assert.deepEqual(selectEnabledTools([...specs,{name:'mcp_new'}],{toolsEnabled:false}),[]);
   assert.deepEqual(selectEnabledTools(specs,{disabledTools:['write_file','mcp_search']}),[specs[0],specs[2]]);
-  assert.deepEqual(selectEnabledTools(specs,{memoryEnabled:false}),[specs[0],specs[1],specs[3]]);
+  assert.deepEqual(selectEnabledTools(specs,{memoryEnabled:false}),[specs[0],specs[1]]);
 });
 test('preferences accept only input controls and preserve explicit false',()=>{
   assert.deepEqual(normalizeInputControls({toolsEnabled:false,memoryEnabled:'false',disabledTools:['read_file','read_file',null,1,''],apiKey:'never persist'}),{toolsEnabled:false,disabledTools:['read_file']});

@@ -1,7 +1,7 @@
 import { tr, getCurrentLanguage } from "../localization/index.js";
 import { compactThresholdFor, parseServerContextLimit } from "../context-window.js";
 import { isTerminalGatewayError } from "../gateway-retry.js";
-import { withImageToolInstructions, withResponseLanguage } from './prompt.js';
+import { withImageToolInstructions } from './prompt.js';
 import { randomUUID } from 'node:crypto';
 import { runHostedTurn, withoutTurnSlot } from './background.js';
 // Agent 主循环：Claude Code 的心脏。
@@ -457,7 +457,7 @@ export class Agent {
         && (t.name !== 'ask_decision' || !!(hooks.requestDecision || this.ctx.requestDecision))
         && (t.name !== 'ask_user' || !(hooks.remoteExecution || this.ctx.remoteExecution)));
       const stepToolMap = new Map(stepTools.map(t => [t.name, this.toolMap.get(t.name) ?? t]));
-      const stepSystem = withResponseLanguage(withImageToolInstructions(this.system, stepTools, process.env.WUWEI_LANG), process.env.WUWEI_LANG);
+      const stepSystem = withImageToolInstructions(this.system, stepTools, process.env.WUWEI_LANG);
       let result: Awaited<ReturnType<typeof this.provider.complete>>;
       let ctxTrims = 0; // 上下文超限时的硬清理次数(防死循环)
       for (let attempt = 0; ; attempt++) {

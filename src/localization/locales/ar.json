@@ -3803,7 +3803,21 @@
     "set.input.part.interaction": "Interaction guidance",
     "set.input.part.images": "Image tool guidance",
     "set.input.part.language": "Reply language",
-    "set.input.trialPrice": "Free · No daily request quota",
-    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue."
+    "set.input.trialPrice": "مجاني · بلا حدود",
+    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue.",
+    "set.tools.category.basic": "الأدوات الأساسية",
+    "set.tools.category.imagegen": "إنشاء الصور",
+    "set.tools.category.vision": "عرض الصور",
+    "set.tools.category.brain": "شبكة المعرفة",
+    "set.tools.category.chrome": "متصفح Chrome",
+    "set.tools.category.browser": "المتصفح المدمج",
+    "set.tools.category.computer": "سطح المكتب",
+    "set.tools.category.sop": "أدوات SOP",
+    "set.tools.category.company": "شركة فردية",
+    "set.tools.category.schedule": "المهام المجدولة",
+    "set.tools.basicOnly": "الأساسية فقط",
+    "set.tools.presets": "إعدادات الأدوات",
+    "set.tools.selectionHint": "ابدأ بالأساسيات. فعّل الأدوات الأخرى حسب الفئة.",
+    "set.tools.enabledCount": "مفعّل: {enabled} / {total}"
   }
 }

@@ -38,7 +38,8 @@ import { loadConfig } from "../../src/config.js";
 import { makeProvider, setImageCapper } from "../../src/agent/provider.js";
 import { prepareModelImage } from "../../src/image-preparation.js";
 import { Agent } from "../../src/agent/loop.js";
-import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN, withImageToolInstructions, withResponseLanguage } from "../../src/agent/prompt.js";
+import { systemPrompt, renderPrompt, DEFAULT_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT_EN, withImageToolInstructions } from "../../src/agent/prompt.js";
+import { groupBuiltinTools } from "../../src/tools/catalog.js";
 import { selectEnabledTools, normalizeInputControls, toolSchemaChars } from "../../src/agent/input-controls.js";
 import { ALL_TOOLS, TOOL_MAP, MEMORY_FILE } from "../../src/tools/index.js";
 import * as brain from "../../src/brain/index.js";
@@ -1296,9 +1297,6 @@ function buildSysPromptParts(cwd: string, model: string, providerId?: string): {
     }
     parts.push({id:'brain',text:brainText});
   }
-  // 密钥说明：告知模型密钥走本地保险箱/环境变量，无需明文；提示词可在设置里覆盖
-  // The vault guidance remains visible; disabling prompt text never disables secret protection.
-  parts.push({id:'secrets',text:typeof st?.secretsPrompt === "string" ? st.secretsPrompt : secrets.secretsSystemNote(lang)});
   // 与用户交互：需要用户拍板时必须弹选择框(强引导，否则模型习惯用文字罗列)
   if (tools.has('ask_user')) parts.push({id:'interaction',text:tr("ui.index.interacting.with.the.user.must.follow.4295d0e")});
   return parts;
@@ -4941,11 +4939,13 @@ ipcMain.handle("tools:get", () => {
     inputSchema: t.inputSchema || { type: "object", properties: {} },
     enabled: active.has(t.name),
   });
-  const browserNames = new Set(BROWSER_TOOLS.map(tool=>tool.name));
   const mcpNames = new Set(mcpTools().map(tool=>tool.name));
-  const groups: { source: string; kind: "builtin" | "browser" | "mcp"; tools: ReturnType<typeof mk>[] }[] = [
-    { source: tr("ui.index.message.6b2c4f3afc"), kind: "builtin", tools: available.filter(tool=>!browserNames.has(tool.name)&&!mcpNames.has(tool.name)).map(mk) },
-    { source: tr("set.tools.badgeBrowser"), kind: "browser", tools: available.filter(tool=>browserNames.has(tool.name)).map(mk) },
+  const groups = [
+    ...groupBuiltinTools(available.filter(tool => !mcpNames.has(tool.name))).map(group => ({
+      id: group.id, source: tr('set.tools.category.' + group.id),
+      kind: group.id === 'browser' ? 'browser' as const : 'builtin' as const,
+      tools: group.tools.map(mk),
+    })),
     ...mcpToolsBySource().map((g) => ({
       source: g.server,
       kind: "mcp" as const,
@@ -4961,10 +4961,8 @@ ipcMain.handle('input:preview', () => {
   const base = parts.map(part=>part.text).join('');
   const tools = desktopTools().filter(tool=>(!tool.requiresImageGeneration||!!provider?.generateImage)&&(tool.name!=='platform_imagegen'||!!provider?.platformImage));
   const image = withImageToolInstructions('',tools,process.env.WUWEI_LANG);
-  const language = withResponseLanguage('',process.env.WUWEI_LANG);
   if (image) parts.push({id:'images',text:image});
-  parts.push({id:'language',text:language});
-  return {parts,systemChars:base.length+image.length+language.length,toolCount:tools.length,toolSchemaChars:toolSchemaChars(tools)};
+  return {parts,systemChars:base.length+image.length,toolCount:tools.length,toolSchemaChars:toolSchemaChars(tools)};
 });
 
 // —— 浏览器面板：把 WebContentsView 贴到主窗口指定区域(前端量好 bounds 发来) ——

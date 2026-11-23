@@ -5018,6 +5018,28 @@ body {
 
 /* ── 设置·「工具」面板：当前生效工具的列表/JSON 视图 + 详情 ── */
 .tools-pane { display: flex; flex-direction: column; min-height: 0; }
+.tools-control-card {
+  border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  background: var(--panel, var(--bg)); margin-bottom: 16px;
+}
+.tools-control-heading, .tools-control-title { display: flex; align-items: center; gap: 10px; }
+.tools-control-heading { justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.tools-control-title strong { font-size: 14px; color: var(--text); }
+.tools-enabled-count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tools-master-switch { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text-muted); cursor: pointer; position: relative; }
+.tools-master-switch input { position: absolute; right: 0; width: 32px; height: 20px; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.tools-switch-track { width: 32px; height: 19px; border-radius: 20px; background: var(--border-strong); transition: background .15s; }
+.tools-switch-track::after { content: ''; display: block; width: 13px; height: 13px; margin: 3px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px #0002; transition: transform .15s; }
+.tools-master-switch input:checked + .tools-switch-track { background: var(--accent); }
+.tools-master-switch input:checked + .tools-switch-track::after { transform: translateX(13px); }
+.tools-master-switch input:focus-visible + .tools-switch-track { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tools-presets { display: inline-flex; flex-wrap: wrap; gap: 5px; padding: 4px; background: var(--accent-soft); border-radius: 9px; }
+.tools-preset { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: 6px; padding: 7px 11px; background: transparent; font: inherit; font-size: 12px; line-height: 1.3; color: var(--text-muted); cursor: pointer; transition: background .15s, color .15s; }
+.tools-preset > span { font-size: 14px; line-height: 1; }
+.tools-preset:hover { background: var(--panel, var(--bg)); color: var(--text); }
+.tools-preset.on { color: var(--accent); background: var(--panel, var(--bg)); border-color: var(--border); box-shadow: 0 1px 3px #00000008; font-weight: 600; }
+.tools-preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tools-control-hint { font-size: 12px; line-height: 1.5; color: var(--text-muted); margin: 11px 0 0; }
 .tools-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .tools-bar .mcp-search { flex: 1 1 auto; margin-bottom: 0; }
 .tools-viewsw {
@@ -5034,8 +5056,11 @@ body {
 .tools-group { margin-bottom: 14px; }
 .tools-group-h {
   display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-  position: sticky; top: 0; background: var(--panel, var(--bg)); padding: 2px 0;
+  position: sticky; top: 0; background: var(--panel, var(--bg)); padding: 8px 0; z-index: 1;
 }
+.tools-group-h > input { margin: 0 2px; accent-color: var(--accent); }
+.tools-group-h .tools-group-n { margin-left: auto; font-variant-numeric: tabular-nums; }
+.tool-row input[type="checkbox"] { accent-color: var(--accent); }
 .tools-group-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .tools-group-n {
   font-size: 11px; color: var(--text-muted);
