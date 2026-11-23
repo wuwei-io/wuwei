@@ -1376,7 +1376,8 @@ app.whenReady().then(async () => {
     assert.equal(f.state.settings.model,'openrouter-auto-free');
     await f.click('.mq-select');await f.wait(`!!document.querySelector('[data-model-key="wuwei-free/qwen3-4b-local-trial"]')`);
     const row=await f.js(`document.querySelector('[data-model-key="wuwei-free/qwen3-4b-local-trial"]').textContent`);
-    assert.match(row,lang==='zh'?/不设每日调用次数/:/No daily request quota/);
+    assert.match(row,lang==='zh'?/免费 · 无限制/:/Free · Unlimited/);
+    assert.doesNotMatch(row,/Free trial/i);
     assert.doesNotMatch(row,lang==='zh'?/有每日额度/:/daily limits apply/i);
     await f.click('[data-model-key="wuwei-free/qwen3-4b-local-trial"]');
     await f.wait('!document.querySelector(".model-picker")');
