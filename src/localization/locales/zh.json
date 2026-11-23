@@ -3803,7 +3803,21 @@
     "set.input.part.interaction": "交互工具说明",
     "set.input.part.images": "图片工具说明",
     "set.input.part.language": "回复语言",
-    "set.input.trialPrice": "免费 · 不设每日调用次数",
-    "set.input.trialPolicy": "当前 Qwen3 4B 试用无需登录，不设每日调用次数，繁忙时可能排队。"
+    "set.input.trialPrice": "免费 · 无限制",
+    "set.input.trialPolicy": "当前 Qwen3 4B 试用无需登录，不设每日调用次数，繁忙时可能排队。",
+    "set.tools.category.basic": "内置基础工具",
+    "set.tools.category.imagegen": "生图工具",
+    "set.tools.category.vision": "看图工具",
+    "set.tools.category.brain": "脑网络工具",
+    "set.tools.category.chrome": "Chrome 浏览器操作工具",
+    "set.tools.category.browser": "内置浏览器操作工具",
+    "set.tools.category.computer": "计算机桌面操作工具",
+    "set.tools.category.sop": "SOP 工具",
+    "set.tools.category.company": "一人公司工具",
+    "set.tools.category.schedule": "定时任务工具",
+    "set.tools.basicOnly": "仅基础工具",
+    "set.tools.presets": "工具快捷选择",
+    "set.tools.selectionHint": "默认仅启用基础工具，其他工具可按类别开启。",
+    "set.tools.enabledCount": "已启用 {enabled} / {total}"
   }
 }

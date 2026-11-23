@@ -402,9 +402,9 @@ function globToRegExp(glob: string): RegExp {
   // 极简 glob → 正则：** 任意层级，* 单层，? 单字符
   let re = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, " ")
+    .replace(/\*\*/g, "\u0000")
     .replace(/\*/g, "[^/]*")
-    .replace(/ /g, ".*")
+    .replace(/\u0000/g, ".*")
     .replace(/\?/g, ".");
   return new RegExp(`^${re}$`);
 }
@@ -571,7 +571,7 @@ const rememberTool: Tool = {
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 // web_search 主力源 = 无为网关搜索代理(服务器端带自建 SearXNG 凭证转发，凭证不进客户端)。
-// 走无为登录 token(主进程登录后写入 WUWEI_GW_TOKEN 环境变量)；未登录则此源跳过、回落到 Bing 等公开源。
+// 所有模型和登录状态都优先使用网关；登录 token 可选，游客使用相同搜索服务。
 const WUWEI_SEARCH_URL = "https://gw.wuweiai.io/api/gateway/v1/search";
 
 function stripTags(s: string): string {
@@ -702,7 +702,7 @@ function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 // 带指数退避的抓取：202挑战页/429限流/5xx 都当作可重试；默认 3 次(间隔 500ms→1000ms)
-async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: Record<string, string>): Promise<string> {
+async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: Record<string, string>, timeoutMs = 8000): Promise<string> {
   // 补全浏览器请求头：Bing/DDG 等反爬会对缺 Accept/Sec-* 的请求返回 202 挑战页，
   // 带上更像真实浏览器的头能显著降低被挑战概率(实测 curl 带同款头即得 200)。
   const isJson = /[?&]format=json\b/.test(url);
@@ -720,7 +720,8 @@ async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: R
   for (let i = 0; i < tries; i++) {
     if (ctx?.signal?.aborted) throw new Error("aborted");
     try {
-      const r = await fetch(url, { headers, signal: ctx?.signal });
+      const attemptSignal = AbortSignal.any([...(ctx?.signal ? [ctx.signal] : []),AbortSignal.timeout(timeoutMs)]);
+      const r = await fetch(url, { headers, signal: attemptSignal });
       if (r.status === 202 || r.status === 429 || r.status >= 500) lastErr = new Error("HTTP " + r.status);
       else return await r.text();
     } catch (e: any) {
@@ -738,15 +739,21 @@ async function fetchTextRetry(url: string, ctx: any, tries = 3, extraHeaders?: R
 // 于是垃圾直接喂给模型、后面真正可用的 SearXNG 根本没机会跑。光看 HTTP 状态发现不了。
 // 判据放得很宽：查询里任一特征词在任一条结果的标题/摘要/URL 里出现即算相关，只拦完全不沾边的。
 function looksRelevant(query: string, results: { title: string; url: string; snippet: string }[]): boolean {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().replace(/全球|最新|今天|今日|目前|现在|近期|新闻|搜索|查询|天气|预报|一下|相关|内容|资料|\b(?:global|latest|today|news|search|weather|forecast|please|find|the)\b/gi, ' ');
   const toks = new Set<string>();
-  for (const w of q.match(/[a-z0-9][a-z0-9.+#_-]{2,}/g) || []) toks.add(w); // 英文/数字词(≥3 字符)
+  for (const w of q.match(/[a-z0-9][a-z0-9.+#_-]{1,}/g) || []) toks.add(w); // Include short topics such as AI.
   // 中文按 2-gram 拆：整词匹配太严("全脑启发架构"很难原样出现)，逐字又太松。
-  for (const seg of query.match(/[一-龥]{2,}/g) || [])
+  for (const seg of q.match(/[一-龥]{2,}/g) || [])
     for (let i = 0; i + 2 <= seg.length; i++) toks.add(seg.slice(i, i + 2));
-  if (!toks.size) return true; // 提不出特征词(纯符号/单字)就不拦，避免误杀
   const hay = results.map((r) => `${r.title} ${r.snippet} ${r.url}`).join(" ").toLowerCase();
-  for (const t of toks) if (hay.includes(t)) return true;
+  if (!toks.size) {
+    if (/新闻|\bnews\b/i.test(query)) return /新闻|报道|时事|\bnews\b/i.test(hay);
+    if (/天气|预报|\bweather\b/i.test(query)) return /天气|预报|气温|\bweather\b|\bforecast\b/i.test(hay);
+    return true;
+  }
+  for (const t of toks) {
+    if (/[一-龥]/.test(t) ? hay.includes(t) : new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)', 'i').test(hay)) return true;
+  }
   return false;
 }
 
@@ -769,13 +776,14 @@ const webSearchTool: Tool = {
       // 走 JSON、独立于 DDG/Bing，多个公共实例互为备份；DDG 部分网络连不上(返回 000)故垫底。
       const sx = (host: string) => `https://${host}/search?q=${eq}&format=json&language=` + getCurrentLanguage();
       const sources: { name: string; url: string; parse: (h: string) => { title: string; url: string; snippet: string }[]; headers?: Record<string, string> }[] = [];
-      // 主力源：无为网关搜索代理(服务器端转发自建 SearXNG，聚合 Google/Bing/Brave)。仅登录用户有 token。
+      // 主力源：无为网关搜索代理。所有模型、游客和登录用户统一优先使用。
       // token 由主进程挂在 globalThis.wuweiGwToken()(永远最新)；CLI 等无此桥则回落 env。
       const tokFn = (globalThis as unknown as { wuweiGwToken?: () => string }).wuweiGwToken;
       const gwTok = (typeof tokFn === "function" ? tokFn() : (process.env.WUWEI_GW_TOKEN || "")).trim();
-      if (gwTok && !gwTok.startsWith("anon-")) {
-        sources.push({ name: "Wuwei-search", url: `${WUWEI_SEARCH_URL}?q=${eq}&format=json&language=` + getCurrentLanguage(), parse: parseSearxng, headers: { Authorization: "Bearer " + gwTok } });
-      }
+      sources.push({
+        name: "Wuwei-search", url: `${WUWEI_SEARCH_URL}?q=${eq}&format=json&language=` + getCurrentLanguage(), parse: parseSearxng,
+        headers: gwTok && !gwTok.startsWith("anon-") ? { Authorization: "Bearer " + gwTok } : undefined,
+      });
       // 兜底：公开源(未登录、或网关不可用时用)。
       // ⚠️ Bing 垫底：实测它会返回「200 + 结构完整 + 内容与查询无关」的反爬缓存页(见 looksRelevant)，
       // 比直接报错更坑——放最后，让真正能出结果的源先跑。
@@ -787,10 +795,12 @@ const webSearchTool: Tool = {
       );
       let results: { title: string; url: string; snippet: string }[] = [];
       const tried: string[] = [];
+      const searchSignal = AbortSignal.any([...(ctx.signal ? [ctx.signal] : []),AbortSignal.timeout(40000)]);
       for (const s of sources) {
-        if (ctx.signal?.aborted) break;
+        if (searchSignal.aborted) break;
         try {
-          const raw = await fetchTextRetry(s.url, ctx, 3, s.headers);
+          const gateway = s.name === "Wuwei-search";
+          const raw = await fetchTextRetry(s.url, {...ctx,signal:searchSignal}, gateway ? 1 : 2, s.headers, gateway ? 25000 : 6000);
           // 网关源鉴权失败(token 过期)会回 {"error":"invalid_token","results":[]}，parseSearxng 解出空数组，
           // 原来只会记成「空」，跟"这词没搜到"混为一谈 → 静默降级到公开源。这里单独点名，好定位。
           if (s.headers?.Authorization && /"error"\s*:\s*"(invalid_token|auth_required)"/.test(raw)) {
@@ -798,7 +808,7 @@ const webSearchTool: Tool = {
             continue;
           }
           const r = s.parse(raw);
-          if (r.length && !looksRelevant(q, r)) {
+          if (s.name !== "Wuwei-search" && r.length && !looksRelevant(q, r)) {
             // 拿到了结果但跟查询八竿子打不着 → 反爬缓存页，弃掉换下一个源，绝不喂给模型
             tried.push(tr("ui.index.irrelevant.results.1c6ca9a", { p0: s.name }));
             continue;
@@ -806,7 +816,7 @@ const webSearchTool: Tool = {
           if (r.length) { results = r; break; }
           tried.push(tr("ui.index.empty.2ac3244", { p0: s.name }));
         } catch (e: any) {
-          if (ctx.signal?.aborted) break;
+          if (searchSignal.aborted) break;
           tried.push(`${s.name}(${e?.message || tr("ui.index.failed.28363f6")})`);
         }
       }
@@ -814,6 +824,7 @@ const webSearchTool: Tool = {
       if (!results.length)
         return {
           content: tr("ui.index.all.search.sources.unavailable.already.retried.a581bda", { p0: (getCurrentLanguage() !== 'zh' ? tried.join(", ") || "none" : tried.join("、") || tr("acct.userInitial")) }),
+          isError: true,
         };
       return {
         content: results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join("\n\n"),

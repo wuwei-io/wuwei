@@ -3803,7 +3803,21 @@
     "set.input.part.interaction": "Interaction guidance",
     "set.input.part.images": "Image tool guidance",
     "set.input.part.language": "Reply language",
-    "set.input.trialPrice": "Free · No daily request quota",
-    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue."
+    "set.input.trialPrice": "Gratuit · Illimité",
+    "set.input.trialPolicy": "Qwen3 4B trial needs no login and has no daily request quota; requests may queue.",
+    "set.tools.category.basic": "Outils de base intégrés",
+    "set.tools.category.imagegen": "Génération d’images",
+    "set.tools.category.vision": "Affichage d’images",
+    "set.tools.category.brain": "Réseau de connaissances",
+    "set.tools.category.chrome": "Navigateur Chrome",
+    "set.tools.category.browser": "Navigateur intégré",
+    "set.tools.category.computer": "Bureau de l’ordinateur",
+    "set.tools.category.sop": "Outils SOP",
+    "set.tools.category.company": "Entreprise individuelle",
+    "set.tools.category.schedule": "Tâches planifiées",
+    "set.tools.basicOnly": "Outils de base",
+    "set.tools.presets": "Sélection des outils",
+    "set.tools.selectionHint": "Commencez par les outils de base. Activez les autres par catégorie.",
+    "set.tools.enabledCount": "{enabled} / {total} activés"
   }
 }
