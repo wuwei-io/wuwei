@@ -574,7 +574,10 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('!!document.querySelector(".billing-usage-link,.billing-usage-details")'),false);
     if(lang==='en')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/[\u3400-\u9fff]/);
     assert.equal(f.state.orders,0);
-    if(lang==='zh')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/积分/);
+    if(lang==='zh'){
+      assert.equal(await f.js('document.querySelector(".billing-selector-intro h1").textContent'),'购买套餐获取更多积分');
+      assert.doesNotMatch(await f.js('(()=>{const panel=document.querySelector(".billing-panel").cloneNode(true);panel.querySelector(".billing-selector-intro h1").remove();return panel.textContent})()'),/积分/);
+    }
   });
   for(const modifier of ['control','meta'])await run('发布关键：语言快捷键切换界面、弹窗和临时英文显示 '+modifier,{
     offscreen:true,account:clone(billingAccount),sessions:[{id:'qa-session',title:'中文会话标题',createdAt:Date.now(),updatedAt:Date.now()}],
