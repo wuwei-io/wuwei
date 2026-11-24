@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "コードが無効か期限切れです。[ブラウザ経由でサインイン] をクリックして、もう一度お試しください。",
     "ui.app.checking.for.updates.ce6b51d": "アップデートをチェック中…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "新しいバージョン v{p0} が見つかりました — バックグラウンドでダウンロードしています。準備ができたら、更新するように求められます。",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "現在更新を確認できません (開発ビルドまたは更新ソースがありません)。",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "更新の確認またはダウンロードに失敗しました。接続を確認して再試行してください。",
     "ui.app.you.re.on.the.latest.version.dffc458": "最新バージョン (v{p0}) を使用しています。",
     "ui.app.not.enough.quota.and.coins.to.956023b": "このイメージを生成するにはクォータとコインが不足しています。続行するには資金を追加してください。",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "全体的な目標に基づいて決定します。最も合理的なオプションを選択し、続行します。",

@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Der Code ist ungültig oder abgelaufen – klicken Sie auf „Über Browser anmelden“ und versuchen Sie es erneut.",
     "ui.app.checking.for.updates.ce6b51d": "Suche nach Updates…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Neue Version v{p0} gefunden – Download im Hintergrund. Sobald die Aktualisierung abgeschlossen ist, werden Sie zur Aktualisierung aufgefordert.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Derzeit können keine Updates überprüft werden (Dev-Build oder keine Update-Quelle).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Updates konnten nicht geprüft oder heruntergeladen werden. Prüfe die Verbindung und versuche es erneut.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Sie verwenden die neueste Version (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Nicht genügend Kontingent und Münzen, um dieses Bild zu erzeugen. Fügen Sie Geld hinzu, um fortzufahren.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Sie entscheiden auf der Grundlage des Gesamtziels – wählen Sie die vernünftigste Option und machen Sie weiter.",

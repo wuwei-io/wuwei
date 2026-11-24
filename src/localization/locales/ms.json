@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Kod itu tidak sah atau tamat tempoh — klik \"Log masuk melalui penyemak imbas\" dan cuba lagi.",
     "ui.app.checking.for.updates.ce6b51d": "Menyemak kemas kini…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Versi baharu v{p0} ditemui — memuat turun di latar belakang. Anda akan digesa untuk mengemas kini apabila sudah sedia.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Tidak dapat menyemak kemas kini sekarang (bangunan pembangun atau tiada sumber kemas kini).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Tidak dapat menyemak atau memuat turun kemas kini. Semak sambungan dan cuba lagi.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Anda menggunakan versi terkini (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Tidak cukup kuota dan syiling untuk menjana imej ini. Tambah dana untuk meneruskan.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Anda membuat keputusan berdasarkan matlamat keseluruhan — pilih pilihan yang paling munasabah dan teruskan.",

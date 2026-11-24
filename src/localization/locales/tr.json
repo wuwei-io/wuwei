@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Kod geçersiz veya süresi dolmuş — \"Tarayıcıyla oturum aç\"ı tıklayın ve tekrar deneyin.",
     "ui.app.checking.for.updates.ce6b51d": "Güncellemeler kontrol ediliyor…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Yeni sürüm v{p0} bulundu — arka planda indiriliyor. Hazır olduğunda güncelleme yapmanız istenecektir.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Güncellemeler şu anda kontrol edilemiyor (geliştirme yapısı veya güncelleme kaynağı yok).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Güncellemeler denetlenemedi veya indirilemedi. Bağlantınızı kontrol edip tekrar deneyin.",
     "ui.app.you.re.on.the.latest.version.dffc458": "En son sürümdesiniz (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Bu görüntüyü oluşturmak için yeterli kota ve para yok. Devam etmek için para ekleyin.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Genel hedefe göre karar verirsiniz; en makul seçeneği seçin ve devam edin.",

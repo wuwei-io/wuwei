@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Mã không hợp lệ hoặc đã hết hạn — hãy nhấp vào \"Đăng nhập qua trình duyệt\" và thử lại.",
     "ui.app.checking.for.updates.ce6b51d": "Đang kiểm tra cập nhật…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Đã tìm thấy phiên bản mới v{p0} - đang tải xuống ở chế độ nền. Bạn sẽ được nhắc cập nhật khi nó sẵn sàng.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Không thể kiểm tra các bản cập nhật ngay bây giờ (bản dựng dành cho nhà phát triển hoặc không có nguồn cập nhật).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Không thể kiểm tra hoặc tải bản cập nhật. Hãy kiểm tra kết nối và thử lại.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Bạn đang sử dụng phiên bản mới nhất (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Không đủ hạn ngạch và tiền để tạo hình ảnh này. Thêm tiền để tiếp tục.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Bạn quyết định dựa trên mục tiêu tổng thể - hãy chọn phương án hợp lý nhất và tiếp tục.",

@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "The code is invalid or expired — click \"Sign in via browser\" and try again.",
     "ui.app.checking.for.updates.ce6b51d": "Checking for updates…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "New version v{p0} found — downloading in the background. You'll be prompted to update when it's ready.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Can't check updates right now (dev build or no update source).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Unable to check or download updates. Check your connection and try again.",
     "ui.app.you.re.on.the.latest.version.dffc458": "You're on the latest version (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Not enough quota and coins to generate this image. Add funds to continue.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "You decide based on the overall goal — pick the most reasonable option and keep going.",

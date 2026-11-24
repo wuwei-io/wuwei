@@ -22,6 +22,7 @@ import electronUpdater from "electron-updater";
 import { fetchAnnouncement } from "./announcement.js";
 import { sessionAfterDelete } from "../../src/team/session-after-delete.js";
 import { createUpdatePolicy, DEFAULT_UPDATE_INTERVAL_MS, updateIntervalMs, jitterUpdateInterval } from "./update-policy.js";
+import { createSourceUpdater } from "./update-sources.js";
 const safeStorageOk = () => {
   try {
     return safeStorage.isEncryptionAvailable();
@@ -5357,7 +5358,7 @@ ipcMain.handle("announcement:get", async () => {
 // 当前应用版本号（帮助菜单显示 + 更新比对）
 ipcMain.handle("app:version", () => app.getVersion());
 
-// ── 自动更新（electron-updater + OSS generic 源，发布配置见 electron-builder.wuwei.yml）──
+// ── 自动更新（GitHub / 国内镜像，SDK 负责版本判断、完整性与缓存）──
 // autoDownload：发现新版即后台静默下载；下载完推 evt:update-downloaded，用户点「升级」再 quitAndInstall。
 // 未打包(dev)或无更新源时 checkForUpdates 会抛错，一律吞掉，不影响使用。
 const { autoUpdater } = electronUpdater;
@@ -5421,7 +5422,16 @@ function setupUpdater(): void {
 }
 
 let downloadedUpdatePath: string | undefined;
-const updatePolicy = createUpdatePolicy(autoUpdater, {
+const sourceUpdater = createSourceUpdater(autoUpdater, {
+  platform: process.platform,
+  fetchText: async (url, signal) => {
+    const response = await net.fetch(url, { signal, cache: "no-store" });
+    if (!response.ok) throw new Error(`Update feed HTTP ${response.status}`);
+    return response.text();
+  },
+  log: (message) => log("updater", message),
+});
+const updatePolicy = createUpdatePolicy(IS_MINICC ? autoUpdater : sourceUpdater, {
   intervalMs: () => updatePollInterval,
   readyExists: () => !!downloadedUpdatePath && existsSync(downloadedUpdatePath),
   onReady: (state) => send("evt:update-downloaded", { version: state.version, notes: state.notes }),

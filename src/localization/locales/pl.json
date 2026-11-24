@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Kod jest nieprawidłowy lub wygasł — kliknij „Zaloguj się przez przeglądarkę” i spróbuj ponownie.",
     "ui.app.checking.for.updates.ce6b51d": "Sprawdzam dostępność aktualizacji…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Znaleziono nową wersję v{p0} — pobieranie w tle. Gdy aktualizacja będzie gotowa, zostanie wyświetlony monit o jej aktualizację.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Nie można teraz sprawdzić aktualizacji (kompilacja deweloperska lub brak źródła aktualizacji).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Nie można sprawdzić ani pobrać aktualizacji. Sprawdź połączenie i spróbuj ponownie.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Korzystasz z najnowszej wersji (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Za mało kwot i monet, aby wygenerować ten obraz. Dodaj środki, aby kontynuować.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Podejmujesz decyzję w oparciu o ogólny cel — wybierz najbardziej rozsądną opcję i kontynuuj.",

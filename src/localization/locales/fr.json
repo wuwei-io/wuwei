@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Le code n'est pas valide ou a expiré : cliquez sur \"Connexion via le navigateur\" et réessayez.",
     "ui.app.checking.for.updates.ce6b51d": "Vérification des mises à jour…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Nouvelle version v{p0} trouvée — téléchargement en arrière-plan. Vous serez invité à mettre à jour lorsqu'il sera prêt.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Impossible de vérifier les mises à jour pour le moment (version de développement ou aucune source de mise à jour).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Impossible de rechercher ou de télécharger les mises à jour. Vérifiez la connexion et réessayez.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Vous utilisez la dernière version (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Pas assez de quotas et de pièces pour générer cette image. Ajoutez des fonds pour continuer.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Vous décidez en fonction de l’objectif global : choisissez l’option la plus raisonnable et continuez.",

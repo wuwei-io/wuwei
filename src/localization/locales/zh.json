@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "授权码无效或已过期，请重新点「用浏览器登录」再试一次。",
     "ui.app.checking.for.updates.ce6b51d": "正在检查更新…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "发现新版本 v{p0}，正在后台下载，下载完成会提示你升级。",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "暂时无法检查更新（开发版或未配置更新源）。",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "更新检查或下载失败，请检查网络连接后重试。",
     "ui.app.you.re.on.the.latest.version.dffc458": "已是最新版本（v{p0}）。",
     "ui.app.not.enough.quota.and.coins.to.956023b": "生图额度与无为币不足，请充值后继续。",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "这个你按总目标自己定，挑最合理的选项继续。",

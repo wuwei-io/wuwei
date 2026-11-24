@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "الرمز غير صالح أو منتهي الصلاحية - انقر على \"تسجيل الدخول عبر المتصفح\" وحاول مرة أخرى.",
     "ui.app.checking.for.updates.ce6b51d": "جارٍ التحقق من وجود تحديثات…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "تم العثور على الإصدار الجديد v{p0} — يتم تنزيله في الخلفية. سيُطلب منك التحديث عندما يكون جاهزًا.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "لا يمكن التحقق من التحديثات الآن (إصدار المطورين أو عدم وجود مصدر تحديث).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "تعذر التحقق من التحديثات أو تنزيلها. تحقق من الاتصال وحاول مرة أخرى.",
     "ui.app.you.re.on.the.latest.version.dffc458": "أنت تستخدم أحدث إصدار (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "لا يوجد ما يكفي من الحصص والعملات المعدنية لإنشاء هذه الصورة. أضف الأموال للمتابعة.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "عليك أن تقرر بناءً على الهدف العام - اختر الخيار الأكثر منطقية واستمر في المضي قدمًا.",

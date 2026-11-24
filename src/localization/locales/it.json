@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Il codice non è valido o è scaduto: fai clic su \"Accedi tramite browser\" e riprova.",
     "ui.app.checking.for.updates.ce6b51d": "Controllo degli aggiornamenti…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Trovata nuova versione v{p0}: download in background. Ti verrà richiesto di aggiornare quando sarà pronto.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Impossibile controllare gli aggiornamenti in questo momento (build di sviluppo o nessuna fonte di aggiornamento).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Impossibile verificare o scaricare gli aggiornamenti. Controlla la connessione e riprova.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Stai utilizzando l'ultima versione (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Quota e monete insufficienti per generare questa immagine. Aggiungi fondi per continuare.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Decidi in base all'obiettivo generale: scegli l'opzione più ragionevole e vai avanti.",
