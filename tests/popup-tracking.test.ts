@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {beginNotice,noticeAction,setTrackingOwner,beginBillingSession} from '../desktop/renderer/src/components/billing/tracking-context.js';
 
+test('automatic plan exposure keeps notice attribution without recording an upgrade click',()=>{
+ const events:{event:string;props:Record<string,unknown>}[]=[];
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'window');
+ Object.defineProperty(globalThis,'window',{configurable:true,value:{wuwei:{track:(event:string,props:Record<string,unknown>)=>{events.push({event,props});return Promise.resolve();}}}});
+ try{
+  for(const kind of ['balance','free_daily'] as const){
+   setTrackingOwner('auto-'+kind);events.length=0;
+   const notice=beginNotice(kind);noticeAction('open_plans',{automatic:true},notice);
+   const visit=beginBillingSession('direct-'+kind,'auto-'+kind);
+   assert.equal(visit.source_notice_id,notice.notice_id);
+   assert.equal(beginBillingSession('direct-'+kind,'auto-'+kind).source_notice_id,notice.notice_id);
+   assert.equal(beginBillingSession('manual-'+kind,'auto-'+kind).source_notice_id,undefined);
+   assert.ok(events.some(e=>e.props.action==='open_plans'&&e.props.automatic===true));
+   assert.ok(events.every(e=>e.props.action!=='upgrade'));
+  }
+ }finally{setTrackingOwner(undefined);if(previous)Object.defineProperty(globalThis,'window',previous);else Reflect.deleteProperty(globalThis,'window');}
+});
+
 test('overview and conversion share explicit notice IDs for both quota dialogs and retain checkout attribution',()=>{
  const events:{event:string;props:Record<string,unknown>}[]=[];
  const previous=Object.getOwnPropertyDescriptor(globalThis,'window');

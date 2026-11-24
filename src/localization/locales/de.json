@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Nur Basiswerkzeuge",
     "set.tools.presets": "Werkzeugauswahl",
     "set.tools.selectionHint": "Mit den Grundlagen beginnen. Weitere Werkzeuge nach Kategorie aktivieren.",
-    "set.tools.enabledCount": "{enabled} / {total} aktiviert"
+    "set.tools.enabledCount": "{enabled} / {total} aktiviert",
+    "billing.purchase.title": "Paket kaufen und mehr Guthaben erhalten",
+    "billing.shortage.balance": "Nicht genug Wuwei-Coins. Upgrade zum Fortfahren.",
+    "billing.shortage.quota": "Dein verfügbares Kontingent ist aufgebraucht. Upgrade zum Fortfahren."
   }
 }

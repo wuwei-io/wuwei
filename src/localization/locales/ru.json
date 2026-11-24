@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Только базовые",
     "set.tools.presets": "Выбор инструментов",
     "set.tools.selectionHint": "Начните с базовых инструментов. Остальные включайте по категориям.",
-    "set.tools.enabledCount": "Включено: {enabled} / {total}"
+    "set.tools.enabledCount": "Включено: {enabled} / {total}",
+    "billing.purchase.title": "Купите тариф, чтобы получить больше кредитов",
+    "billing.shortage.balance": "Недостаточно монет Wuwei. Повысьте тариф, чтобы продолжить.",
+    "billing.shortage.quota": "Доступный лимит исчерпан. Повысьте тариф, чтобы продолжить."
   }
 }

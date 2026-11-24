@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "基本ツールのみ",
     "set.tools.presets": "ツールの一括選択",
     "set.tools.selectionHint": "基本ツールから始め、必要なツールをカテゴリごとに有効にできます。",
-    "set.tools.enabledCount": "{enabled} / {total} 有効"
+    "set.tools.enabledCount": "{enabled} / {total} 有効",
+    "billing.purchase.title": "プランを購入してクレジットを追加",
+    "billing.shortage.balance": "Wuweiコインが不足しています。アップグレードして続行してください。",
+    "billing.shortage.quota": "利用可能な上限に達しました。アップグレードして続行してください。"
   }
 }

@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "केवल मूल उपकरण",
     "set.tools.presets": "उपकरण विकल्प",
     "set.tools.selectionHint": "मूल उपकरणों से शुरू करें। अन्य उपकरण श्रेणी के अनुसार चालू करें।",
-    "set.tools.enabledCount": "{enabled} / {total} चालू"
+    "set.tools.enabledCount": "{enabled} / {total} चालू",
+    "billing.purchase.title": "ज़्यादा क्रेडिट पाने के लिए प्लान खरीदें",
+    "billing.shortage.balance": "Wuwei कॉइन पर्याप्त नहीं हैं। जारी रखने के लिए अपग्रेड करें।",
+    "billing.shortage.quota": "आपका उपलब्ध कोटा समाप्त हो गया है। जारी रखने के लिए अपग्रेड करें।"
   }
 }

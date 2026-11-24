@@ -7,7 +7,7 @@ import {SessionExpiredNotice} from './components/SessionExpiredNotice.js';
 import {setTrackingOwner} from './components/billing/tracking-context.js';
 import {signedInDefaultModel,paidSwitchNeedsFreshChat,switchContextTokens} from '../../../src/free-first.js';
 import {PaidContextDialog} from './components/PaidContextDialog.js';
-import {BalanceShortageDialog} from './components/BalanceShortageDialog.js';
+import {DirectUpgradePrompt} from './components/DirectUpgradePrompt.js';
 import {usePromotionConfig} from './usePromotionConfig.js';
 import { BackgroundTasksPanel } from './components/BackgroundTasksPanel.js';
 import { BackgroundQueueNotice } from './components/BackgroundQueueNotice.js';
@@ -46,7 +46,6 @@ import {VideoStudio} from './components/VideoStudio.js';
 import type {VideoHistoryEntry} from '../../../src/videogen/contracts.js';
 import { ImageStudio } from './components/ImageStudio.js';
 import { withImageSkuChoices } from './components/image-studio-catalog.js';
-import { FreeQuotaGuide } from './components/FreeQuotaGuide.js';
 import { BillingPanel } from './components/billing/BillingPanel.js';
 import {refreshBillingCatalogCache} from './components/billing/catalog-cache.js';
 import {BillingExitFeedback} from "./components/billing/BillingExitFeedback.js";
@@ -4327,7 +4326,7 @@ export function App() {
     accountRefreshRef.current?.cancel();
     setWuwei(null);
     setShowAcctMenu(false);
-    setCoinShortage(null); setFreeCapModal(null); setCryptoPay(null);
+    setCoinShortage(null); setFreeCapModal(null); setBillingOpen(false); setCryptoPay(null);
     setShowLoginIntro(false);
     setSessionExpiredNotice(true);
     setShowLoginForm(true);
@@ -4396,9 +4395,8 @@ export function App() {
     setDebugCtx(null); // 关掉调试强制的 context
   }
   function upgradeFromShortage() {
-    closeShortage("upgrade");
     if (!wuweiRef.current) { requestModelLogin(); return; }
-    setCoinPackOpen(false); setPlanOpen(false); setFreeCapModal(null);
+    setCoinPackOpen(false); setPlanOpen(false);
     setBillingPage('plans'); setBillingOpen(true);
   }
   // 【仅开发预览】调试快捷键，逐个弹出各弹窗看文案/效果。import.meta.env.DEV 门控，生产构建自动剥离。
@@ -4462,7 +4460,7 @@ export function App() {
     // 3 秒内已弹过就跳过(点「刷新余额」按钮走的是同函数，但那是用户主动、间隔一般 >3s，不受影响)。
     usageLimitRequestRef.current = null;
     if (coinShortage && Date.now() - shortageShownAt.current < 3000) return;
-    // 先说明余额不足；只有用户点击升级后才打开标准套餐弹窗。
+    // The shortage state opens the standard plan selector directly.
     setBillingOpen(false); setCoinPackOpen(false); setPlanOpen(false);
     setFreeCapModal(null); setQuotaWarn(null); setShowAcctMenu(false);
     setShowProviderMenu(false); setShowModelMenu(false); setDebugCtx(null);
@@ -4492,7 +4490,7 @@ export function App() {
     // The gateway has already rejected the request. Showing this local notice
     // does not depend on another account/network read.
     setShowAcctMenu(false); setShowProviderMenu(false); setShowModelMenu(false); setQuotaWarn(null); setDebugCtx(null);
-    setCoinShortage(null);
+    setCoinShortage(null);setBillingOpen(false);setCoinPackOpen(false);setPlanOpen(false);
     setFreeCapModal({model,balance:account.coin.balance,hasMemberQuota:!!account.membership?.weeklyQuota?.active&&(account.membership.weeklyQuota.remainingPct??0)>0});
     // Show immediately with the latest known balance; refresh quietly without
     // delaying the notice, sharing the account refresher's lifetime guards.
@@ -4917,6 +4915,7 @@ export function App() {
   useEffect(() => {
     // A response from before an account/session/model change cannot open a stale dialog.
     usageLimitRequestRef.current = null;
+    if (freeCapModal || coinShortage && !coinShortage.browse) setBillingOpen(false);
     setFreeCapModal(null); setCoinShortage(null);
   }, [wuwei?.user.id, currentId, selectedModelKey]);
   const selectedCategory = selectedChoice?.category ?? (imageMode ? "images" : curPreset?.hosted ? "premium" : "connections");
@@ -9227,7 +9226,7 @@ export function App() {
           </div>
         )}
 
-        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={()=>{if(wuwei) setPlanOpen(true);else requestModelLogin();}} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
+        {videoMode && appView===null && !agiView && <VideoStudio key={wuwei?.user.id||"anonymous"} owner={wuwei?.user.id} lang={lang} newVersion={videoNewVersion} requestedCreation={requestedVideoCreation} onCreation={id=>{setRequestedVideoCreation({id,version:Date.now()});void loadVideoHistory()}} onHistoryChange={()=>{void loadVideoHistory()}} onDeleteRequest={deleteVideoCreation} onViewChange={()=>setRequestedVideoCreation(undefined)} historyVersion={videoHistoryVersion} requestedModel={requestedVideo} membershipVersion={JSON.stringify(wuwei?.membership)} onLogin={requestModelLogin} onUpgrade={reason=>{if(reason==='balance'){void refreshWuweiForShortage(tr('billing.shortage.balance'));}else if(wuwei)setPlanOpen(true);else requestModelLogin();}} onSettled={()=>{void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===wuweiRef.current?.user.id)setWuwei(me);}).catch(()=>{});}}/>}
         <div
           className={"stream" + (imageMode?" studio-gallery-stream":"") + (imageMode && !imageHistory && !busy ? " image-studio-stream-hidden" : "")}
           ref={streamRef}
@@ -10790,11 +10789,10 @@ export function App() {
         onClose={()=>setPaidContext(null)}
         onNew={async()=>{const pending=paidContext;if(pending.userId!==wuweiRef.current?.user.id||pending.sid!==currentIdRef.current)throw Error('stale_switch');pendingPaidChat.current={choice:pending.choice,sourceSid:pending.sid,userId:pending.userId,at:Date.now()};setPaidContext(null);setVideoMode(false);setAppView(null);setAgiView(null);window.wuwei.newSession()}}
         onCurrent={async()=>{const pending=paidContext;if(pending.userId!==wuweiRef.current?.user.id||pending.sid!==currentIdRef.current||!await selectModelChoice(pending.choice,false,true,true))throw Error('model_switch_failed');setPaidContext(null)}}/>}
-      {freeCapModal && <FreeQuotaGuide
+      {freeCapModal && <DirectUpgradePrompt
+        kind="free"
         balance={wuwei?.coin.balance ?? 0}
-        onSwitchPaid={switchFreeCapToPaid}
-        onUpgrade={()=>{usageLimitRequestRef.current=null;setFreeCapModal(null);setCoinShortage(null);setBillingPage('plans');setBillingOpen(true);shortageShownAt.current=Date.now()}}
-        onClose={() => { usageLimitRequestRef.current = null; setFreeCapModal(null); }}
+        onOpen={upgradeFromShortage}
       />}
       {/* 高价模型烧周额度过快：建议一键切到更省的 DeepSeek V4 Flash / GLM-5.3 Flash；点「继续用」则不再打扰这档 */}
       {quotaWarn && (() => {
@@ -10833,17 +10831,17 @@ export function App() {
         );
       })()}
       {wuwei && coinShortage && !coinShortage.browse && (
-        <BalanceShortageDialog balance={coinShortage.balance} onClose={() => closeShortage("close")} onUpgrade={upgradeFromShortage} />
+        <DirectUpgradePrompt kind={coinShortage.freecap ? 'free' : 'balance'} balance={coinShortage.balance} onOpen={upgradeFromShortage} />
       )}
       {payFaqOpen && <PayFaqModal en={lang !== "zh"} onClose={() => setPayFaqOpen(false)} />}
       {wuwei && (billingOpen || coinShortage?.browse || coinPackOpen || planOpen) && (
         <BillingPanel onVideo={id=>{setRequestedVideo(v=>({id,version:(v?.version??0)+1}));setAppView(null);setAgiView(null);setVideoMode(true);setPlanOpen(false);}} key={wuwei.user.id}
           lang={lang} accountId={wuwei.user.id} balance={wuwei.coin.balance} models={pickerChoices}
           initialPage={billingOpen?billingPage:'plans'} initialPeriod={coinPackOpen?'pack':"monthly"}
-          insufficient={!!coinShortage&&!coinShortage.browse} contextMessage={coinShortage&&!coinShortage.browse&&!coinShortage.freecap?coinShortage.message:undefined} gatewayFailure={coinShortage?.gatewayFailure} imageMode={imageMode}
+          insufficient={!!freeCapModal||!!coinShortage&&!coinShortage.browse} shortageReason={freeCapModal||coinShortage?.freecap?'quota':coinShortage&&!coinShortage.browse?'balance':undefined} gatewayFailure={coinShortage?.gatewayFailure} imageMode={imageMode}
           onExit={visit => showBillingExitFeedback(visit, wuwei.user.id)}
-          onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);if(coinShortage)closeShortage("close");}}
-          onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
+          onClose={()=>{setBillingOpen(false);setBillingPage('plans');setCoinPackOpen(false);setPlanOpen(false);setFreeCapModal(null);usageLimitRequestRef.current=null;if(coinShortage)closeShortage("close");}}
+          onNeedLogin={()=>{setBillingOpen(false);setCoinShortage(null);setFreeCapModal(null);usageLimitRequestRef.current=null;setCoinPackOpen(false);setPlanOpen(false);setWuwei(null);setShowLoginForm(true);}}
           onPaid={()=>{const paidUser=wuwei.user.id;void window.wuwei.wuweiMe().then(me=>{if(me?.user.id===paidUser)setWuwei(current=>current?.user.id===paidUser?me:current);}).catch(()=>{});}}
           onSwitch={async choice=>{if(!await selectModelChoice(choice))throw new Error('model_switch_failed');push({type:'notice',text:tr("billing.switch.ready")});}}
         />

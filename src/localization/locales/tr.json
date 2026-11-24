@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Yalnızca temel",
     "set.tools.presets": "Araç seçimi",
     "set.tools.selectionHint": "Temel araçlarla başlayın. Diğer araçları kategoriye göre açın.",
-    "set.tools.enabledCount": "{enabled} / {total} etkin"
+    "set.tools.enabledCount": "{enabled} / {total} etkin",
+    "billing.purchase.title": "Daha fazla kredi için bir plan satın alın",
+    "billing.shortage.balance": "Yeterli Wuwei coin yok. Devam etmek için planınızı yükseltin.",
+    "billing.shortage.quota": "Kullanılabilir kotanız doldu. Devam etmek için planınızı yükseltin."
   }
 }

@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "仅基础工具",
     "set.tools.presets": "工具快捷选择",
     "set.tools.selectionHint": "默认仅启用基础工具，其他工具可按类别开启。",
-    "set.tools.enabledCount": "已启用 {enabled} / {total}"
+    "set.tools.enabledCount": "已启用 {enabled} / {total}",
+    "billing.purchase.title": "购买套餐获取更多积分",
+    "billing.shortage.balance": "无为币不足，请升级后继续使用",
+    "billing.shortage.quota": "可用额度不足，请升级后继续使用"
   }
 }

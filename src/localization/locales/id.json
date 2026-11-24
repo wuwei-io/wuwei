@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Hanya dasar",
     "set.tools.presets": "Pilihan alat",
     "set.tools.selectionHint": "Mulai dengan alat dasar. Aktifkan alat lain menurut kategori.",
-    "set.tools.enabledCount": "{enabled} / {total} aktif"
+    "set.tools.enabledCount": "{enabled} / {total} aktif",
+    "billing.purchase.title": "Beli paket untuk mendapatkan lebih banyak kredit",
+    "billing.shortage.balance": "Koin Wuwei tidak cukup. Tingkatkan paket untuk melanjutkan.",
+    "billing.shortage.quota": "Kuota yang tersedia telah habis. Tingkatkan paket untuk melanjutkan."
   }
 }

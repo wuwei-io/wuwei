@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Basics only",
     "set.tools.presets": "Tool presets",
     "set.tools.selectionHint": "Start with the basics. Enable other tools by category.",
-    "set.tools.enabledCount": "{enabled} / {total} enabled"
+    "set.tools.enabledCount": "{enabled} / {total} enabled",
+    "billing.purchase.title": "Buy a plan for more credits",
+    "billing.shortage.balance": "Not enough Wuwei coins. Upgrade to continue.",
+    "billing.shortage.quota": "Your available quota is used up. Upgrade to continue."
   }
 }
