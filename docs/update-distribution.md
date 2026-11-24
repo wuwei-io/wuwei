@@ -9,7 +9,12 @@ The existing two-hour polling, retry limits and explicit install action remain.
 Linux retains its last release and GitHub feed. Test/minicc editions retain
 their own update behavior.
 
-The China installer mirror workflow also copies Mac update ZIPs and available
+The China installer mirror workflow reuses the website's existing immutable
+installer objects after checking their GitHub digest and public full GET bytes.
+It processes the Windows installer/blockmap first and publishes that platform's
+feed immediately after validation. It publishes the original three-installer
+website marker before copying the additional Mac update ZIPs, so the website
+and Windows updates do not wait for Mac ZIP transfer. It also copies available
 blockmaps to immutable `installers/<version>/` keys. It verifies GitHub SHA-256,
 public full GET hashes, sizes and Range responses before publishing separate
 `updates-cn/latest.yml` and `updates-cn/latest-mac.yml` pointers. SHA-512 fields
