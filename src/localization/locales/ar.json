@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "الأساسية فقط",
     "set.tools.presets": "إعدادات الأدوات",
     "set.tools.selectionHint": "ابدأ بالأساسيات. فعّل الأدوات الأخرى حسب الفئة.",
-    "set.tools.enabledCount": "مفعّل: {enabled} / {total}"
+    "set.tools.enabledCount": "مفعّل: {enabled} / {total}",
+    "billing.purchase.title": "اشترِ باقة للحصول على المزيد من الرصيد",
+    "billing.shortage.balance": "رصيد عملات Wuwei غير كافٍ. قم بالترقية للمتابعة.",
+    "billing.shortage.quota": "نفدت حصتك المتاحة. قم بالترقية للمتابعة."
   }
 }

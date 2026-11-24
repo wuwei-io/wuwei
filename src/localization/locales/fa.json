@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "فقط ابزارهای پایه",
     "set.tools.presets": "انتخاب ابزارها",
     "set.tools.selectionHint": "با ابزارهای پایه شروع کنید. ابزارهای دیگر را بر اساس دسته فعال کنید.",
-    "set.tools.enabledCount": "{enabled} / {total} فعال"
+    "set.tools.enabledCount": "{enabled} / {total} فعال",
+    "billing.purchase.title": "برای دریافت اعتبار بیشتر، طرح بخرید",
+    "billing.shortage.balance": "سکه‌های Wuwei کافی نیست. برای ادامه ارتقا دهید.",
+    "billing.shortage.quota": "سهمیه موجود شما تمام شده است. برای ادامه ارتقا دهید."
   }
 }

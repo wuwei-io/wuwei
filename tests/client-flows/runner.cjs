@@ -66,6 +66,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'wuweiCatalog': return clone(s.modelCatalog||(s.account?.flags?.includes('billing_v2')?billingModelCatalog:catalog));
     case 'imageCatalog': return clone(s.imageCatalog || []);
     case 'imageHistory': return [];
+    case 'imageQuote': return s.directImageShortage?{approval_id:'qa-image-approval',sku_id:args[0].sku_id,count:args[0].count,expires_at:Date.now()+60000,estimated_coins:36,price_version:'qa-image'}:[];
     case 'goalGet': return null;
     case 'supportThread': return {messages:[],unread:0};
     case 'getModelPricing': return { providers: [] };
@@ -89,6 +90,14 @@ ipcMain.handle('qa:api', async (event, method, args) => {
       else setTimeout(() => { emit(s, 'evt:done', { sid: 'qa-session' }); emit(s, 'evt:tasks', { running: [] }); }, 20);
       return true;
     case 'stop': emit(s, 'evt:stopped', { sid: 'qa-session' }); emit(s, 'evt:tasks', { running: [] }); return true;
+    case 'videoRequest': {
+      if(!s.videoShortage)return [];
+      const req=args[0];if(req.action==='catalog')return {version:'qa-video',enabled:true,models:[{id:'veo-3.1',name:'Veo 3.1',brand:'veo',description:'QA',ratios:['16:9'],resolutions:['720p'],durations:[4],frames:[],audio:false,premium:false,eligible:true,min_coins:30,timing:null}]};
+      if(['orders','cached_orders','history'].includes(req.action))return [];
+      if(req.action==='quote')return {approval:'qa-video-approval',expires_at:Date.now()+60000,estimated_coins:30,reserved_coins:30,unit_estimate:30,unit_budget:30};
+      if(req.action==='create')return {error:'INSUFFICIENT_BALANCE'};
+      return null;
+    }
     case 'billingRequest': {
       const req=clone(args[0]);(s.billingCalls??=[]).push(req);
       const products=JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/billing-products.json'),'utf8'));
@@ -474,17 +483,56 @@ app.whenReady().then(async () => {
     await openBilling(f);await f.wait('!!document.querySelector("[data-sku=v2_plan_mini_monthly]")');await f.click('[data-sku=v2_plan_mini_monthly]');await f.click('.billing-selector-pay');await f.wait('!!document.querySelector(".billing-live-order")');f.state.billingPaid=true;
     await f.click('.billing-live-order .billing-secondary');await f.wait('!!document.querySelector(".billing-order-state[role=alert]")');assert.equal(await f.js('!!document.querySelector(".billing-paid-symbol")'),false);assert.equal(f.state.orders,1);
   });
-  for(const coins of [0,100])await run('发布关键：额度弹窗立即显示、模态关闭和余额切换 '+coins,{account:account(coins),nextError:'[[gw:free_daily_cap_reached]] exhausted'},async f=>{
-    f.state.meDelay=2000;await f.send();await f.wait('!!document.querySelector(".free-quota-notice")',1000);
-    await f.js('document.querySelector(".usage-notice-overlay").click();document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');assert.equal(await f.js('!!document.querySelector(".free-quota-notice")'),true);
-    assert.equal(await f.js('!!document.querySelector(".usage-notice-secondary")'),coins>0);
-    if(coins){assert.match(await f.js('document.querySelector(".usage-notice-description").textContent'),/另外您还有无为币/);await f.click('.usage-notice-secondary');await f.wait('!document.querySelector(".free-quota-notice")');await f.wait('document.querySelector(".mq-txt")?.textContent.includes("MiMo") || document.querySelector(".mq-txt")?.textContent.includes("mimo")');assert.equal(f.state.settings.model,'mimo-v2.6-flash');assert.equal(f.state.sent.length,1);assert.equal(f.state.orders,0);}
-    else{await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-selector-shortage")'),false);}
-    await delay(80);const shown=f.state.tracked.filter(x=>x.event==='free_cap_guide_shown');assert.equal(shown.length,1);assert.ok(shown[0].props.notice_id);const canonical=f.state.tracked.find(x=>x.event==='usage_notice_shown');assert.equal(shown[0].props.notice_id,canonical.props.notice_id);assert.ok(f.state.tracked.some(x=>x.event==='usage_notice_action'&&x.props.notice_id===shown[0].props.notice_id));
+
+  const directPayment = async (f,reason) => {
+    await f.wait('!!document.querySelector(".billing-shortage-notice")',1200);
+    await f.wait('document.querySelectorAll(".billing-selector-option").length>=3');
+    const pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',f.state.lang==='en'?'en.json':'zh.json'),'utf8')).messages;
+    assert.equal(await f.js('document.querySelector(".billing-selector-intro h1").textContent'),pack['billing.purchase.title']);
+    assert.equal(await f.js('document.querySelector(".billing-shortage-notice").textContent'),pack['billing.shortage.'+reason]);
+    assert.equal(await f.js('!!document.querySelector(".usage-notice,.billing-selector-overline,.billing-selector-subtitle,.billing-selector-shortage,.billing-context-note,.billing-model-disclosure")'),false);
+    assert.equal(await f.js('document.querySelectorAll(".billing-panel").length'),1);
+    assert.equal(await f.js('(()=>{const n=document.querySelector(".billing-shortage-notice"),h=document.querySelector(".billing-selector-intro h1");return n.getBoundingClientRect().bottom<=h.getBoundingClientRect().top})()'),true);
+    assert.equal(f.state.orders,0);
+    await delay(80);
+    const shown=f.state.tracked.filter(x=>x.event==='usage_notice_shown');assert.equal(shown.length,1);
+    const visit=f.state.tracked.find(x=>x.event==='billing_panel_shown');assert.equal(visit.props.source_notice_id,shown[0].props.notice_id);
+    assert.equal(f.state.tracked.filter(x=>x.event==='credits_shortage_action'&&x.props.action==='upgrade').length,0);
+  };
+  for(const lang of ['zh','en'])for(const coins of [0,100])await run('发布关键：直接付费窗：免费额度用尽 '+lang+' '+coins,{
+    account:account(coins),lang,settings:{...settings(),app:{lang}},nextError:'[[gw:free_daily_cap_reached]] exhausted',
+  },async f=>{
+    f.state.meDelay=2000;await f.send();await directPayment(f,'quota');
+    assert.equal(f.state.settings.model,'nemotron-super-free');
+    await f.click('.billing-close');await f.wait('!document.querySelector(".billing-panel")');
+    await f.click('.acct-btn');await f.click('[data-account-upgrade]');await f.wait('!!document.querySelector(".billing-selector")');
+    assert.equal(await f.js('!!document.querySelector(".billing-shortage-notice")'),false);
+    assert.equal(f.state.orders,0);
   });
-  await run('发布关键：余额不足先说明，点击立马升级后打开标准套餐',{account:account(0),settings:settings('wuwei-mimo','mimo-v2.6-flash')},async f=>{
-    await f.send();await f.wait('!!document.querySelector(".balance-shortage-dialog")');assert.equal(await f.js('!!document.querySelector(".billing-panel")'),false);await f.click('.usage-notice-upgrade');await f.wait('!!document.querySelector(".billing-selector")');assert.equal(await f.js('!!document.querySelector(".billing-error,.billing-selector-shortage")'),false);assert.equal(f.state.orders,0);
-    await delay(80);const shown=f.state.tracked.filter(x=>x.event==='credits_shortage_shown'),actions=f.state.tracked.filter(x=>x.event==='credits_shortage_action');assert.equal(shown.length,1);assert.equal(actions.length,1);assert.ok(shown[0].props.notice_id);assert.equal(actions[0].props.notice_id,shown[0].props.notice_id);assert.equal(actions[0].props.action,'upgrade');
+  for(const lang of ['zh','en'])await run('发布关键：直接付费窗：无为币不足 '+lang,{
+    account:account(0),lang,settings:{...settings('wuwei-mimo','mimo-v2.6-flash'),app:{lang}},
+  },async f=>{
+    await f.fill('.composer textarea','Keep this draft');await f.click('.composer .send-btn');await directPayment(f,'balance');
+    fs.writeFileSync(path.join(evidence,'direct-payment-balance-'+lang+'.png'),await captureBillingFrame(f));
+    await f.click('.billing-close');await f.wait('!document.querySelector(".billing-panel")');
+    assert.equal(await f.js('document.querySelector(".composer textarea").value'),'Keep this draft');
+    await f.click('.acct-btn');await f.click('[data-account-upgrade]');await f.wait('!!document.querySelector(".billing-selector")');
+    assert.equal(await f.js('!!document.querySelector(".billing-shortage-notice")'),false);
+  });
+  for(const lang of ['zh','en'])await run('发布关键：直接付费窗：生图余额不足不建单 '+lang,{
+    account:account(0),lang,directImageShortage:true,settings:{...settings(),app:{lang}},imageCatalog:[{sku_id:'qa-image-two',model:'gpt-image-2',coins_per_image:36}],
+  },async f=>{
+    await f.click('.mq-select');await f.click('.model-picker nav button:nth-child(4)');await f.wait('!!document.querySelector(`[data-model-key="wuwei-image/qa-image-two"]`)');await f.click('[data-model-key="wuwei-image/qa-image-two"]');
+    await f.wait('!!document.querySelector(".image-studio textarea")');await delay(300);await f.fill('.image-studio textarea','Image draft is retained');await f.wait('document.querySelector(".studio-generate")?.disabled===false');await f.click('.studio-generate');await directPayment(f,'balance');assert.equal(f.state.sent.length,0);assert.equal(f.state.orders,0);
+  });
+  await run('发布关键：直接付费窗：视频余额不足不留失败记录',{
+    account:account(),videoShortage:true,
+  },async f=>{
+    await f.click('.mq-select');await f.click('.model-picker nav button:nth-child(5)');await f.wait('!!document.querySelector("[data-model-key^=\\"wuwei-video/\\"]")');
+    await f.js('document.querySelector("[data-model-key^=\\"wuwei-video/\\"]").click()');await f.wait('!document.querySelector(".vs-notice") && document.querySelector(".vs-controls button")?.textContent.includes("Veo")');
+    await f.fill('.vs-composer textarea','Video draft is retained');await f.wait('document.querySelector(".vs-generate")?.disabled===false');await f.click('.vs-generate');await directPayment(f,'balance');
+    assert.equal(await f.js('document.querySelectorAll(".vs-result-card").length'),0);assert.equal(await f.js('!!document.querySelector(".vs-error")'),false);
+    await f.click('.billing-close');await f.wait('!document.querySelector(".billing-panel")');assert.equal(await f.js('document.querySelector(".vs-composer textarea").value'),'Video draft is retained');
   });
   for(const lang of ['zh','en','fa'])await run('发布关键：账号菜单升级入口与菜单顺序 '+lang,{account:clone(billingAccount),lang,settings:{...settings(),app:{teamEnabled:false,lang}}},async f=>{
     await f.click('.acct-btn');await f.wait('!!document.querySelector("[data-account-upgrade]")');await delay(180);
@@ -526,7 +574,10 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('!!document.querySelector(".billing-usage-link,.billing-usage-details")'),false);
     if(lang==='en')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/[\u3400-\u9fff]/);
     assert.equal(f.state.orders,0);
-    if(lang==='zh')assert.doesNotMatch(await f.js('document.querySelector(".billing-panel").textContent'),/积分/);
+    if(lang==='zh'){
+      assert.equal(await f.js('document.querySelector(".billing-selector-intro h1").textContent'),'购买套餐获取更多积分');
+      assert.doesNotMatch(await f.js('(()=>{const panel=document.querySelector(".billing-panel").cloneNode(true);panel.querySelector(".billing-selector-intro h1").remove();return panel.textContent})()'),/积分/);
+    }
   });
   for(const modifier of ['control','meta'])await run('发布关键：语言快捷键切换界面、弹窗和临时英文显示 '+modifier,{
     offscreen:true,account:clone(billingAccount),sessions:[{id:'qa-session',title:'中文会话标题',createdAt:Date.now(),updatedAt:Date.now()}],

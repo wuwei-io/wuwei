@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Chỉ công cụ cơ bản",
     "set.tools.presets": "Chọn nhanh công cụ",
     "set.tools.selectionHint": "Bắt đầu với công cụ cơ bản. Bật công cụ khác theo danh mục.",
-    "set.tools.enabledCount": "Đã bật {enabled} / {total}"
+    "set.tools.enabledCount": "Đã bật {enabled} / {total}",
+    "billing.purchase.title": "Mua gói để nhận thêm tín dụng",
+    "billing.shortage.balance": "Không đủ xu Wuwei. Nâng cấp để tiếp tục.",
+    "billing.shortage.quota": "Hạn mức khả dụng đã hết. Nâng cấp để tiếp tục."
   }
 }

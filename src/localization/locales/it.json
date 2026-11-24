@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Solo strumenti base",
     "set.tools.presets": "Selezione strumenti",
     "set.tools.selectionHint": "Inizia dagli strumenti di base. Attiva gli altri per categoria.",
-    "set.tools.enabledCount": "{enabled} / {total} attivi"
+    "set.tools.enabledCount": "{enabled} / {total} attivi",
+    "billing.purchase.title": "Acquista un piano per ottenere più crediti",
+    "billing.shortage.balance": "Monete Wuwei insufficienti. Passa a un piano superiore per continuare.",
+    "billing.shortage.quota": "La quota disponibile è esaurita. Passa a un piano superiore per continuare."
   }
 }

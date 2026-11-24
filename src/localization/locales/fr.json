@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Outils de base",
     "set.tools.presets": "Sélection des outils",
     "set.tools.selectionHint": "Commencez par les outils de base. Activez les autres par catégorie.",
-    "set.tools.enabledCount": "{enabled} / {total} activés"
+    "set.tools.enabledCount": "{enabled} / {total} activés",
+    "billing.purchase.title": "Achetez un forfait pour obtenir plus de crédits",
+    "billing.shortage.balance": "Solde de pièces Wuwei insuffisant. Passez à une offre supérieure pour continuer.",
+    "billing.shortage.quota": "Votre quota disponible est épuisé. Passez à une offre supérieure pour continuer."
   }
 }

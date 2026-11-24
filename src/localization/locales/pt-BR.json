@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Apenas básicas",
     "set.tools.presets": "Seleção de ferramentas",
     "set.tools.selectionHint": "Comece pelo básico. Ative outras ferramentas por categoria.",
-    "set.tools.enabledCount": "{enabled} / {total} ativas"
+    "set.tools.enabledCount": "{enabled} / {total} ativas",
+    "billing.purchase.title": "Compre um plano para obter mais créditos",
+    "billing.shortage.balance": "Moedas Wuwei insuficientes. Faça upgrade para continuar.",
+    "billing.shortage.quota": "Sua cota disponível acabou. Faça upgrade para continuar."
   }
 }

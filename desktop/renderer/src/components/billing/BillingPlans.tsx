@@ -9,12 +9,13 @@ import {BillingAnnualTerm} from './BillingAnnualTerm.js';
 import {BillingFreePlan} from './BillingFreePlan.js';
 import {BillingBrand} from './BillingBrand.js';
 import {BillingMiniOffer,BillingPurchaseActions} from './BillingPurchaseActions.js';
+import type {BillingShortageReason} from './BillingShortageNotice.js';
 
 export interface BillingPlansProps {
   onReview?:()=>void;
   pricingPolicy?:BillingCatalog;
   backgroundPolicy?:BillingCatalog['backgroundPolicy'];lang:string;period:BillingPlanPeriod;currency:BillingCurrency;products:BillingProduct[];catalogProducts:BillingProduct[];member:boolean;
-  models:ModelChoice[];onVideo?:(id:string)=>void;busy:boolean;loading:boolean;insufficient?:boolean;balance:number;
+  models:ModelChoice[];onVideo?:(id:string)=>void;busy:boolean;loading:boolean;insufficient?:boolean;shortageReason?:BillingShortageReason;balance:number;
   onPeriod:(period:BillingPlanPeriod)=>void;onChoose:(product:BillingProduct, method:BillingChannel)=>void;onFree?:()=>void;onRules:()=>void;
 }
 const money=(minor:number,currency:BillingCurrency,lang:string)=>new Intl.NumberFormat(lang,{style:'currency',currency,currencyDisplay:'narrowSymbol',minimumFractionDigits:0,maximumFractionDigits:2}).format(minor/100);

@@ -20,16 +20,17 @@ import {useBillingVisit} from './useBillingVisit.js';
 import type {BillingExit} from '../../../../../src/billing/exit-feedback.js';
 import type {GatewayAffordability} from '../../../../../src/gateway-affordability.js';
 import {BillingRequestContext} from './BillingRequestContext.js';
+import type {BillingShortageReason} from './BillingShortageNotice.js';
 import {beginBillingSession,endBillingSession} from './tracking-context.js';
 
-type Props={lang:string;accountId:string;balance:number;models:ModelChoice[];initialPage?:'plans'|'ledger';initialPeriod?:BillingPeriod;insufficient?:boolean;contextMessage?:string;gatewayFailure?:GatewayAffordability;imageMode?:boolean;onClose:()=>void;onExit?:(visit:BillingExit)=>void;onNeedLogin:()=>void;onPaid?:()=>void;onVideo?:(id:string)=>void;onSwitch:(choice:ModelChoice)=>Promise<void>};
+type Props={lang:string;accountId:string;balance:number;models:ModelChoice[];initialPage?:'plans'|'ledger';initialPeriod?:BillingPeriod;insufficient?:boolean;shortageReason?:BillingShortageReason;contextMessage?:string;gatewayFailure?:GatewayAffordability;imageMode?:boolean;onClose:()=>void;onExit?:(visit:BillingExit)=>void;onNeedLogin:()=>void;onPaid?:()=>void;onVideo?:(id:string)=>void;onSwitch:(choice:ModelChoice)=>Promise<void>};
 const fmt=formatCredits;
 const time=formatLedgerTime;
 function csvCell(v:unknown){const text=String(v??'');return '"'+(/^[\s]*[=+@\-]/.test(text)?"'"+text:text).replace(/"/g,'""')+'"';}
 
 export function BillingPanel(p:Props){
   const contextMessage=p.contextMessage?.trim();
-  const showContext=!!contextMessage&&!['browse','weekly','shortage','freecap'].includes(contextMessage);
+  const showContext=!p.shortageReason&&!!contextMessage&&!['browse','weekly','shortage','freecap'].includes(contextMessage);
   const openedAt=useRef(performance.now());
   const billingSession=useRef(crypto.randomUUID()),purchaseAttempt=useRef('');
   const trackingContext=beginBillingSession(billingSession.current,p.accountId);
@@ -212,7 +213,7 @@ export function BillingPanel(p:Props){
     </div>
     {showContext&&<div className="billing-context-note" role="status">{contextMessage}{p.gatewayFailure&&<BillingRequestContext diagnostic={p.gatewayFailure} lang={p.lang} balance={p.balance} credits={page==='ledger'?undefined:quote?.creditsPerGrant??(product?(product.kind==='pack'&&catalog?.member?product.memberCredits:product.credits):undefined)}/>}</div>}
     {error&&<div className="billing-error" role="alert">{localizeStoredText(error, getCurrentLanguage())} <button onClick={()=>{if(page==='checkout')void createOrder();else setRetry(x=>x+1);}}>{tr("ui.billingpanel.retry.2cd6945")}</button></div>}
-    {page==='plans'&&<BillingSelector onVideo={p.onVideo} lang={p.lang} period={period} currency={currency} products={products} catalogProducts={availableProducts} backgroundPolicy={catalog?.backgroundPolicy} pricingPolicy={pricingPolicy} member={catalog?.member??false} models={p.models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} onPeriod={next=>{billingTrack('billing_period_select',{period:next,from_period:period,lang:p.lang});setPeriod(next);}} onChoose={(chosen,method)=>void requestQuote(chosen,method)} onFree={free?()=>{billingTrack('billing_free_start',{period});setFallback(free)}:undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onReview={()=>{billingTrack('billing_reward_rules_open');setReviewRules(true)}} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{visitSelect(sku,period);billingTrack('billing_plan_select',{sku,period,lang:p.lang});setSelected(sku);setQuote(null);}}/>}
+    {page==='plans'&&<BillingSelector onVideo={p.onVideo} lang={p.lang} period={period} currency={currency} products={products} catalogProducts={availableProducts} backgroundPolicy={catalog?.backgroundPolicy} pricingPolicy={pricingPolicy} member={catalog?.member??false} models={p.models} busy={quoteBusy} loading={catalogBusy} balance={p.balance} insufficient={p.insufficient} shortageReason={p.shortageReason} onPeriod={next=>{billingTrack('billing_period_select',{period:next,from_period:period,lang:p.lang});setPeriod(next);}} onChoose={(chosen,method)=>void requestQuote(chosen,method)} onFree={free?()=>{billingTrack('billing_free_start',{period});setFallback(free)}:undefined} onValue={!p.imageMode&&value?()=>setFallback(value):undefined} onReview={()=>{billingTrack('billing_reward_rules_open');setReviewRules(true)}} onRules={()=>setRules(true)} selected={product?.sku??selected} onSelect={sku=>{visitSelect(sku,period);billingTrack('billing_plan_select',{sku,period,lang:p.lang});setSelected(sku);setQuote(null);}}/>}
     {page==='checkout'&&quote&&<BillingPayment lang={p.lang} quote={quote} order={order} channel={channel} chain={chain} busy={orderBusy} selected={paymentSelected} channels={{...(catalog?.channels??{alipay:false,paddle:false,crypto:false}),...(quote.period==='trial'?{crypto:!!catalog?.channels.crypto&&catalog.trial?.cryptoChains?.includes('solana')===true}:{})}} ready={!!catalog?.checkoutReady&&!!catalog.channels[channel]}
       onMethod={next=>{setError('');billingTrack('billing_payment_method_select',{channel:next,selection:'manual',sku:quote.sku,currency:quote.currency,lang:p.lang});openWebAfterPrepare.current=next==='paddle';setPaymentSelected(true);if(channel!==next){setOrder(null);setChannel(next);}else if(order&&next==='paddle')openWeb(order);}}
       onChain={next=>{setError('');billingTrack('billing_crypto_network_select',{channel:'crypto',chain:next,sku:quote.sku,lang:p.lang});setOrder(null);setChain(next);}} onRetry={()=>void createOrder()} onNeedLogin={p.onNeedLogin} onReturn={closePanel}

@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Asas sahaja",
     "set.tools.presets": "Pilihan alat",
     "set.tools.selectionHint": "Mulakan dengan alat asas. Aktifkan alat lain mengikut kategori.",
-    "set.tools.enabledCount": "{enabled} / {total} aktif"
+    "set.tools.enabledCount": "{enabled} / {total} aktif",
+    "billing.purchase.title": "Beli pelan untuk mendapatkan lebih banyak kredit",
+    "billing.shortage.balance": "Syiling Wuwei tidak mencukupi. Naik taraf untuk meneruskan.",
+    "billing.shortage.quota": "Kuota tersedia anda telah habis. Naik taraf untuk meneruskan."
   }
 }

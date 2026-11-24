@@ -3818,6 +3818,9 @@
     "set.tools.basicOnly": "Solo básicas",
     "set.tools.presets": "Selección de herramientas",
     "set.tools.selectionHint": "Empieza con lo básico. Activa otras herramientas por categoría.",
-    "set.tools.enabledCount": "{enabled} / {total} activadas"
+    "set.tools.enabledCount": "{enabled} / {total} activadas",
+    "billing.purchase.title": "Compra un plan para obtener más créditos",
+    "billing.shortage.balance": "No tienes suficientes monedas Wuwei. Mejora tu plan para continuar.",
+    "billing.shortage.quota": "Tu cuota disponible se ha agotado. Mejora tu plan para continuar."
   }
 }
