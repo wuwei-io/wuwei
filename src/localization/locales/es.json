@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "El código no es válido o ha caducado: haga clic en \"Iniciar sesión mediante el navegador\" e inténtelo de nuevo.",
     "ui.app.checking.for.updates.ce6b51d": "Buscando actualizaciones...",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Se encontró una nueva versión v{p0}: se descarga en segundo plano. Se te pedirá que actualices cuando esté listo.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "No puedo verificar las actualizaciones en este momento (compilación del desarrollador o sin fuente de actualización).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "No se pudieron buscar o descargar actualizaciones. Revisa la conexión e inténtalo de nuevo.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Estás en la última versión (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "No hay suficientes cuotas ni monedas para generar esta imagen. Agregue fondos para continuar.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Tú decides en función del objetivo general: elige la opción más razonable y continúa.",

@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "코드가 유효하지 않거나 만료되었습니다. \"브라우저를 통해 로그인\"을 클릭하고 다시 시도하세요.",
     "ui.app.checking.for.updates.ce6b51d": "업데이트 확인 중…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "새 버전 v{p0}가 발견되었습니다. 백그라운드에서 다운로드 중입니다. 준비가 되면 업데이트하라는 메시지가 표시됩니다.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "지금은 업데이트를 확인할 수 없습니다(개발 빌드 또는 업데이트 소스 없음).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "업데이트 확인 또는 다운로드에 실패했습니다. 연결을 확인하고 다시 시도하세요.",
     "ui.app.you.re.on.the.latest.version.dffc458": "최신 버전(v{p0})을 사용하고 있습니다.",
     "ui.app.not.enough.quota.and.coins.to.956023b": "이 이미지를 생성하기에는 할당량과 코인이 충분하지 않습니다. 계속하려면 자금을 추가하세요.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "전반적인 목표에 따라 결정합니다. 가장 합리적인 옵션을 선택하고 계속 진행하세요.",

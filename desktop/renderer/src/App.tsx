@@ -5507,7 +5507,11 @@ export function App() {
   async function checkUpdateNow() {
     setShowAcctMenu(false); // 关菜单，结果用居中弹窗显示
     setUpdateMsg(tr("ui.app.checking.for.updates.ce6b51d"));
-    const r = await window.wuwei.checkUpdate();
+    const r = await window.wuwei.checkUpdate().catch(() => ({ available: false, downloaded: false, version: "", notes: "", error: "unavailable" }));
+    if (r.error) {
+      setUpdateMsg(tr("ui.app.can.check.updates.right.now.dev.75ffe29"));
+      return;
+    }
     if (r.available) {
       setHasUpdate(true);
       if (r.downloaded) {

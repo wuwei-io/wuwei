@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "O código é inválido ou expirou. Clique em \"Fazer login pelo navegador\" e tente novamente.",
     "ui.app.checking.for.updates.ce6b51d": "Verificando atualizações…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Nova versão v{p0} encontrada – download em segundo plano. Você será solicitado a atualizar quando estiver pronto.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Não é possível verificar as atualizações no momento (dev build ou nenhuma fonte de atualização).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Não foi possível verificar ou baixar atualizações. Verifique a conexão e tente novamente.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Você está na versão mais recente (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Não há cota e moedas suficientes para gerar esta imagem. Adicione fundos para continuar.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Você decide com base no objetivo geral – escolha a opção mais razoável e continue.",

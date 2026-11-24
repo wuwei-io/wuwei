@@ -110,7 +110,7 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'payCreate': s.orders++; s.orderSkus.push(args[0]); return s.payError ? { error: s.payError } : { orderId: 'qa-order-' + s.orders, qr: 'https://qa.invalid/fake-payment-' + s.orders };
     case 'payStatus': if (s.paid) { s.account = account(500); return { status: 'paid', balance: 500 }; } return { status: 'pending' };
     case 'openExternal': (s.externalURLs??=[]).push(args[0]);return true;
-    case 'checkUpdate': return { available: false };
+    case 'checkUpdate': if (s.updateRejected) throw Error('IPC unavailable'); return clone(s.updateResult || { available: false });
     case 'isRunning': return false;
     case 'getTools': {
       const pack=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales/zh.json'),'utf8')).messages;
@@ -199,6 +199,19 @@ async function billingHeaderAligned(f){
   assert.ok(Math.abs(inset.top-inset.right)<1.1,JSON.stringify(inset));assert.ok(inset.right>=12&&inset.right<=18,JSON.stringify(inset));
 }
 app.whenReady().then(async () => {
+  for (const lang of ['zh','en']) for (const phase of ['check','download','ipc']) await run('发布关键：更新错误提示 '+lang+' '+phase, {
+    lang, settings:{...settings(),app:{lang}},
+    updateRejected:phase==='ipc',
+    updateResult:{available:phase==='download',version:'1.7.81',error:'net::ERR_TIMED_OUT'},
+  }, async f => {
+    const messages=JSON.parse(fs.readFileSync(path.join(repo,'src/localization/locales',lang+'.json'),'utf8')).messages;
+    await f.click('.acct-btn');
+    await f.js('Array.from(document.querySelectorAll(".acct-it")).find(b=>b.textContent.trim()==='+JSON.stringify(messages['ui.app.updates.c50e856'])+')?.click()');
+    const message=messages['ui.app.can.check.updates.right.now.dev.75ffe29'];
+    await f.wait('document.querySelector(".perm-overlay")?.textContent.includes('+JSON.stringify(message)+')');
+    const text=await f.js('document.querySelector(".perm-overlay").textContent');
+    assert.doesNotMatch(text,/开发版|未配置更新源|dev build|no update source|后台下载|background/i);
+  });
   for(const platform of ['Win32','MacIntel'])await run('发布关键：公告快捷键打开已读线上公告并保留输入 '+platform,{announcement:JSON.parse(fs.readFileSync(path.join(repo,'tests/fixtures/announcement-video.json'),'utf8'))},async f=>{
     await f.wait('!!document.querySelector(".announce-dialog")');await f.click('.announce-primary');await f.wait('!document.querySelector(".announce-dialog")');
     const receipt=await f.js('localStorage.getItem("wuwei_read_announcement_v2")');assert.ok(receipt);

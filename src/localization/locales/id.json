@@ -1174,7 +1174,7 @@
     "ui.app.the.code.is.invalid.or.expired.0b5df91": "Kode tidak valid atau kedaluwarsa — klik \"Masuk melalui browser\" dan coba lagi.",
     "ui.app.checking.for.updates.ce6b51d": "Memeriksa pembaruan…",
     "ui.app.new.version.found.downloading.in.the.44e0ef9": "Versi baru v{p0} ditemukan — diunduh di latar belakang. Anda akan diminta untuk memperbarui jika sudah siap.",
-    "ui.app.can.check.updates.right.now.dev.75ffe29": "Tidak dapat memeriksa pembaruan saat ini (dev build atau tidak ada sumber pembaruan).",
+    "ui.app.can.check.updates.right.now.dev.75ffe29": "Tidak dapat memeriksa atau mengunduh pembaruan. Periksa koneksi dan coba lagi.",
     "ui.app.you.re.on.the.latest.version.dffc458": "Anda menggunakan versi terbaru (v{p0}).",
     "ui.app.not.enough.quota.and.coins.to.956023b": "Kuota dan koin tidak cukup untuk menghasilkan gambar ini. Tambahkan dana untuk melanjutkan.",
     "ui.app.you.decide.based.on.the.overall.f7b0fe6": "Anda memutuskan berdasarkan tujuan keseluruhan — pilih opsi yang paling masuk akal dan teruskan.",
