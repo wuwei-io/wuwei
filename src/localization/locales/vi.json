@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "Đã bật {enabled} / {total}",
     "billing.purchase.title": "Mua gói để nhận thêm tín dụng",
     "billing.shortage.balance": "Không đủ xu Wuwei. Nâng cấp để tiếp tục.",
-    "billing.shortage.quota": "Hạn mức khả dụng đã hết. Nâng cấp để tiếp tục."
+    "billing.shortage.quota": "Hạn mức khả dụng đã hết. Nâng cấp để tiếp tục.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

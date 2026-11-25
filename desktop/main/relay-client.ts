@@ -69,6 +69,7 @@ export interface RemoteChatArgs {
   sessionId?: string | null;
   model?: string | null;
   channelId?: string | null;
+  effort?: import("../../src/model-reasoning.js").ReasoningEffort;
   employeeId?: string | null;
   onSession?: (sessionId: string) => void;
   signal: AbortSignal;
@@ -192,7 +193,7 @@ async function handleRemoteChat(msg: any): Promise<void> {
   const heartbeat = setInterval(() => reply({ type: "heartbeat", reqId }), 25_000);
   const args: RemoteChatArgs = {
     reqId, text: String(msg.text || ""), images: Array.isArray(msg.images) ? msg.images : [],
-    sessionId: msg.sessionId ?? null, employeeId: msg.employeeId ?? null, channelId: msg.channelId ?? null, model: msg.model ?? null, signal: ac.signal,
+    sessionId: msg.sessionId ?? null, employeeId: msg.employeeId ?? null, channelId: msg.channelId ?? null, model: msg.model ?? null, effort: msg.effort, signal: ac.signal,
     onSession: sessionId => { msg.sessionId = sessionId; reply({ type: "session", reqId, sessionId }); },
     onDelta: text => reply({ type: "delta", reqId, text }),
     onTool: (name, input) => reply({ type: "tool", reqId, phase: "start", name, input }),

@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} 有効",
     "billing.purchase.title": "プランを購入してクレジットを追加",
     "billing.shortage.balance": "Wuweiコインが不足しています。アップグレードして続行してください。",
-    "billing.shortage.quota": "利用可能な上限に達しました。アップグレードして続行してください。"
+    "billing.shortage.quota": "利用可能な上限に達しました。アップグレードして続行してください。",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

@@ -6,7 +6,7 @@ export type TextModelMembership = 'member' | 'pro';
 const memberModels = new Set([
   'wuwei-claude/claude-fable-5-1', 'wuwei-claude/claude-fable-5',
   'wuwei-claude/claude-opus-5-5', 'wuwei-claude/claude-opus-5',
-  'wuwei-gpt/gpt-6-1-sol', 'wuwei-gpt/gpt-6-sol', 'wuwei-gpt/gpt-6-astra',
+  'wuwei-gpt/gpt-6-2-sol', 'wuwei-gpt/gpt-6-2-astra', 'wuwei-gpt/gpt-6-1-sol', 'wuwei-gpt/gpt-6-sol', 'wuwei-gpt/gpt-6-astra',
 ]);
 type Choice = Pick<ModelChoice, 'key' | 'free' | 'category' | 'membershipRequired'>;
 export function textModelMembership(choice: Choice): TextModelMembership | null {

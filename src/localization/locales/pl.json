@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} włączonych",
     "billing.purchase.title": "Kup plan, aby otrzymać więcej kredytów",
     "billing.shortage.balance": "Za mało monet Wuwei. Zmień plan na wyższy, aby kontynuować.",
-    "billing.shortage.quota": "Dostępny limit został wyczerpany. Zmień plan na wyższy, aby kontynuować."
+    "billing.shortage.quota": "Dostępny limit został wyczerpany. Zmień plan na wyższy, aby kontynuować.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

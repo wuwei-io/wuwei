@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "Включено: {enabled} / {total}",
     "billing.purchase.title": "Купите тариф, чтобы получить больше кредитов",
     "billing.shortage.balance": "Недостаточно монет Wuwei. Повысьте тариф, чтобы продолжить.",
-    "billing.shortage.quota": "Доступный лимит исчерпан. Повысьте тариф, чтобы продолжить."
+    "billing.shortage.quota": "Доступный лимит исчерпан. Повысьте тариф, чтобы продолжить.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

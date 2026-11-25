@@ -39,6 +39,7 @@ export interface SessionMeta {
   done?: boolean; // 已完成：排到最后、置灰
   discuss?: boolean; // 待讨论：该会话内容需过会议讨论，列表里打「议」徽标区分(独立于优先级/完成)
   model?: string; // 该会话绑定的模型(切到此会话自动切回)；空=用当前全局
+  effort?: import("../../src/model-reasoning.js").ReasoningEffort;
   providerId?: string; // 该会话绑定的平台/供应商
   kind?: string; // 该会话绑定平台的鉴权种类(codex/anthropic-oauth/anthropic-apikey/openai)——重建单会话 provider 用
   baseUrl?: string; // 该会话绑定的自定义端点(openai 兼容中转站等)——重建单会话 provider 用
@@ -177,7 +178,7 @@ export function setSessionEmployee(id: string, employeeId: string, title?: strin
 
 export function setSessionBinding(
   id: string,
-  b: { model?: string; providerId?: string; kind?: string; baseUrl?: string },
+  b: { model?: string; providerId?: string; kind?: string; baseUrl?: string; effort?: import("../../src/model-reasoning.js").ReasoningEffort },
 ) {
   const l = listSessions();
   const s = l.find((x) => x.id === id);
@@ -187,6 +188,7 @@ export function setSessionBinding(
   // kind/baseUrl 允许显式清空(切到无端点的平台)：只要传了字段就覆盖
   if ("kind" in b) s.kind = b.kind || undefined;
   if ("baseUrl" in b) s.baseUrl = b.baseUrl || undefined;
+  if ("effort" in b) s.effort = b.effort;
   saveList(l);
 }
 
@@ -381,6 +383,7 @@ export function saveSession(
     providerId: prev?.providerId,
     kind: prev?.kind, // 保留每会话鉴权种类/端点，别被每轮落盘抹掉(否则单会话 provider 重建失据)
     baseUrl: prev?.baseUrl,
+    effort: prev?.effort,
     running: prev?.running, // 保留运行/中断标记，别被每轮落盘抹掉(否则崩溃检测失效)
     interrupted: prev?.interrupted,
     resumeDismissed: prev?.resumeDismissed,

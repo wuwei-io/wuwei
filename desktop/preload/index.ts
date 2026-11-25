@@ -263,6 +263,7 @@ const api = {
   bootstrap: () => ipcRenderer.invoke("session:bootstrap") as Promise<any>,
   getSettings: () => ipcRenderer.invoke("settings:get"),
   setSettings: (s: unknown) => ipcRenderer.send("settings:set", s),
+  setModelEffort: (change: unknown) => ipcRenderer.invoke("settings:set-model-effort", change),
   getMemory: () => ipcRenderer.invoke("memory:get") as Promise<string>,
   setMemory: (text: string) => ipcRenderer.send("memory:set", text),
   // 输入框草稿(文字+粘贴的图)实时存本地，重开自动恢复

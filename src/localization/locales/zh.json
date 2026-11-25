@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "已启用 {enabled} / {total}",
     "billing.purchase.title": "购买套餐获取更多积分",
     "billing.shortage.balance": "无为币不足，请升级后继续使用",
-    "billing.shortage.quota": "可用额度不足，请升级后继续使用"
+    "billing.shortage.quota": "可用额度不足，请升级后继续使用",
+    "reasoning.defaults": "各模型默认思考等级",
+    "reasoning.defaultsHint": "切换模型时使用这里的默认等级；对话下方可临时调整。",
+    "reasoning.default": "默认思考等级",
+    "reasoning.hosted": "无为托管",
+    "reasoning.saveError": "保存失败，请重试。",
+    "reasoning.settings": "思考等级"
   }
 }

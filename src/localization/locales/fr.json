@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} activés",
     "billing.purchase.title": "Achetez un forfait pour obtenir plus de crédits",
     "billing.shortage.balance": "Solde de pièces Wuwei insuffisant. Passez à une offre supérieure pour continuer.",
-    "billing.shortage.quota": "Votre quota disponible est épuisé. Passez à une offre supérieure pour continuer."
+    "billing.shortage.quota": "Votre quota disponible est épuisé. Passez à une offre supérieure pour continuer.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} चालू",
     "billing.purchase.title": "ज़्यादा क्रेडिट पाने के लिए प्लान खरीदें",
     "billing.shortage.balance": "Wuwei कॉइन पर्याप्त नहीं हैं। जारी रखने के लिए अपग्रेड करें।",
-    "billing.shortage.quota": "आपका उपलब्ध कोटा समाप्त हो गया है। जारी रखने के लिए अपग्रेड करें।"
+    "billing.shortage.quota": "आपका उपलब्ध कोटा समाप्त हो गया है। जारी रखने के लिए अपग्रेड करें।",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }
