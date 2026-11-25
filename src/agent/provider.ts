@@ -767,10 +767,12 @@ class CodexProvider implements Provider {
   private readonly sessionId = randomUUID();
   constructor(private cfg: Config) { if (cfg.provider !== 'codex') this.generateImage = undefined; }
 
-  generateImage: Provider['generateImage'] = (options) => generateSubscriptionImage({
-    ...options, accessToken: this.cfg.codexToken, accountId: this.cfg.codexAccountId,
-    responsesEndpoint: this.cfg.codexEndpoint,
-  });
+  private credentials() { return this.cfg.codexCredentials?.() ?? { token: this.cfg.codexToken, accountId: this.cfg.codexAccountId }; }
+  generateImage: Provider['generateImage'] = (options) => {
+    const credentials = this.credentials();
+    return generateSubscriptionImage({ ...options, accessToken: credentials.token, accountId: credentials.accountId,
+      responsesEndpoint: this.cfg.codexEndpoint });
+  };
 
   async complete(
     system: string,
@@ -798,13 +800,14 @@ class CodexProvider implements Provider {
     };
 
     const subscription = this.cfg.provider === "codex";
+    const credentials = subscription ? this.credentials() : undefined;
     const endpoint = subscription ? this.cfg.codexEndpoint : `${(this.cfg.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "")}/responses`;
     const res = await fetchWithRetry(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${subscription ? this.cfg.codexToken : this.cfg.apiKey}`,
+        Authorization: `Bearer ${subscription ? credentials!.token : this.cfg.apiKey}`,
         ...(subscription ? {
-          "chatgpt-account-id": this.cfg.codexAccountId,
+          "chatgpt-account-id": credentials!.accountId,
           "OpenAI-Beta": "responses=experimental",
           originator: "codex_cli_rs", session_id: this.sessionId,
         } : {}),

@@ -40,6 +40,23 @@ test('GPT models precede Claude in My Connections even when Claude ranks first',
   assert.deepEqual(mixed.filter(row=>row.category==='connections').map(row=>row.modelId),['gpt-6.2-sol','gpt-6.2-astra','claude-opus-5-5']);
 });
 const response = events => new Response(events.map(value=>`data: ${JSON.stringify(value)}\n\n`).join(''),{headers:{'content-type':'text/event-stream'}});
+test('existing Codex providers pick up login and token rotation without changing their model or effort',async t=>{
+  let credentials={token:'',accountId:''};
+  const requests=[];
+  t.mock.method(globalThis,'fetch',async(url,init)=>{
+    requests.push({headers:init.headers,body:JSON.parse(init.body)});
+    return response([{type:'response.output_text.delta',delta:'ready'},{type:'response.completed',response:{usage:{input_tokens:1,output_tokens:1}}}]);
+  });
+  const providers=['gpt-6.2-sol','gpt-6.2-astra'].map((model,i)=>makeProvider({provider:'codex',model,codexToken:'stale',codexAccountId:'stale',codexCredentials:()=>credentials,codexEndpoint:'https://qa.invalid/responses',effort:i?'max':'high'}));
+  credentials={token:'fresh-login',accountId:'new-account'};
+  await providers[0].complete('',[],[],{});
+  credentials={token:'rotated-token',accountId:'new-account'};
+  await providers[1].complete('',[],[],{});
+  await providers[0].complete('',[],[],{});
+  assert.deepEqual(requests.map(r=>r.headers.Authorization),['Bearer fresh-login','Bearer rotated-token','Bearer rotated-token']);
+  assert(requests.every(r=>r.headers['chatgpt-account-id']==='new-account'));
+  assert.deepEqual(requests.map(r=>[r.body.model,r.body.reasoning.effort]),[['gpt-6.2-sol','high'],['gpt-6.2-astra','max'],['gpt-6.2-sol','high']]);
+});
 for (const provider of ['codex','official','hosted']) test(`${provider}: selected reasoning reaches the real serializer with correct endpoint and tool protocol`,async t=>{
   const requests=[];
   t.mock.method(globalThis,'fetch',async(url,init)=>{

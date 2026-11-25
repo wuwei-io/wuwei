@@ -5127,6 +5127,13 @@ ipcMain.handle("account:codex-login", async () => {
       initProvider();
       send("evt:ready", { backend: backendLabel, model: modelLabel, cwd, sub: subFlag, ctxWindow });
     }
+    const bindings = new Map(listSessions().map(row => [row.id,row]));
+    for (const [sid,agent] of agents) {
+      const binding = bindings.get(sid);
+      if ((binding?.providerId || backendBySid.get(sid)) !== 'codex') continue;
+      const refreshed = providerForSession(sid,true);
+      if (refreshed) agent.setProvider(refreshed);
+    }
     void emitAccount();
   } catch (e) {
     log("codex-login-ipc", "重载 provider 失败", String(e));

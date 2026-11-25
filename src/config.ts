@@ -25,6 +25,7 @@ export interface Config {
   maxTokens: number;
   anthropicBeta: string;
   // Codex 订阅
+  codexCredentials?: () => { token: string; accountId: string };
   codexToken: string;
   codexAccountId: string;
   codexEndpoint: string;
@@ -150,6 +151,7 @@ export function loadConfig(): Config {
     disableTools: /^(1|true|yes)$/i.test(pick("MINICC_NO_TOOLS", "")),
     maxTokens: Number(pick("MINICC_MAX_TOKENS", "8192")),
     anthropicBeta: pick("MINICC_ANTHROPIC_BETA", "oauth-2025-04-20"),
+    codexCredentials: provider === "codex" ? loadCodexCreds : undefined,
     codexToken: codex.token,
     codexAccountId: codex.accountId,
     codexEndpoint: pick(

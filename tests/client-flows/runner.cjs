@@ -83,7 +83,12 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'translateBatch': return args[0].map(text=>text==='中文会话标题'?'English preview conversation':text==='已有对话，沿用明确选择的模型'?'Existing conversation, keep the chosen model':'English preview text');
     case 'respondPermission': s.permissionReplies.push(clone(args)); return true;
     case 'respondDecision': s.decisionReplies.push(clone(args)); return true;
-    case 'checkConn': return { status: 'green', reason: 'Isolated stub' };
+    case 'checkConn': {const result=clone(s.connResult??{status:'green',reason:'Isolated stub'});if(s.connDelay)await delay(s.connDelay);return result;}
+    case 'codexLogin': {
+      if(s.codexLoginResult===false)return false;
+      if(s.codexLoginStaleCheck){ready(s);await delay(50);}
+      s.connResult={status:'green',reason:'Authorized Codex subscription'};return true;
+    }
     case 'getAnnouncement': { if(s.announcementDelay)await delay(s.announcementDelay);return clone(s.announcement??{active:false,version:''}); }
     case 'getMessages': return { messages: [], unread: 0 };
     case 'rememberList': return { accounts: [], last: null };
@@ -1478,6 +1483,7 @@ app.whenReady().then(async () => {
     assert.equal(await f.js('!!document.querySelector(".login-intro,.login-card,.coin-shortage")'),false);
   });
   await require('./reasoning-flows.cjs')({run,provider,model,catalog,settings,evidence,delay});
+  await require('./codex-auth-flows.cjs')({run,provider,model,catalog,settings,evidence,delay});
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);
 }).catch(error => { console.error(error.stack); app.exit(1); });

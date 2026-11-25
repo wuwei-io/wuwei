@@ -4695,9 +4695,14 @@ export function App() {
     }
   }
   async function doCodexLogin() {
+    ++connCheckSeqRef.current;
     setCodexBusy(true);
     try {
       const ok = await window.wuwei.codexLogin();
+      if (ok) {
+        setNeedAuth(false); setAuthDismissed(false);
+        void runConnCheck();
+      }
       push({
         type: "notice",
         text: ok
@@ -4902,6 +4907,8 @@ export function App() {
   // 未登录：免费体验(anon)恒置顶(稳定排序，其余相对序不变)——访客第一眼就是免费体验，也是唯一可用项。
   const providerList = [...providerListRaw.filter(p=>p.id==="wuwei-free"), imagePreset, ...providerListRaw.filter(p=>p.id!=="wuwei-free")];
   const curPreset = imageMode ? imagePreset : providerList.find((p) => p.id === curProviderId);
+  const connectionPresetRef = useRef(curPreset);
+  connectionPresetRef.current = curPreset;
   const selectedModelKey = imageMode ? `wuwei-image/${displayModel}` : `${curProviderId}/${meta.model}`;
   const imageBillingScopeRef = useRef({ sid: currentId, user: wuwei?.user.id, model: selectedModelKey });
   const imageBillingToolsRef = useRef(new Map<string, object>());
@@ -5218,9 +5225,11 @@ export function App() {
       const r = await window.wuwei.checkConn();
       if (seq !== connCheckSeqRef.current) return;
       setConn(r);
+      if (r.status === 'green') { setNeedAuth(false); setAuthDismissed(false); }
       // 需登录/配 Key 的平台(非托管)一旦红灯且属「缺凭证/未授权」→ 主动亮一键授权引导条，
       // 别让用户对着红灯反复重试却不知道要先登录(线上见过选 Codex 没登录 ChatGPT 就卡死循环)。
-      if (!imageModeRef.current && r.status === "red" && curPreset && !curPreset.hosted && isAuthErrorText(r.reason || "")) {
+      const selected = connectionPresetRef.current;
+      if (!imageModeRef.current && r.status === "red" && selected && !selected.hosted && isAuthErrorText(r.reason || "")) {
         setNeedAuth(true);
         setAuthDismissed(false);
       }
