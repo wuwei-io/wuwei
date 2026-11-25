@@ -485,7 +485,7 @@
     "set.win.maximize": "最大化（同时把整个窗口最大化铺满屏幕）",
     "set.g.effortGroup": "思考档位",
     "set.g.effortPicker": "在底栏显示档位选择器",
-    "set.g.effortPickerHint": "开启后可在输入框下方随时切换「快 / 平衡 / 深入」。档位越高思考越深，也越慢越贵；任务老是跑到一半中断时，调低一档往往就能一次跑完。只对支持该参数的模型显示（Claude 4.5 以上、GPT-5 系）。",
+    "set.g.effortPickerHint": "开启后可在输入框下方选择模型支持的思考档位：轻度、中、高、极高、最高。档位越高思考越深，也越慢越贵。",
     "set.g.remindGroup": "会话提醒",
     "set.g.autoDismiss": "提醒自动消失",
     "set.g.autoDismissHint": "别的会话「在等你选择」时右上角的提醒：开启则倒计时后自动消失；关闭则常驻，直到你点开处理或手动 ✕ 忽略。改动点「保存」后生效。",
@@ -3827,6 +3827,11 @@
     "reasoning.default": "默认思考等级",
     "reasoning.hosted": "无为托管",
     "reasoning.saveError": "保存失败，请重试。",
-    "reasoning.settings": "思考等级"
+    "reasoning.settings": "思考等级",
+    "eff.level.low": "轻度",
+    "eff.level.medium": "中",
+    "eff.level.high": "高",
+    "eff.level.xhigh": "极高",
+    "eff.level.max": "最高"
   }
 }

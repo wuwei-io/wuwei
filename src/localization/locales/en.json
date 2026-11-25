@@ -504,7 +504,7 @@
     "eff.head": "Thinking level",
     "set.g.effortGroup": "Thinking level",
     "set.g.effortPicker": "Show the level picker in the bottom bar",
-    "set.g.effortPickerHint": "Switch between Fast / Balanced / Deep right under the input box. Higher levels think harder but run slower and cost more — if a task keeps dying halfway, dropping one level often gets it through in one go. Only shown for models that support it (Claude 4.5+, GPT-5 family).",
+    "set.g.effortPickerHint": "Choose the levels supported by the selected model: Low, Medium, High, Extra high, Maximum. Higher levels use deeper reasoning and may take longer and cost more.",
     "err.ctxOverflow": "Error: this conversation is too long for the model's context window.",
     "err.ctxOverflowTip": "Start a new conversation (use Handoff to carry the key points over), or delete some earlier messages.",
     "err.ctxUsed": "used",
@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "Low",
+    "eff.level.medium": "Medium",
+    "eff.level.high": "High",
+    "eff.level.xhigh": "Extra high",
+    "eff.level.max": "Maximum"
   }
 }

@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "빠르게",
+    "eff.level.medium": "균형 잡힌",
+    "eff.level.high": "깊은",
+    "eff.level.xhigh": "더 깊게",
+    "eff.level.max": "맥스"
   }
 }

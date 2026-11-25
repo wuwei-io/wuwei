@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "Hızlı",
+    "eff.level.medium": "Dengeli",
+    "eff.level.high": "Derin",
+    "eff.level.xhigh": "Daha derin",
+    "eff.level.max": "Maksimum"
   }
 }

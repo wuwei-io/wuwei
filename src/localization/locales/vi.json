@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "Nhanh",
+    "eff.level.medium": "Cân bằng",
+    "eff.level.high": "sâu",
+    "eff.level.xhigh": "sâu hơn",
+    "eff.level.max": "Tối đa"
   }
 }

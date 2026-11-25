@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "तेज",
+    "eff.level.medium": "संतुलित",
+    "eff.level.high": "गहरा",
+    "eff.level.xhigh": "गहरा",
+    "eff.level.max": "अधिकतम"
   }
 }

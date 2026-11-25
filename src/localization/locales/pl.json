@@ -3827,6 +3827,11 @@
     "reasoning.default": "Default reasoning",
     "reasoning.hosted": "Wuwei hosted",
     "reasoning.saveError": "Could not save. Please try again.",
-    "reasoning.settings": "Reasoning"
+    "reasoning.settings": "Reasoning",
+    "eff.level.low": "Szybko",
+    "eff.level.medium": "Zrównoważony",
+    "eff.level.high": "Głęboko",
+    "eff.level.xhigh": "Głębiej",
+    "eff.level.max": "Maks"
   }
 }

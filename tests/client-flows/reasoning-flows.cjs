@@ -10,6 +10,8 @@ module.exports=async function({run,provider,model,catalog,settings,evidence,dela
   for(const lang of ['zh','en'])await run('发布关键：reasoning-control-and-defaults-'+lang,{lang,settings:{...settings('codex','gpt-6.2-sol'),kind:'codex',effort:'medium',creds:{codex:{model:'gpt-6.2-sol'}}},modelCatalog:[...catalog,...newModels]},async f=>{
     await f.wait('!!document.querySelector(".mq-eff")');
     await f.click('.mq-eff');await f.wait('document.querySelectorAll(".mq-menu-eff .mq-item").length===5');
+    const expectedLabels=lang==='zh'?['轻度','中','高','极高','最高']:['Low','Medium','High','Extra high','Maximum'];
+    assert.deepEqual(await f.js('[...document.querySelectorAll(".mq-menu-eff .mq-item-main")].map(el=>el.textContent.replace("✓","").trim())'),expectedLabels);
     await f.js('document.querySelectorAll(".mq-menu-eff .mq-item")[3].click()');
     await f.wait('!document.querySelector(".mq-menu-eff")');
     assert.equal(f.state.settings.effort,'xhigh');
@@ -20,6 +22,7 @@ module.exports=async function({run,provider,model,catalog,settings,evidence,dela
     fs.writeFileSync(path.join(evidence,'platforms-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
     await f.click('[data-testid=settings-tab-reasoning]');await f.wait('!!document.querySelector(".model-reasoning-defaults")');
     const selector='.model-reasoning-defaults select[aria-label^="GPT-6.2 Sol"]';
+    assert.deepEqual(await f.js('[...document.querySelector('+JSON.stringify(selector)+').options].map(el=>el.textContent)'),expectedLabels);
     await f.js(`(()=>{const el=[...document.querySelectorAll(${JSON.stringify(selector)})].find(el=>el.closest('label').textContent.includes('Codex')||el.closest('label').textContent.includes('codex'))||document.querySelector(${JSON.stringify(selector)});const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;setter.call(el,'high');el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
     await f.wait('!!document.querySelector(".model-reasoning-defaults select[value=high]") || ![...document.querySelectorAll(".model-reasoning-defaults select")].some(el=>el.disabled)');
     await delay(120);

@@ -727,11 +727,11 @@ type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 // 其它模型不显示选择器，免得给了个按了没反应的开关。
 const EFFORT_MODELS = /claude-(opus-4-[5-9]|opus-[5-9]|sonnet-[5-9]|sonnet-4-6|fable|mythos)|gpt-5|\bo3\b|\bo4\b/i;
 const EFFORT_OPTIONS: { id: Effort; zh: string; en: string; zhDesc: string; enDesc: string }[] = [
-  { id: "low", get zh() { return tr("model.badge.6"); }, get en() { return tr("model.badge.6"); }, get zhDesc() { return tr("ui.catalog.app.8480d3df03"); }, get enDesc() { return tr("ui.catalog.app.8480d3df03"); } },
-  { id: "medium", get zh() { return tr("ui.app.message.5081d3292b"); }, get en() { return tr("ui.app.message.5081d3292b"); }, get zhDesc() { return tr("ui.catalog.app.4500427316"); }, get enDesc() { return tr("ui.catalog.app.4500427316"); } },
-  { id: "high", get zh() { return tr("ui.helpmanualmodal.deep.cb03d15"); }, get en() { return tr("ui.helpmanualmodal.deep.cb03d15"); }, get zhDesc() { return tr("ui.catalog.app.8312203e33"); }, get enDesc() { return tr("ui.catalog.app.8312203e33"); } },
-  { id: "xhigh", get zh() { return tr("ui.helpmanualmodal.deeper.96029be"); }, get en() { return tr("ui.helpmanualmodal.deeper.96029be"); }, get zhDesc() { return tr("ui.catalog.app.c284828dc5"); }, get enDesc() { return tr("ui.catalog.app.c284828dc5"); } },
-  { id: "max", get zh() { return tr("ui.helpmanualmodal.max.70a555c"); }, get en() { return tr("ui.helpmanualmodal.max.70a555c"); }, get zhDesc() { return tr("ui.catalog.app.92f766edac"); }, get enDesc() { return tr("ui.catalog.app.92f766edac"); } },
+  { id: "low", get zh() { return tr("eff.level.low"); }, get en() { return tr("eff.level.low"); }, get zhDesc() { return tr("ui.catalog.app.8480d3df03"); }, get enDesc() { return tr("ui.catalog.app.8480d3df03"); } },
+  { id: "medium", get zh() { return tr("eff.level.medium"); }, get en() { return tr("eff.level.medium"); }, get zhDesc() { return tr("ui.catalog.app.4500427316"); }, get enDesc() { return tr("ui.catalog.app.4500427316"); } },
+  { id: "high", get zh() { return tr("eff.level.high"); }, get en() { return tr("eff.level.high"); }, get zhDesc() { return tr("ui.catalog.app.8312203e33"); }, get enDesc() { return tr("ui.catalog.app.8312203e33"); } },
+  { id: "xhigh", get zh() { return tr("eff.level.xhigh"); }, get en() { return tr("eff.level.xhigh"); }, get zhDesc() { return tr("ui.catalog.app.c284828dc5"); }, get enDesc() { return tr("ui.catalog.app.c284828dc5"); } },
+  { id: "max", get zh() { return tr("eff.level.max"); }, get en() { return tr("eff.level.max"); }, get zhDesc() { return tr("ui.catalog.app.92f766edac"); }, get enDesc() { return tr("ui.catalog.app.92f766edac"); } },
 ];
 function effortLabel(e: Effort, lang: string): string {
   const o = EFFORT_OPTIONS.find((x) => x.id === e);
