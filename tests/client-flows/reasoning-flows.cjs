@@ -7,7 +7,7 @@ module.exports=async function({run,provider,model,catalog,settings,evidence,dela
   const providerLabels={'wuwei-free':'免费体验（无需登录）','wuwei-mimo':'小米 MiMo','wuwei-claude':'无为托管 · Claude','wuwei-gpt':'无为托管 · GPT',codex:'Codex subscription',anthropic:'Claude API Key (Anthropic)','claude-oauth':'Claude subscription'};
   for(const p of [...catalog,...newModels]) if(providerLabels[p.id]) p.label=p.labelEn=providerLabels[p.id];
   for(const p of newModels) for(const m of p.models) if(m.id.startsWith('gpt-')) m.label=m.labelEn=m.id.replace('gpt-6-2-','GPT-6.2 ').replace('gpt-6.2-','GPT-6.2 ').replace(/\b(sol|astra)\b/g,v=>v[0].toUpperCase()+v.slice(1));
-  for(const lang of ['zh','en'])await run('reasoning-control-and-defaults-'+lang,{lang,settings:{...settings('codex','gpt-6.2-sol'),kind:'codex',effort:'medium',creds:{codex:{model:'gpt-6.2-sol'}}},modelCatalog:[...catalog,...newModels]},async f=>{
+  for(const lang of ['zh','en'])await run('发布关键：reasoning-control-and-defaults-'+lang,{lang,settings:{...settings('codex','gpt-6.2-sol'),kind:'codex',effort:'medium',creds:{codex:{model:'gpt-6.2-sol'}}},modelCatalog:[...catalog,...newModels]},async f=>{
     await f.wait('!!document.querySelector(".mq-eff")');
     await f.click('.mq-eff');await f.wait('document.querySelectorAll(".mq-menu-eff .mq-item").length===5');
     await f.js('document.querySelectorAll(".mq-menu-eff .mq-item")[3].click()');
@@ -33,6 +33,19 @@ module.exports=async function({run,provider,model,catalog,settings,evidence,dela
     assert(keys.indexOf('codex/gpt-6.2-sol')<keys.indexOf('claude-oauth/claude-opus-5-5'));
     assert(keys.includes('codex/gpt-6.2-astra'));
     fs.writeFileSync(path.join(evidence,'my-connections-gpt-first-'+lang+'.png'),(await f.state.win.webContents.capturePage()).toPNG());
+    await f.click('[data-model-key="codex/gpt-6.2-astra"]');await f.wait('!document.querySelector(".model-picker")');
+    assert.equal(f.state.settings.model,'gpt-6.2-astra');assert.equal(f.state.settings.effort,'medium');
+    await f.click('.mq-select');await f.click('.model-picker footer button');await f.wait('!!document.querySelector(".settings")');
+    await f.click('[data-testid=settings-tab-reasoning]');await f.wait('!!document.querySelector(".model-reasoning-defaults")');
+    await f.js(`(()=>{const el=[...document.querySelectorAll('.model-reasoning-defaults select[aria-label^="GPT-6.2 Astra"]')].find(el=>el.closest('label').textContent.includes('Codex'));Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(el,'max');el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await f.wait('document.querySelector(".model-reasoning-defaults") && ![...document.querySelectorAll(".model-reasoning-defaults select")].some(el=>el.disabled)');await delay(100);
+    assert.equal(f.state.settings.modelEffortDefaults['codex/gpt-6.2-astra'],'max');
+    await f.click('.set-win-btn:last-child');await f.wait('!document.querySelector(".settings")');
+    for(const [modelId,level] of [['gpt-6.2-sol','high'],['gpt-6.2-astra','max']]){
+      await f.click('.mq-select');await f.wait('!!document.querySelector(".model-picker")');await f.click('[data-model-key="codex/'+modelId+'"]');await f.wait('!document.querySelector(".model-picker")');
+      assert.equal(f.state.settings.model,modelId);assert.equal(f.state.settings.effort,level);
+    }
+
   });
 
 };
