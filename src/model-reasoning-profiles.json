@@ -1,0 +1,426 @@
+{
+  "gpt-6.2-astra": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-6.2-sol": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-fable-5.2": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-fable-5.2:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "glm-5.3-flashx-legal": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "gpt-6.1-terra": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-haiku-5.5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-haiku-5.5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-sonnet-5.5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-sonnet-5.5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "glm-5.3-prime": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "claude-opus-5.5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-5.5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "glm-5.3-flashx": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "claude-fable-5.1": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-fable-5.1:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "glm-5.3-flash": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "glm-5.3-flash:batch": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "glm-5.3": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "glm-5.3:batch": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  },
+  "claude-opus-5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-sonnet-5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-sonnet-5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "glm-5.2": {
+    "levels": [
+      "high",
+      "xhigh"
+    ],
+    "default": "high"
+  },
+  "glm-5.2:batch": {
+    "levels": [
+      "high",
+      "xhigh"
+    ],
+    "default": "high"
+  },
+  "claude-fable-5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-fable-5:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-4.8": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-4.8:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-4.7": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-4.7:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-sonnet-4.6": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-sonnet-4.6:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "claude-opus-4.6": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "max"
+    ],
+    "default": "high"
+  },
+  "claude-opus-4.6:batch": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "max"
+    ],
+    "default": "high"
+  },
+  "gpt-6.1-sol": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-6-astra": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-6-sol": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-6-luna": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-5.6-sol": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-5.6-terra": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-5.6-luna": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "gpt-5.5": {
+    "levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "medium"
+  },
+  "glm-5.4": {
+    "levels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "max"
+  }
+}

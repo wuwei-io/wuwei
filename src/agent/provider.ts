@@ -271,6 +271,7 @@ class AnthropicProvider implements Provider {
         system: systemParam,
         messages: msgParams,
         tools: toolParams,
+        ...(this.cfg.effort ? { output_config: { effort: this.cfg.effort } } : {}),
       },
       { signal: handlers.signal },
     );
@@ -760,13 +761,13 @@ function toOpenAIMessages(system: string, messages: Message[], vision: boolean):
 // 头需 Authorization:Bearer + chatgpt-account-id + originator:codex_cli_rs；
 // body 走 Responses 格式(input/instructions/扁平 tools)；model 用主线名 gpt-5.5。
 class CodexProvider implements Provider {
-  name = "codex";
+  get name() { return this.cfg.provider === "codex" ? "codex" : "openai-responses"; }
   // 整个会话复用同一 session_id：让 Codex 后端把每步请求路由到 KV cache 还热着的同一实例，
   // 重发的上下文才能命中 prompt 缓存(便宜)。之前每请求 randomUUID → 每步换后端、缓存全冷 → 输入按新增算、消耗飞快。
   private readonly sessionId = randomUUID();
-  constructor(private cfg: Config) {}
+  constructor(private cfg: Config) { if (cfg.provider !== 'codex') this.generateImage = undefined; }
 
-  generateImage: NonNullable<Provider['generateImage']> = (options) => generateSubscriptionImage({
+  generateImage: Provider['generateImage'] = (options) => generateSubscriptionImage({
     ...options, accessToken: this.cfg.codexToken, accountId: this.cfg.codexAccountId,
     responsesEndpoint: this.cfg.codexEndpoint,
   });
@@ -792,17 +793,21 @@ class CodexProvider implements Provider {
       parallel_tool_calls: true,
       store: false,
       stream: true,
-      reasoning: { effort: "medium" },
+      reasoning: { effort: this.cfg.effort || "medium" },
+      ...(this.cfg.provider === "codex" ? {} : { max_output_tokens: this.cfg.maxTokens }),
     };
 
-    const res = await fetchWithRetry(this.cfg.codexEndpoint, {
+    const subscription = this.cfg.provider === "codex";
+    const endpoint = subscription ? this.cfg.codexEndpoint : `${(this.cfg.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "")}/responses`;
+    const res = await fetchWithRetry(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.cfg.codexToken}`,
-        "chatgpt-account-id": this.cfg.codexAccountId,
-        "OpenAI-Beta": "responses=experimental",
-        originator: "codex_cli_rs",
-        session_id: this.sessionId, // 稳定不变→缓存亲和,重发上下文命中 prompt 缓存
+        Authorization: `Bearer ${subscription ? this.cfg.codexToken : this.cfg.apiKey}`,
+        ...(subscription ? {
+          "chatgpt-account-id": this.cfg.codexAccountId,
+          "OpenAI-Beta": "responses=experimental",
+          originator: "codex_cli_rs", session_id: this.sessionId,
+        } : {}),
         "Content-Type": "application/json",
         Accept: "text/event-stream",
         "User-Agent": "codex_cli_rs/0.0.0",
@@ -950,7 +955,8 @@ function toResponsesInput(messages: Message[]): any[] {
 }
 
 export function makeProvider(cfg: Config): Provider {
-  const p: Provider = cfg.provider === "codex" ? new CodexProvider(cfg)
+  const officialResponses = cfg.provider === "openai" && /^gpt-6(?:[.-]|$)/i.test(cfg.model) && /^https:\/\/api\.openai\.com\/v1\/?$/.test(cfg.baseUrl || "");
+  const p: Provider = cfg.provider === "codex" || officialResponses ? new CodexProvider(cfg)
     : cfg.provider === "openai" ? new OpenAIProvider(cfg) : new AnthropicProvider(cfg);
   // Strict known hosted endpoints only: never use a BYOK credential as website token.
   if(cfg.provider==='openai' && !cfg.disableTools && cfg.apiKey && isWuweiHostedGateway(cfg.baseUrl)) {

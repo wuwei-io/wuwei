@@ -5,6 +5,8 @@ import { join } from "node:path";
 // Individually verified against developers.openai.com/api/docs/models/<slug>.md.
 // API total window includes output; maximum input is separately documented as 922000.
 export const GPT_API_WINDOWS: Readonly<Record<string, number>> = {
+  "gpt-6.2-sol": 1_050_000,
+  "gpt-6.2-astra": 1_050_000,
   "gpt-6.1-sol": 1_050_000,
   "gpt-6-astra": 1_050_000,
   "gpt-6-sol": 1_050_000,
@@ -21,6 +23,9 @@ export const ECONOMY_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
 };
 // Observed in Codex 0.160.0 models_cache.json. Never use experimental max_context_window.
 const CODEX_DEFAULTS: Readonly<Record<string, number>> = {
+  // Observed in the current Codex model cache on 2026-11-25.
+  "gpt-6.2-sol": 500_000,
+  "gpt-6.2-astra": 272_000,
   "gpt-5.6-sol": 272_000,
   "gpt-5.6-terra": 272_000,
   "gpt-5.6-luna": 272_000,
@@ -49,7 +54,8 @@ export function codexWindow(model: string, readCache: () => string = () =>
 export function resolveContextWindow(provider: string, model: string, fallback: number,
   explicit?: unknown, readCache?: () => string): number {
   const id = model.toLowerCase();
-  const supported = provider === "codex" ? codexWindow(id, readCache) : GPT_API_WINDOWS[id] ?? ECONOMY_CONTEXT_WINDOWS[id.split('/').at(-1)!];
+  const apiId = id.replace(/^gpt-(\d+)-(\d+)-/, 'gpt-$1.$2-');
+  const supported = provider === "codex" ? codexWindow(id, readCache) : GPT_API_WINDOWS[apiId] ?? ECONOMY_CONTEXT_WINDOWS[id.split('/').at(-1)!];
   const requested = positiveWindow(explicit);
   // Codex explicit overrides may reduce the default, never implicitly enable experimental context.
   // Known API models cannot claim more than their documented total window.

@@ -15,8 +15,9 @@ for (const model of Object.keys(GPT_API_WINDOWS)) {
     const cache = () => JSON.stringify({ models: [{ slug: model, context_window: 272000, max_context_window: 872000, effective_context_window_percent: 95 }] });
     assert.equal(resolveContextWindow("openai", model, 128000), 1050000);
     assert.equal(resolveContextWindow("codex", model, 128000, undefined, cache), 272000);
-    assert.equal(resolveContextWindow("codex", model, 128000, undefined, missing), 272000);
-    assert.equal(resolveContextWindow("codex", model, 128000, undefined, () => "{"), 272000);
+    const verifiedDefault = model === 'gpt-6.2-sol' ? 500000 : 272000;
+    assert.equal(resolveContextWindow("codex", model, 128000, undefined, missing), verifiedDefault);
+    assert.equal(resolveContextWindow("codex", model, 128000, undefined, () => "{"), verifiedDefault);
     assert.equal(resolveContextWindow("codex", model, 128000, 872000, cache), 272000);
     assert.equal(resolveContextWindow("codex", model, 128000, 200000, cache), 200000);
     assert.equal(resolveContextWindow("openai", model, 128000, 2000000), 1050000);

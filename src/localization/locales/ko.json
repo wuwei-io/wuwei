@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} 활성화",
     "billing.purchase.title": "요금제를 구매하고 더 많은 크레딧을 받으세요",
     "billing.shortage.balance": "Wuwei 코인이 부족합니다. 계속하려면 업그레이드하세요.",
-    "billing.shortage.quota": "사용 가능한 한도에 도달했습니다. 계속하려면 업그레이드하세요."
+    "billing.shortage.quota": "사용 가능한 한도에 도달했습니다. 계속하려면 업그레이드하세요.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

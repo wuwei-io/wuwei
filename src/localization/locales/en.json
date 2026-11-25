@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} enabled",
     "billing.purchase.title": "Buy a plan for more credits",
     "billing.shortage.balance": "Not enough Wuwei coins. Upgrade to continue.",
-    "billing.shortage.quota": "Your available quota is used up. Upgrade to continue."
+    "billing.shortage.quota": "Your available quota is used up. Upgrade to continue.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

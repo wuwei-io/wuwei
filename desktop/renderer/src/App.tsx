@@ -15,6 +15,8 @@ import { useBackgroundTasks } from './components/useBackgroundTasks.js';
 import { accountBackgroundTasks } from '../../../src/billing/background-tasks.js';
 import { formatCredits } from "../../../src/billing/presentation.js";
 import {localizeToolMetadata} from "../../../src/localization/tools.js";
+import { modelReasoning, reasoningKey, resolveModelEffort } from "../../../src/model-reasoning.js";
+import { ModelReasoningDefaults } from "./components/ModelReasoningDefaults.js";
 import systemData from "../../../src/localization/content/system-data.json";
 import { LanguagePicker } from "./components/LanguagePicker.js";
 import { AccountLanguageMenu } from "./components/AccountLanguageMenu.js";
@@ -744,6 +746,10 @@ const MODEL_LABEL_OVERRIDES: Record<string, string> = {
   "gpt-5.6-sol": "GPT-5.6 Sol",
   "gpt-5.6-terra": "GPT-5.6 Terra",
   "gpt-5.6-luna": "GPT-5.6 Luna",
+  "gpt-6.2-sol": "GPT-6.2 Sol",
+  "gpt-6.2-astra": "GPT-6.2 Astra",
+  "gpt-6-2-sol": "GPT-6.2 Sol",
+  "gpt-6-2-astra": "GPT-6.2 Astra",
   "gpt-6-astra": "GPT-6 Astra",
   "gpt-5.5": "GPT-5.5",
   // Claude 订阅
@@ -3965,6 +3971,15 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("model"); // 统一设置页的初始/当前左侧菜单项
   const [curProviderId, setCurProviderId] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => { void window.wuwei.getSettings().then(r => {
+      if (alive) setEffort(resolveModelEffort(curProviderId, meta.model, r?.settings || {}) || "medium");
+    }); };
+    refresh(); window.addEventListener('wuwei-effort-change', refresh);
+    setShowEffortMenu(false);
+    return () => { alive = false; window.removeEventListener('wuwei-effort-change', refresh); };
+  }, [curProviderId, meta.model]);
   const [videoMode,setVideoMode]=useState(false);
   const [videoNewVersion,setVideoNewVersion]=useState(0);
   const [requestedVideoCreation,setRequestedVideoCreation]=useState<{id:string;version:number}|undefined>();
@@ -4832,7 +4847,7 @@ export function App() {
       setStreamMode((r?.settings as any)?.streamMode || "stream");
       setStreamSpeed((r?.settings as any)?.streamSpeed || 400);
       setKeepRecent((r?.settings as any)?.keepRecent || 12);
-      setEffort((r?.settings as any)?.effort || "medium");
+      setEffort(resolveModelEffort(r?.settings?.providerId || "", r?.settings?.model || "", r?.settings || {}) || "medium");
       setShowEffortPicker((r?.settings as any)?.showEffortPicker !== false); // 默认显示
       setAskToastAuto((r?.settings as any)?.askToastAutoDismiss !== false); // 默认开
       setAskToastSec((r?.settings as any)?.askToastDismissSec || 30);
@@ -5017,7 +5032,7 @@ export function App() {
       const provider = providerListRef.current.find((p) => p.id === choice.providerId);
       if (!provider) throw new Error("Provider unavailable");
       const slot = (cur.creds || {})[provider.id] || {};
-      window.wuwei.setSettings({ ...cur, modelPreferences, kind: provider.kind, providerId: provider.id, model: choice.modelId, imageMode: false,
+      window.wuwei.setSettings({ ...cur, modelPreferences, effort: resolveModelEffort(provider.id, choice.modelId, cur, false), effortModel: reasoningKey(provider.id, choice.modelId), kind: provider.kind, providerId: provider.id, model: choice.modelId, imageMode: false,
         apiKey: slot.apiKey, oauthToken: slot.oauthToken, baseUrl: provider.fixedBaseUrl ? provider.baseUrl : slot.baseUrl || provider.baseUrl, modelChoiceExplicit });
       setCurProviderId(provider.id); setImageMode(false); setRate(null);
     }
@@ -7164,7 +7179,7 @@ export function App() {
               </button>
               {/* 思考档位：只对支持 effort 的模型出现（Claude 4.5+/Sonnet 5、GPT-5、o 系）。
                   档位越高思考越深，也越慢越贵；时长受限时降档能明显提高「一次跑完」的概率。 */}
-              {showEffortPicker && EFFORT_MODELS.test(meta.model) && (
+              {!imageMode && showEffortPicker && !!modelReasoning(meta.model) && (
                 <>
                   <span className="mq-mid">·</span>
                   <button
@@ -7180,12 +7195,12 @@ export function App() {
                   </button>
                 </>
               )}
-              {showEffortMenu && (
+              {showEffortMenu && !imageMode && !!modelReasoning(meta.model) && (
                 <>
                   <div className="mq-overlay" onClick={() => setShowEffortMenu(false)} />
                   <div className="mq-menu mq-menu-eff" style={{ left: mqMenuLeft }}>
                     <div className="mq-head">{t("eff.head")}</div>
-                    {EFFORT_OPTIONS.map((o) => (
+                    {EFFORT_OPTIONS.filter(o => modelReasoning(meta.model)?.levels.includes(o.id)).map((o) => (
                       <button
                         key={o.id}
                         className={"mq-item mq-item-col" + (o.id === effort ? " on" : "")}
@@ -7193,8 +7208,13 @@ export function App() {
                           setEffort(o.id);
                           setShowEffortMenu(false);
                           void (async () => {
-                            const r = await window.wuwei.getSettings();
-                            window.wuwei.setSettings({ ...((r?.settings as any) || {}), effort: o.id });
+                            try {
+                              await window.wuwei.setModelEffort({providerId:curProviderId,model:meta.model,effort:o.id});
+                            } catch {
+                              const r = await window.wuwei.getSettings();
+                              setEffort(resolveModelEffort(curProviderId,meta.model,r?.settings || {}) || "medium");
+                              push({type:'notice',text:tr('reasoning.saveError')});
+                            }
                           })();
                         }}
                       >
@@ -10571,6 +10591,7 @@ export function App() {
             setWdIntervalSec(interval); localStorage.setItem("wuwei-wd-interval", String(interval));
             setWdIdleSec(idle); localStorage.setItem("wuwei-wd-idle", String(idle));
           }}
+          reasoningModels={pickerChoices}
           showEffortPicker={showEffortPicker}
           onShowEffortPicker={changeShowEffortPicker}
           visibleSidebarEntries={visibleSidebarEntries}
@@ -12970,7 +12991,7 @@ const PRESETS: Preset[] = [
     baseUrl: WUWEI_GATEWAY_BASE,
     keyUrl: "",
     keyHint: "",
-    models: ["gpt-6-astra", "gpt-5.6", "gpt-5.5"],
+    models: ["gpt-6-2-sol", "gpt-6-2-astra", "gpt-6-astra", "gpt-5.6", "gpt-5.5"],
     get note() { return tr("ui.app.message.d6f81fea7d"); },
     fixedBaseUrl: true,
     hosted: true,
@@ -12983,6 +13004,8 @@ const PRESETS: Preset[] = [
     keyUrl: "",
     keyHint: "",
     models: [
+      "gpt-6.2-sol",
+      "gpt-6.2-astra",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
@@ -13285,9 +13308,9 @@ const PRESET_EN: Record<string, { label?: string; note?: string; keyHint?: strin
   grok: { label: "Grok (xAI)", note: "grok-4.x is natively multimodal (text+image); grok-4.3 is the 1M-context flagship" },
   get custom() { return { label: tr("ui.app.message.6f759dc793"), keyHint: "Can be left blank locally", note: "Any OpenAI-compatible endpoint — just fill your Base URL + model name" }; },
 };
-// Hosted entries use the catalog's primary model name in the selected language.
+// Platform names belong to ai_provider; model labels belong to ai_model.
 const pLabel = (p: Preset, lang: Lang) => p.hosted && p.id !== "wuwei-free"
-  ? (lang !== "zh" ? p.labelEn || p.models[0] || tr("set.m.model") : p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")
+  ? (lang !== "zh" ? p.labelEn || p.label || p.id : p.label).replace(/^(?:无为托管\s*[·・]?\s*|Wuwei(?: Hosted)?\s*[·・]?\s*)/i, "")
   : (lang !== "zh" && (PRESET_EN[p.id]?.label || p.labelEn)) || p.label;
 const pKeyHint = (p: Preset, lang: Lang) => (lang !== "zh" && PRESET_EN[p.id]?.keyHint) || p.keyHint;
 const pNote = (p: Preset, lang: Lang) => (lang !== "zh" ? PRESET_EN[p.id]?.note ?? p.note : p.note);
@@ -13361,14 +13384,13 @@ function mergeCatalogIntoPresets(
       if (labelEnMap) { const enLabel = m.labelEn || m.label_en; if (enLabel) labelEnMap.set(m.id, enLabel); }
     }
     const models = c.models.map((m) => m.id);
-    const primary = c.hosted && c.id !== "wuwei-free" ? c.models[0] : undefined;
-    const modelLabel = primary?.label || c.label;
-    const modelLabelEn = primary ? primary.labelEn || primary.label_en || primary.id : c.labelEn;
+    const modelLabel = c.label;
+    const modelLabelEn = c.labelEn;
     const local = byId.get(c.id);
     if (local) {
       // 已知平台：保留本地元数据，模型用 catalog 覆盖；anon(未登录可见)由后台控制，跟随 catalog。
       // labelEn 跟随 catalog(后台 label_en)，让后台新增/改名的英文标签即时生效。
-      out.push({ ...local, ...(models.length ? { models } : {}), anon: c.anon, ...(primary ? { label: modelLabel } : {}), labelEn: modelLabelEn ?? local.labelEn });
+      out.push({ ...local, ...(models.length ? { models } : {}), anon: c.anon, label: modelLabel || local.label, labelEn: modelLabelEn ?? local.labelEn });
     } else {
       out.push({
         id: c.id,
@@ -14022,6 +14044,7 @@ function SettingsModal({
   watchdogInterval,
   watchdogIdle,
   onWatchdog,
+  reasoningModels,
   showEffortPicker,
   onShowEffortPicker,
   visibleSidebarEntries,
@@ -14052,6 +14075,7 @@ function SettingsModal({
   watchdogInterval: number;
   watchdogIdle: number;
   onWatchdog: (interval: number, idle: number) => void;
+  reasoningModels: ModelChoice[];
   showEffortPicker: boolean;
   onShowEffortPicker: (v: boolean) => void;
   visibleSidebarEntries: readonly SidebarEntry[];
@@ -14158,7 +14182,7 @@ function SettingsModal({
   const [dragOverIdx, setDragOverIdx] = useState(-1); // 拖拽悬停到第几行(高亮)
   const dragIdxRef = useRef(-1); // 拖起始行
   const [tab, setTab] = useState<
-    "general" | "team" | "remote" | "model" | "platforms" | "prompt" | "memory" | "brain" | "mcp" | "tools" | "secrets"
+    "reasoning" | "general" | "team" | "remote" | "model" | "platforms" | "prompt" | "memory" | "brain" | "mcp" | "tools" | "secrets"
   >((initialTab as any) || "model"); // 设置分块标签页(左侧菜单)
   const [maxed, setMaxed] = useState(false); // 设置弹窗最大化(脑网络等大结构需放大看)
   const [memory, setMemory] = useState(""); // 全局长期记忆
@@ -15045,7 +15069,7 @@ function SettingsModal({
         <aside className="set-side">
           <div className="set-side-title">{t("set.title")}</div>
           <nav className="set-tabs">
-          <button type="button" className={"set-tab" + (tab === "general" ? " on" : "")} onClick={() => setTab("general")}>
+          <button type="button" data-testid="settings-tab-general" className={"set-tab" + (tab === "general" ? " on" : "")} onClick={() => setTab("general")}>
             {t("set.tab.general")}
           </button>
           {teamOn && (
@@ -15059,6 +15083,7 @@ function SettingsModal({
           <button type="button" data-testid="settings-tab-model" className={"set-tab" + (tab === "model" ? " on" : "")} onClick={() => setTab("model")}>
             {t("set.tab.model")}
           </button>
+          <button type="button" data-testid="settings-tab-reasoning" className={"set-tab" + (tab === "reasoning" ? " on" : "")} onClick={() => setTab("reasoning")}>{tr("reasoning.settings")}</button>
           <button type="button" className={"set-tab" + (tab === "platforms" ? " on" : "")} onClick={() => setTab("platforms")}>
             {t("set.tab.platforms")}
           </button>
@@ -15135,6 +15160,7 @@ function SettingsModal({
             />
           )}
           {/* ── 通用：会话分组 + 上下文压缩 + 账号读取 ── */}
+          {tab === "reasoning" && <div className="app-set-scroll"><ModelReasoningDefaults models={reasoningModels} label={level => effortLabel(level,lang)} /></div>}
           {tab === "general" && (
             <>
               <LanguagePicker language={lang} onChange={onLang}/>
@@ -15301,7 +15327,6 @@ function SettingsModal({
                   onChange={(e) => onShowEffortPicker(e.target.checked)}
                 />
               </div>
-              <div className="app-set-hint" style={{ marginBottom: "16px" }} />
               <div className="app-set-group">{t("set.g.remindGroup")}</div>
               <div className="app-set-row" style={{ cursor: "default" }}>
                 <div className="app-set-text">

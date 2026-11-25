@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} attivi",
     "billing.purchase.title": "Acquista un piano per ottenere più crediti",
     "billing.shortage.balance": "Monete Wuwei insufficienti. Passa a un piano superiore per continuare.",
-    "billing.shortage.quota": "La quota disponibile è esaurita. Passa a un piano superiore per continuare."
+    "billing.shortage.quota": "La quota disponibile è esaurita. Passa a un piano superiore per continuare.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

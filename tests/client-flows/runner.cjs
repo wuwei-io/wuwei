@@ -56,6 +56,12 @@ ipcMain.handle('qa:api', async (event, method, args) => {
     case 'team.sopTree': return {tree:[]};
     case 'team.scheduleList': return {schedules:[]};
     case 'getSettings': { const value = { settings: clone(s.settings), systemLanguage:s.systemLanguage, backend: 'openai', model: s.settings.model }; if (s.settingsDelay) await delay(s.settingsDelay); return value; }
+    case 'setModelEffort': {
+      const change=args[0],key=change.providerId+'/'+change.model;
+      if(change.asDefault)s.settings.modelEffortDefaults={...s.settings.modelEffortDefaults,[key]:change.effort};
+      if(s.settings.providerId===change.providerId&&s.settings.model===change.model){s.settings.effort=change.effort;s.settings.effortModel=key;ready(s);}
+      return {modelEffortDefaults:clone(s.settings.modelEffortDefaults)};
+    }
     case 'setSettings': s.settings = { ...s.settings, ...clone(args[0]) }; s.modelWrites.push(s.settings.model); ready(s); return true;
     case 'getAccount': return { providerId: s.settings.providerId, model: s.settings.model };
     case 'bootstrap': return { currentId: 'qa-session', mode: s.startupMode, sessions: clone(s.sessions??[{ id: 'qa-session', title: '隔离流程测试', createdAt: Date.now(), updatedAt: Date.now() }]), groups: [], messages: clone(s.historyMessages) };
@@ -175,7 +181,7 @@ async function boot(options = {}) {
   await win.loadURL(url.href);
   await wait('!!document.querySelector(".mq-select")');
   await delay(250); ready(state); await delay(100);
-  await wait('document.querySelector(".mq-select")?.textContent.includes(' + JSON.stringify(state.settings.model) + ')');
+  await wait('document.querySelector(".mq-select")?.textContent.includes(' + JSON.stringify(state.settings.model) + ') || document.querySelector(".mq-select")?.textContent.includes(' + JSON.stringify(state.settings.model.replace(/^gpt-/, 'GPT-').replace(/-(sol|astra)$/, (_,v)=>' '+v[0].toUpperCase()+v.slice(1)).replace('6-2','6.2')) + ')');
   return { state, js, wait, click, fill, send, close: () => { states.delete(win.webContents.id); win.destroy(); } };
 }
 async function run(name, options, test) {
@@ -1471,6 +1477,7 @@ app.whenReady().then(async () => {
     assert.equal(f.state.orders,0);
     assert.equal(await f.js('!!document.querySelector(".login-intro,.login-card,.coin-shortage")'),false);
   });
+  await require('./reasoning-flows.cjs')({run,provider,model,catalog,settings,evidence,delay});
   fs.writeFileSync(path.join(evidence, 'results.json'), JSON.stringify({ renderer: url.href, rendererMode:process.env.WUWEI_QA_BUILT_RENDERER==='1'?'production':'development', backend: 'isolated in-memory IPC', realPayments: 0, results }, null, 2));
   app.exit(results.every(r => r.passed||r.skipped) ? 0 : 1);
 }).catch(error => { console.error(error.stack); app.exit(1); });

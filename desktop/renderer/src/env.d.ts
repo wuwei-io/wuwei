@@ -152,6 +152,7 @@ export interface WuweiApi {
   bootstrap(): Promise<{ sessions: any[]; groups?: string[]; currentId: string; mode?: "chat"; messages: any[]; usage?: any; rateLimits?: any; interrupted?: { id: string; title: string }[] }>;
   getSettings(): Promise<{ settings: any; systemLanguage?: string; backend: string; model: string; defaultPrompt?: string; defaultBrainPrompt?: string; defaultSecretsPrompt?: string }>;
   setSettings(s: any): void;
+  setModelEffort(change: import("../../../src/reasoning-settings.js").EffortChange): Promise<{ modelEffortDefaults?: Record<string, import("../../../src/model-reasoning.js").ReasoningEffort> }>;
   getMemory(): Promise<string>;
   setMemory(text: string): void;
   draftGet(): Promise<{ text: string; images: string[] }>;

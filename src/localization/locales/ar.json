@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "مفعّل: {enabled} / {total}",
     "billing.purchase.title": "اشترِ باقة للحصول على المزيد من الرصيد",
     "billing.shortage.balance": "رصيد عملات Wuwei غير كافٍ. قم بالترقية للمتابعة.",
-    "billing.shortage.quota": "نفدت حصتك المتاحة. قم بالترقية للمتابعة."
+    "billing.shortage.quota": "نفدت حصتك المتاحة. قم بالترقية للمتابعة.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

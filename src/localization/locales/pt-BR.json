@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} ativas",
     "billing.purchase.title": "Compre um plano para obter mais créditos",
     "billing.shortage.balance": "Moedas Wuwei insuficientes. Faça upgrade para continuar.",
-    "billing.shortage.quota": "Sua cota disponível acabou. Faça upgrade para continuar."
+    "billing.shortage.quota": "Sua cota disponível acabou. Faça upgrade para continuar.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

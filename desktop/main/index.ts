@@ -1,3 +1,5 @@
+import { modelReasoning, resolveModelEffort, reasoningKey, type ReasoningEffort } from "../../src/model-reasoning.js";
+import { updateModelEffort, type EffortChange } from "../../src/reasoning-settings.js";
 import mobileHistory from "./mobile-remote/wuwei-remote-history.cjs";
 import mobileToolPolicy from "./mobile-remote/wuwei-remote-tool-policy.cjs";
 import mobileRead from "./mobile-remote/wuwei-remote-read.cjs";
@@ -1408,7 +1410,7 @@ function applySettings(sIn: Settings, forceSid?: string) {
   }
   // 方案B：把「聚焦会话改后的完整身份」立即持久化进它自己的 meta——每次改模型/切平台即写入，
   // 不再依赖离开时的 lockSessionModel 补锁。之后 providerForSession 就能凭它精确重建该会话 provider。
-  if (target) setSessionBinding(target, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl });
+  if (target) setSessionBinding(target, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl, effort: cfg.effort });
   refreshAgentTools(); // 「知识网络」开关变了→即时给所有会话加/摘 brain_* 工具
   send("evt:ready", { backend: backendLabel, model: modelLabel, cwd, sub: subFlag, ctxWindow });
   void emitAccount(); // 切平台后左下角账号/余额随之更新
@@ -2573,6 +2575,7 @@ function providerForSession(id: string, strict = false): ReturnType<typeof makeP
       kind: (meta.kind as Settings["kind"]) || providerKindForId(meta.providerId, gs),
       model: meta.model,
       baseUrl: meta.baseUrl ?? slot.baseUrl ?? gs.baseUrl,
+      effort: meta.effort ?? resolveModelEffort(meta.providerId,meta.model,gs,false), effortModel: reasoningKey(meta.providerId,meta.model),
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
     };
@@ -2628,7 +2631,7 @@ function getAgent(id: string): Agent | null {
     // 懒绑定：会话已有 meta 但从没存过完整身份(老会话)→把此刻的身份补写进去，之后就有自己的真相源。
     if (meta && (!meta.kind || !meta.model || !meta.providerId)) {
       const s = loadSettings();
-      if (s) setSessionBinding(id, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl });
+      if (s) setSessionBinding(id, { model: s.model, providerId: s.providerId, kind: s.kind, baseUrl: s.baseUrl, effort: resolveModelEffort(s.providerId || '',s.model || '',s) });
     }
   }
   // A freshly opened employee chat may bind its employee after the Agent was created.
@@ -3242,7 +3245,7 @@ if (!gotLock) {
     });
     // M2 远程执行：手机端经 relay 发来 chat → 用本机 provider(含 Claude Code 订阅)跑一轮 agent，流式回传。
     // 复用桌面端现成的 Agent 机器，只是输入来自 relay、输出发回 relay（见 relay-client handleRemoteChat）。
-    const remoteProvider = (channelId: string | null | undefined, existingId?: string | null, model?: string | null) => {
+    const remoteProvider = (channelId: string | null | undefined, existingId?: string | null, model?: string | null, effort?: ReasoningEffort) => {
       const settings = loadSettings();
       const meta = existingId ? listSessions().find(session => session.id === existingId) : undefined;
       const selection = resolveRemoteSelection(detectChannels(settings), channelId, model);
@@ -3251,8 +3254,9 @@ if (!gotLock) {
       let selected = selection ? null : providerForSession(existingId || '', true);
       if (selection && settings) {
         const ch = selection.channel, slot = settings.creds?.[ch.providerId] || {};
+        if (effort !== undefined && !modelReasoning(selection.model)?.levels.includes(effort)) throw Error('invalid_reasoning_effort');
         try {
-          applyEnvFromSettings({ ...settings, providerId: ch.providerId, kind: ch.providerKind, model: selection.model,
+          applyEnvFromSettings({ ...settings, providerId: ch.providerId, kind: ch.providerKind, model: selection.model, effort: effort ?? resolveModelEffort(ch.providerId, selection.model, settings, false), effortModel: reasoningKey(ch.providerId, selection.model),
             apiKey: slot.apiKey || (settings.providerId === ch.providerId ? settings.apiKey : undefined),
             oauthToken: slot.oauthToken || (settings.providerId === ch.providerId ? settings.oauthToken : undefined),
             baseUrl: slot.baseUrl || (settings.providerId === ch.providerId ? settings.baseUrl : undefined) });
@@ -3270,7 +3274,7 @@ if (!gotLock) {
       if (args.employeeId && !args.sessionId && (!teamEnabled(remoteSettings) || !employee)) throw new Error(tr("ui.index.message.a20e780624"));
       const employeeBinding = !args.channelId && !args.model ? employee?.model : undefined;
       if (employeeBinding && !remoteShareSubscription(remoteSettings) && ['claude-oauth', 'codex'].includes(employeeBinding.providerId)) throw new Error(tr("ui.index.message.e0fccfc9ef"));
-      const choice = employeeBinding ? { provider: providerForEmployee(employee!), selection: null } : remoteProvider(args.channelId, args.sessionId, args.model);
+      const choice = employeeBinding ? { provider: providerForEmployee(employee!), selection: null } : remoteProvider(args.channelId, args.sessionId, args.model, args.effort);
       const selected = choice.provider;
       if (!selected) throw new Error(tr("ui.index.message.9776823cfb"));
       const selectedBinding = choice.selection?.channel.providerId || employeeBinding?.providerId;
@@ -3300,7 +3304,7 @@ if (!gotLock) {
             const settings = loadSettings();
             const slot = settings?.creds?.[selectedBinding] || {};
             setSessionBinding(id, { providerId: selectedBinding, kind: choice.selection?.channel.providerKind || (settings ? providerKindForId(selectedBinding, settings) : undefined),
-              model: choice.selection?.model || employeeBinding!.model, baseUrl: slot.baseUrl || (settings?.providerId === selectedBinding ? settings.baseUrl : undefined) });
+              model: choice.selection?.model || employeeBinding!.model, effort: args.effort ?? resolveModelEffort(selectedBinding,choice.selection?.model || employeeBinding!.model,settings || {},false), baseUrl: slot.baseUrl || (settings?.providerId === selectedBinding ? settings.baseUrl : undefined) });
             backendBySid.set(id, selectedBinding);
           }
           if (args.employeeId && !args.sessionId) {
@@ -3326,7 +3330,7 @@ if (!gotLock) {
     });
     setRemoteRoomExecutor(async args => {
       if (!teamEnabled(loadSettings())) throw new Error(tr("ui.index.message.a5a64df91c"));
-      const choice = args.channelId || args.model ? remoteProvider(args.channelId, undefined, args.model) : undefined;
+      const choice = args.channelId || args.model ? remoteProvider(args.channelId, undefined, args.model, args.effort) : undefined;
       const selected = choice?.provider;
       await runRemoteRoomTurn(args, {
         ...teamOrchestratorDeps(),
@@ -3724,6 +3728,7 @@ async function ensureHostedProviderReady(targetSid?: string): Promise<void> {
       kind: (meta.kind as Settings["kind"]) || st.kind,
       model: meta.model,
       baseUrl: meta.baseUrl ?? slot.baseUrl ?? st.baseUrl,
+      effort: meta.effort ?? resolveModelEffort(meta.providerId,meta.model,st,false), effortModel: reasoningKey(meta.providerId,meta.model),
       apiKey: slot.apiKey,
       oauthToken: slot.oauthToken,
     };
@@ -4513,6 +4518,14 @@ ipcMain.on("settings:set-secrets-prompt", (_e, text: string | null) => {
   hotRefreshSys();
 });
 
+ipcMain.handle("settings:set-model-effort", (_e, change: EffortChange) => {
+  const current = loadSettings();
+  if (!current) throw Error('settings_unavailable');
+  const next = updateModelEffort(current, change);
+  if (current.providerId === change.providerId && current.model === change.model) applySettings(next, currentId || undefined);
+  else saveSettings(next);
+  return { modelEffortDefaults: next.modelEffortDefaults };
+});
 ipcMain.on("settings:set", (_e, s: Settings) => {
   try {
     // 显式切换：强制应用到当前活动会话(即使它正在智能继续)，避免"切了平台但正在跑的会话没跟着换"

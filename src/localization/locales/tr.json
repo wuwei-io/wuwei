@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} etkin",
     "billing.purchase.title": "Daha fazla kredi için bir plan satın alın",
     "billing.shortage.balance": "Yeterli Wuwei coin yok. Devam etmek için planınızı yükseltin.",
-    "billing.shortage.quota": "Kullanılabilir kotanız doldu. Devam etmek için planınızı yükseltin."
+    "billing.shortage.quota": "Kullanılabilir kotanız doldu. Devam etmek için planınızı yükseltin.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

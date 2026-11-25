@@ -20,7 +20,7 @@ export function configuredRemoteChannels(s: Settings | null, share: boolean): Re
     const slot = s.creds?.[pid] || {};
     const current = s.providerId === pid || !s.providerId && kind === s.kind;
     const model = (current ? s.model : slot.model) || slot.model || '';
-    const models = [...new Set([model, ...(slot.customModels || [])].filter(Boolean))];
+    const models = [...new Set([model, ...(pid === "codex" ? ["gpt-6.2-sol", "gpt-6.2-astra"] : []), ...(slot.customModels || [])].filter(Boolean))];
     if (!model || !models.length) return;
     out.push({ id, label, kind: subscription ? 'subscription' : 'api-key', providerId: pid,
       providerKind: kind, defaultModel: model, models });

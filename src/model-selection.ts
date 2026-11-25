@@ -26,8 +26,22 @@ function englishCatalogLabel(label: string, fallback: string): string {
   const translated = localizeStoredText(label, 'en');
   return /[\u3400-\u9fff]/.test(translated) ? fallback : translated;
 }
+function prioritizeGptGroups(choices: ModelChoice[]): ModelChoice[] {
+  const groups = new Map<ModelCategory, ModelChoice[]>();
+  for (const category of ['premium','connections'] as const) {
+    groups.set(category, choices.filter(row => row.category === category).sort((a,b) =>
+      Number(!/gpt-/i.test(a.modelId)) - Number(!/gpt-/i.test(b.modelId)) || Number(b.recommended)-Number(a.recommended) || a.rank-b.rank));
+  }
+  const positions = new Map<ModelCategory, number>();
+  return choices.map(row => {
+    const group = groups.get(row.category);
+    if (!group) return row;
+    const index = positions.get(row.category) ?? 0; positions.set(row.category,index+1);
+    return group[index];
+  });
+}
 export function catalogModelChoices(providers: Provider[], selectedKey: string): ModelChoice[] {
-  return providers.flatMap(p=>p.models.filter(m=>!m.selection?.hiddenInPicker || `${p.id}/${m.id}`===selectedKey).map((m,index)=>({
+  return prioritizeGptGroups(providers.flatMap(p=>p.models.filter(m=>!m.selection?.hiddenInPicker || `${p.id}/${m.id}`===selectedKey).map((m,index)=>({
     key:`${p.id}/${m.id}`,providerId:p.id,modelId:m.id,
     label:modelDisplayLabel(m.id,(m.free && /自动/.test(m.label) ? m.label.replace(/^免费模型\s*[·・]?\s*/, '') : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,'')),labelEn:modelDisplayLabel(m.id,(p.hosted ? englishCatalogLabel(m.labelEn || m.label_en || m.label || m.id, m.id) : m.labelEn || m.label_en || m.label || m.id).replace(/^(?:Zhipu\s+|智谱\s*)/i,'')),
     connectionLabel:p.labelEn || (p.hosted ? englishCatalogLabel(p.label, p.id) : p.label),
@@ -36,7 +50,7 @@ export function catalogModelChoices(providers: Provider[], selectedKey: string):
     free:m.free,needsLogin:p.hosted && (!m.free || m.anon===false),badge:m.badge,price:m.price,hiddenInPicker:m.selection?.hiddenInPicker===true,
     membershipRequired:m.selection?.membershipRequired,
     imageInput:p.hosted ? hostedModelImageInput(m.id,m.badge,m.inputModalities) : undefined,
-  }))).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||a.rank-b.rank);
+  }))).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||a.rank-b.rank));
 }
 export function recommendedNewUserModel(choices: ModelChoice[]): ModelChoice | undefined {
   return choices.find(c=>c.category==='economy' && c.defaultForNewUsers && c.recommended && c.price?.input!=null && c.price?.output!=null);

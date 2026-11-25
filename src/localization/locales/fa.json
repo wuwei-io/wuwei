@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} فعال",
     "billing.purchase.title": "برای دریافت اعتبار بیشتر، طرح بخرید",
     "billing.shortage.balance": "سکه‌های Wuwei کافی نیست. برای ادامه ارتقا دهید.",
-    "billing.shortage.quota": "سهمیه موجود شما تمام شده است. برای ادامه ارتقا دهید."
+    "billing.shortage.quota": "سهمیه موجود شما تمام شده است. برای ادامه ارتقا دهید.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }

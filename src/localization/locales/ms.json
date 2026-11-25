@@ -3821,6 +3821,12 @@
     "set.tools.enabledCount": "{enabled} / {total} aktif",
     "billing.purchase.title": "Beli pelan untuk mendapatkan lebih banyak kredit",
     "billing.shortage.balance": "Syiling Wuwei tidak mencukupi. Naik taraf untuk meneruskan.",
-    "billing.shortage.quota": "Kuota tersedia anda telah habis. Naik taraf untuk meneruskan."
+    "billing.shortage.quota": "Kuota tersedia anda telah habis. Naik taraf untuk meneruskan.",
+    "reasoning.defaults": "Default reasoning by model",
+    "reasoning.defaultsHint": "These defaults apply when switching models. Adjust the current chat beside the model.",
+    "reasoning.default": "Default reasoning",
+    "reasoning.hosted": "Wuwei hosted",
+    "reasoning.saveError": "Could not save. Please try again.",
+    "reasoning.settings": "Reasoning"
   }
 }
